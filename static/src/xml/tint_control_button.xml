@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.ControlButtonsTint"
+       t-inherit="point_of_sale.ControlButtons"
+       t-inherit-mode="extension">
+
+        <xpath expr="//SelectPartnerButton" position="after">
+            <button t-if="!props.showRemainingButtons"
+                    class="btn btn-light btn-lg lh-lg o-tint-button"
+                    t-on-click="() => this.onClickTint()">
+                <i class="fa fa-paint-brush me-1" role="img" aria-label="Entintado"/>
+                <span>Entintado</span>
+            </button>
+        </xpath>
+
+    </t>
+
+</templates>

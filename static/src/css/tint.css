@@ -1,0 +1,6 @@
+.o-tint-button {
+    border: 1px solid var(--o-tint-border, #b58900);
+}
+.o-tint-button i.fa-paint-brush {
+    color: #b58900;
+}
