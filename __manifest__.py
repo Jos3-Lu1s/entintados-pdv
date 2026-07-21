@@ -19,7 +19,7 @@ Long description of module's purpose
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['point_of_sale'],
+    'depends': ['base', 'point_of_sale'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -32,6 +32,7 @@ Long description of module's purpose
         # 'security/ir.model.access.csv',
         'views/views.xml',
         'views/templates.xml',
+        'views/res_partner_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

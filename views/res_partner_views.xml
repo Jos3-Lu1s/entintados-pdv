@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_partner_form" model="ir.ui.view">
+            <field name="name">res.partner.view.form.inherit.entintados_pdv</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//page[@name='sales_purchases']//group[@name='misc']" position="after">
+                    <group name="entintados_classification" string="Clasificación">
+                        <field name="is_customer" widget="boolean_toggle"/>
+                        <field name="is_creditor" widget="boolean_toggle"/>
+                        <field name="is_supplier" widget="boolean_toggle"/>
+                        <field name="is_distributor" widget="boolean_toggle"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
