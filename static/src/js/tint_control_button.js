@@ -2,14 +2,14 @@
 
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
-import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { TintFormulaPopup } from "@entintados_pdv/js/tint_formula_popup";
 
 patch(ControlButtons.prototype, {
     async onClickTint() {
-        const order = this.pos.get_order();
-        const line = order?.get_selected_orderline();
+        const order = this.pos.getOrder();
+        const line = order?.getSelectedOrderline();
 
         if (!line) {
             this.notification.add(
