@@ -16,5 +16,30 @@
                 </xpath>
             </field>
         </record>
+
+        <record id="res_partner_view_search" model="ir.ui.view">
+            <field name="name">res.partner.view.search.inherit.entintados_pdv</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="account.res_partner_view_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='customer']" position="attributes">
+                    <attribute name="domain">[('is_customer', '=', True)]</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='supplier']" position="attributes">
+                    <attribute name="domain">[('is_supplier', '=', True)]</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- A un contacto creado desde el menú "Clientes"/"Proveedores" de
+             Contabilidad hay que marcarlo con nuestros campos también,
+             o desaparecería de inmediato del filtro que acabamos de cambiar. -->
+        <record id="account.res_partner_action_customer" model="ir.actions.act_window">
+            <field name="context">{'search_default_customer': 1, 'res_partner_search_mode': 'customer', 'default_is_company': True, 'default_customer_rank': 1, 'default_is_customer': True}</field>
+        </record>
+
+        <record id="account.res_partner_action_supplier" model="ir.actions.act_window">
+            <field name="context">{'search_default_supplier': 1, 'res_partner_search_mode': 'supplier', 'default_is_company': True, 'default_supplier_rank': 1, 'default_is_supplier': True}</field>
+        </record>
     </data>
 </odoo>
