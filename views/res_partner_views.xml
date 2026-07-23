@@ -51,13 +51,31 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="account.res_partner_view_search"/>
             <field name="arch" type="xml">
-                <xpath expr="//filter[@name='customer']" position="attributes">
-                    <attribute name="string">Clientes y distribuidores</attribute>
-                    <attribute name="domain">["|", ("is_customer", "=", True), ("is_distributor", "!=", False)]</attribute>
+                <xpath expr="//filter[@name='customer']" position="replace">
+                    <group>
+                        <filter string="Clientes y distribuidores" name="customer"
+                                domain="['|', ('is_customer', '=', True), ('is_distributor', '!=', False)]"
+                                invisible="context.get('res_partner_search_mode') == 'supplier'"/>
+                        <filter string="Clientes" name="only_customer"
+                                domain="[('is_customer', '=', True)]"
+                                invisible="context.get('res_partner_search_mode') == 'supplier'"/>
+                        <filter string="Distribuidores" name="only_distributor"
+                                domain="[('is_distributor', '!=', False)]"
+                                invisible="context.get('res_partner_search_mode') == 'supplier'"/>
+                    </group>
                 </xpath>
-                <xpath expr="//filter[@name='supplier']" position="attributes">
-                    <attribute name="string">Proveedores y acreedores</attribute>
-                    <attribute name="domain">["|", ("is_supplier", "!=", False), ("is_creditor", "!=", False)]</attribute>
+                <xpath expr="//filter[@name='supplier']" position="replace">
+                    <group>
+                        <filter string="Proveedores y acreedores" name="supplier"
+                                domain="['|', ('is_supplier', '!=', False), ('is_creditor', '!=', False)]"
+                                invisible="context.get('res_partner_search_mode') == 'customer'"/>
+                        <filter string="Proveedores" name="only_supplier"
+                                domain="[('is_supplier', '!=', False)]"
+                                invisible="context.get('res_partner_search_mode') == 'customer'"/>
+                        <filter string="Acreedores" name="only_creditor"
+                                domain="[('is_creditor', '!=', False)]"
+                                invisible="context.get('res_partner_search_mode') == 'customer'"/>
+                    </group>
                 </xpath>
             </field>
         </record>
