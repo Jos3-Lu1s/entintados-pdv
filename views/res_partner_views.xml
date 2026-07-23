@@ -54,7 +54,7 @@
                 <xpath expr="//filter[@name='customer']" position="replace">
                     <group>
                         <filter string="Clientes y distribuidores" name="customer"
-                                domain="['|', ('is_customer', '=', True), ('is_distributor', '!=', False)]"
+                                domain="[('is_sales_contact', '=', True)]"
                                 invisible="context.get('res_partner_search_mode') == 'supplier'"/>
                         <filter string="Clientes" name="only_customer"
                                 domain="[('is_customer', '=', True)]"
@@ -67,7 +67,7 @@
                 <xpath expr="//filter[@name='supplier']" position="replace">
                     <group>
                         <filter string="Proveedores y acreedores" name="supplier"
-                                domain="['|', ('is_supplier', '!=', False), ('is_creditor', '!=', False)]"
+                                domain="[('is_purchase_contact', '=', True)]"
                                 invisible="context.get('res_partner_search_mode') == 'customer'"/>
                         <filter string="Proveedores" name="only_supplier"
                                 domain="[('is_supplier', '!=', False)]"
@@ -84,12 +84,12 @@
              Contabilidad hay que marcarlo con nuestros campos también,
              o desaparecería de inmediato del filtro que acabamos de cambiar. -->
         <record id="account.res_partner_action_customer" model="ir.actions.act_window">
-            <field name="domain">["|", ("is_customer", "=", True), ("is_distributor", "!=", False)]</field>
+            <field name="domain">[('is_sales_contact', '=', True)]</field>
             <field name="context">{'search_default_customer': 1, 'res_partner_search_mode': 'customer', 'default_is_company': True, 'default_customer_rank': 1, 'default_is_customer': True}</field>
         </record>
 
         <record id="account.res_partner_action_supplier" model="ir.actions.act_window">
-            <field name="domain">["|", ("is_supplier", "=", True), ("is_creditor", "!=", False)]</field>
+            <field name="domain">[('is_purchase_contact', '=', True)]</field>
             <field name="context">{'search_default_supplier': 1, 'res_partner_search_mode': 'supplier', 'default_is_company': True, 'default_supplier_rank': 1, 'default_is_supplier': True}</field>
         </record>
     </data>
