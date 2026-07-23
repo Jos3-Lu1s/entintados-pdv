@@ -12,7 +12,7 @@ class ResPartner(models.Model):
     )
     is_creditor = fields.Boolean(
         string="Acreedor",
-        help="Marca este contacto como acreedor (a quien se le debe dinero).",
+        help="Marca este contacto como acreedor.",
     )
     is_supplier = fields.Boolean(
         string="Proveedor",
