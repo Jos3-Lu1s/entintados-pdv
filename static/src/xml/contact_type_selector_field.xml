@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.BooleanGroupSelectorField">
+        <div class="o_boolean_group_selector d-flex flex-wrap gap-1">
+            <t t-foreach="options" t-as="option" t-key="option.field">
+                <span role="button"
+                      tabindex="0"
+                      t-attf-class="badge rounded-pill smaller o_tag {{isActive(option.field) ? 'o_tag_color_' + getColor(option) : 'bg-secondary'}} {{props.readonly ? 'pe-none opacity-50' : ''}}"
+                      t-att-aria-label="getLabel(option)"
+                      t-att-title="getLabel(option)"
+                      t-on-click.stop="() => this.onSelect(option.field)"
+                      t-on-keydown="(ev) => this.onKeydown(ev, option.field)">
+                    <i t-if="option.icon" role="img" t-attf-class="fa me-1 {{option.icon}}"/>
+                    <t t-esc="getLabel(option)"/>
+                </span>
+            </t>
+        </div>
+    </t>
+
+</templates>

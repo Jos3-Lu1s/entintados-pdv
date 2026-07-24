@@ -80,14 +80,22 @@
             <field name="inherit_id" ref="base.view_partner_tree"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='category_id']" position="after">
-                    <field name="is_customer" widget="boolean_toggle" optional="show"
-                           column_invisible="context.get('res_partner_search_mode') == 'supplier'"/>
-                    <field name="is_distributor" widget="boolean_toggle" optional="show"
-                           column_invisible="context.get('res_partner_search_mode') == 'supplier'"/>
-                    <field name="is_supplier" widget="boolean_toggle" optional="show"
-                           column_invisible="context.get('res_partner_search_mode') == 'customer'"/>
-                    <field name="is_creditor" widget="boolean_toggle" optional="show"
-                           column_invisible="context.get('res_partner_search_mode') == 'customer'"/>
+                    <field name="is_customer" widget="boolean_group_selector"
+                           string="Tipo de contacto" optional="show"
+                           help="Clasificación del contacto. Puede tener más de una a la vez: haz clic en una insignia para activarla o desactivarla."
+                           options="{
+                               'fields': [
+                                   {'field': 'is_customer', 'group': 'sales', 'color': 1, 'icon': 'fa-shopping-cart'},
+                                   {'field': 'is_supplier', 'group': 'purchase', 'color': 4, 'icon': 'fa-truck'},
+                                   {'field': 'is_creditor', 'group': 'purchase', 'color': 3, 'icon': 'fa-money'},
+                                   {'field': 'is_distributor', 'group': 'sales', 'color': 6, 'icon': 'fa-share-alt'},
+                               ],
+                               'context_key': 'res_partner_search_mode',
+                               'group_values': {'sales': 'customer', 'purchase': 'supplier'},
+                           }"/>
+                    <field name="is_supplier" column_invisible="1"/>
+                    <field name="is_creditor" column_invisible="1"/>
+                    <field name="is_distributor" column_invisible="1"/>
                 </xpath>
             </field>
         </record>
