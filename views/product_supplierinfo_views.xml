@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_supplierinfo_form_view" model="ir.ui.view">
+        <field name="name">product.supplierinfo.view.form.inherit.entintados_pdv</field>
+        <field name="model">product.supplierinfo</field>
+        <field name="inherit_id" ref="product.product_supplierinfo_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_supplierinfo_tree_view" model="ir.ui.view">
+        <field name="name">product.supplierinfo.view.list.inherit.entintados_pdv</field>
+        <field name="model">product.supplierinfo</field>
+        <field name="inherit_id" ref="product.product_supplierinfo_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_supplierinfo_tree_view2" model="ir.ui.view">
+        <field name="name">product.supplierinfo.view.list.inherit.entintados_pdv.purchase</field>
+        <field name="model">product.supplierinfo</field>
+        <field name="inherit_id" ref="purchase.product_supplierinfo_tree_view2"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_product_supplierinfo_tree_view2" model="ir.ui.view">
+        <field name="name">product.supplierinfo.view.list.inherit.entintados_pdv.product</field>
+        <field name="model">product.supplierinfo</field>
+        <field name="inherit_id" ref="purchase.product_product_supplierinfo_tree_view2"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

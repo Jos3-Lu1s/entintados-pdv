@@ -19,7 +19,7 @@ Long description of module's purpose
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'account', 'point_of_sale', 'sale', 'sale_management', 'purchase'],
+    'depends': ['base', 'account', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -35,6 +35,7 @@ Long description of module's purpose
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
         'views/purchase_order_views.xml',
+        'views/product_supplierinfo_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [
