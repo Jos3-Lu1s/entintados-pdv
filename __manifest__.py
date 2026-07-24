@@ -36,6 +36,8 @@ Long description of module's purpose
         'views/sale_order_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
+        'views/account_move_views.xml',
+        'views/account_payment_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [
