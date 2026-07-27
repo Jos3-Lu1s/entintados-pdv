@@ -2,7 +2,8 @@
 <odoo>
     <!-- Formulario principal de Lead/Oportunidad: tiene DOS campos partner_id
          distintos (uno se usa mientras type == 'lead', el otro mientras
-         type == 'opportunity'); se restringen ambos por separado. -->
+         type == 'opportunity'); se restringen ambos por separado y se asegura
+         que al crear un cliente nuevo se marque is_customer = True. -->
     <record id="crm_lead_view_form" model="ir.ui.view">
         <field name="name">crm.lead.view.form.inherit.entintados_pdv</field>
         <field name="model">crm.lead</field>
@@ -10,9 +11,11 @@
         <field name="arch" type="xml">
             <xpath expr="//group[@name='lead_partner']/field[@name='partner_id']" position="attributes">
                 <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+                <attribute name="context">{'default_is_customer': True}</attribute>
             </xpath>
             <xpath expr="//group[@name='opportunity_partner']/field[@name='partner_id']" position="attributes">
                 <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+                <attribute name="context">{'default_is_customer': True}</attribute>
             </xpath>
         </field>
     </record>
@@ -28,12 +31,14 @@
         <field name="inherit_id" ref="crm.quick_create_opportunity_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='commercial_partner_id']" position="attributes">
-                <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+                <attribute name="domain">[('is_company', '=', True), ('is_sales_contact', '=', True)]</attribute>
+                <attribute name="context">{'default_is_company': True, 'default_is_customer': True}</attribute>
             </xpath>
             <xpath expr="//field[@name='partner_id']" position="attributes">
                 <attribute name="domain">[('is_company', '!=', True), ('is_sales_contact', '=', True)] + (
                     [('id', 'child_of', commercial_partner_id)] if commercial_partner_id else []
                 )</attribute>
+                <attribute name="context">{'default_is_customer': True}</attribute>
             </xpath>
         </field>
     </record>
