@@ -48,6 +48,7 @@ Long description of module's purpose
         'views/account_payment_views.xml',
         'views/crm_lead_views.xml',
         'views/crm_lead_to_opportunity_views.xml',
+        'views/crm_menu_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

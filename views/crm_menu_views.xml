@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- El menú "Customers" propio de CRM (CRM > Ventas > Customers) apunta
+         por defecto a base.action_partner_form, una acción genérica sin
+         domain que muestra todo el catálogo de contactos. En vez de duplicar
+         la lógica de restricción en una acción nueva, se reutiliza la misma
+         acción que ya usa el menú "Customers" de Ventas/Facturación
+         (account.res_partner_action_customer), que ya trae
+         domain="[('is_sales_contact', '=', True)]" y su propio contexto.
+
+         IMPORTANTE: hay que repetir explícitamente parent/name/sequence tal
+         cual están en el <menuitem> original de crm (parent="crm_menu_sales",
+         name="Customers", sequence="5"). Si se omite "parent" al sobreescribir
+         un <menuitem> existente por id, Odoo lo interpreta como que ya no
+         tiene padre y lo asciende a menú raíz (aparece como una app nueva y
+         desaparece de dentro de CRM)". -->
+    <menuitem id="crm.res_partner_menu_customer"
+              name="Customers"
+              parent="crm.crm_menu_sales"
+              action="account.res_partner_action_customer"
+              sequence="5"/>
+</odoo>
