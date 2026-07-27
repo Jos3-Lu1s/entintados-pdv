@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Formulario principal de Lead/Oportunidad: tiene DOS campos partner_id
+         distintos (uno se usa mientras type == 'lead', el otro mientras
+         type == 'opportunity'); se restringen ambos por separado. -->
+    <record id="crm_lead_view_form" model="ir.ui.view">
+        <field name="name">crm.lead.view.form.inherit.entintados_pdv</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='lead_partner']/field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+            </xpath>
+            <xpath expr="//group[@name='opportunity_partner']/field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Formulario de creación rápida (Kanban > Nueva oportunidad): tiene
+         "Company" (commercial_partner_id) y "Contact" (partner_id). El
+         segundo ya trae un domain dinámico propio de CRM (solo contactos que
+         no sean empresa, y si hay compañía seleccionada, hijos de esa
+         compañía); se extiende sin perder esa lógica, no se reemplaza. -->
+    <record id="quick_create_opportunity_form" model="ir.ui.view">
+        <field name="name">crm.lead.form.quick_create.inherit.entintados_pdv</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.quick_create_opportunity_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='commercial_partner_id']" position="attributes">
+                <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="domain">[('is_company', '!=', True), ('is_sales_contact', '=', True)] + (
+                    [('id', 'child_of', commercial_partner_id)] if commercial_partner_id else []
+                )</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

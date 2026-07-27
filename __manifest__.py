@@ -19,7 +19,7 @@ Long description of module's purpose
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'account', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase'],
+    'depends': ['base', 'account', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase', 'crm'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -46,6 +46,8 @@ Long description of module's purpose
         'views/product_supplierinfo_views.xml',
         'views/account_move_views.xml',
         'views/account_payment_views.xml',
+        'views/crm_lead_views.xml',
+        'views/crm_lead_to_opportunity_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [
