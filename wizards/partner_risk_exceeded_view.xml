@@ -18,7 +18,7 @@
                         class="btn-primary"
                         name="button_continue"
                         type="object"
-                        groups="account_financial_risk.group_account_financial_risk_manager"
+                        groups="entintados_pdv.group_account_financial_risk_manager"
                     />
                     <button string="Cancel" class="btn-link" special="cancel" />
                 </footer>

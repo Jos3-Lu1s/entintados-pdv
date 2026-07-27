@@ -193,7 +193,7 @@ class ResPartner(models.Model):
         global_enabled = (
             self.env["ir.config_parameter"]
             .sudo()
-            .get_param("account_financial_risk.portal_show_financial_risk")
+            .get_param("entintados_pdv.portal_show_financial_risk")
         )
         self.portal_show_financial_risk_visible = str2bool(global_enabled)
 
@@ -248,7 +248,7 @@ class ResPartner(models.Model):
         # Change when we find a better way to add a group while maintaining inheritance.
         res = super()._setup_complete()
         field = self._fields["credit_limit"]
-        new_group = "account_financial_risk.group_account_financial_risk_user"
+        new_group = "entintados_pdv.group_account_financial_risk_user"
         group_list = field.groups.split(",") if field.groups else []
         if new_group not in group_list:
             group_list.append(new_group)

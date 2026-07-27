@@ -15,6 +15,6 @@ class AccountConfigSettings(models.TransientModel):
     )
     portal_show_financial_risk = fields.Boolean(
         string="Show credit information in portal",
-        config_parameter="account_financial_risk.portal_show_financial_risk",
+        config_parameter="entintados_pdv.portal_show_financial_risk",
         help="If enabled, portal users will be able to see their credit information.",
     )
