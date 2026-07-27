@@ -1,5 +1,3 @@
-# Copyright 2016-2021 Tecnativa - Carlos Dauden
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 from datetime import datetime
 
 from dateutil.relativedelta import relativedelta

@@ -19,7 +19,7 @@ Long description of module's purpose
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase', 'crm'],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase', 'crm'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -39,8 +39,6 @@ Long description of module's purpose
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
-        'views/views.xml',
-        'views/templates.xml',
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
         'views/purchase_order_views.xml',
@@ -55,11 +53,6 @@ Long description of module's purpose
         'views/res_config_risk_view.xml',
         'views/res_partner_risk_view.xml',
         "wizards/partner_risk_exceeded_view.xml",
-
-    ],
-    # only loaded in demonstration mode
-    'demo': [
-        'demo/demo.xml',
     ],
     "installable": True,
     "application": False,
