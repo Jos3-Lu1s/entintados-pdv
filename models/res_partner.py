@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
 
+import re
+
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
+PHONE_REGEX = re.compile(r'^\d{10}$')
+
+MX_COUNTRY_CODE = '52'
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
+
+    phone = fields.Char(required=True)
 
     is_customer = fields.Boolean(
         string="Cliente",
@@ -73,34 +80,45 @@ class ResPartner(models.Model):
             domain.append(('id', 'not in', exclude_ids))
         return self.sudo().search(domain, limit=1)
 
-    def _check_duplicate_vat(self, vat, exclude_ids=None):
-        duplicate = self._find_duplicate_by_vat(vat, exclude_ids=exclude_ids)
-        if duplicate:
-            raise ValidationError(_(
-                'Ya existe un contacto activo con el mismo RFC/VAT (%(vat)s): '
-                '"%(name)s" (ID %(id)s).\n'
-                'Verifica si es el mismo cliente o proveedor antes de crear uno '
-                'nuevo. Si de verdad son duplicados, usa la herramienta de '
-                'fusión de contactos (Contactos > seleccionar los registros > '
-                'Acción > Fusionar) en lugar de conservar los dos.',
-                vat=vat, name=duplicate.display_name, id=duplicate.id,
-            ))
+    @api.constrains('vat')
+    def _check_vat_duplicate(self):
+        for partner in self:
+            duplicate = self._find_duplicate_by_vat(partner.vat, exclude_ids=partner.ids)
+            if duplicate:
+                raise ValidationError(_(
+                    'Ya existe un contacto activo con el mismo RFC/VAT (%(vat)s): '
+                    '"%(name)s" (ID %(id)s).\n'
+                    'Verifica si es el mismo cliente o proveedor antes de crear uno '
+                    'nuevo. Si de verdad son duplicados, usa la herramienta de '
+                    'fusión de contactos (Contactos > seleccionar los registros > '
+                    'Acción > Fusionar) en lugar de conservar los dos.',
+                    vat=partner.vat, name=duplicate.display_name, id=duplicate.id,
+                ))
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            vat = vals.get('vat')
-            if vat:
-                vals['vat'] = vat.strip()
-                self._check_duplicate_vat(vals['vat'])
-        return super().create(vals_list)
+    def _phone_digits(self, phone):
+        # Deja solo dígitos y, si el widget nativo antepuso el código de
+        # país (+52), lo quita para comparar contra el número real de 10.
+        digits = re.sub(r'\D', '', phone or '')
+        if len(digits) == 12 and digits.startswith(MX_COUNTRY_CODE):
+            digits = digits[len(MX_COUNTRY_CODE):]
+        return digits
 
-    def write(self, vals):
-        vat = vals.get('vat')
-        if vat:
-            vals['vat'] = vat.strip()
-            self._check_duplicate_vat(vals['vat'], exclude_ids=self.ids)
-        return super().write(vals)
+    @api.constrains('phone')
+    def _check_phone_format(self):
+        for partner in self:
+            if not partner.phone:
+                raise ValidationError(_(
+                    'El teléfono es obligatorio. Falta en: %(name)s.',
+                    name=partner.display_name,
+                ))
+            if not PHONE_REGEX.match(self._phone_digits(partner.phone)):
+                raise ValidationError(_(
+                    'El teléfono de "%(name)s" debe tener 10 dígitos (puede '
+                    'incluir el +52 y espacios que agrega el campo, pero al '
+                    'quitarlos deben quedar exactamente 10). '
+                    'Valor actual: %(phone)s.',
+                    name=partner.display_name, phone=partner.phone,
+                ))
 
     @api.model
     def _load_pos_data_domain(self, data, config):
