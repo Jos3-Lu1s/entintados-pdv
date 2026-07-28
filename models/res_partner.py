@@ -73,7 +73,50 @@ class ResPartner(models.Model):
         for partner in self:
             partner.is_purchase_contact = partner.is_supplier or partner.is_creditor
 
+    def _raise_vat_duplicate_error(self, vat, duplicate):
+        raise ValidationError(_(
+            'Ya existe un contacto activo con el mismo RFC/VAT (%(vat)s): '
+            '"%(name)s" (ID %(id)s).\n'
+            'Verifica si es el mismo cliente o proveedor antes de crear uno '
+            'nuevo. Si de verdad son duplicados, usa la herramienta de '
+            'fusión de contactos (Contactos > seleccionar los registros > '
+            'Acción > Fusionar) en lugar de conservar los dos.',
+            vat=vat, name=duplicate.display_name, id=duplicate.id,
+        ))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if 'vat' in vals and isinstance(vals['vat'], str):
+                vat = vals['vat'].strip().upper()
+                vals['vat'] = vat
+                duplicate = self._find_duplicate_by_vat(vat)
+                if duplicate:
+                    self._raise_vat_duplicate_error(vat, duplicate)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if 'vat' in vals and isinstance(vals['vat'], str):
+            vat = vals['vat'].strip().upper()
+            vals['vat'] = vat
+            for partner in self:
+                duplicate = self._find_duplicate_by_vat(vat, exclude_ids=partner.ids)
+                if duplicate:
+                    self._raise_vat_duplicate_error(vat, duplicate)
+        return super().write(vals)
+
+    @api.onchange('vat')
+    def _onchange_vat_uppercase(self):
+        if self.vat and isinstance(self.vat, str):
+            self.vat = self.vat.strip().upper()
+
     def init(self):
+        # Normaliza RFC existentes en la base de datos a mayúsculas.
+        self.env.cr.execute("""
+            UPDATE res_partner
+            SET vat = UPPER(TRIM(vat))
+            WHERE vat IS NOT NULL AND vat != UPPER(TRIM(vat));
+        """)
         # Índice único para RFC activos; ignora archivados y RFC genéricos.
         # Se recrea para mantener la definición actual.
         super().init()
@@ -99,15 +142,7 @@ class ResPartner(models.Model):
         for partner in self:
             duplicate = self._find_duplicate_by_vat(partner.vat, exclude_ids=partner.ids)
             if duplicate:
-                raise ValidationError(_(
-                    'Ya existe un contacto activo con el mismo RFC/VAT (%(vat)s): '
-                    '"%(name)s" (ID %(id)s).\n'
-                    'Verifica si es el mismo cliente o proveedor antes de crear uno '
-                    'nuevo. Si de verdad son duplicados, usa la herramienta de '
-                    'fusión de contactos (Contactos > seleccionar los registros > '
-                    'Acción > Fusionar) en lugar de conservar los dos.',
-                    vat=partner.vat, name=duplicate.display_name, id=duplicate.id,
-                ))
+                self._raise_vat_duplicate_error(partner.vat, duplicate)
 
     @api.constrains('vat')
     def _check_vat_format(self):
