@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class ResPartner(models.Model):
@@ -51,6 +52,55 @@ class ResPartner(models.Model):
     def _compute_is_purchase_contact(self):
         for partner in self:
             partner.is_purchase_contact = partner.is_supplier or partner.is_creditor
+
+    def init(self):
+        # Evita RFC/VAT duplicados en contactos activos mediante un índice único
+        # en la base de datos. Normaliza el RFC (sin espacios y en mayúsculas) e
+        # ignora registros sin RFC o archivados.
+        super().init()
+        self.env.cr.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS res_partner_vat_uniq_active_idx
+            ON res_partner (upper(trim(vat)))
+            WHERE vat IS NOT NULL AND trim(vat) != '' AND active = true
+        """)
+
+    def _find_duplicate_by_vat(self, vat, exclude_ids=None):
+        vat = (vat or '').strip()
+        if not vat:
+            return self.browse()
+        domain = [('vat', '=ilike', vat), ('active', '=', True)]
+        if exclude_ids:
+            domain.append(('id', 'not in', exclude_ids))
+        return self.sudo().search(domain, limit=1)
+
+    def _check_duplicate_vat(self, vat, exclude_ids=None):
+        duplicate = self._find_duplicate_by_vat(vat, exclude_ids=exclude_ids)
+        if duplicate:
+            raise ValidationError(_(
+                'Ya existe un contacto activo con el mismo RFC/VAT (%(vat)s): '
+                '"%(name)s" (ID %(id)s).\n'
+                'Verifica si es el mismo cliente o proveedor antes de crear uno '
+                'nuevo. Si de verdad son duplicados, usa la herramienta de '
+                'fusión de contactos (Contactos > seleccionar los registros > '
+                'Acción > Fusionar) en lugar de conservar los dos.',
+                vat=vat, name=duplicate.display_name, id=duplicate.id,
+            ))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            vat = vals.get('vat')
+            if vat:
+                vals['vat'] = vat.strip()
+                self._check_duplicate_vat(vals['vat'])
+        return super().create(vals_list)
+
+    def write(self, vals):
+        vat = vals.get('vat')
+        if vat:
+            vals['vat'] = vat.strip()
+            self._check_duplicate_vat(vals['vat'], exclude_ids=self.ids)
+        return super().write(vals)
 
     @api.model
     def _load_pos_data_domain(self, data, config):
