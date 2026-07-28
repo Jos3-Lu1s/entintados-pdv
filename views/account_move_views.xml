@@ -17,6 +17,7 @@
                 <field name="partner_id" widget="res_partner_many2one" nolabel="1"
                        context="{
                         'res_partner_search_mode': (context.get('default_move_type', 'entry') in ('out_invoice', 'out_refund', 'out_receipt') and 'customer') or (context.get('default_move_type', 'entry') in ('in_invoice', 'in_refund', 'in_receipt') and 'supplier') or False,
+                        'entintados_partner_scope': 'customer',
                         'show_address': 1, 'default_is_company': True, 'show_vat': True, 'default_is_customer': True}"
                        options='{"no_quick_create": True}'
                        default_focus="1"
@@ -27,6 +28,7 @@
                 <field name="partner_id" widget="res_partner_many2one" nolabel="1"
                        context="{
                         'res_partner_search_mode': (context.get('default_move_type', 'entry') in ('out_invoice', 'out_refund', 'out_receipt') and 'customer') or (context.get('default_move_type', 'entry') in ('in_invoice', 'in_refund', 'in_receipt') and 'supplier') or False,
+                        'entintados_partner_scope': 'supplier',
                         'show_address': 1, 'default_is_company': True, 'show_vat': True, 'default_is_supplier': True}"
                        options='{"no_quick_create": True}'
                        default_focus="1"
