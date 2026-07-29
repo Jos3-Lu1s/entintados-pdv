@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <menuitem
+        id="menu_tint_root"
+        name="Entintados"
+        sequence="85"
+        groups="entintados_pdv.group_tint_manager"
+    />
+
+    <menuitem
+        id="menu_tint_config"
+        name="Configuración"
+        parent="menu_tint_root"
+        sequence="90"
+    />
+
+    <menuitem
+        id="menu_tint_base_type"
+        name="Tipos de base"
+        parent="menu_tint_config"
+        action="tint_base_type_action"
+        sequence="10"
+    />
+
+    <menuitem
+        id="menu_tint_size"
+        name="Presentaciones"
+        parent="menu_tint_config"
+        action="tint_size_action"
+        sequence="20"
+    />
+
+    <menuitem
+        id="menu_tint_base_capacity"
+        name="Matriz de capacidad"
+        parent="menu_tint_config"
+        action="tint_base_capacity_action"
+        sequence="30"
+    />
+
+</odoo>

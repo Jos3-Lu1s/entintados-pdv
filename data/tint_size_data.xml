@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--
+      Presentaciones de envase.
+
+      Volúmenes nominales verificados contra la matriz de capacidad del
+      fabricante: la relación Cubeta : Galón : Litro es exactamente
+      19 : 4 : 1 en las 21 combinaciones de la tabla.
+
+      TODO antes de salida a producción: cambiar a noupdate="1" para que
+      una actualización de módulo no sobreescriba ajustes del cliente.
+      Se deja actualizable durante el desarrollo para poder iterar.
+    -->
+    <data>
+
+        <record id="tint_size_liter" model="tint.size">
+            <field name="name">Litro</field>
+            <field name="code">L</field>
+            <field name="volume_liters">1.0</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="tint_size_gallon" model="tint.size">
+            <field name="name">Galón</field>
+            <field name="code">G</field>
+            <field name="volume_liters">4.0</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <record id="tint_size_bucket" model="tint.size">
+            <field name="name">Cubeta</field>
+            <field name="code">Q</field>
+            <field name="volume_liters">19.0</field>
+            <field name="sequence">30</field>
+        </record>
+
+    </data>
+</odoo>

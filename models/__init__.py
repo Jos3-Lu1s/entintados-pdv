@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from . import tint_size
+from . import tint_base_type
+from . import tint_base_capacity
 from . import res_partner
 from . import crm_lead
 from . import account_invoice_risk

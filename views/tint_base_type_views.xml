@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="tint_base_type_view_list" model="ir.ui.view">
+        <field name="name">tint.base.type.list</field>
+        <field name="model">tint.base.type</field>
+        <field name="arch" type="xml">
+            <list string="Tipos de base">
+                <field name="sequence" widget="handle" />
+                <field name="code" />
+                <field name="name" />
+                <field name="white_content" />
+                <field name="points_per_liter" />
+                <field name="fill_percentage" />
+                <field name="requires_extraction" />
+                <field name="capacity_count" string="Capacidades" />
+                <field name="is_line_color" optional="hide" />
+                <field name="line_color_codes" optional="hide" />
+            </list>
+        </field>
+    </record>
+
+    <record id="tint_base_type_view_form" model="ir.ui.view">
+        <field name="name">tint.base.type.form</field>
+        <field name="model">tint.base.type</field>
+        <field name="arch" type="xml">
+            <form string="Tipo de base">
+                <sheet>
+                    <widget
+                        name="web_ribbon"
+                        title="Archivado"
+                        bg_color="text-bg-danger"
+                        invisible="active"
+                    />
+                    <div class="oe_title">
+                        <label for="name" />
+                        <h1>
+                            <field name="name" placeholder="p. ej. White" />
+                        </h1>
+                        <h3>
+                            <field name="code" placeholder="W" />
+                        </h3>
+                    </div>
+                    <group>
+                        <group string="Características">
+                            <field name="white_content" />
+                            <field name="points_per_liter" />
+                            <field name="fill_percentage" />
+                            <field name="sequence" />
+                            <field name="active" invisible="1" />
+                        </group>
+                        <group string="Color de línea">
+                            <field name="is_line_color" />
+                            <field
+                                name="line_color_codes"
+                                invisible="not is_line_color"
+                                placeholder="1510, 1710, 9115"
+                            />
+                        </group>
+                    </group>
+                    <group string="Extracción previa">
+                        <field name="requires_extraction" />
+                        <field
+                            name="extraction_percentage"
+                            invisible="not requires_extraction"
+                            required="requires_extraction"
+                        />
+                        <field
+                            name="operator_note"
+                            invisible="not requires_extraction"
+                            placeholder="Instrucción que verá el operador en caja y que se imprimirá en la etiqueta."
+                        />
+                    </group>
+                    <notebook>
+                        <page string="Capacidad por presentación" name="capacities">
+                            <field name="capacity_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="size_id" />
+                                    <field name="max_points" />
+                                    <field name="max_points_display" string="Notación" />
+                                    <field name="theoretical_points" optional="show" />
+                                    <field name="is_consistent" optional="show" />
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Descripción" name="description">
+                            <field name="description" nolabel="1" />
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="tint_base_type_view_search" model="ir.ui.view">
+        <field name="name">tint.base.type.search</field>
+        <field name="model">tint.base.type</field>
+        <field name="arch" type="xml">
+            <search string="Buscar tipo de base">
+                <field name="name" />
+                <field name="code" />
+                <filter
+                    name="requires_extraction"
+                    string="Requieren extracción previa"
+                    domain="[('requires_extraction', '=', True)]"
+                />
+                <filter
+                    name="line_color"
+                    string="Colores de línea"
+                    domain="[('is_line_color', '=', True)]"
+                />
+                <separator />
+                <filter
+                    name="inactive"
+                    string="Archivados"
+                    domain="[('active', '=', False)]"
+                />
+                <group>
+                    <filter
+                        name="group_white_content"
+                        string="Contenido de blanco"
+                        domain="[]"
+                        context="{'group_by': 'white_content'}"
+                    />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="tint_base_type_action" model="ir.actions.act_window">
+        <field name="name">Tipos de base</field>
+        <field name="res_model">tint.base.type</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="tint_base_type_view_search" />
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registre un tipo de base</p>
+            <p>
+                El tipo de base determina cuánto colorante admite el envase y a
+                qué porcentaje viene llenado de fábrica.
+            </p>
+        </field>
+    </record>
+
+</odoo>

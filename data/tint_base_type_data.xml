@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--
+      Tipos de base del fabricante.
+
+      A menor contenido de blanco, mayor cantidad de colorante admite la
+      base: los puntos por litro escalan 24 / 48 / 96 / 144, es decir
+      ×1, ×2, ×4 y ×6 respecto de la base White.
+
+      Las bases Y y R son colores de línea envasados al 100% porque
+      también se venden sin entintar. Requieren extraer el 10% del
+      contenido antes de dispensar colorante, o el envase se sobrellena.
+      Esa instrucción viaja en `operator_note` hasta la pantalla de caja
+      y la etiqueta del envase.
+
+      TODO antes de salida a producción: cambiar a noupdate="1".
+    -->
+    <data>
+
+        <record id="tint_base_type_w" model="tint.base.type">
+            <field name="name">White</field>
+            <field name="code">W</field>
+            <field name="white_content">high</field>
+            <field name="fill_percentage">100.0</field>
+            <field name="points_per_liter">24</field>
+            <field name="sequence">10</field>
+            <field
+                name="description"
+            >Base de alto contenido de blanco, envasada al 100% del llenado total.</field>
+        </record>
+
+        <record id="tint_base_type_m" model="tint.base.type">
+            <field name="name">Medium</field>
+            <field name="code">M</field>
+            <field name="white_content">medium</field>
+            <field name="fill_percentage">97.0</field>
+            <field name="points_per_liter">48</field>
+            <field name="sequence">20</field>
+            <field
+                name="description"
+            >Base de mediano contenido de blanco, envasada al 97% del llenado total.</field>
+        </record>
+
+        <record id="tint_base_type_d" model="tint.base.type">
+            <field name="name">Deep</field>
+            <field name="code">D</field>
+            <field name="white_content">low</field>
+            <field name="fill_percentage">94.0</field>
+            <field name="points_per_liter">96</field>
+            <field name="sequence">30</field>
+            <field
+                name="description"
+            >Base de menor contenido de blanco, envasada al 94% del llenado total.</field>
+        </record>
+
+        <record id="tint_base_type_a" model="tint.base.type">
+            <field name="name">Accent</field>
+            <field name="code">A</field>
+            <field name="white_content">very_low</field>
+            <field name="fill_percentage">91.0</field>
+            <field name="points_per_liter">144</field>
+            <field name="sequence">40</field>
+            <field
+                name="description"
+            >Base de muy poco contenido de blanco, envasada al 91% del llenado total.</field>
+        </record>
+
+        <record id="tint_base_type_n" model="tint.base.type">
+            <field name="name">Neutral</field>
+            <field name="code">N</field>
+            <field name="white_content">none</field>
+            <field name="fill_percentage">91.0</field>
+            <field name="points_per_liter">144</field>
+            <field name="sequence">50</field>
+            <field
+                name="description"
+            >Base transparente, sin contenido de blanco, envasada al 91% del llenado total.</field>
+        </record>
+
+        <record id="tint_base_type_y" model="tint.base.type">
+            <field name="name">Yellow</field>
+            <field name="code">Y</field>
+            <field name="fill_percentage">100.0</field>
+            <field name="points_per_liter">144</field>
+            <field name="sequence">60</field>
+            <field name="is_line_color" eval="True" />
+            <field name="line_color_codes">1510, 1710, 9115</field>
+            <field name="requires_extraction" eval="True" />
+            <field name="extraction_percentage">10.0</field>
+            <field
+                name="description"
+            >Base color amarillo medio. Es un color de línea (1510, 1710 y 9115), por lo que el envase viene lleno al 100%.</field>
+            <field
+                name="operator_note"
+            >Antes de entintar, extraiga el 10% del contenido del envase. Si no lo hace, el envase se sobrellenará al dispensar el colorante.</field>
+        </record>
+
+        <record id="tint_base_type_r" model="tint.base.type">
+            <field name="name">Red</field>
+            <field name="code">R</field>
+            <field name="fill_percentage">100.0</field>
+            <field name="points_per_liter">144</field>
+            <field name="sequence">70</field>
+            <field name="is_line_color" eval="True" />
+            <field name="line_color_codes">1508, 1708, 4427, 9127</field>
+            <field name="requires_extraction" eval="True" />
+            <field name="extraction_percentage">10.0</field>
+            <field
+                name="description"
+            >Base color rojo. Es un color de línea (1508, 1708, 4427 y 9127), por lo que el envase viene lleno al 100%.</field>
+            <field
+                name="operator_note"
+            >Antes de entintar, extraiga el 10% del contenido del envase. Si no lo hace, el envase se sobrellenará al dispensar el colorante.</field>
+        </record>
+
+    </data>
+</odoo>

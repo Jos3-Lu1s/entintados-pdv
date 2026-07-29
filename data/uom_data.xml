@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--
+      Unidades de medida del colorante.
+
+      El punto es la unidad de referencia y la onza se define como unidad
+      derivada con factor 48, de modo que la conversión y la presentación
+      son nativas de Odoo y no requieren código propio.
+
+      Se cargan con noupdate="1" de forma deliberada: Odoo advierte de
+      forma explícita que modificar unidades de medida en una base en
+      operación puede causar problemas graves, porque los datos ya
+      registrados no se recalculan. Cualquier ajuste debe hacerse por
+      migración controlada, nunca por actualización de módulo.
+    -->
+    <data noupdate="1">
+
+        <record id="uom_tint_point" model="uom.uom">
+            <field name="name">Punto</field>
+            <field name="relative_factor">1.0</field>
+        </record>
+
+        <record id="uom_tint_ounce" model="uom.uom">
+            <field name="name">Onza de colorante</field>
+            <field name="relative_uom_id" ref="uom_tint_point" />
+            <field name="relative_factor">48.0</field>
+        </record>
+
+    </data>
+</odoo>

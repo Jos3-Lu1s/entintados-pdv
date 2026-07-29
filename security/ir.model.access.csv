@@ -1,2 +1,8 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_partner_risk_exceeded_wiz_user,Partner Risk Exceeded Wizard (Internal user),model_partner_risk_exceeded_wiz,base.group_user,1,1,1,1
+access_tint_size_user,tint.size (lectura usuario interno),model_tint_size,base.group_user,1,0,0,0
+access_tint_size_manager,tint.size (administrador de catalogo),model_tint_size,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_base_type_user,tint.base.type (lectura usuario interno),model_tint_base_type,base.group_user,1,0,0,0
+access_tint_base_type_manager,tint.base.type (administrador de catalogo),model_tint_base_type,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_base_capacity_user,tint.base.capacity (lectura usuario interno),model_tint_base_capacity,base.group_user,1,0,0,0
+access_tint_base_capacity_manager,tint.base.capacity (administrador de catalogo),model_tint_base_capacity,entintados_pdv.group_tint_manager,1,1,1,1

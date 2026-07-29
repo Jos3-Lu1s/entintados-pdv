@@ -2,19 +2,36 @@
 {
     'name': "Entintados PDV",
 
-    'summary': "Configurar entintado desde la caja del POS",
+    'summary': "Configurar entintado de pintura desde la caja del Punto de Venta",
 
     'description': """
-Long description of module's purpose
+Entintado de pintura en el Punto de Venta
+=========================================
+
+Permite configurar y vender pintura entintada directamente desde la caja,
+sin pasar por cotización ni pedido de venta.
+
+Catálogo de entintado
+---------------------
+* Tipos de base (White, Medium, Deep, Accent, Neutral, Yellow, Red) con su
+  porcentaje de llenado de envase y sus puntos de colorante por litro.
+* Presentaciones de envase (Litro, Galón, Cubeta) con su volumen nominal.
+* Matriz de capacidad máxima de colorante por tipo de base y presentación,
+  precargada con la tabla del fabricante y verificada automáticamente.
+* Manejo nativo de la unidad de dispensado: el punto, con la onza como
+  unidad derivada (una onza equivale a 48 puntos) y presentación en la
+  notación mixta que usa la operación.
+* Instrucciones operativas por tipo de base, como la extracción previa del
+  10% requerida por las bases de color de línea.
     """,
 
-    'author': "My Company",
-    'website': "https://www.yourcompany.com",
+    'author': "Tekuno",
+    'website': "https://www.tekuno.mx",
 
     # Categories can be used to filter modules in modules listing
-    # Check https://github.com/odoo/odoo/blob/15.0/odoo/addons/base/data/ir_module_category_data.xml
+    # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
-    'category': 'Sales',
+    'category': 'Sales/Point of Sale',
     'version': '19.0.1.0.0',
     'license': 'LGPL-3',
 
@@ -40,6 +57,16 @@ Long description of module's purpose
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
+        # Catálogo de entintado: datos maestros físicos
+        'data/uom_data.xml',
+        'data/tint_size_data.xml',
+        'data/tint_base_type_data.xml',
+        'data/tint_base_capacity_data.xml',
+        'views/tint_size_views.xml',
+        'views/tint_base_type_views.xml',
+        'views/tint_base_capacity_views.xml',
+        'views/tint_menu_views.xml',
+        # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
         'views/purchase_order_views.xml',

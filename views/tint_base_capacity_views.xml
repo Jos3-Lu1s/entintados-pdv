@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="tint_base_capacity_view_list" model="ir.ui.view">
+        <field name="name">tint.base.capacity.list</field>
+        <field name="model">tint.base.capacity</field>
+        <field name="arch" type="xml">
+            <list string="Matriz de capacidad" editable="bottom">
+                <field name="base_type_id" />
+                <field name="size_id" />
+                <field name="volume_liters" optional="show" />
+                <field name="points_per_liter" optional="show" />
+                <field name="max_points" sum="Total puntos" />
+                <field name="max_points_display" string="Notación" />
+                <field name="theoretical_points" optional="show" />
+                <field
+                    name="is_consistent"
+                    optional="show"
+                    decoration-danger="not is_consistent"
+                />
+                <field name="requires_extraction" optional="hide" />
+            </list>
+        </field>
+    </record>
+
+    <record id="tint_base_capacity_view_form" model="ir.ui.view">
+        <field name="name">tint.base.capacity.form</field>
+        <field name="model">tint.base.capacity</field>
+        <field name="arch" type="xml">
+            <form string="Capacidad de colorante">
+                <sheet>
+                    <group>
+                        <group string="Combinación">
+                            <field name="base_type_id" />
+                            <field name="size_id" />
+                            <field name="volume_liters" />
+                            <field name="points_per_liter" />
+                        </group>
+                        <group string="Capacidad">
+                            <field name="max_points" />
+                            <field name="max_points_display" string="Notación" />
+                            <field name="theoretical_points" />
+                            <field name="is_consistent" />
+                        </group>
+                    </group>
+                    <div
+                        class="alert alert-warning"
+                        role="alert"
+                        invisible="is_consistent"
+                    >
+                        La capacidad capturada no coincide con el valor teórico
+                        (puntos por litro × volumen). Puede tratarse de una
+                        excepción legítima de la tabla del fabricante o de un
+                        error de captura: verifíquelo antes de continuar.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="tint_base_capacity_view_search" model="ir.ui.view">
+        <field name="name">tint.base.capacity.search</field>
+        <field name="model">tint.base.capacity</field>
+        <field name="arch" type="xml">
+            <search string="Buscar capacidad">
+                <field name="base_type_id" />
+                <field name="size_id" />
+                <filter
+                    name="inconsistent"
+                    string="Inconsistentes"
+                    domain="[('is_consistent', '=', False)]"
+                />
+                <group>
+                    <filter
+                        name="group_base_type"
+                        string="Tipo de base"
+                        domain="[]"
+                        context="{'group_by': 'base_type_id'}"
+                    />
+                    <filter
+                        name="group_size"
+                        string="Presentación"
+                        domain="[]"
+                        context="{'group_by': 'size_id'}"
+                    />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="tint_base_capacity_action" model="ir.actions.act_window">
+        <field name="name">Matriz de capacidad</field>
+        <field name="res_model">tint.base.capacity</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="tint_base_capacity_view_search" />
+        <field name="context">{'search_default_group_base_type': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registre una capacidad</p>
+            <p>
+                Cantidad máxima de colorante que admite cada combinación de tipo
+                de base y presentación, expresada en puntos. Una onza equivale a
+                48 puntos.
+            </p>
+        </field>
+    </record>
+
+</odoo>
