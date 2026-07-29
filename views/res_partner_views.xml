@@ -8,37 +8,23 @@
             <field name="arch" type="xml">
                 <xpath expr="//div[@name='partner_address_country']/../../.." position="after">
                     <div class="row g-3">
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-shopping-cart text-muted" title="Cliente"/>
-                                <label for="is_customer" class="mb-0">Cliente</label>
-                                <field class="mt-2" name="is_customer" widget="boolean_toggle" nolabel="1"/>
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-truck text-muted" title="Proveedor"/>
-                                <label for="is_supplier" class="mb-0">Proveedor</label>
-                                <field class="mt-2" name="is_supplier" widget="boolean_toggle" nolabel="1"/>
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-money text-muted" title="Acreedor"/>
-                                <label for="is_creditor" class="mb-0">Acreedor</label>
-                                <field class="mt-2" name="is_creditor" widget="boolean_toggle" nolabel="1"/>
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-share-alt text-muted" title="Distribuidor"/>
-                                <label for="is_distributor" class="mb-0">Distribuidor</label>
-                                <field class="mt-2" name="is_distributor" widget="boolean_toggle" nolabel="1"/>
-                            </div>
+                        <div class="col-12">
+                            <label for="is_customer" string="Tipo de contacto" class="mb-1 d-block"/>
+                            <field name="is_customer" widget="boolean_group_selector" nolabel="1"
+                                   help="Clasificación del contacto. Puede tener más de una a la vez: haz clic en una insignia para activarla o desactivarla."
+                                   options="{
+                                       'fields': [
+                                           {'field': 'is_customer', 'group': 'sales', 'color': 1, 'icon': 'fa-shopping-cart'},
+                                           {'field': 'is_supplier', 'group': 'purchase', 'color': 4, 'icon': 'fa-truck'},
+                                           {'field': 'is_creditor', 'group': 'purchase', 'color': 3, 'icon': 'fa-money'},
+                                           {'field': 'is_distributor', 'group': 'sales', 'color': 6, 'icon': 'fa-share-alt'},
+                                       ],
+                                       'context_key': 'entintados_partner_scope',
+                                       'group_values': {'sales': 'customer', 'purchase': 'supplier'},
+                                   }"/>
+                            <field name="is_supplier" invisible="1"/>
+                            <field name="is_creditor" invisible="1"/>
+                            <field name="is_distributor" invisible="1"/>
                         </div>
                     </div>
                 </xpath>
