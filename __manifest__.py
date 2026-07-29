@@ -26,6 +26,7 @@ Long description of module's purpose
             "entintados_pdv/static/src/css/tint.css",
             "entintados_pdv/static/src/js/tint_control_button.js",
             "entintados_pdv/static/src/js/tint_formula_popup.js",
+            "entintados_pdv/static/src/js/pos_partner_defaults.js",
             "entintados_pdv/static/src/xml/tint_control_button.xml",
             "entintados_pdv/static/src/xml/tint_formula_popup.xml",
         ],
