@@ -28,6 +28,18 @@
                         </div>
                     </div>
                 </xpath>
+                <xpath expr="//field[@name='vat']" position="after">
+                    <field name="is_told" widget="boolean_group_selector" nolabel="1"
+                        options="{
+                            'fields': [
+                                {'field': 'is_told', 'group': 'sales', 'color': 1, 'icon': 'fa-shopping-cart'},
+                                {'field': 'is_credit', 'group': 'sales', 'color': 2, 'icon': 'fa-credit-card'}
+                            ],
+                            'context_key': 'entintados_partner_scope',
+                            'group_values': {'sales': 'customer', 'purchase': 'supplier'},
+                        }"/>
+                    <field name="is_credit" invisible="1"/>
+                </xpath>
             </field>
         </record>
 

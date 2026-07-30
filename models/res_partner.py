@@ -62,6 +62,15 @@ class ResPartner(models.Model):
         help="Proveedor o acreedor. Se usa para restringir el campo "
              "Proveedor en Compras.",
     )
+    
+    is_told=fields.Boolean(
+        string="Contado",
+        default=True,
+    )
+    is_credit=fields.Boolean(
+        string="Crédito",
+        help="Marca este contacto como cliente de crédito.",
+    )
 
     @api.depends('is_customer', 'is_distributor')
     def _compute_is_sales_contact(self):
@@ -86,13 +95,27 @@ class ResPartner(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        payment_term = self.env.ref(
+            'account.account_payment_term_immediate',
+            raise_if_not_found=False,
+        )
+
         for vals in vals_list:
-            if 'vat' in vals and isinstance(vals['vat'], str):
+            # Normalizar y validar RFC/VAT duplicado
+            if isinstance(vals.get('vat'), str):
                 vat = vals['vat'].strip().upper()
                 vals['vat'] = vat
-                duplicate = self._find_duplicate_by_vat(vat)
-                if duplicate:
-                    self._raise_vat_duplicate_error(vat, duplicate)
+
+                if vat:
+                    duplicate = self._find_duplicate_by_vat(vat)
+
+                    if duplicate:
+                        self._raise_vat_duplicate_error(vat, duplicate)
+
+            # Asignar plazo de pago de 30 días por defecto
+            if not vals.get('property_payment_term_id') and payment_term:
+                vals['property_payment_term_id'] = payment_term.id
+
         return super().create(vals_list)
 
     def write(self, vals):
