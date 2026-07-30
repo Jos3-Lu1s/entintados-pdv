@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="tint_color_formula_view_list" model="ir.ui.view">
+        <field name="name">tint.color.formula.list</field>
+        <field name="model">tint.color.formula</field>
+        <field name="arch" type="xml">
+            <list string="Fórmulas" decoration-danger="not fits">
+                <field name="color_id" />
+                <field name="base_type_id" />
+                <field name="size_id" />
+                <field name="total_points" sum="Total puntos" />
+                <field name="total_points_display" string="Total" />
+                <field name="capacity_display" string="Capacidad" />
+                <field name="remaining_points" string="Holgura" />
+                <field name="fits" string="Cabe" />
+                <field name="requires_extraction" optional="show" string="Extracción" />
+            </list>
+        </field>
+    </record>
+
+    <record id="tint_color_formula_view_form" model="ir.ui.view">
+        <field name="name">tint.color.formula.form</field>
+        <field name="model">tint.color.formula</field>
+        <field name="arch" type="xml">
+            <form string="Fórmula de entintado">
+                <header>
+                    <button
+                        name="action_generate_other_sizes"
+                        type="object"
+                        string="Generar otras presentaciones"
+                        class="btn-primary"
+                        invisible="not line_ids"
+                        help="Crea las fórmulas de las demás presentaciones escalando estas dosis. Quedan editables."
+                    />
+                </header>
+                <sheet>
+                    <widget
+                        name="web_ribbon"
+                        title="Archivado"
+                        bg_color="text-bg-danger"
+                        invisible="active"
+                    />
+                    <group>
+                        <group string="Combinación">
+                            <field name="color_id" options="{'no_create': True}" />
+                            <field
+                                name="base_type_id"
+                                options="{'no_create': True}"
+                            />
+                            <field name="size_id" options="{'no_create': True}" />
+                            <field name="active" invisible="1" />
+                        </group>
+                        <group string="Puntos">
+                            <field name="total_points_display" string="Total" />
+                            <field name="capacity_display" string="Capacidad del envase" />
+                            <field name="remaining_points" />
+                            <field name="fits" />
+                        </group>
+                    </group>
+                    <div
+                        class="alert alert-danger"
+                        role="alert"
+                        invisible="fits or not capacity_points"
+                    >
+                        Esta fórmula excede la capacidad del envase. Al dispensar
+                        se derramaría. Reduzca las dosis o use un tipo de base que
+                        admita más colorante.
+                    </div>
+                    <div
+                        class="alert alert-warning"
+                        role="alert"
+                        invisible="not capacity_points == 0"
+                    >
+                        No hay capacidad registrada para esta combinación de tipo de
+                        base y presentación. Captúrela en la matriz de capacidad.
+                    </div>
+                    <div
+                        class="alert alert-info"
+                        role="alert"
+                        invisible="not requires_extraction"
+                    >
+                        <field name="operator_note" nolabel="1" readonly="1" />
+                    </div>
+                    <notebook>
+                        <page string="Dosis de colorante" name="lines">
+                            <field name="line_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle" />
+                                    <field
+                                        name="colorant_id"
+                                        options="{'no_create': True}"
+                                    />
+                                    <field name="colorant_slot" string="Posición" />
+                                    <field name="points" sum="Total" />
+                                    <field name="points_display" string="Notación" />
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="tint_color_formula_view_search" model="ir.ui.view">
+        <field name="name">tint.color.formula.search</field>
+        <field name="model">tint.color.formula</field>
+        <field name="arch" type="xml">
+            <search string="Buscar fórmula">
+                <field name="color_id" />
+                <field name="base_type_id" />
+                <field name="size_id" />
+                <separator />
+                <filter
+                    name="does_not_fit"
+                    string="No caben en el envase"
+                    domain="[('fits', '=', False)]"
+                />
+                <filter
+                    name="requires_extraction"
+                    string="Requieren extracción previa"
+                    domain="[('requires_extraction', '=', True)]"
+                />
+                <group>
+                    <filter
+                        name="group_color"
+                        string="Color"
+                        domain="[]"
+                        context="{'group_by': 'color_id'}"
+                    />
+                    <filter
+                        name="group_base_type"
+                        string="Tipo de base"
+                        domain="[]"
+                        context="{'group_by': 'base_type_id'}"
+                    />
+                    <filter
+                        name="group_size"
+                        string="Presentación"
+                        domain="[]"
+                        context="{'group_by': 'size_id'}"
+                    />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="tint_color_formula_action" model="ir.actions.act_window">
+        <field name="name">Fórmulas</field>
+        <field name="res_model">tint.color.formula</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="tint_color_formula_view_search" />
+        <field name="context">{'search_default_group_color': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registre una fórmula</p>
+            <p>
+                Dosis de colorante necesarias para lograr un color sobre un tipo
+                de base y una presentación concretos.
+            </p>
+        </field>
+    </record>
+
+</odoo>

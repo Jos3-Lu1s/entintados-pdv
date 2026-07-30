@@ -119,7 +119,7 @@
 
         <!-- ==================== Colorantes ==================== -->
 
-        <record id="demo_colorant_black" model="product.template">
+        <record id="demo_colorant_black" model="product.product">
             <field name="name">Colorante Negro (demo)</field>
             <field name="default_code">DEMO-COL-B</field>
             <field name="type">consu</field>
@@ -131,7 +131,7 @@
             <field name="price_per_point">1.80</field>
         </record>
 
-        <record id="demo_colorant_yellow_oxide" model="product.template">
+        <record id="demo_colorant_yellow_oxide" model="product.product">
             <field name="name">Colorante Óxido Amarillo (demo)</field>
             <field name="default_code">DEMO-COL-C</field>
             <field name="type">consu</field>
@@ -143,7 +143,7 @@
             <field name="price_per_point">2.10</field>
         </record>
 
-        <record id="demo_colorant_red_oxide" model="product.template">
+        <record id="demo_colorant_red_oxide" model="product.product">
             <field name="name">Colorante Óxido Rojo (demo)</field>
             <field name="default_code">DEMO-COL-D</field>
             <field name="type">consu</field>
@@ -155,7 +155,7 @@
             <field name="price_per_point">2.40</field>
         </record>
 
-        <record id="demo_colorant_phthalo_blue" model="product.template">
+        <record id="demo_colorant_phthalo_blue" model="product.product">
             <field name="name">Colorante Azul Ftalo (demo)</field>
             <field name="default_code">DEMO-COL-W</field>
             <field name="type">consu</field>

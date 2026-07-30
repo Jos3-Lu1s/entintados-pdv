@@ -8,6 +8,37 @@
     />
 
     <menuitem
+        id="menu_tint_catalog"
+        name="Carta de color"
+        parent="menu_tint_root"
+        sequence="10"
+    />
+
+    <menuitem
+        id="menu_tint_color"
+        name="Colores"
+        parent="menu_tint_catalog"
+        action="tint_color_action"
+        sequence="10"
+    />
+
+    <menuitem
+        id="menu_tint_color_formula"
+        name="Fórmulas"
+        parent="menu_tint_catalog"
+        action="tint_color_formula_action"
+        sequence="20"
+    />
+
+    <menuitem
+        id="menu_tint_collection"
+        name="Colecciones"
+        parent="menu_tint_catalog"
+        action="tint_collection_action"
+        sequence="30"
+    />
+
+    <menuitem
         id="menu_tint_config"
         name="Configuración"
         parent="menu_tint_root"

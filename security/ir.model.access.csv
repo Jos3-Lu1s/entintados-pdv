@@ -6,3 +6,11 @@ access_tint_base_type_user,tint.base.type (lectura usuario interno),model_tint_b
 access_tint_base_type_manager,tint.base.type (administrador de catalogo),model_tint_base_type,entintados_pdv.group_tint_manager,1,1,1,1
 access_tint_base_capacity_user,tint.base.capacity (lectura usuario interno),model_tint_base_capacity,base.group_user,1,0,0,0
 access_tint_base_capacity_manager,tint.base.capacity (administrador de catalogo),model_tint_base_capacity,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_collection_user,tint.collection (lectura usuario interno),model_tint_collection,base.group_user,1,0,0,0
+access_tint_collection_manager,tint.collection (administrador de catalogo),model_tint_collection,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_color_user,tint.color (lectura usuario interno),model_tint_color,base.group_user,1,0,0,0
+access_tint_color_manager,tint.color (administrador de catalogo),model_tint_color,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_color_formula_user,tint.color.formula (lectura usuario interno),model_tint_color_formula,base.group_user,1,0,0,0
+access_tint_color_formula_manager,tint.color.formula (administrador de catalogo),model_tint_color_formula,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_color_formula_line_user,tint.color.formula.line (lectura usuario interno),model_tint_color_formula_line,base.group_user,1,0,0,0
+access_tint_color_formula_line_manager,tint.color.formula.line (administrador de catalogo),model_tint_color_formula_line,entintados_pdv.group_tint_manager,1,1,1,1

@@ -1,0 +1,33 @@
+# -*- coding: utf-8 -*-
+
+from odoo import api, fields, models
+
+
+class TintCollection(models.Model):
+    _name = 'tint.collection'
+    _description = "Colección o carta de color"
+    _order = 'sequence, name, id'
+
+    name = fields.Char(
+        string="Colección", required=True, translate=True)
+    code = fields.Char(string="Código")
+    description = fields.Text(string="Descripción", translate=True)
+    sequence = fields.Integer(string="Secuencia", default=10)
+    active = fields.Boolean(string="Activo", default=True)
+
+    color_ids = fields.One2many(
+        comodel_name='tint.color', inverse_name='collection_id',
+        string="Colores")
+    color_count = fields.Integer(
+        string="Colores", compute='_compute_color_count')
+
+    @api.depends('color_ids')
+    def _compute_color_count(self):
+        data = self.env['tint.color']._read_group(
+            domain=[('collection_id', 'in', self.ids)],
+            groupby=['collection_id'],
+            aggregates=['__count'],
+        )
+        counts = {collection.id: count for collection, count in data}
+        for collection in self:
+            collection.color_count = counts.get(collection.id, 0)
