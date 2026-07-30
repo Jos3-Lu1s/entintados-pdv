@@ -41,11 +41,8 @@
                         <field name="tint_operator_note" />
                     </group>
                     <group invisible="tint_role != 'colorant'">
-                        <group name="tint_colorant" string="Dispensado">
-                            <field name="colorant_slot" placeholder="p. ej. B1" />
+                        <group name="tint_colorant" string="Colorante">
                             <field name="uom_id" readonly="1" />
-                        </group>
-                        <group name="tint_colorant_price" string="Precio">
                             <field name="price_per_point" />
                         </group>
                     </group>

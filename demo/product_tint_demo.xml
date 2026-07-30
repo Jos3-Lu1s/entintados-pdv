@@ -127,7 +127,6 @@
             <field name="uom_id" ref="uom_tint_point" />
             <field name="sale_ok" eval="False" />
             <field name="tint_role">colorant</field>
-            <field name="colorant_slot">B</field>
             <field name="price_per_point">1.80</field>
         </record>
 
@@ -139,7 +138,6 @@
             <field name="uom_id" ref="uom_tint_point" />
             <field name="sale_ok" eval="False" />
             <field name="tint_role">colorant</field>
-            <field name="colorant_slot">C</field>
             <field name="price_per_point">2.10</field>
         </record>
 
@@ -151,7 +149,6 @@
             <field name="uom_id" ref="uom_tint_point" />
             <field name="sale_ok" eval="False" />
             <field name="tint_role">colorant</field>
-            <field name="colorant_slot">D</field>
             <field name="price_per_point">2.40</field>
         </record>
 
@@ -163,7 +160,6 @@
             <field name="uom_id" ref="uom_tint_point" />
             <field name="sale_ok" eval="False" />
             <field name="tint_role">colorant</field>
-            <field name="colorant_slot">W</field>
             <field name="price_per_point">3.20</field>
         </record>
 

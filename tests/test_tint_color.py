@@ -27,11 +27,11 @@ class TestTintColor(TransactionCase):
         point = cls.env.ref('entintados_pdv.uom_tint_point')
         cls.colorant_a = cls.env['product.product'].create({
             'name': 'Colorante prueba A', 'uom_id': point.id,
-            'tint_role': 'colorant', 'colorant_slot': 'A', 'price_per_point': 2.0,
+            'tint_role': 'colorant', 'price_per_point': 2.0,
         })
         cls.colorant_b = cls.env['product.product'].create({
             'name': 'Colorante prueba B', 'uom_id': point.id,
-            'tint_role': 'colorant', 'colorant_slot': 'B', 'price_per_point': 3.0,
+            'tint_role': 'colorant', 'price_per_point': 3.0,
         })
         cls.color = cls.colors.create({'name': 'Color de prueba'})
 
