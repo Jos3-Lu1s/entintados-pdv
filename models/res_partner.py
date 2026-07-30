@@ -111,8 +111,10 @@ class ResPartner(models.Model):
 
                     if duplicate:
                         self._raise_vat_duplicate_error(vat, duplicate)
+                        
+            if not vals.get('user_id'):
+                vals['user_id'] = self.env.user.id
 
-            # Asignar plazo de pago de 30 días por defecto
             if not vals.get('property_payment_term_id') and payment_term:
                 vals['property_payment_term_id'] = payment_term.id
 
