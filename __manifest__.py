@@ -65,6 +65,7 @@ Catálogo de entintado
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',
+        'views/product_template_tint_views.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
@@ -81,6 +82,9 @@ Catálogo de entintado
         'views/res_config_risk_view.xml',
         'views/res_partner_risk_view.xml',
         "wizards/partner_risk_exceeded_view.xml",
+    ],
+    'demo': [
+        'demo/product_tint_demo.xml',
     ],
     "installable": True,
     "application": False,
