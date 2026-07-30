@@ -45,9 +45,6 @@ class ProductTemplate(models.Model):
         related='tint_base_type_id.operator_note', readonly=True)
 
     # --- Solo para colorantes -------------------------------------------
-    colorant_slot = fields.Char(
-        string="Posición en dispensador",
-        help="Cánula o posición que ocupa el colorante en la dispensadora.")
     price_per_point = fields.Float(
         string="Precio por punto", digits='Product Price',
         help="Precio de venta de cada punto dispensado de este colorante.")
@@ -126,12 +123,10 @@ class ProductTemplate(models.Model):
                 product.tint_base_type_id = False
                 product.tint_size_id = False
             elif product.tint_role == 'base':
-                product.colorant_slot = False
                 product.price_per_point = 0.0
             else:
                 product.tint_base_type_id = False
                 product.tint_size_id = False
-                product.colorant_slot = False
                 product.price_per_point = 0.0
 
     @api.onchange('tint_base_type_id')

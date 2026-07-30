@@ -23,8 +23,6 @@ class TintColorFormulaLine(models.Model):
         help="Puntos de colorante a dispensar. Una onza equivale a 48 puntos.")
     points_display = fields.Char(
         string="Dosis", compute='_compute_points_display')
-    colorant_slot = fields.Char(
-        string="Posición", related='colorant_id.colorant_slot', readonly=True)
     sequence = fields.Integer(string="Secuencia", default=10)
 
     _points_positive = models.Constraint(

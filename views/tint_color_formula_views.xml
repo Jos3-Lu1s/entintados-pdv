@@ -91,7 +91,6 @@
                                         name="colorant_id"
                                         options="{'no_create': True}"
                                     />
-                                    <field name="colorant_slot" string="Posición" />
                                     <field name="points" sum="Total" />
                                     <field name="points_display" string="Notación" />
                                 </list>

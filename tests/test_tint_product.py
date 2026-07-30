@@ -123,8 +123,7 @@ class TestTintProduct(TransactionCase):
         self.assertEqual(colorant.uom_id, self.ounce)
 
     def test_colorant_fields(self):
-        colorant = self._create_colorant(colorant_slot='B1', price_per_point=2.5)
-        self.assertEqual(colorant.colorant_slot, 'B1')
+        colorant = self._create_colorant(price_per_point=2.5)
         self.assertEqual(colorant.price_per_point, 2.5)
         self.assertEqual(colorant.uom_id, self.point)
 
@@ -158,10 +157,8 @@ class TestTintProduct(TransactionCase):
         product = self.templates.new({
             'name': 'Producto cambiante',
             'tint_role': 'colorant',
-            'colorant_slot': 'B1',
             'price_per_point': 2.0,
         })
         product.tint_role = 'base'
         product._onchange_tint_role()
-        self.assertFalse(product.colorant_slot)
         self.assertEqual(product.price_per_point, 0.0)
