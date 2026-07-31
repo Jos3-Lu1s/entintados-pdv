@@ -1,6 +1,60 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
 
+    <record id="tint_base_capacity_view_kanban" model="ir.ui.view">
+        <field name="name">tint.base.capacity.kanban</field>
+        <field name="model">tint.base.capacity</field>
+        <field name="arch" type="xml">
+            <kanban
+                default_group_by="base_type_id"
+                records_draggable="false"
+                group_create="false"
+                group_delete="false"
+                quick_create="false"
+            >
+                <field name="is_consistent" />
+                <field name="requires_extraction" />
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <field name="size_id" class="fw-bold fs-5" />
+                                <div class="text-muted small">
+                                    <field name="base_type_id" />
+                                </div>
+                            </div>
+                            <span
+                                t-if="record.is_consistent.raw_value"
+                                class="badge rounded-pill text-bg-success"
+                            >
+                                <i class="fa fa-check me-1" role="img" aria-label="Consistente" />Consistente
+                            </span>
+                            <span
+                                t-else=""
+                                class="badge rounded-pill text-bg-danger"
+                                title="La capacidad capturada no coincide con el valor teórico (puntos por litro × volumen). Revísela."
+                            >
+                                <i class="fa fa-exclamation-triangle me-1" role="img" aria-label="Revisar" />Revisar
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-baseline gap-2 mt-2">
+                            <field name="max_points_display" class="fs-2 fw-bolder text-primary" />
+                            <span class="text-muted small">≈ <field name="max_points" /> Pts.</span>
+                        </div>
+                        <div class="text-muted small mt-1">
+                            <field name="volume_liters" /> L · <field name="points_per_liter" /> pts/L
+                        </div>
+                        <div t-if="record.requires_extraction.raw_value" class="mt-2">
+                            <span class="badge rounded-pill text-bg-warning">
+                                <i class="fa fa-tint me-1" role="img" aria-label="Extracción" />Requiere extracción previa
+                            </span>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="tint_base_capacity_view_list" model="ir.ui.view">
         <field name="name">tint.base.capacity.list</field>
         <field name="model">tint.base.capacity</field>
@@ -91,7 +145,7 @@
     <record id="tint_base_capacity_action" model="ir.actions.act_window">
         <field name="name">Matriz de capacidad</field>
         <field name="res_model">tint.base.capacity</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">kanban,list,form</field>
         <field name="search_view_id" ref="tint_base_capacity_view_search" />
         <field name="context">{'search_default_group_base_type': 1}</field>
         <field name="help" type="html">
