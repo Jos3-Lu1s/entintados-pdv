@@ -11,7 +11,7 @@
       una actualización de módulo no sobreescriba ajustes del cliente.
       Se deja actualizable durante el desarrollo para poder iterar.
     -->
-    <data>
+    <data noupdate="1">
 
         <record id="tint_size_liter" model="tint.size">
             <field name="name">Litro</field>

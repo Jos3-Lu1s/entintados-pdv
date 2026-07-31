@@ -44,8 +44,10 @@ Catálogo de entintado
             "entintados_pdv/static/src/js/tint_control_button.js",
             "entintados_pdv/static/src/js/tint_formula_popup.js",
             "entintados_pdv/static/src/js/pos_partner_defaults.js",
+            "entintados_pdv/static/src/js/contact_type_selector_field.js",
             "entintados_pdv/static/src/xml/tint_control_button.xml",
             "entintados_pdv/static/src/xml/tint_formula_popup.xml",
+            "entintados_pdv/static/src/xml/contact_type_selector_field.xml",
         ],
         "web.assets_backend": [
             "entintados_pdv/static/src/js/contact_type_selector_field.js",

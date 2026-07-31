@@ -15,7 +15,7 @@
 
       TODO antes de salida a produccion: cambiar a noupdate="1".
     -->
-    <data>
+    <data noupdate="1">
 
         <!-- W: 24 puntos por litro -->
         <record id="tint_cap_w_l" model="tint.base.capacity">

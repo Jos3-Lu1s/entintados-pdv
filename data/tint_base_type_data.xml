@@ -15,7 +15,7 @@
 
       TODO antes de salida a producción: cambiar a noupdate="1".
     -->
-    <data>
+    <data noupdate="1">
 
         <record id="tint_base_type_w" model="tint.base.type">
             <field name="name">White</field>
