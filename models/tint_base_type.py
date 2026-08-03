@@ -102,6 +102,25 @@ class TintBaseType(models.Model):
                 if base_type.code else base_type.name
             )
 
+    # --- Normalización del código ---------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if isinstance(vals.get('code'), str):
+                vals['code'] = vals['code'].strip()
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if isinstance(vals.get('code'), str):
+            vals['code'] = vals['code'].strip()
+        return super().write(vals)
+
+    @api.onchange('code')
+    def _onchange_code_trim(self):
+        if self.code and isinstance(self.code, str):
+            self.code = self.code.strip()
+
     @api.constrains('requires_extraction', 'extraction_percentage')
     def _check_extraction(self):
         for base_type in self:

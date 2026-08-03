@@ -50,3 +50,22 @@ class TintSize(models.Model):
     def _compute_display_name(self):
         for size in self:
             size.display_name = "%s (%s)" % (size.name, size.code) if size.code else size.name
+
+    # --- Normalización del código ---------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if isinstance(vals.get('code'), str):
+                vals['code'] = vals['code'].strip()
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if isinstance(vals.get('code'), str):
+            vals['code'] = vals['code'].strip()
+        return super().write(vals)
+
+    @api.onchange('code')
+    def _onchange_code_trim(self):
+        if self.code and isinstance(self.code, str):
+            self.code = self.code.strip()

@@ -46,7 +46,6 @@
                             <field name="white_content" />
                             <field name="points_per_liter" />
                             <field name="fill_percentage" />
-                            <field name="sequence" />
                             <field name="active" invisible="1" />
                         </group>
                         <group string="Color de línea">

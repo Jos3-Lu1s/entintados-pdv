@@ -52,9 +52,40 @@
                             <field name="active" invisible="1" />
                         </group>
                         <group string="Puntos">
-                            <field name="total_points_display" string="Total" />
-                            <field name="capacity_display" string="Capacidad del envase" />
-                            <field name="remaining_points" />
+                            <label for="total_points_display" string="Total del entintado" />
+                            <div class="d-flex gap-3">
+                                <field
+                                    name="total_points_display"
+                                    nolabel="1"
+                                    widget="badge"
+                                    decoration-info="True"
+                                    class="w-auto"
+                                />
+                                <span class="text-muted" invisible="total_points &lt; 48">≈</span>
+                                <field name="total_points" nolabel="1" class="oe_inline w-auto" invisible="total_points &lt; 48" />
+                                <span class="text-muted" invisible="total_points &lt; 48">Pts.</span>
+                            </div>
+
+                            <label for="capacity_display" string="Capacidad del envase" />
+                            <div class="d-flex gap-3">
+                                <field
+                                    name="capacity_display"
+                                    nolabel="1"
+                                    widget="badge"
+                                    decoration-info="True"
+                                    class="w-auto"
+                                />
+                                <span class="text-muted" invisible="capacity_points &lt; 48">≈</span>
+                                <field name="capacity_points" nolabel="1" class="oe_inline w-auto" invisible="capacity_points &lt; 48" />
+                                <span class="text-muted" invisible="capacity_points &lt; 48">Pts.</span>
+                            </div>
+
+                            <label for="remaining_points" string="Holgura" />
+                            <div class="d-flex gap-3">
+                                <field name="remaining_points" nolabel="1" class="oe_inline w-auto" />
+                                <span class="text-muted">Pts.</span>
+                            </div>
+
                             <field name="fits" />
                         </group>
                     </group>
