@@ -61,7 +61,8 @@ Catálogo de entintado
         'security/ir.model.access.csv',
         # Catálogo de entintado: datos maestros físicos
         'data/uom_data.xml',
-        'data/ir_sequence_data.xml',
+        'data/schema_value.xml',
+        'data/schema_value.xml',
         'data/tint_size_data.xml',
         'data/tint_base_type_data.xml',
         'data/tint_base_capacity_data.xml',
@@ -71,6 +72,7 @@ Catálogo de entintado
         'views/product_template_tint_views.xml',
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
+        'views/product_schema_view.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
