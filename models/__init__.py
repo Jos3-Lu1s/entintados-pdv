@@ -8,6 +8,7 @@ from . import tint_collection
 from . import tint_color
 from . import tint_color_formula
 from . import tint_color_formula_line
+from . import pos_session
 from . import res_partner
 from . import crm_lead
 from . import account_invoice_risk

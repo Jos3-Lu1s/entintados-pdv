@@ -9,6 +9,7 @@ class TintBaseCapacity(models.Model):
     _name = 'tint.base.capacity'
     _description = "Capacidad de colorante por base y presentación"
     _order = 'base_type_id, size_id, id'
+    _inherit = ['pos.load.mixin']
 
     base_type_id = fields.Many2one(
         comodel_name='tint.base.type', string="Tipo de base",
@@ -73,3 +74,14 @@ class TintBaseCapacity(models.Model):
                 capacity.size_id.code or "",
                 format_points(capacity.max_points),
             )
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'base_type_id', 'size_id', 'max_points']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        # Sin campo `active`: la matriz de capacidad se carga completa.
+        return []

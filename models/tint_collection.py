@@ -7,11 +7,12 @@ class TintCollection(models.Model):
     _name = 'tint.collection'
     _description = "Colección o carta de color"
     _order = 'sequence, name, id'
+    _inherit = ['pos.load.mixin']
 
     name = fields.Char(
         string="Colección", required=True, translate=True)
     code = fields.Char(string="Código")
-    description = fields.Text(string="Descripción", translate=True)
+    description = fields.Html(string="Descripción", translate=True, sanitize=True)
     sequence = fields.Integer(string="Secuencia", default=10)
     active = fields.Boolean(string="Activo", default=True)
 
@@ -31,3 +32,13 @@ class TintCollection(models.Model):
         counts = {collection.id: count for collection, count in data}
         for collection in self:
             collection.color_count = counts.get(collection.id, 0)
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'name', 'code', 'sequence']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]

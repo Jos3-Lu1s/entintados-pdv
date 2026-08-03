@@ -10,6 +10,7 @@ class TintColorFormula(models.Model):
     _name = 'tint.color.formula'
     _description = "Fórmula de entintado"
     _order = 'color_id, base_type_id, size_id, id'
+    _inherit = ['pos.load.mixin']
 
     color_id = fields.Many2one(
         comodel_name='tint.color', string="Color",
@@ -186,3 +187,13 @@ class TintColorFormula(models.Model):
             'view_mode': 'list,form',
             'domain': [('id', 'in', creadas.ids)],
         }
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'color_id', 'base_type_id', 'size_id', 'total_points']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]

@@ -11,14 +11,15 @@ class TintBaseType(models.Model):
     _name = 'tint.base.type'
     _description = "Tipo de base de pintura"
     _order = 'sequence, code, id'
+    _inherit = ['pos.load.mixin']
 
     name = fields.Char(
         string="Tipo de base", required=True, translate=True)
     code = fields.Char(
         string="Código", required=True,
         help="Código de una letra del fabricante: W, M, D, A, N, Y, R.")
-    description = fields.Text(
-        string="Descripción", translate=True)
+    description = fields.Html(
+        string="Descripción", translate=True, sanitize=True)
     sequence = fields.Integer(string="Secuencia", default=10)
     active = fields.Boolean(string="Activo", default=True)
 
@@ -149,3 +150,16 @@ class TintBaseType(models.Model):
     def capacity_display_for(self, size, raise_if_missing=True):
         """Capacidad en notación mixta, p. ej. ``9Y 24``."""
         return format_points(self.capacity_for(size, raise_if_missing=raise_if_missing))
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return [
+            'id', 'name', 'code', 'fill_percentage', 'points_per_liter',
+            'requires_extraction', 'extraction_percentage', 'operator_note',
+        ]
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]

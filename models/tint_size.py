@@ -7,6 +7,7 @@ class TintSize(models.Model):
     _name = 'tint.size'
     _description = "Presentación de envase de pintura"
     _order = 'sequence, volume_liters, id'
+    _inherit = ['pos.load.mixin']
 
     name = fields.Char(
         string="Presentación", required=True, translate=True)
@@ -69,3 +70,13 @@ class TintSize(models.Model):
     def _onchange_code_trim(self):
         if self.code and isinstance(self.code, str):
             self.code = self.code.strip()
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'name', 'code', 'volume_liters', 'sequence']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]

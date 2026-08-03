@@ -10,6 +10,7 @@ class TintColorFormulaLine(models.Model):
     _name = 'tint.color.formula.line'
     _description = "Dosis de colorante de una fórmula"
     _order = 'formula_id, sequence, id'
+    _inherit = ['pos.load.mixin']
 
     formula_id = fields.Many2one(
         comodel_name='tint.color.formula', string="Fórmula",
@@ -57,3 +58,14 @@ class TintColorFormulaLine(models.Model):
                     "dosificarse en una fórmula.",
                     line.colorant_id.display_name,
                 ))
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'formula_id', 'colorant_id', 'points', 'sequence']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        # Sin campo `active`: las dosis se cargan junto con sus fórmulas.
+        return []

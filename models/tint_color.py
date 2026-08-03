@@ -12,6 +12,7 @@ class TintColor(models.Model):
     _name = 'tint.color'
     _description = "Color de la carta"
     _order = 'collection_id, name, id'
+    _inherit = ['pos.load.mixin']
 
     name = fields.Char(string="Color", required=True, translate=True)
     code = fields.Char(
@@ -24,7 +25,7 @@ class TintColor(models.Model):
     collection_id = fields.Many2one(
         comodel_name='tint.collection', string="Colección",
         ondelete='restrict', index=True)
-    notes = fields.Text(string="Notas", translate=True)
+    notes = fields.Html(string="Notas", translate=True, sanitize=True)
     active = fields.Boolean(string="Activo", default=True)
 
     formula_ids = fields.One2many(
@@ -95,3 +96,13 @@ class TintColor(models.Model):
     def formulas_for_size(self, size):
         self.ensure_one()
         return self.formula_ids.filtered(lambda f: f.size_id == size)
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'name', 'code', 'html_color', 'collection_id']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]
