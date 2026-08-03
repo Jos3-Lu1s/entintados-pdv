@@ -192,7 +192,10 @@ class TintColorFormula(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return ['id', 'color_id', 'base_type_id', 'size_id', 'total_points']
+        return [
+            'id', 'color_id', 'base_type_id', 'size_id', 'total_points',
+            'line_ids',
+        ]
 
     @api.model
     def _load_pos_data_domain(self, data, config):

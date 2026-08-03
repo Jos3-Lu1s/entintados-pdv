@@ -148,3 +148,36 @@ class ProductTemplate(models.Model):
                     ),
                 }
             }
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        # EXTENDS point_of_sale: agrega los campos de entintado que la caja
+        # necesita (rol, tipo y presentación de la base, capacidad y precio
+        # por punto del colorante).
+        field_names = super()._load_pos_data_fields(config)
+        return field_names + [
+            'tint_role', 'tint_base_type_id', 'tint_size_id',
+            'tint_capacity_points', 'price_per_point',
+        ]
+
+    @api.model
+    def _load_pos_data_search_read(self, data, config):
+        # EXTENDS point_of_sale: garantiza que los colorantes lleguen al POS.
+        #
+        # Los colorantes son insumo del entintado (sale_ok=False,
+        # available_in_pos=False), así que el dominio estándar los excluye y
+        # el límite de productos podría dejarlos fuera. Se añaden aquí después
+        # de la carga normal —igual que el core hace con el producto de
+        # propina y los especiales— sin volverlos vendibles en caja. Al quedar
+        # en data['product.template'], sus variantes product.product se cargan
+        # solas por dependerse de esa lista.
+        read = super()._load_pos_data_search_read(data, config)
+        loaded_ids = {p['id'] for p in read}
+        colorants = self.search([('tint_role', '=', 'colorant')])
+        missing = colorants.filtered(lambda p: p.id not in loaded_ids)
+        if missing:
+            read += self._load_pos_data_read(missing, config)
+        return read
+
