@@ -49,6 +49,7 @@
                                     <field name="name" />
                                     <field name="html_color" optional="show" />
                                     <field name="formula_count" string="Fórmulas" />
+                                    <field name="schema_id" />
                                 </list>
                             </field>
                         </page>
@@ -129,6 +130,7 @@
                                 widget="many2many_tags"
                                 string="Bases con fórmula"
                             />
+                            <field name="schema_id" />
                         </group>
                     </group>
                     <notebook>

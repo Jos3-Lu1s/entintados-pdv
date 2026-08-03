@@ -17,6 +17,10 @@ class ProductTemplate(models.Model):
         string="Rol en entintado",
         help="Base: envase de pintura que recibe colorante. "
              "Colorante: tinte que se dispensa por puntos.")
+    
+    tint_schema_id = fields.Many2one(
+        comodel_name='product.schema', string="Esquema de producto",
+        )
 
     # --- Solo para bases ------------------------------------------------
     tint_base_type_id = fields.Many2one(

@@ -12,6 +12,9 @@
                         <group name="tint_role" string="Rol">
                             <field name="tint_role" />
                         </group>
+                        <group name="tint_schema" string="Esquema">
+                            <field name="tint_schema_id" />
+                        </group>
                     </group>
                     <group invisible="tint_role != 'base'">
                         <group name="tint_base" string="Envase">
