@@ -49,6 +49,7 @@
                                 options="{'no_create': True}"
                             />
                             <field name="size_id" options="{'no_create': True}" />
+                            <field name="scheme_id" />
                             <field name="active" invisible="1" />
                         </group>
                         <group string="Puntos">
@@ -141,6 +142,7 @@
                 <field name="color_id" />
                 <field name="base_type_id" />
                 <field name="size_id" />
+                <field name="scheme_id" />
                 <separator />
                 <filter
                     name="does_not_fit"

@@ -22,8 +22,7 @@ class TintColor(models.Model):
         string="Muestra (hex)",
         help="Color aproximado para mostrar en pantalla, en formato #RRGGBB. "
              "Es una referencia visual, no un valor colorimétrico.")
-    schema_id = fields.Many2one(
-        comodel_name='product.schema', string="Esquema de producto")
+    
     collection_id = fields.Many2one(
         comodel_name='tint.collection', string="Colección",
         ondelete='restrict', index=True)
