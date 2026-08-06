@@ -78,6 +78,14 @@
     />
 
     <menuitem 
+        id="menu_lines_schema"
+        name="Líneas de esquema"
+        parent="menu_tint_config"
+        action="action_lines_schema"
+        sequence="50"
+    />
+
+    <menuitem 
         id="menu_product"
         name="Productos"
         parent="menu_tint_root"

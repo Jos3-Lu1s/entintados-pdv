@@ -37,14 +37,56 @@ patch(ControlButtons.prototype, {
         const payload = await makeAwaitable(this.dialog, TintFormulaPopup, {
             baseTypeId: tmpl.tint_base_type_id.id,
             sizeId: tmpl.tint_size_id.id,
+            initialColorId: order.uiState?.selectedTintColorId || false,
         });
         if (!payload) {
             return;
         }
 
-        // Se guarda como nota de cliente (texto plano y visible en la línea).
+        // 1. Guardar la especificación del entintado en la nota de cliente de la línea base
         line.setCustomerNote(payload.text);
 
-        this.notification.add(_t("Entintado guardado en la línea."), { type: "success" });
+        // 2. Agregar automáticamente los materiales / colorantes que componen la fórmula debajo de la base
+        if (payload.doses && payload.doses.length > 0) {
+            for (const dose of payload.doses) {
+                if (dose.colorantId) {
+                    const colorantProduct = this.pos.models["product.product"].get(dose.colorantId);
+                    if (colorantProduct) {
+                        const price = colorantProduct.price_per_point || colorantProduct.lst_price || 0;
+                        const noteText = _t("Insumo de entintado para: %s (%s Pts)", line.product_id?.display_name || "", dose.points);
+
+                        let addedLine = null;
+                        if (typeof this.pos.addLineToCurrentOrder === "function") {
+                            addedLine = await this.pos.addLineToCurrentOrder({
+                                product_id: colorantProduct,
+                                qty: dose.points,
+                                price_unit: price,
+                                customer_note: noteText,
+                            });
+                        } else if (this.pos.models && this.pos.models["pos.order.line"]) {
+                            addedLine = this.pos.models["pos.order.line"].create({
+                                order_id: order,
+                                product_id: colorantProduct,
+                                qty: dose.points,
+                                price_unit: price,
+                                customer_note: noteText,
+                            });
+                        } else if (typeof order?.add_product === "function") {
+                            await order.add_product(colorantProduct, {
+                                quantity: dose.points,
+                                price: price,
+                                customer_note: noteText,
+                            });
+                        }
+
+                        if (addedLine && typeof addedLine.setCustomerNote === "function") {
+                            addedLine.setCustomerNote(noteText);
+                        }
+                    }
+                }
+            }
+        }
+
+        this.notification.add(_t("Entintado y materiales agregados a la orden."), { type: "success" });
     },
 });

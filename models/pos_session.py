@@ -8,9 +8,9 @@ class PosSession(models.Model):
 
     @api.model
     def _load_pos_data_models(self, config):
-        # EXTENDS point_of_sale: agrega el catálogo de entintado al POS.
-        data = super()._load_pos_data_models(config)
-        data += [
+        models_to_load = super()._load_pos_data_models(config)
+
+        tint_models = [
             'tint.size',
             'tint.base.type',
             'tint.base.capacity',
@@ -19,4 +19,9 @@ class PosSession(models.Model):
             'tint.color.formula',
             'tint.color.formula.line',
         ]
-        return data
+
+        for model_name in tint_models:
+            if model_name not in models_to_load:
+                models_to_load.append(model_name)
+
+        return models_to_load

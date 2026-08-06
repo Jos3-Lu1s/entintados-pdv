@@ -36,7 +36,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase', 'crm', 'phone_validation'],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -48,6 +48,15 @@ Catálogo de entintado
             "entintados_pdv/static/src/xml/tint_control_button.xml",
             "entintados_pdv/static/src/xml/tint_formula_popup.xml",
             "entintados_pdv/static/src/xml/contact_type_selector_field.xml",
+            
+            "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.js",
+            "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.xml",
+            "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.scss",
+            "entintados_pdv/static/src/app/product_screen/tint_color_button.js",
+            "entintados_pdv/static/src/app/product_screen/tint_color_button.xml",
+            "entintados_pdv/static/src/app/product_screen/tint_products_widget.js",
+            "entintados_pdv/static/src/app/product_screen/tint_products_widget.xml",
+            "entintados_pdv/static/src/app/models/tint_models.js",
         ],
         "web.assets_backend": [
             "entintados_pdv/static/src/js/contact_type_selector_field.js",
@@ -62,10 +71,10 @@ Catálogo de entintado
         # Catálogo de entintado: datos maestros físicos
         'data/uom_data.xml',
         'data/schema_value.xml',
-        'data/schema_value.xml',
         'data/tint_size_data.xml',
         'data/tint_base_type_data.xml',
         'data/tint_base_capacity_data.xml',
+        'data/tint_color_data.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',
@@ -73,6 +82,7 @@ Catálogo de entintado
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
         'views/product_schema_view.xml',
+        'views/line_schema_view.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',

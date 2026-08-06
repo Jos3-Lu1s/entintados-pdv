@@ -34,6 +34,7 @@ export class TintFormulaPopup extends Component {
         title: { type: String, optional: true },
         baseTypeId: { type: [Number, Boolean], optional: true },
         sizeId: { type: [Number, Boolean], optional: true },
+        initialColorId: { type: [Number, Boolean], optional: true },
         getPayload: { type: Function, optional: true },
         close: Function,
     };
@@ -41,6 +42,7 @@ export class TintFormulaPopup extends Component {
         title: _t("Configurar entintado"),
         baseTypeId: false,
         sizeId: false,
+        initialColorId: false,
     };
 
     setup() {
@@ -48,7 +50,7 @@ export class TintFormulaPopup extends Component {
         this.state = useState({
             activeTab: "tint", // "tint" | "create_color"
             search: "",
-            colorId: false,
+            colorId: this.props.initialColorId || false,
             extractionDone: false,
 
             // Formulario para crear nuevo color (tint.color)
@@ -271,6 +273,7 @@ export class TintFormulaPopup extends Component {
             this.state.newColorantPoints = 1;
 
             if (colorId) {
+                this.pos.loadVirtualTintProducts?.();
                 this.state.colorId = colorId;
                 setTimeout(() => {
                     this.state.activeTab = "tint";
@@ -376,7 +379,8 @@ export class TintFormulaPopup extends Component {
             .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
             .map((l) => ({
                 id: l.id,
-                name: l.colorant_id?.display_name || _t("(colorante)"),
+                colorantId: l.colorant_id?.id,
+                name: l.colorant_id?.display_name || l.colorant_id?.name || _t("(colorante)"),
                 points: l.points,
             }));
     }
@@ -441,6 +445,7 @@ export class TintFormulaPopup extends Component {
             totalPoints: this.totalPoints,
             extractionDone: this.state.extractionDone,
             text: this.summaryText,
+            doses: this.doses,
         });
         this.props.close();
     }

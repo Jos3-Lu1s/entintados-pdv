@@ -43,6 +43,10 @@ class TintColor(models.Model):
         'UNIQUE(code)',
         "Ya existe un color con ese código.",
     )
+    
+    scheme_id=fields.Many2one(
+        comodel_name='product.schema',string="Esquema"
+    )
 
     @api.depends('formula_ids')
     def _compute_formula_count(self):
@@ -102,7 +106,7 @@ class TintColor(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return ['id', 'name', 'code', 'html_color', 'collection_id']
+        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id', 'scheme_id', 'base_type_ids',]
 
     @api.model
     def _load_pos_data_domain(self, data, config):

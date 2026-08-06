@@ -28,7 +28,8 @@ class TintColorFormula(models.Model):
         string="Dosis de colorante")
     
     scheme_id = fields.Many2one(
-        comodel_name='product.schema', string="Esquema de producto")
+        related='color_id.scheme_id', string="Esquema de producto",
+        store=True, readonly=True,)
 
     total_points = fields.Integer(
         string="Total (Pts.)", compute='_compute_total_points', store=True)

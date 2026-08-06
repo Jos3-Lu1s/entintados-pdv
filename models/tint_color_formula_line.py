@@ -69,3 +69,17 @@ class TintColorFormulaLine(models.Model):
     def _load_pos_data_domain(self, data, config):
         # Sin campo `active`: las dosis se cargan junto con sus fórmulas.
         return []
+    
+    @api.constrains('colorant_id', 'formula_id')
+    def _check_colorant_schema(self):
+        for line in self:
+            formula_schema = line.formula_id.scheme_id
+            colorant_schema = line.colorant_id.product_tmpl_id.tint_schema_id
+            if formula_schema and colorant_schema != formula_schema:
+                raise ValidationError(_(
+                    "«%(colorant)s» pertenece al esquema «%(colorant_schema)s», pero "
+                    "la fórmula usa el esquema «%(formula_schema)s».",
+                    colorant=line.colorant_id.display_name,
+                    colorant_schema=colorant_schema.display_name if colorant_schema else _("ninguno"),
+                    formula_schema=formula_schema.display_name,
+                ))

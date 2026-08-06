@@ -122,6 +122,8 @@
                                     <field
                                         name="colorant_id"
                                         options="{'no_create': True}"
+                                        domain="[('tint_role', '=', 'colorant'),
+                                            ('product_tmpl_id.tint_schema_id', '=', parent.scheme_id)]"
                                     />
                                     <field name="points" sum="Total" />
                                     <field name="points_display" string="Notación" />

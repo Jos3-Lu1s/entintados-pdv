@@ -14,6 +14,8 @@
                         </group>
                         <group name="tint_schema" string="Esquema">
                             <field name="tint_schema_id" />
+                            <field name="tint_line_id" 
+                                    domain="[('schema_id', '=', tint_schema_id)]" />
                         </group>
                     </group>
                     <group invisible="tint_role != 'base'">

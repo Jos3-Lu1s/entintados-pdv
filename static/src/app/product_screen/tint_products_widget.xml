@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Banner de color de entintado activo en la pantalla principal del PDV -->
+    <t t-name="entintados_pdv.ProductScreenActiveTintBanner" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
+        <xpath expr="//ControlButtons" position="before">
+            <t t-set="activeOrder" t-value="pos.getOrder()"/>
+            <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor" class="o-active-tint-banner">
+                <div class="d-flex align-items-center">
+                    <span class="tint-sample" t-att-style="'background-color:' + (activeOrder.uiState.selectedTintColor.html_color || '#9E9E9E')"/>
+                    <div>
+                        <strong>Color seleccionado: </strong>
+                        <span class="fw-bold me-1">
+                            <t t-esc="activeOrder.uiState.selectedTintColor.code ? '[' + activeOrder.uiState.selectedTintColor.code + '] ' : ''"/>
+                            <t t-esc="activeOrder.uiState.selectedTintColor.name"/>
+                        </span>
+                        <small class="text-warning d-block d-sm-inline ms-sm-2">
+                            (Selecciona ahora un producto base de pintura)
+                        </small>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-light ms-3" t-on-click="() => this.clearSelectedTintColor()" title="Cancelar selección de color">
+                    <i class="fa fa-times me-1"/> Cancelar
+                </button>
+            </div>
+        </xpath>
+    </t>
+
+    <!-- Tarjeta visual de producto para tint.color en la grilla principal del PDV -->
+    <t t-name="entintados_pdv.ProductCardTintExtension" t-inherit="point_of_sale.ProductCard" t-inherit-mode="extension">
+        <xpath expr="//article" position="attributes">
+            <attribute name="t-att-class">(props.product.is_tint_color or props.product.isTintColor) ? 'product-card tint-color-card' : 'product-card'</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('product-img')]" position="replace">
+            <t t-if="props.product.is_tint_color or props.product.isTintColor">
+                <div class="tint-swatch-box" t-att-style="'background-color:' + (props.product.html_color || '#9E9E9E')">
+                    <span t-if="props.product.code" class="tint-swatch-code">
+                        <t t-esc="props.product.code"/>
+                    </span>
+                </div>
+            </t>
+            <t t-else="">
+                <div class="product-img">
+                    <img t-if="props.imageUrl" t-att-src="props.imageUrl" t-att-alt="props.name" loading="lazy"/>
+                    <i t-else="" class="fa fa-picture-o fa-2x text-300" role="img" aria-label="Sin imagen"/>
+                </div>
+            </t>
+        </xpath>
+        <xpath expr="//div[hasclass('product-name')]" position="after">
+            <t t-if="(props.product.is_tint_color or props.product.isTintColor) and props.product.collection_name">
+                <span class="tint-collection-badge">
+                    <i class="fa fa-book me-1"/>
+                    <t t-esc="props.product.collection_name"/>
+                </span>
+            </t>
+        </xpath>
+    </t>
+
+</templates>

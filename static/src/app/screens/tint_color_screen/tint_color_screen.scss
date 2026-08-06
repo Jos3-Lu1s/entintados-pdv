@@ -1,0 +1,33 @@
+.tint-color-screen {
+    width: 100%;
+    height: 100%;
+    background: #f4f5f7;
+}
+
+.tint-color-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.tint-color-card {
+    min-height: 170px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid #d8dadd;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+}
+
+.tint-color-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+.tint-color-sample {
+    width: 100%;
+    height: 105px;
+    border-bottom: 1px solid #d8dadd;
+}

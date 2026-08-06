@@ -1,6 +1,5 @@
 from odoo import models, fields, api
 
-
 class Schema(models.Model):
     _name = 'product.schema'
     _description = 'Product Schema'
