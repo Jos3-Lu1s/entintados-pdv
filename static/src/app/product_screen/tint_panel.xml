@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.TintPanel">
+        <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
+
+            <div class="flex-grow-1 overflow-auto p-3">
+
+                <div t-if="missingModels.length" class="alert alert-danger" role="alert">
+                    <strong>Faltan modelos por cargar en caja.</strong>
+                    <div class="mt-1">
+                        <t t-esc="missingModels.map(m => m.label).join(', ')"/>.
+                        Revisa <code>_load_pos_data_models</code> en <code>pos_session.py</code>
+                        y vuelve a abrir la sesión.
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Catálogo de entintado en caja</h5>
+
+                        <div class="d-flex flex-wrap gap-3">
+                            <div t-foreach="catalogStats" t-as="stat" t-key="stat.label"
+                                 class="border rounded p-3 text-center" style="min-width: 8rem;">
+                                <div class="fs-4 fw-bold">
+                                    <t t-if="stat.value === null">—</t>
+                                    <t t-else="" t-esc="stat.value"/>
+                                </div>
+                                <small class="text-muted" t-esc="stat.label"/>
+                            </div>
+                        </div>
+
+                        <p class="text-muted mt-3 mb-0">
+                            El intercambio de paneles funciona: la grilla de productos quedó
+                            oculta y este panel ocupa su lugar. Sobre esta base se construyen
+                            los filtros escalonados y las tarjetas de fórmula.
+                        </p>
+                    </div>
+                </div>
+
+                <div t-if="formulaCount > 2000" class="alert alert-warning mt-3" role="alert">
+                    Se cargaron <strong><t t-esc="formulaCount"/></strong> fórmulas en memoria del
+                    navegador. Conviene medir cuánto tarda en abrir la sesión con el catálogo
+                    real antes de decidir si hay que cargarlas bajo demanda.
+                </div>
+
+            </div>
+
+        </div>
+    </t>
+
+</templates>

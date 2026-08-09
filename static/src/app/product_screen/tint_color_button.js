@@ -1,22 +1,19 @@
 /** @odoo-module **/
 
-import { patch } from "@web/core/utils/patch";
-import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
-import { _t } from "@web/core/l10n/translation";
-
-patch(ControlButtons.prototype, {
-    openTintColorScreen() {
-        const tintCategory = this.pos.models["pos.category"]
-            ?.getAll()
-            .find((c) => c.name === "Carta de Colores" || c.is_tint_category);
-
-        if (tintCategory && typeof this.pos.setSelectedCategory === "function") {
-            this.pos.setSelectedCategory(tintCategory);
-        } else {
-            const order = this.pos.getOrder();
-            if (order) {
-                this.pos.navigate("TintColorScreen", { orderUuid: order.uuid });
-            }
-        }
-    },
-});
+/**
+ * OBSOLETO — este archivo ya no se carga.
+ *
+ * Extendía `ControlButtons` con un segundo botón de pincel que duplicaba al
+ * de `js/tint_control_button.js`. Dos botones con el mismo icono hacían
+ * imposible distinguir cuál se estaba pulsando, y su método
+ * `openTintColorScreen` buscaba una categoría POS «Carta de Colores» que ya
+ * no existe desde que se eliminaron los productos virtuales.
+ *
+ * Todo vive ahora en:
+ *   - `static/src/js/tint_control_button.js`
+ *   - `static/src/xml/tint_control_button.xml`
+ *
+ * Se deja el archivo vacío en lugar de borrarlo para no romper instalaciones
+ * que aún tengan los assets en caché. Puede eliminarse en la siguiente
+ * limpieza.
+ */

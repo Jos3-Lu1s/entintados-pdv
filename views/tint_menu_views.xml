@@ -89,7 +89,7 @@
         id="menu_product"
         name="Productos"
         parent="menu_tint_root"
-        action="product.product_template_action"
+        action="product_template_action_tint"
         sequence="100"
     />
 

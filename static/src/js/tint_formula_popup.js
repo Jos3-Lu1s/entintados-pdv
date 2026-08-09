@@ -2,22 +2,11 @@ import { Component, useState } from "@odoo/owl";
 import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
+import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
 
-const POINTS_PER_OUNCE = 48;
-
-/** Notación mixta de la operación: 456 -> "9Y 24", 96 -> "2Y", 24 -> "24 Pts." */
-export function formatPoints(total) {
-    total = Math.round(total || 0);
-    const ounces = Math.trunc(total / POINTS_PER_OUNCE);
-    const rest = total % POINTS_PER_OUNCE;
-    if (ounces && rest) {
-        return `${ounces}Y ${rest}`;
-    }
-    if (ounces) {
-        return `${ounces}Y`;
-    }
-    return `${rest} Pts.`;
-}
+// Se reexporta para no romper importaciones existentes. La implementación
+// vive ahora en `app/utils/tint_points.js`.
+export { formatPoints };
 
 /**
  * Popup de entintado en caja.
@@ -273,7 +262,6 @@ export class TintFormulaPopup extends Component {
             this.state.newColorantPoints = 1;
 
             if (colorId) {
-                this.pos.loadVirtualTintProducts?.();
                 this.state.colorId = colorId;
                 setTimeout(() => {
                     this.state.activeTab = "tint";

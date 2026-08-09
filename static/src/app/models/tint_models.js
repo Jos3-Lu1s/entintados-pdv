@@ -3,6 +3,18 @@
 import { registry } from "@web/core/registry";
 import { Base } from "@point_of_sale/app/models/related_models";
 
+/**
+ * Modelos de entintado disponibles en caja.
+ *
+ * Ninguno necesita comportamiento propio en el cliente todavía: existen para
+ * que el POS sepa instanciarlos. Se declaran en una lista y se registran en
+ * bucle en lugar de repetir siete bloques idénticos; añadir un modelo es
+ * añadir una línea.
+ */
+export class ProductSchema extends Base {
+    static pythonModel = "product.schema";
+}
+
 export class TintCollection extends Base {
     static pythonModel = "tint.collection";
 }
@@ -31,37 +43,17 @@ export class TintColorFormulaLine extends Base {
     static pythonModel = "tint.color.formula.line";
 }
 
-registry.category("pos_available_models").add(
-    TintCollection.pythonModel,
-    TintCollection
-);
+const TINT_MODELS = [
+    ProductSchema,
+    TintCollection,
+    TintColor,
+    TintSize,
+    TintBaseType,
+    TintBaseCapacity,
+    TintColorFormula,
+    TintColorFormulaLine,
+];
 
-registry.category("pos_available_models").add(
-    TintColor.pythonModel,
-    TintColor
-);
-
-registry.category("pos_available_models").add(
-    TintSize.pythonModel,
-    TintSize
-);
-
-registry.category("pos_available_models").add(
-    TintBaseType.pythonModel,
-    TintBaseType
-);
-
-registry.category("pos_available_models").add(
-    TintBaseCapacity.pythonModel,
-    TintBaseCapacity
-);
-
-registry.category("pos_available_models").add(
-    TintColorFormula.pythonModel,
-    TintColorFormula
-);
-
-registry.category("pos_available_models").add(
-    TintColorFormulaLine.pythonModel,
-    TintColorFormulaLine
-);
+for (const model of TINT_MODELS) {
+    registry.category("pos_available_models").add(model.pythonModel, model);
+}

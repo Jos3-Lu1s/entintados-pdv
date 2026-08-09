@@ -166,6 +166,10 @@ class ProductTemplate(models.Model):
         return field_names + [
             'tint_role', 'tint_base_type_id', 'tint_size_id',
             'tint_capacity_points', 'price_per_point',
+            # El asistente de caja resuelve el producto base concreto a partir
+            # de la combinación (esquema, presentación, tipo de base), así que
+            # necesita el esquema en el cliente.
+            'tint_schema_id', 'tint_line_id',
         ]
 
     @api.model
@@ -185,47 +189,6 @@ class ProductTemplate(models.Model):
         missing = colorants.filtered(lambda p: p.id not in loaded_ids)
         if missing:
             read += self._load_pos_data_read(missing, config)
-
-        colors = self.env['tint.color'].search([('active', '=', True)])
-        if colors and read:
-            categ = self.env['pos.category'].search([('name', '=', 'Carta de Colores')], limit=1)
-            if not categ:
-                categ = self.env['pos.category'].create({
-                    'name': 'Carta de Colores',
-                    'sequence': 1,
-                })
-
-            base_dict = dict(read[0])
-
-            for color in colors:
-                display_name = "[%s] %s" % (color.code, color.name) if color.code else color.name
-                col_name = color.collection_id.name if color.collection_id else ""
-
-                color_dict = base_dict.copy()
-                color_dict.update({
-                    'id': -1000 - color.id,
-                    'display_name': display_name,
-                    'name': color.name,
-                    'default_code': color.code or '',
-                    'code': color.code or '',
-                    'html_color': color.html_color or '#9E9E9E',
-                    'collection_name': col_name,
-                    'rawColorId': color.id,
-                    'is_tint_color': True,
-                    'isTintColor': True,
-                    'lst_price': 0.0,
-                    'list_price': 0.0,
-                    'price': 0.0,
-                    'pos_categ_ids': [categ.id],
-                    'categ_id': categ.id,
-                    'type': 'consu',
-                    'tracking': 'none',
-                    'available_in_pos': True,
-                    'active': True,
-                    'product_template_variant_value_ids': [],
-                })
-                read.append(color_dict)
-
         return read
 
 
