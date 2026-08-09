@@ -9,9 +9,14 @@ from ..utils.points import format_points
 class TintColorFormula(models.Model):
     _name = 'tint.color.formula'
     _description = "Fórmula de entintado"
-    _order = 'color_id, base_type_id, size_id, id'
+    _order = 'gallery_id, color_id, base_type_id, size_id, id'
     _inherit = ['pos.load.mixin']
 
+    gallery_id = fields.Many2one(
+        comodel_name='tint.gallery', string="Galería",
+        required=True, ondelete='restrict', index=True,
+        help="Origen de la receta: catálogo propio, de un fabricante de la "
+             "competencia, histórico o desarrollo interno.")
     color_id = fields.Many2one(
         comodel_name='tint.color', string="Color",
         required=True, ondelete='cascade', index=True)
@@ -51,9 +56,14 @@ class TintColorFormula(models.Model):
     operator_note = fields.Text(
         related='base_type_id.operator_note', readonly=True)
 
-    _color_base_size_uniq = models.Constraint(
-        'UNIQUE(color_id, base_type_id, size_id)',
-        "Ya existe una fórmula para ese color sobre esa base y presentación.",
+    # La galería forma parte de la llave a propósito: el sentido de tener
+    # galerías es que dos fabricantes puedan dar recetas distintas para el
+    # mismo color sobre la misma base y presentación. Sin ella en la llave,
+    # registrar la equivalencia de un color de la competencia sería imposible.
+    _gallery_color_base_size_uniq = models.Constraint(
+        'UNIQUE(gallery_id, color_id, base_type_id, size_id)',
+        "Esa galería ya tiene una fórmula para ese color sobre esa base y "
+        "presentación.",
     )
 
     # --- Cálculos -------------------------------------------------------
@@ -108,10 +118,11 @@ class TintColorFormula(models.Model):
         objetivo = caben if busca_las_que_caben else (todas - caben)
         return [('id', 'in', objetivo.ids)]
 
-    @api.depends('color_id', 'base_type_id', 'size_id')
+    @api.depends('gallery_id', 'color_id', 'base_type_id', 'size_id')
     def _compute_display_name(self):
         for formula in self:
-            formula.display_name = "%s · %s · %s" % (
+            formula.display_name = "%s · %s · %s · %s" % (
+                formula.gallery_id.code or formula.gallery_id.name or "",
                 formula.color_id.name or "",
                 formula.base_type_id.code or "",
                 formula.size_id.name or "",
@@ -161,7 +172,10 @@ class TintColorFormula(models.Model):
                 ))
             otras = self.env['tint.size'].search([('id', '!=', formula.size_id.id)])
             for size in otras:
-                if formula.color_id.formula_for(formula.base_type_id, size):
+                # Solo cuenta lo que ya exista en LA MISMA galería: que Comex
+                # tenga la fórmula en galón no significa que la nuestra la tenga.
+                if formula.color_id.formula_for(
+                        formula.base_type_id, size, gallery=formula.gallery_id):
                     continue  # ya existe: no se sobreescribe trabajo capturado
                 if not formula.base_type_id.capacity_for(size, raise_if_missing=False):
                     continue  # combinación fuera de la matriz
@@ -175,6 +189,7 @@ class TintColorFormula(models.Model):
                     for line in formula.line_ids
                 ]
                 creadas |= self.create({
+                    'gallery_id': formula.gallery_id.id,
                     'color_id': formula.color_id.id,
                     'base_type_id': formula.base_type_id.id,
                     'size_id': size.id,
@@ -203,6 +218,7 @@ class TintColorFormula(models.Model):
             # cliente toda fórmula parece huérfana de esquema aunque su color
             # lo tenga asignado.
             'scheme_id',
+            'gallery_id',
         ]
 
     @api.model

@@ -18,3 +18,5 @@ access_product_schema_user,product.schema (lectura usuario interno),model_produc
 access_product_schema_manager,product.schema (administrador de catalogo),model_product_schema,entintados_pdv.group_tint_manager,1,1,1,1
 access_lines_schema_user,product.lines.schema (lectura usuario interno),model_lines_schema,base.group_user,1,1,1,1
 access_lines_schema_manager,product.lines.schema (administrador de catalogo),model_lines_schema,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_gallery_user,tint.gallery (lectura usuario interno),model_tint_gallery,base.group_user,1,0,0,0
+access_tint_gallery_manager,tint.gallery (administrador de catalogo),model_tint_gallery,entintados_pdv.group_tint_manager,1,1,1,1

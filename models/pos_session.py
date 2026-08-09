@@ -16,6 +16,7 @@ class PosSession(models.Model):
             'tint.base.type',
             'tint.base.capacity',
             'tint.collection',
+            'tint.gallery',
             'tint.color',
             'tint.color.formula',
             'tint.color.formula.line',

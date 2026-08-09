@@ -6,6 +6,7 @@
         <field name="model">tint.color.formula</field>
         <field name="arch" type="xml">
             <list string="Fórmulas" decoration-danger="not fits">
+                <field name="gallery_id" />
                 <field name="color_id" />
                 <field name="base_type_id" />
                 <field name="size_id" />
@@ -43,6 +44,7 @@
                     />
                     <group>
                         <group string="Combinación">
+                            <field name="gallery_id" options="{'no_create': True}" />
                             <field name="color_id" options="{'no_create': True}" />
                             <field
                                 name="base_type_id"
@@ -141,6 +143,7 @@
         <field name="model">tint.color.formula</field>
         <field name="arch" type="xml">
             <search string="Buscar fórmula">
+                <field name="gallery_id" />
                 <field name="color_id" />
                 <field name="base_type_id" />
                 <field name="size_id" />
@@ -157,6 +160,12 @@
                     domain="[('requires_extraction', '=', True)]"
                 />
                 <group>
+                    <filter
+                        name="group_gallery"
+                        string="Galería"
+                        domain="[]"
+                        context="{'group_by': 'gallery_id'}"
+                    />
                     <filter
                         name="group_color"
                         string="Color"

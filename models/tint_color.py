@@ -92,15 +92,26 @@ class TintColor(models.Model):
                 vals['code'] = self.env['ir.sequence'].next_by_code('tint.color.code')
         return super().create(vals_list)
 
-    def formula_for(self, base_type, size):
+    def formula_for(self, base_type, size, gallery=None):
+        """Fórmula de este color para esa base y presentación.
+
+        Desde que existen las galerías, la combinación puede repetirse entre
+        recetas de distinto origen. Sin acotar la galería se devuelve la
+        primera que aparezca, que no tiene por qué ser la deseada.
+        """
         self.ensure_one()
         return self.formula_ids.filtered(
-            lambda f: f.base_type_id == base_type and f.size_id == size
+            lambda f: f.base_type_id == base_type
+            and f.size_id == size
+            and (not gallery or f.gallery_id == gallery)
         )[:1]
 
-    def formulas_for_size(self, size):
+    def formulas_for_size(self, size, gallery=None):
         self.ensure_one()
-        return self.formula_ids.filtered(lambda f: f.size_id == size)
+        return self.formula_ids.filtered(
+            lambda f: f.size_id == size
+            and (not gallery or f.gallery_id == gallery)
+        )
 
     # --- Carga al POS ---------------------------------------------------
 

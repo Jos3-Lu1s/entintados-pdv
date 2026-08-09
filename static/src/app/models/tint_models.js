@@ -19,6 +19,10 @@ export class TintCollection extends Base {
     static pythonModel = "tint.collection";
 }
 
+export class TintGallery extends Base {
+    static pythonModel = "tint.gallery";
+}
+
 export class TintColor extends Base {
     static pythonModel = "tint.color";
 }
@@ -46,6 +50,7 @@ export class TintColorFormulaLine extends Base {
 const TINT_MODELS = [
     ProductSchema,
     TintCollection,
+    TintGallery,
     TintColor,
     TintSize,
     TintBaseType,

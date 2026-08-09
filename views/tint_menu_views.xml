@@ -14,6 +14,11 @@
         sequence="10"
     />
 
+    <!--
+      Colores va primero a propósito: el menú raíz no tiene acción, así que
+      Odoo abre la primera hoja que encuentra. Cambiar este orden cambia la
+      pantalla de entrada del módulo.
+    -->
     <menuitem
         id="menu_tint_color"
         name="Colores"
@@ -28,6 +33,15 @@
         parent="menu_tint_catalog"
         action="tint_color_formula_action"
         sequence="20"
+    />
+
+    <!-- Junto a Fórmulas, que es lo que clasifica. -->
+    <menuitem
+        id="menu_tint_gallery"
+        name="Galerías"
+        parent="menu_tint_catalog"
+        action="tint_gallery_action"
+        sequence="25"
     />
 
     <menuitem

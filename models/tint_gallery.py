@@ -1,0 +1,118 @@
+# -*- coding: utf-8 -*-
+
+from odoo import api, fields, models
+
+
+class TintGallery(models.Model):
+    """Familia de fórmulas según su origen.
+
+    Una galería agrupa las fórmulas que vienen de una misma fuente: el
+    catálogo propio, el de un fabricante de la competencia, los colores
+    descontinuados que aún se reproducen, o los desarrollos internos.
+
+    No confundir con `tint.collection`, que agrupa **colores** en cartas
+    comerciales. La galería agrupa **fórmulas**: un mismo color puede
+    resolverse con dosis distintas según de quién sea la receta.
+    """
+
+    _name = 'tint.gallery'
+    _description = "Galería de fórmulas"
+    _order = 'sequence, name, id'
+    _inherit = ['pos.load.mixin']
+
+    name = fields.Char(
+        string="Galería", required=True, translate=True)
+    code = fields.Char(
+        string="Código", index='btree_not_null',
+        help="Código corto para identificarla en listados y etiquetas.")
+    sequence = fields.Integer(string="Secuencia", default=10)
+    active = fields.Boolean(string="Activa", default=True)
+
+    kind = fields.Selection(
+        selection=[
+            ('own', "Propia"),
+            ('competitor', "Competencia"),
+            ('legacy', "Histórica"),
+            ('development', "Desarrollo"),
+        ],
+        string="Origen",
+        help="De dónde viene la receta. Sirve para decidir qué galerías se "
+             "ofrecen en caja: las históricas y los desarrollos rara vez se "
+             "muestran al cliente.")
+    description = fields.Html(
+        string="Descripción", translate=True, sanitize=True)
+
+    formula_ids = fields.One2many(
+        comodel_name='tint.color.formula', inverse_name='gallery_id',
+        string="Fórmulas")
+    formula_count = fields.Integer(
+        string="Fórmulas", compute='_compute_counts')
+    color_count = fields.Integer(
+        string="Colores", compute='_compute_counts',
+        help="Colores distintos con al menos una fórmula en esta galería.")
+
+    _code_uniq = models.Constraint(
+        'UNIQUE(code)',
+        "Ya existe una galería con ese código.",
+    )
+
+    @api.depends('formula_ids', 'formula_ids.color_id')
+    def _compute_counts(self):
+        data = self.env['tint.color.formula']._read_group(
+            domain=[('gallery_id', 'in', self.ids)],
+            groupby=['gallery_id'],
+            aggregates=['__count', 'color_id:count_distinct'],
+        )
+        counts = {
+            gallery.id: (total, colors)
+            for gallery, total, colors in data
+        }
+        for gallery in self:
+            total, colors = counts.get(gallery.id, (0, 0))
+            gallery.formula_count = total
+            gallery.color_count = colors
+
+    @api.depends('name', 'code')
+    def _compute_display_name(self):
+        for gallery in self:
+            gallery.display_name = (
+                "[%s] %s" % (gallery.code, gallery.name)
+                if gallery.code else gallery.name
+            )
+
+    # --- Normalización del código ---------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if isinstance(vals.get('code'), str):
+                vals['code'] = vals['code'].strip().upper()
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if isinstance(vals.get('code'), str):
+            vals['code'] = vals['code'].strip().upper()
+        return super().write(vals)
+
+    # --- Acciones -------------------------------------------------------
+
+    def action_open_formulas(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.display_name,
+            'res_model': 'tint.color.formula',
+            'view_mode': 'list,form',
+            'domain': [('gallery_id', '=', self.id)],
+            'context': {'default_gallery_id': self.id},
+        }
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'name', 'code', 'kind', 'sequence']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]
