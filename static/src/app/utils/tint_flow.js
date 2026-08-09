@@ -1,9 +1,13 @@
 /** @odoo-module **/
 
 import { _t } from "@web/core/l10n/translation";
+import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { TintFormulaPopup } from "@entintados_pdv/js/tint_formula_popup";
-import { addTintedBaseToOrder } from "@entintados_pdv/app/utils/tint_order";
+import {
+    addTintedBaseToOrder,
+    extractionLiters,
+} from "@entintados_pdv/app/utils/tint_order";
 
 /**
  * El recorrido de entintar, de principio a fin, en un solo lugar.
@@ -74,6 +78,57 @@ export async function runTintFlow(
     ctx.notification.add(
         parent
             ? _t("Entintado y materiales agregados a la orden.")
+            : _t("No se pudo agregar el entintado a la orden."),
+        { type: parent ? "success" : "danger" }
+    );
+    return parent;
+}
+
+/**
+ * Entintado desde una tarjeta del panel.
+ *
+ * Aquí no hace falta el popup: la tarjeta ya es una fórmula concreta, así que
+ * base, presentación y color están decididos. Lo único que sigue requiriendo
+ * intervención es el acuse de extracción previa, y solo en las bases que lo
+ * exigen.
+ */
+export async function addTintedFromCard(ctx, { baseProduct, formula, color, qty = 1 }) {
+    const tmpl = baseProduct?.product_tmpl_id;
+    const baseType = tmpl?.tint_base_type_id;
+    const liters = extractionLiters(baseType, tmpl?.tint_size_id);
+
+    if (liters) {
+        const acknowledged = await new Promise((resolve) => {
+            ctx.dialog.add(ConfirmationDialog, {
+                title: _t("Extracción previa"),
+                body: _t(
+                    "Antes de entintar hay que extraer %(liters)s L del envase. %(note)s",
+                    {
+                        liters: liters.toFixed(1),
+                        note: baseType?.operator_note || "",
+                    }
+                ),
+                confirmLabel: _t("Ya se extrajo"),
+                cancelLabel: _t("Cancelar"),
+                confirm: () => resolve(true),
+                cancel: () => resolve(false),
+            });
+        });
+        if (!acknowledged) {
+            return undefined;
+        }
+    }
+
+    const parent = await addTintedBaseToOrder(ctx.pos, {
+        baseProduct,
+        formula,
+        color,
+        qty,
+    });
+
+    ctx.notification.add(
+        parent
+            ? _t("Entintado agregado a la orden.")
             : _t("No se pudo agregar el entintado a la orden."),
         { type: parent ? "success" : "danger" }
     );

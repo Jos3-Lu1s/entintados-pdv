@@ -60,7 +60,9 @@ export function formulaDoses(pos, formula) {
             const colorantId = line.colorant_id?.id ?? line.colorant_id;
             const colorant = pos.models["product.product"].get(colorantId);
             return {
+                id: line.id,
                 colorant,
+                colorantId,
                 points: line.points || 0,
                 name:
                     colorant?.display_name ||

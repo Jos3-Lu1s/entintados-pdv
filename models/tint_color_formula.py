@@ -199,6 +199,10 @@ class TintColorFormula(models.Model):
         return [
             'id', 'color_id', 'base_type_id', 'size_id', 'total_points',
             'line_ids',
+            # Primer nivel del filtrado escalonado en caja. Sin él, en el
+            # cliente toda fórmula parece huérfana de esquema aunque su color
+            # lo tenga asignado.
+            'scheme_id',
         ]
 
     @api.model

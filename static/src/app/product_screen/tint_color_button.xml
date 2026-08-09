@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  OBSOLETO — esta plantilla ya no se carga.
-
-  Definía un segundo botón de pincel sobre `point_of_sale.ControlButtons`,
-  duplicando al de `xml/tint_control_button.xml`. Los dos botones vivos están
-  ahora en ese archivo.
--->
-<templates xml:space="preserve"/>

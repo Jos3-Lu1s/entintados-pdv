@@ -158,6 +158,8 @@ class TintBaseType(models.Model):
         return [
             'id', 'name', 'code', 'fill_percentage', 'points_per_liter',
             'requires_extraction', 'extraction_percentage', 'operator_note',
+            # El panel ordena los tipos de base por secuencia.
+            'sequence',
         ]
 
     @api.model
