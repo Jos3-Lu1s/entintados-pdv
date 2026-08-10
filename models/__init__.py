@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from . import tint_code_mixin
 from . import tint_size
 from . import tint_base_type
 from . import tint_base_capacity

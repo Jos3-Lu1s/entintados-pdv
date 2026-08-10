@@ -7,12 +7,11 @@ class TintSize(models.Model):
     _name = 'tint.size'
     _description = "Presentación de envase de pintura"
     _order = 'sequence, volume_liters, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
         string="Presentación", required=True, translate=True)
     code = fields.Char(
-        string="Código", required=True,
         help="Código corto usado por la operación: L = Litro, G = Galón, Q = Cubeta.")
     volume_liters = fields.Float(
         string="Volumen (L)", required=True, digits=(12, 3),
@@ -51,25 +50,6 @@ class TintSize(models.Model):
     def _compute_display_name(self):
         for size in self:
             size.display_name = "%s (%s)" % (size.name, size.code) if size.code else size.name
-
-    # --- Normalización del código ---------------------------------------
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if isinstance(vals.get('code'), str):
-                vals['code'] = vals['code'].strip()
-        return super().create(vals_list)
-
-    def write(self, vals):
-        if isinstance(vals.get('code'), str):
-            vals['code'] = vals['code'].strip()
-        return super().write(vals)
-
-    @api.onchange('code')
-    def _onchange_code_trim(self):
-        if self.code and isinstance(self.code, str):
-            self.code = self.code.strip()
 
     # --- Carga al POS ---------------------------------------------------
 

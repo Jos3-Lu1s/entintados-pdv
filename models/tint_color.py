@@ -12,12 +12,12 @@ class TintColor(models.Model):
     _name = 'tint.color'
     _description = "Color de la carta"
     _order = 'collection_id, name, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(string="Color", required=True, translate=True)
     code = fields.Char(
-        string="Código", copy=False, index='btree_not_null',
-        help="Código del color. Se genera automáticamente si se deja vacío.")
+        copy=False, index='btree_not_null',
+        help="Código del color. Debe capturarse y no puede repetirse.")
     html_color = fields.Char(
         string="Muestra (hex)",
         help="Color aproximado para mostrar en pantalla, en formato #RRGGBB. "
@@ -84,13 +84,6 @@ class TintColor(models.Model):
                     color=color.name,
                     value=color.html_color,
                 ))
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if not vals.get('code'):
-                vals['code'] = self.env['ir.sequence'].next_by_code('tint.color.code')
-        return super().create(vals_list)
 
     def formula_for(self, base_type, size, gallery=None):
         """Fórmula de este color para esa base y presentación.

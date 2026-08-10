@@ -9,7 +9,6 @@
                 <field name="sequence" widget="handle" />
                 <field name="code" />
                 <field name="name" />
-                <field name="kind" />
                 <field name="color_count" string="Colores" />
                 <field name="formula_count" string="Fórmulas" />
             </list>
@@ -57,22 +56,11 @@
                     </div>
                     <group>
                         <group>
-                            <field name="kind" />
-                        </group>
-                        <group>
                             <!-- El orden se ajusta arrastrando en la lista. -->
                             <field name="sequence" invisible="1" />
                             <field name="active" invisible="1" />
                         </group>
                     </group>
-                    <div
-                        class="alert alert-info"
-                        role="alert"
-                        invisible="kind != 'legacy'"
-                    >
-                        Una galería histórica agrupa colores que ya no están en la
-                        carta comercial pero que se siguen reproduciendo bajo pedido.
-                    </div>
                     <notebook>
                         <page string="Descripción" name="description">
                             <field name="description" nolabel="1" />
@@ -91,31 +79,11 @@
                 <field name="name" />
                 <field name="code" />
                 <separator />
-                <filter name="own" string="Propias" domain="[('kind', '=', 'own')]" />
-                <filter
-                    name="competitor"
-                    string="De competencia"
-                    domain="[('kind', '=', 'competitor')]"
-                />
-                <filter
-                    name="legacy"
-                    string="Históricas"
-                    domain="[('kind', '=', 'legacy')]"
-                />
-                <separator />
                 <filter
                     name="inactive"
                     string="Archivadas"
                     domain="[('active', '=', False)]"
                 />
-                <group>
-                    <filter
-                        name="group_kind"
-                        string="Origen"
-                        domain="[]"
-                        context="{'group_by': 'kind'}"
-                    />
-                </group>
             </search>
         </field>
     </record>

@@ -7,11 +7,12 @@ class TintCollection(models.Model):
     _name = 'tint.collection'
     _description = "Colección o carta de color"
     _order = 'sequence, name, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
         string="Colección", required=True, translate=True)
-    code = fields.Char(string="Código")
+    code = fields.Char(
+        help="Código corto para identificar la colección en listados y cartas.")
     description = fields.Html(string="Descripción", translate=True, sanitize=True)
     sequence = fields.Integer(string="Secuencia", default=10)
     active = fields.Boolean(string="Activo", default=True)
@@ -21,6 +22,11 @@ class TintCollection(models.Model):
         string="Colores")
     color_count = fields.Integer(
         string="Colores", compute='_compute_color_count')
+
+    _code_uniq = models.Constraint(
+        'UNIQUE(code)',
+        "Ya existe una colección con ese código.",
+    )
 
     @api.depends('color_ids')
     def _compute_color_count(self):

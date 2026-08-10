@@ -18,27 +18,16 @@ class TintGallery(models.Model):
     _name = 'tint.gallery'
     _description = "Galería de fórmulas"
     _order = 'sequence, name, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
         string="Galería", required=True, translate=True)
     code = fields.Char(
-        string="Código", index='btree_not_null',
+        index='btree_not_null',
         help="Código corto para identificarla en listados y etiquetas.")
     sequence = fields.Integer(string="Secuencia", default=10)
     active = fields.Boolean(string="Activa", default=True)
 
-    kind = fields.Selection(
-        selection=[
-            ('own', "Propia"),
-            ('competitor', "Competencia"),
-            ('legacy', "Histórica"),
-            ('development', "Desarrollo"),
-        ],
-        string="Origen",
-        help="De dónde viene la receta. Sirve para decidir qué galerías se "
-             "ofrecen en caja: las históricas y los desarrollos rara vez se "
-             "muestran al cliente.")
     description = fields.Html(
         string="Descripción", translate=True, sanitize=True)
 
@@ -80,20 +69,6 @@ class TintGallery(models.Model):
                 if gallery.code else gallery.name
             )
 
-    # --- Normalización del código ---------------------------------------
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if isinstance(vals.get('code'), str):
-                vals['code'] = vals['code'].strip().upper()
-        return super().create(vals_list)
-
-    def write(self, vals):
-        if isinstance(vals.get('code'), str):
-            vals['code'] = vals['code'].strip().upper()
-        return super().write(vals)
-
     # --- Acciones -------------------------------------------------------
 
     def action_open_formulas(self):
@@ -111,7 +86,7 @@ class TintGallery(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return ['id', 'name', 'code', 'kind', 'sequence']
+        return ['id', 'name', 'code', 'sequence']
 
     @api.model
     def _load_pos_data_domain(self, data, config):

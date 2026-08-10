@@ -110,10 +110,7 @@
                             <field name="name" placeholder="p. ej. Rojo Cardenal" />
                         </h1>
                         <h3>
-                            <field
-                                name="code"
-                                placeholder="Se genera automáticamente"
-                            />
+                            <field name="code" placeholder="p. ej. D-0001" />
                         </h3>
                     </div>
                     <group>
