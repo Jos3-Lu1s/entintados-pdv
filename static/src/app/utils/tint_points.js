@@ -1,4 +1,3 @@
-/** @odoo-module **/
 
 /**
  * Notación mixta de puntos de colorante, espejo de `utils/points.py`.

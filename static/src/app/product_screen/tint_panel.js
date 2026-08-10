@@ -1,4 +1,3 @@
-/** @odoo-module **/
 
 import { Component, useState } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
@@ -17,13 +16,17 @@ import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
  * Deliberadamente NO se apoya en la grilla del núcleo. No parchea
  * `productsToDisplay` ni `addProductToOrder`, y sus tarjetas no fingen ser
  * `product.template`. La pestaña oculta el contenedor nativo y renderiza
- * este componente en su lugar, así que los internos de la grilla pueden
- * cambiar entre versiones de Odoo sin afectar al entintado.
+ * este componente en su lugar.
  *
- * Todo el filtrado se deriva de `tint.color.formula`, que ya trae `scheme_id`,
- * `size_id` y `base_type_id`. Cada nivel se calcula sobre las fórmulas que
- * sobrevivieron al nivel anterior, así que nunca se ofrece una combinación
- * sin fórmula registrada.
+ * ## El escalonado: galería → presentación → tipo de base
+ *
+ * La galería es la familia de la receta (catálogo propio, de competencia,
+ * histórica). El esquema **no participa en caja**: es una clasificación de
+ * catálogo que se usa en el backend para validar la coherencia entre los
+ * colorantes y sus fórmulas, pero el cajero no razona con él.
+ *
+ * Cada nivel se calcula sobre las fórmulas que sobrevivieron al anterior, así
+ * que nunca se ofrece una combinación sin fórmula registrada.
  */
 export class TintPanel extends Component {
     static template = "entintados_pdv.TintPanel";
@@ -34,7 +37,7 @@ export class TintPanel extends Component {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.state = useState({
-            schemaId: null,
+            galleryId: null,
             sizeId: null,
             baseTypeId: null,
             search: "",
@@ -46,7 +49,7 @@ export class TintPanel extends Component {
     get catalogStats() {
         const count = (model) => this.pos.models[model]?.getAll?.().length ?? null;
         return [
-            { label: "Esquemas", value: count("product.schema") },
+            { label: "Galerías", value: count("tint.gallery") },
             { label: "Presentaciones", value: count("tint.size") },
             { label: "Tipos de base", value: count("tint.base.type") },
             { label: "Colores", value: count("tint.color") },
@@ -71,28 +74,27 @@ export class TintPanel extends Component {
         return this.catalogStats.filter((stat) => stat.value === 0);
     }
 
-    get schemasLoaded() {
-        return this.pos.models["product.schema"]?.getAll?.().length ?? 0;
+    get galleriesLoaded() {
+        return this.pos.models["tint.gallery"]?.getAll?.().length ?? 0;
     }
 
     /**
-     * Fórmulas sin esquema asignado.
+     * Fórmulas sin galería asignada.
      *
-     * Solo tiene sentido preguntarlo si hay esquemas cargados: en el cliente,
-     * `scheme_id` es una relación que se resuelve contra los `product.schema`
-     * en memoria, así que con cero cargados TODA fórmula parece huérfana
-     * aunque su color tenga esquema en la base de datos. Avisar en ese caso
-     * mandaría a corregir un dato que probablemente está bien.
+     * Solo tiene sentido preguntarlo si hay galerías cargadas: en el cliente,
+     * `gallery_id` es una relación que se resuelve contra los `tint.gallery`
+     * en memoria, así que con cero cargadas TODA fórmula parece huérfana
+     * aunque tenga galería en la base de datos.
      */
-    get formulasWithoutSchema() {
-        if (!this.schemasLoaded) {
+    get formulasWithoutGallery() {
+        if (!this.galleriesLoaded) {
             return 0;
         }
-        return this.formulas.filter((formula) => !formula.scheme_id).length;
+        return this.formulas.filter((formula) => !formula.gallery_id).length;
     }
 
     get hasCatalog() {
-        return this.formulas.length > 0 && !this.formulasWithoutSchema;
+        return this.formulas.length > 0 && !this.formulasWithoutGallery;
     }
 
     // --- Filtrado en cascada --------------------------------------------
@@ -107,9 +109,9 @@ export class TintPanel extends Component {
 
     /** Fórmulas que sobreviven a los filtros elegidos hasta ahora. */
     formulasUpTo(level) {
-        const { schemaId, sizeId, baseTypeId } = this.state;
+        const { galleryId, sizeId, baseTypeId } = this.state;
         return this.formulas.filter((formula) => {
-            if (level >= 1 && schemaId && formula.scheme_id?.id !== schemaId) {
+            if (level >= 1 && galleryId && formula.gallery_id?.id !== galleryId) {
                 return false;
             }
             if (level >= 2 && sizeId && formula.size_id?.id !== sizeId) {
@@ -137,22 +139,43 @@ export class TintPanel extends Component {
             .sort(sorter);
     }
 
-    get schemas() {
-        return this.optionsFor(1, "scheme_id", "product.schema", (a, b) =>
-            (a.record.name || "").localeCompare(b.record.name || "")
-        );
+    bySequence(a, b) {
+        return (a.record.sequence || 0) - (b.record.sequence || 0);
+    }
+
+    get galleries() {
+        return this.optionsFor(1, "gallery_id", "tint.gallery", this.bySequence);
     }
 
     get sizes() {
-        return this.optionsFor(2, "size_id", "tint.size", (a, b) =>
-            (a.record.sequence || 0) - (b.record.sequence || 0)
-        );
+        return this.optionsFor(2, "size_id", "tint.size", this.bySequence);
     }
 
     get baseTypes() {
-        return this.optionsFor(3, "base_type_id", "tint.base.type", (a, b) =>
-            (a.record.sequence || 0) - (b.record.sequence || 0)
-        );
+        return this.optionsFor(3, "base_type_id", "tint.base.type", this.bySequence);
+    }
+
+    get levels() {
+        return [
+            {
+                key: "gallery",
+                label: "Galería",
+                options: this.galleries,
+                selected: this.state.galleryId,
+            },
+            {
+                key: "size",
+                label: "Presentación",
+                options: this.sizes,
+                selected: this.state.sizeId,
+            },
+            {
+                key: "baseType",
+                label: "Tipo de base",
+                options: this.baseTypes,
+                selected: this.state.baseTypeId,
+            },
+        ];
     }
 
     get searchTerm() {
@@ -202,28 +225,51 @@ export class TintPanel extends Component {
         };
     }
 
-    /** El producto base concreto que corresponde a la combinación. */
-    resolveBaseProduct(formula) {
-        const schemaId = formula.scheme_id?.id;
-        const sizeId = formula.size_id?.id;
-        const baseTypeId = formula.base_type_id?.id;
-        return this.pos.models["product.product"].getAll().find((product) => {
+    /**
+     * Bases que sirven para una presentación y un tipo de base.
+     *
+     * La galería NO participa: identifica el origen de la receta, no el
+     * envase. Aunque la fórmula venga del catálogo de la competencia, la base
+     * que se dispensa y se cobra es la propia.
+     */
+    basesFor(sizeId, baseTypeId) {
+        return this.pos.models["product.product"].getAll().filter((product) => {
             const tmpl = product.product_tmpl_id;
             return (
                 tmpl?.tint_role === "base" &&
-                tmpl.tint_schema_id?.id === schemaId &&
                 tmpl.tint_size_id?.id === sizeId &&
                 tmpl.tint_base_type_id?.id === baseTypeId
             );
         });
     }
 
-    /**
-     * Fórmulas filtradas que no tienen producto base capturado.
-     *
-     * No se pueden vender, así que se ocultan de las tarjetas — pero callarlo
-     * dejaría al cajero buscando un color que existe en la carta y no aparece.
-     */
+    resolveBaseProduct(formula) {
+        return this.basesFor(formula.size_id?.id, formula.base_type_id?.id)[0];
+    }
+
+    // --- Diagnóstico de la resolución de base ----------------------------
+
+    comboLabel(size, baseType) {
+        return [size?.name, baseType?.name]
+            .map((part) => part || "(sin definir)")
+            .join(" · ");
+    }
+
+    /** Combinaciones que las fórmulas piden y ningún producto base cubre. */
+    get missingCombos() {
+        const seen = new Map();
+        for (const formula of this.formulasUpTo(3)) {
+            if (this.resolveBaseProduct(formula)) {
+                continue;
+            }
+            const key = [formula.size_id?.id, formula.base_type_id?.id].join("-");
+            if (!seen.has(key)) {
+                seen.set(key, this.comboLabel(formula.size_id, formula.base_type_id));
+            }
+        }
+        return [...seen.values()];
+    }
+
     get unsellableCount() {
         if (!this.showCards) {
             return 0;
@@ -231,46 +277,8 @@ export class TintPanel extends Component {
         return this.formulasUpTo(3).filter((f) => !this.resolveBaseProduct(f)).length;
     }
 
-    /** Etiqueta legible de una combinación (esquema · presentación · base). */
-    comboLabel(schema, size, baseType) {
-        return [schema?.name, size?.name, baseType?.name]
-            .map((part) => part || "(sin definir)")
-            .join(" · ");
-    }
-
     /**
-     * Combinaciones que las fórmulas piden y ningún producto base cubre.
-     *
-     * Se muestra junto a las bases que el POS sí conoce: el desajuste casi
-     * siempre salta a la vista comparando ambas listas.
-     */
-    get missingCombos() {
-        const seen = new Map();
-        for (const formula of this.formulasUpTo(3)) {
-            if (this.resolveBaseProduct(formula)) {
-                continue;
-            }
-            const key = [
-                formula.scheme_id?.id,
-                formula.size_id?.id,
-                formula.base_type_id?.id,
-            ].join("-");
-            if (!seen.has(key)) {
-                seen.set(
-                    key,
-                    this.comboLabel(
-                        formula.scheme_id,
-                        formula.size_id,
-                        formula.base_type_id
-                    )
-                );
-            }
-        }
-        return [...seen.values()];
-    }
-
-    /**
-     * Bases que llegaron a la caja, con los tres atributos que las identifican.
+     * Bases que llegaron a la caja, con los dos atributos que las identifican.
      *
      * Si esta lista sale vacía, el problema no son los atributos sino que los
      * productos no llegan al POS: revisar «Disponible en PdV» y «Puede
@@ -285,35 +293,46 @@ export class TintPanel extends Component {
                 return {
                     id: product.id,
                     name: product.display_name,
-                    combo: this.comboLabel(
-                        tmpl.tint_schema_id,
-                        tmpl.tint_size_id,
-                        tmpl.tint_base_type_id
-                    ),
+                    combo: this.comboLabel(tmpl.tint_size_id, tmpl.tint_base_type_id),
                 };
             });
     }
 
+    /**
+     * Combinaciones cubiertas por más de una base.
+     *
+     * Sin el esquema en la ecuación, `(presentación, tipo de base)` debe
+     * identificar una sola base. Si hay varias, se toma la primera y el
+     * cajero cobraría una u otra sin saberlo.
+     */
+    get ambiguousBases() {
+        const groups = new Map();
+        for (const base of this.loadedBases) {
+            groups.set(base.combo, (groups.get(base.combo) || 0) + 1);
+        }
+        return [...groups.entries()]
+            .filter(([, total]) => total > 1)
+            .map(([combo, total]) => ({ combo, total }));
+    }
+
     // --- Interacción -----------------------------------------------------
 
-    selectSchema(id) {
-        this.state.schemaId = this.state.schemaId === id ? null : id;
-        this.state.sizeId = null;
-        this.state.baseTypeId = null;
-    }
-
-    selectSize(id) {
-        this.state.sizeId = this.state.sizeId === id ? null : id;
-        this.state.baseTypeId = null;
-    }
-
-    selectBaseType(id) {
-        this.state.baseTypeId = this.state.baseTypeId === id ? null : id;
+    selectLevel(key, id) {
+        if (key === "gallery") {
+            this.state.galleryId = this.state.galleryId === id ? null : id;
+            this.state.sizeId = null;
+            this.state.baseTypeId = null;
+        } else if (key === "size") {
+            this.state.sizeId = this.state.sizeId === id ? null : id;
+            this.state.baseTypeId = null;
+        } else {
+            this.state.baseTypeId = this.state.baseTypeId === id ? null : id;
+        }
     }
 
     clearFilters() {
         Object.assign(this.state, {
-            schemaId: null,
+            galleryId: null,
             sizeId: null,
             baseTypeId: null,
             search: "",

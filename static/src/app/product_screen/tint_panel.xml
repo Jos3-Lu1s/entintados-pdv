@@ -17,12 +17,6 @@
                     </button>
                 </div>
 
-                <t t-set="levels" t-value="[
-                    { key: 'schema',   label: 'Esquema',       options: schemas,   selected: state.schemaId },
-                    { key: 'size',     label: 'Presentación',  options: sizes,     selected: state.sizeId },
-                    { key: 'baseType', label: 'Tipo de base',  options: baseTypes, selected: state.baseTypeId }
-                ]"/>
-
                 <div t-foreach="levels" t-as="level" t-key="level.key"
                      class="d-flex align-items-center gap-2 mb-1">
                     <small class="text-muted text-nowrap" style="width: 6.5rem;"
@@ -31,11 +25,7 @@
                         <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
                                 class="btn btn-sm text-nowrap"
                                 t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
-                                t-on-click="() => {
-                                    level.key === 'schema' ? this.selectSchema(opt.record.id)
-                                    : level.key === 'size' ? this.selectSize(opt.record.id)
-                                    : this.selectBaseType(opt.record.id)
-                                }">
+                                t-on-click="() => this.selectLevel(level.key, opt.record.id)">
                             <t t-esc="opt.record.name"/>
                             <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
                         </button>
@@ -79,16 +69,29 @@
                     </ol>
                 </div>
 
-                <div t-if="formulasWithoutSchema" class="alert alert-warning" role="alert">
+                <div t-if="formulasWithoutGallery" class="alert alert-warning" role="alert">
                     <strong>
-                        <t t-esc="formulasWithoutSchema"/> de <t t-esc="formulaCount"/> fórmulas
-                        no tienen esquema.
+                        <t t-esc="formulasWithoutGallery"/> de <t t-esc="formulaCount"/> fórmulas
+                        no tienen galería.
                     </strong>
                     <div class="mt-1">
-                        El esquema de la fórmula se hereda del color. Asígnalo en
-                        <em>Entintados → Carta de color → Colores</em>, campo <em>Esquema</em>,
-                        o el filtrado no tiene por dónde empezar.
+                        Asígnala en <em>Entintados → Carta de color → Fórmulas</em>, campo
+                        <em>Galería</em>, o el filtrado no tiene por dónde empezar.
                     </div>
+                </div>
+
+                <div t-if="ambiguousBases.length" class="alert alert-danger" role="alert">
+                    <strong>Hay combinaciones con más de una base.</strong>
+                    <div class="mt-1">
+                        Sin el esquema en la ecuación, cada pareja presentación · tipo de base
+                        debe corresponder a un solo producto. Con varias, la caja toma la
+                        primera y cobraría una u otra sin avisar.
+                    </div>
+                    <ul class="mb-0 mt-1 small">
+                        <li t-foreach="ambiguousBases" t-as="amb" t-key="amb.combo">
+                            <t t-esc="amb.combo"/> — <t t-esc="amb.total"/> productos
+                        </li>
+                    </ul>
                 </div>
 
                 <!-- Tarjetas de fórmula -->
@@ -97,7 +100,7 @@
                     <div t-if="!showCards"
                          class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
                         <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
-                        <h5>Elige esquema, presentación y tipo de base</h5>
+                        <h5>Elige galería, presentación y tipo de base</h5>
                         <p class="mb-0">
                             O escribe el nombre o código de un color para ver todas sus opciones.
                         </p>
@@ -141,9 +144,9 @@
                             </div>
 
                             <div class="mt-2 small">
-                                Los tres atributos deben coincidir exactamente. El más fácil de
-                                olvidar es el <em>Esquema</em> del producto base, en la pestaña
-                                Entintado.
+                                La base se identifica solo por presentación y tipo de base: la
+                                galería dice de dónde viene la receta, no qué envase se dispensa.
+                                Ambos atributos se capturan en la pestaña Entintado del producto.
                             </div>
                         </div>
 

@@ -1,4 +1,3 @@
-/** @odoo-module **/
 
 import { useState } from "@odoo/owl";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";

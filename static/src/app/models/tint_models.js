@@ -1,4 +1,3 @@
-/** @odoo-module **/
 
 import { registry } from "@web/core/registry";
 import { Base } from "@point_of_sale/app/models/related_models";
@@ -11,10 +10,6 @@ import { Base } from "@point_of_sale/app/models/related_models";
  * bucle en lugar de repetir siete bloques idénticos; añadir un modelo es
  * añadir una línea.
  */
-export class ProductSchema extends Base {
-    static pythonModel = "product.schema";
-}
-
 export class TintCollection extends Base {
     static pythonModel = "tint.collection";
 }
@@ -48,7 +43,6 @@ export class TintColorFormulaLine extends Base {
 }
 
 const TINT_MODELS = [
-    ProductSchema,
     TintCollection,
     TintGallery,
     TintColor,

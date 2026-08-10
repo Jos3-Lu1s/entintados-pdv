@@ -166,10 +166,6 @@ class ProductTemplate(models.Model):
         return field_names + [
             'tint_role', 'tint_base_type_id', 'tint_size_id',
             'tint_capacity_points', 'price_per_point',
-            # El asistente de caja resuelve el producto base concreto a partir
-            # de la combinación (esquema, presentación, tipo de base), así que
-            # necesita el esquema en el cliente.
-            'tint_schema_id', 'tint_line_id',
         ]
 
     @api.model

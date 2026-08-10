@@ -11,11 +11,12 @@ class PosSession(models.Model):
         models_to_load = super()._load_pos_data_models(config)
 
         tint_models = [
-            'product.schema',
             'tint.size',
             'tint.base.type',
             'tint.base.capacity',
             'tint.collection',
+            # La galería es el primer nivel del filtrado en caja, así que va
+            # antes que las fórmulas que la referencian.
             'tint.gallery',
             'tint.color',
             'tint.color.formula',
