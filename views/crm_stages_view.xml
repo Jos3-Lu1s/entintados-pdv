@@ -1,0 +1,24 @@
+<odoo>
+    <data>
+
+        <record id="view_crm_stage_form_inherit" model="ir.ui.view">
+            <field name="name">crm.stage.form.inherit</field>
+            <field name="model">crm.stage</field>
+            <field name="inherit_id" ref="crm.crm_stage_form"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//field[@name='is_won']" position="after">
+                    <field name="stage_type"
+                           widget="radio"
+                           options="{'horizontal': True}"/>
+                </xpath>
+                <!-- <xpath expr="//field[@name='fold']" position="before">
+                    <field name="authorized_user_ids"
+                           widget="many2many_avatar_user"
+                           options="{'no_create': True}"/>
+                </xpath> -->
+            </field>
+        </record>
+
+    </data>
+</odoo>

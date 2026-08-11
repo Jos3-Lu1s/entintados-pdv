@@ -16,4 +16,5 @@ from . import res_company_risk
 from . import res_config_risk
 from . import res_partner_risk
 from . import product_schema
-from . import lines_schema  
+from . import lines_schema 
+from . import sale_order

@@ -1,12 +1,95 @@
-# -*- coding: utf-8 -*-
-
-from odoo import models
-
+from odoo import models, fields, api, _
+from odoo.exceptions import ValidationError
 
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
+
+    stage_type = fields.Selection(
+        related='stage_id.stage_type',
+        string='Tipo de Etapa',
+        store=True,
+    )
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
         res = super()._prepare_customer_values(partner_name, is_company=is_company, parent_id=parent_id)
         res['is_customer'] = True
         return res
+    
+    def write(self, vals):
+        if 'stage_id' in vals and not self.env.context.get('skip_stage_sequence_check'):
+            new_stage = self.env['crm.stage'].browse(vals['stage_id'])
+            for record in self:
+                old_stage = record.stage_id
+                if not old_stage or not new_stage or old_stage.id == new_stage.id:
+                    continue
+                
+                if new_stage.stage_type == 'quotation':
+                    raise ValidationError(_(
+                        'No puedes mover manualmente la oportunidad a "%s". '
+                        'Esta etapa se asigna automáticamente al generar una cotización.'
+                    ) % new_stage.name)
+
+                ordered_stages = self.env['crm.stage'].search([], order='sequence, id')
+                stage_ids = ordered_stages.ids
+
+                if old_stage.id not in stage_ids or new_stage.id not in stage_ids:
+                    continue
+
+                old_index = stage_ids.index(old_stage.id)
+                new_index = stage_ids.index(new_stage.id)
+
+                quotation_stage = ordered_stages.filtered(lambda s: s.stage_type == 'quotation')
+                quotation_index = stage_ids.index(quotation_stage.id) if quotation_stage else None
+
+                if quotation_index is not None and old_index < quotation_index and new_index < quotation_index:
+                    continue
+
+                if new_index > old_index + 1:
+                    skipped = ordered_stages[old_index + 1:new_index]
+                    raise ValidationError(_(
+                        'No puedes saltar etapas. Antes de pasar a "%s" '
+                        'debes pasar por: %s'
+                    ) % (new_stage.name, ', '.join(skipped.mapped('name'))))
+
+                if quotation_index is not None and old_index >= quotation_index and new_index < old_index:
+                    raise ValidationError(_(
+                        'No puedes regresar de "%s" a una etapa anterior una vez que '
+                        'la oportunidad llegó a Cotización.'
+                    ) % old_stage.name)
+
+        return super().write(vals)
+    
+    @api.constrains('stage_id', 'expected_revenue')
+    def _check_expected_revenue_in_quotation(self):
+        for lead in self:
+            if lead.stage_id.stage_type == 'quotation' and not lead.expected_revenue:
+                raise ValidationError(_(
+                    'El campo "Ingreso Esperado" es obligatorio para oportunidades '
+                    'en la etapa de Cotización.'
+                ))
+
+class CrmStage(models.Model):
+    _inherit = 'crm.stage'
+
+    stage_type = fields.Selection([
+        ('new', 'Prospecto'),
+        ('visit', 'Visita de campo'),
+        ('quotation', 'Cotizacion'),
+        ('demo', 'Demo'),
+        ('closed', 'Venta Cerrada'),
+        ('postsale', 'Post Venta')
+        ])
+    
+    @api.constrains('stage_type')
+    def _check_stage_type_unique(self):
+        for record in self:
+            if record.stage_type:
+                duplicate = self.search([
+                    ('stage_type', '=', record.stage_type),
+                    ('id', '!=', record.id)
+                ], limit=1)
+                if duplicate:
+                    raise ValidationError((
+                        'El tipo "%s" ya está asignado a la etapa "%s". '
+                        'Cada tipo solo puede usarse en una etapa.'
+                    ) % (dict(record._fields['stage_type'].selection).get(record.stage_type), duplicate.name))
