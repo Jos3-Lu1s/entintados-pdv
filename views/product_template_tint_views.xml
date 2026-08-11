@@ -12,11 +12,6 @@
                         <group name="tint_role" string="Rol">
                             <field name="tint_role" />
                         </group>
-                        <group name="tint_schema" string="Esquema">
-                            <field name="tint_schema_id" />
-                            <field name="tint_line_id" 
-                                    domain="[('schema_id', '=', tint_schema_id)]" />
-                        </group>
                     </group>
                     <group invisible="tint_role != 'base'">
                         <group name="tint_base" string="Envase">
@@ -63,6 +58,14 @@
                 </page>
             </xpath>
         </field>
+    </record>
+
+    <record id="product_template_action_tint" model="ir.actions.act_window">
+        <field name="name">Productos</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="domain">[('tint_role', '!=', False)]</field>
+        <field name="context">{'search_default_filter_to_sell': 0}</field>
     </record>
 
     <record id="product_template_search_view_tint" model="ir.ui.view">

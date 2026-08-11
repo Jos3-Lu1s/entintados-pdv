@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <list string="Fórmulas" decoration-danger="not fits">
                 <field name="color_id" />
+                <field name="gallery_id" />
                 <field name="base_type_id" />
                 <field name="size_id" />
                 <field name="total_points" sum="Total puntos" />
@@ -44,12 +45,12 @@
                     <group>
                         <group string="Combinación">
                             <field name="color_id" options="{'no_create': True}" />
+                            <field name="gallery_id" options="{'no_create': True}" />
                             <field
                                 name="base_type_id"
                                 options="{'no_create': True}"
                             />
                             <field name="size_id" options="{'no_create': True}" />
-                            <field name="scheme_id" />
                             <field name="active" invisible="1" />
                         </group>
                         <group string="Puntos">
@@ -122,8 +123,7 @@
                                     <field
                                         name="colorant_id"
                                         options="{'no_create': True}"
-                                        domain="[('tint_role', '=', 'colorant'),
-                                            ('product_tmpl_id.tint_schema_id', '=', parent.scheme_id)]"
+                                        domain="[('tint_role', '=', 'colorant')]"
                                     />
                                     <field name="points" sum="Total" />
                                     <field name="points_display" string="Notación" />
@@ -142,9 +142,9 @@
         <field name="arch" type="xml">
             <search string="Buscar fórmula">
                 <field name="color_id" />
+                <field name="gallery_id" />
                 <field name="base_type_id" />
                 <field name="size_id" />
-                <field name="scheme_id" />
                 <separator />
                 <filter
                     name="does_not_fit"
@@ -157,6 +157,12 @@
                     domain="[('requires_extraction', '=', True)]"
                 />
                 <group>
+                    <filter
+                        name="group_gallery"
+                        string="Galería"
+                        domain="[]"
+                        context="{'group_by': 'gallery_id'}"
+                    />
                     <filter
                         name="group_color"
                         string="Color"

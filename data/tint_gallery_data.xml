@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--
+      Galerías de fórmulas en operación.
+    -->
+    <data noupdate="1">
+
+        <record id="tint_gallery_milenium" model="tint.gallery">
+            <field name="name">Galería Milenium</field>
+            <field name="code">MIL</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="tint_gallery_comex" model="tint.gallery">
+            <field name="name">Comex</field>
+            <field name="code">CMX</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <record id="tint_gallery_verel" model="tint.gallery">
+            <field name="name">Verel</field>
+            <field name="code">VRL</field>
+            <field name="sequence">30</field>
+        </record>
+
+        <record id="tint_gallery_antiguos" model="tint.gallery">
+            <field name="name">Antiguos</field>
+            <field name="code">ANT</field>
+            <field name="sequence">40</field>
+            <field
+                name="description"
+            ><![CDATA[<p>Colores de competencia vieja que se siguen reproduciendo bajo pedido.</p>]]></field>
+        </record>
+
+        <record id="tint_gallery_desarrollos" model="tint.gallery">
+            <field name="name">Desarrollos</field>
+            <field name="code">DES</field>
+            <field name="sequence">50</field>
+            <field
+                name="description"
+            ><![CDATA[<p>Fórmulas en prueba, aún no liberadas a la carta comercial.</p>]]></field>
+        </record>
+
+    </data>
+</odoo>

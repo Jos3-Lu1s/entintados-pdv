@@ -1,12 +1,10 @@
-/** @odoo-module **/
 
 import { Component, useState } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
-import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
-import { TintFormulaPopup } from "@entintados_pdv/js/tint_formula_popup";
+import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 
 export class TintColorScreen extends Component {
     static template = "entintados_pdv.TintColorScreen";
@@ -84,57 +82,27 @@ export class TintColorScreen extends Component {
         order.uiState.selectedTintColorCode = color.code;
 
         const line = order.getSelectedOrderline();
-        const lineTmpl = line?.product_id?.product_tmpl_id || line?.product_id;
+        const lineTmpl = line?.product_id?.product_tmpl_id;
 
-        if (line && lineTmpl && lineTmpl.tint_role === "base") {
-            // Base line is already selected in order -> Open TintFormulaPopup directly
-            const baseTypeId =
-                lineTmpl.tint_base_type_id?.id || lineTmpl.tint_base_type_id;
-            const sizeId =
-                lineTmpl.tint_size_id?.id || lineTmpl.tint_size_id;
+        if (line && lineTmpl?.tint_role === "base") {
+            // Ya hay una base seleccionada en la orden: se resuelve el
+            // entintado sobre ella sin pedir de nuevo base ni presentación.
+            const baseProduct = line.product_id;
+            const qty = line.qty || 1;
 
             this.goBack();
 
-            const payload = await makeAwaitable(this.dialog, TintFormulaPopup, {
-                baseTypeId: baseTypeId,
-                sizeId: sizeId,
+            const parent = await runTintFlow(this, {
+                baseProduct,
+                replaceLine: line,
+                qty,
                 initialColorId: color.id,
             });
 
-            if (!payload) return;
-
-            line.setCustomerNote(payload.text);
-            if (payload.doses && payload.doses.length > 0) {
-                for (const dose of payload.doses) {
-                    if (dose.colorantId) {
-                        const colorantProduct =
-                            this.pos.models["product.product"].get(
-                                dose.colorantId
-                            );
-                        if (colorantProduct) {
-                            const price =
-                                colorantProduct.price_per_point ||
-                                colorantProduct.lst_price ||
-                                0;
-                            const noteText = _t(
-                                "Insumo de entintado para: %s (%s Pts)",
-                                line.product_id?.display_name || "",
-                                dose.points
-                            );
-                            await this.pos.addLineToCurrentOrder({
-                                product_id: colorantProduct,
-                                qty: dose.points,
-                                price_unit: price,
-                                customer_note: noteText,
-                            });
-                        }
-                    }
-                }
+            if (parent) {
+                order.uiState.selectedTintColor = null;
+                order.uiState.selectedTintColorId = null;
             }
-            this.notification.add(
-                _t("Entintado y materiales agregados a la orden."),
-                { type: "success" }
-            );
         } else {
             // No base line selected -> Store active color and return to ProductScreen
             this.notification.add(

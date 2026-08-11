@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.TintPanel">
+        <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
+
+            <!-- Filtros escalonados -->
+            <div t-if="hasCatalog" class="flex-shrink-0 border-bottom bg-view p-2">
+
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <input type="text" class="form-control form-control-sm"
+                           placeholder="Buscar color por nombre o código..."
+                           t-model="state.search"/>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                            t-on-click="() => this.clearFilters()">
+                        Limpiar
+                    </button>
+                </div>
+
+                <div t-foreach="levels" t-as="level" t-key="level.key"
+                     class="d-flex align-items-center gap-2 mb-1">
+                    <small class="text-muted text-nowrap" style="width: 6.5rem;"
+                           t-esc="level.label"/>
+                    <div t-if="level.options.length" class="d-flex flex-wrap gap-1">
+                        <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
+                                class="btn btn-sm text-nowrap"
+                                t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
+                                t-on-click="() => this.selectLevel(level.key, opt.record.id)">
+                            <t t-esc="opt.record.name"/>
+                            <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
+                        </button>
+                    </div>
+                    <small t-else="" class="text-muted fst-italic">
+                        Elige el nivel anterior
+                    </small>
+                </div>
+
+            </div>
+
+            <!-- Contenido -->
+            <div class="flex-grow-1 overflow-auto p-3">
+
+                <div t-if="missingModels.length" class="alert alert-danger" role="alert">
+                    <strong>Modelos que no existen en el cliente:</strong>
+                    <t t-esc="missingModels.map(m => m.label).join(', ')"/>.
+                    <div class="mt-1">
+                        Falta registrarlos en <code>_load_pos_data_models</code>
+                        (<code>pos_session.py</code>) o en <code>tint_models.js</code>.
+                    </div>
+                </div>
+
+                <div t-if="emptyModels.length" class="alert alert-warning" role="alert">
+                    <strong>Modelos cargados pero sin registros:</strong>
+                    <t t-esc="emptyModels.map(m => m.label).join(', ')"/>.
+                    <div class="mt-1">
+                        El cliente conoce el modelo, así que el problema está del lado del
+                        servidor. Dos causas, en este orden:
+                    </div>
+                    <ol class="mb-0 mt-1">
+                        <li>
+                            El servidor no recargó el Python. Añadir <code>pos.load.mixin</code>
+                            exige reiniciar Odoo con <code>-u entintados_pdv</code>; no basta
+                            con refrescar el navegador ni reabrir la sesión.
+                        </li>
+                        <li>
+                            No hay registros que cargar. Compruébalo en
+                            <em>Entintados → Configuración</em>.
+                        </li>
+                    </ol>
+                </div>
+
+                <div t-if="formulasWithoutGallery" class="alert alert-warning" role="alert">
+                    <strong>
+                        <t t-esc="formulasWithoutGallery"/> de <t t-esc="formulaCount"/> fórmulas
+                        no tienen galería.
+                    </strong>
+                    <div class="mt-1">
+                        Asígnala en <em>Entintados → Carta de color → Fórmulas</em>, campo
+                        <em>Galería</em>, o el filtrado no tiene por dónde empezar.
+                    </div>
+                </div>
+
+                <div t-if="ambiguousBases.length" class="alert alert-danger" role="alert">
+                    <strong>Hay combinaciones con más de una base.</strong>
+                    <div class="mt-1">
+                        Cada pareja presentación · tipo de base debe corresponder a un
+                        solo producto. Con varias, la caja toma la primera y cobraría
+                        una u otra sin avisar.
+                    </div>
+                    <ul class="mb-0 mt-1 small">
+                        <li t-foreach="ambiguousBases" t-as="amb" t-key="amb.combo">
+                            <t t-esc="amb.combo"/> — <t t-esc="amb.total"/> productos
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Tarjetas de fórmula -->
+                <t t-if="hasCatalog">
+
+                    <div t-if="!showCards"
+                         class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                        <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
+                        <h5>Elige galería, presentación y tipo de base</h5>
+                        <p class="mb-0">
+                            O escribe el nombre o código de un color para ver todas sus opciones.
+                        </p>
+                    </div>
+
+                    <t t-else="">
+
+                        <div t-if="unsellableCount" class="alert alert-warning" role="alert">
+                            <strong>
+                                <t t-esc="unsellableCount"/>
+                                <t t-if="unsellableCount === 1"> fórmula oculta</t>
+                                <t t-else=""> fórmulas ocultas</t>
+                                por no encontrar producto base.
+                            </strong>
+
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <div class="fw-bold small">La fórmula pide</div>
+                                    <ul class="mb-0 small">
+                                        <li t-foreach="missingCombos" t-as="combo" t-key="combo"
+                                            t-esc="combo"/>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="fw-bold small">
+                                        Bases que conoce la caja
+                                        (<t t-esc="loadedBases.length"/>)
+                                    </div>
+                                    <ul t-if="loadedBases.length" class="mb-0 small">
+                                        <li t-foreach="loadedBases" t-as="base" t-key="base.id">
+                                            <t t-esc="base.combo"/>
+                                            <span class="text-muted"> — <t t-esc="base.name"/></span>
+                                        </li>
+                                    </ul>
+                                    <div t-else="" class="small">
+                                        Ninguna. Los productos base no están llegando al POS:
+                                        revisa <em>Disponible en PdV</em> y <em>Puede venderse</em>
+                                        en su ficha.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-2 small">
+                                La base se identifica solo por presentación y tipo de base: la
+                                galería dice de dónde viene la receta, no qué envase se dispensa.
+                                Ambos atributos se capturan en la pestaña Entintado del producto.
+                            </div>
+                        </div>
+
+                        <div t-if="cards.length" class="tint-formula-grid d-grid gap-2"
+                             style="grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));">
+                            <button t-foreach="cards" t-as="card" t-key="card.formula.id"
+                                    class="btn btn-light text-start p-0 border rounded overflow-hidden"
+                                    t-on-click="() => this.addCard(card)">
+
+                                <div style="height: 4.5rem;"
+                                     t-attf-style="height: 4.5rem; background-color: {{ card.color.html_color or '#9E9E9E' }};">
+                                    <span t-if="card.color.code"
+                                          class="badge bg-dark bg-opacity-75 m-2 d-inline-block"
+                                          t-esc="card.color.code"/>
+                                </div>
+
+                                <div class="p-2">
+                                    <div class="fw-bold text-truncate" t-esc="card.color.name"/>
+                                    <small class="text-muted d-block text-truncate">
+                                        <t t-esc="card.baseProduct.display_name"/>
+                                    </small>
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <small class="text-muted">
+                                            <t t-esc="formatPoints(card.totalPoints)"/>
+                                        </small>
+                                        <span class="fw-bold" t-esc="formatPrice(card.price)"/>
+                                    </div>
+                                </div>
+
+                            </button>
+                        </div>
+
+                        <div t-else=""
+                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                            <i class="fa fa-search fa-3x mb-3 text-secondary"/>
+                            <h5>No hay fórmulas para esta combinación</h5>
+                        </div>
+
+                    </t>
+
+                </t>
+
+            </div>
+
+        </div>
+    </t>
+
+</templates>

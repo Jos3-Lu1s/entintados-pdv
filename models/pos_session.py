@@ -15,6 +15,9 @@ class PosSession(models.Model):
             'tint.base.type',
             'tint.base.capacity',
             'tint.collection',
+            # La galería es el primer nivel del filtrado en caja, así que va
+            # antes que las fórmulas que la referencian.
+            'tint.gallery',
             'tint.color',
             'tint.color.formula',
             'tint.color.formula.line',

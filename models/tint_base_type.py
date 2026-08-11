@@ -11,17 +11,22 @@ class TintBaseType(models.Model):
     _name = 'tint.base.type'
     _description = "Tipo de base de pintura"
     _order = 'sequence, code, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
-        string="Tipo de base", required=True, translate=True)
+        string="Tipo de base", required=True, translate=True,
+        help="Nombre de la base de pintura sobre la que se entinta.")
     code = fields.Char(
-        string="Código", required=True,
         help="Código de una letra del fabricante: W, M, D, A, N, Y, R.")
     description = fields.Html(
-        string="Descripción", translate=True, sanitize=True)
-    sequence = fields.Integer(string="Secuencia", default=10)
-    active = fields.Boolean(string="Activo", default=True)
+        string="Descripción", translate=True, sanitize=True,
+        help="Nota interna sobre las características o el uso de esta base.")
+    sequence = fields.Integer(
+        string="Secuencia", default=10,
+        help="Orden en que se muestra el tipo de base en listados y en caja.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, el tipo de base se archiva y deja de ofrecerse.")
 
     white_content = fields.Selection(
         selection=[
@@ -63,9 +68,11 @@ class TintBaseType(models.Model):
 
     capacity_ids = fields.One2many(
         comodel_name='tint.base.capacity', inverse_name='base_type_id',
-        string="Capacidades por presentación")
+        string="Capacidades por presentación",
+        help="Colorante máximo que admite esta base en cada presentación.")
     capacity_count = fields.Integer(
-        string="Capacidades definidas", compute='_compute_capacity_count')
+        string="Capacidades definidas", compute='_compute_capacity_count',
+        help="Número de presentaciones con capacidad registrada para esta base.")
 
     _code_uniq = models.Constraint(
         'UNIQUE(code)',
@@ -103,25 +110,6 @@ class TintBaseType(models.Model):
                 if base_type.code else base_type.name
             )
 
-    # --- Normalización del código ---------------------------------------
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if isinstance(vals.get('code'), str):
-                vals['code'] = vals['code'].strip()
-        return super().create(vals_list)
-
-    def write(self, vals):
-        if isinstance(vals.get('code'), str):
-            vals['code'] = vals['code'].strip()
-        return super().write(vals)
-
-    @api.onchange('code')
-    def _onchange_code_trim(self):
-        if self.code and isinstance(self.code, str):
-            self.code = self.code.strip()
-
     @api.constrains('requires_extraction', 'extraction_percentage')
     def _check_extraction(self):
         for base_type in self:
@@ -158,6 +146,8 @@ class TintBaseType(models.Model):
         return [
             'id', 'name', 'code', 'fill_percentage', 'points_per_liter',
             'requires_extraction', 'extraction_percentage', 'operator_note',
+            # El panel ordena los tipos de base por secuencia.
+            'sequence',
         ]
 
     @api.model

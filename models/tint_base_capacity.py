@@ -13,10 +13,12 @@ class TintBaseCapacity(models.Model):
 
     base_type_id = fields.Many2one(
         comodel_name='tint.base.type', string="Tipo de base",
-        required=True, ondelete='cascade', index=True)
+        required=True, ondelete='cascade', index=True,
+        help="Tipo de base al que aplica esta capacidad de colorante.")
     size_id = fields.Many2one(
         comodel_name='tint.size', string="Presentación",
-        required=True, ondelete='cascade', index=True)
+        required=True, ondelete='cascade', index=True,
+        help="Presentación de envase a la que aplica esta capacidad.")
 
     max_points = fields.Integer(
         string="Colorante máximo (Pts.)", required=True,
@@ -37,11 +39,14 @@ class TintBaseCapacity(models.Model):
              "error de captura: revíselo.")
 
     volume_liters = fields.Float(
-        string="Volumen (L)", related='size_id.volume_liters', readonly=True)
+        string="Volumen (L)", related='size_id.volume_liters', readonly=True,
+        help="Volumen del envase de la presentación seleccionada.")
     points_per_liter = fields.Integer(
-        string="Puntos por litro", related='base_type_id.points_per_liter', readonly=True)
+        string="Puntos por litro", related='base_type_id.points_per_liter', readonly=True,
+        help="Puntos de colorante por litro que admite el tipo de base.")
     requires_extraction = fields.Boolean(
-        related='base_type_id.requires_extraction', readonly=True)
+        related='base_type_id.requires_extraction', readonly=True,
+        help="Indica si el tipo de base requiere extracción previa antes de entintar.")
 
     _base_size_uniq = models.Constraint(
         'UNIQUE(base_type_id, size_id)',

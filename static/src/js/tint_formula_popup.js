@@ -2,22 +2,8 @@ import { Component, useState } from "@odoo/owl";
 import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
-
-const POINTS_PER_OUNCE = 48;
-
-/** Notación mixta de la operación: 456 -> "9Y 24", 96 -> "2Y", 24 -> "24 Pts." */
-export function formatPoints(total) {
-    total = Math.round(total || 0);
-    const ounces = Math.trunc(total / POINTS_PER_OUNCE);
-    const rest = total % POINTS_PER_OUNCE;
-    if (ounces && rest) {
-        return `${ounces}Y ${rest}`;
-    }
-    if (ounces) {
-        return `${ounces}Y`;
-    }
-    return `${rest} Pts.`;
-}
+import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
+import { formulaDoses } from "@entintados_pdv/app/utils/tint_order";
 
 /**
  * Popup de entintado en caja.
@@ -273,7 +259,6 @@ export class TintFormulaPopup extends Component {
             this.state.newColorantPoints = 1;
 
             if (colorId) {
-                this.pos.loadVirtualTintProducts?.();
                 this.state.colorId = colorId;
                 setTimeout(() => {
                     this.state.activeTab = "tint";
@@ -371,18 +356,9 @@ export class TintFormulaPopup extends Component {
 
     /** Dosis de la fórmula, ordenadas por secuencia. */
     get doses() {
-        const formula = this.selectedFormula;
-        if (!formula) {
-            return [];
-        }
-        return [...(formula.line_ids || [])]
-            .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
-            .map((l) => ({
-                id: l.id,
-                colorantId: l.colorant_id?.id,
-                name: l.colorant_id?.display_name || l.colorant_id?.name || _t("(colorante)"),
-                points: l.points,
-            }));
+        return this.selectedFormula
+            ? formulaDoses(this.pos, this.selectedFormula)
+            : [];
     }
 
     get totalPoints() {
@@ -420,21 +396,14 @@ export class TintFormulaPopup extends Component {
         this.state.extractionDone = false;
     }
 
-    /** Resumen legible que, por ahora, se guarda como nota de la línea. */
-    get summaryText() {
-        const color = this.selectedColor;
-        const parts = [
-            `${color?.code ? "[" + color.code + "] " : ""}${color?.name || ""}`,
-            `${this.baseType?.code || ""} · ${this.size?.name || ""}`,
-            ...this.doses.map((d) => `${d.name}: ${this.formatPoints(d.points)}`),
-            `Total: ${this.formatPoints(this.totalPoints)}`,
-        ];
-        if (this.requiresExtraction) {
-            parts.push(_t("Extraer %s L antes de entintar", this.extractionLiters.toFixed(1)));
-        }
-        return parts.join(" | ");
-    }
-
+    /**
+     * El popup solo decide qué fórmula se aplica.
+     *
+     * El resumen de la nota y las líneas de colorante los arma
+     * `tint_order.js` a partir de la fórmula. Antes se devolvían aquí ya
+     * calculados, duplicando esa lógica y dejando al popup opinando sobre
+     * cómo se escribe una orden.
+     */
     confirm() {
         if (!this.canConfirm) {
             return;
@@ -442,10 +411,7 @@ export class TintFormulaPopup extends Component {
         this.props.getPayload?.({
             colorId: this.state.colorId,
             formulaId: this.selectedFormula.id,
-            totalPoints: this.totalPoints,
             extractionDone: this.state.extractionDone,
-            text: this.summaryText,
-            doses: this.doses,
         });
         this.props.close();
     }

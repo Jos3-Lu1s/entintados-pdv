@@ -7,25 +7,31 @@ class TintSize(models.Model):
     _name = 'tint.size'
     _description = "Presentación de envase de pintura"
     _order = 'sequence, volume_liters, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
-        string="Presentación", required=True, translate=True)
+        string="Presentación", required=True, translate=True,
+        help="Nombre comercial del envase, p. ej. Litro, Galón o Cubeta.")
     code = fields.Char(
-        string="Código", required=True,
         help="Código corto usado por la operación: L = Litro, G = Galón, Q = Cubeta.")
     volume_liters = fields.Float(
         string="Volumen (L)", required=True, digits=(12, 3),
         help="Volumen nominal del envase en litros. Se usa para verificar "
              "la consistencia de la matriz de capacidad de colorante.")
-    sequence = fields.Integer(string="Secuencia", default=10)
-    active = fields.Boolean(string="Activo", default=True)
+    sequence = fields.Integer(
+        string="Secuencia", default=10,
+        help="Orden en que se muestra la presentación en listados y en caja.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, la presentación se archiva y deja de ofrecerse.")
 
     capacity_ids = fields.One2many(
         comodel_name='tint.base.capacity', inverse_name='size_id',
-        string="Capacidades por tipo de base")
+        string="Capacidades por tipo de base",
+        help="Colorante máximo que admite cada tipo de base en esta presentación.")
     capacity_count = fields.Integer(
-        string="Capacidades definidas", compute='_compute_capacity_count')
+        string="Capacidades definidas", compute='_compute_capacity_count',
+        help="Número de tipos de base con capacidad registrada para esta presentación.")
 
     _code_uniq = models.Constraint(
         'UNIQUE(code)',
@@ -51,25 +57,6 @@ class TintSize(models.Model):
     def _compute_display_name(self):
         for size in self:
             size.display_name = "%s (%s)" % (size.name, size.code) if size.code else size.name
-
-    # --- Normalización del código ---------------------------------------
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if isinstance(vals.get('code'), str):
-                vals['code'] = vals['code'].strip()
-        return super().create(vals_list)
-
-    def write(self, vals):
-        if isinstance(vals.get('code'), str):
-            vals['code'] = vals['code'].strip()
-        return super().write(vals)
-
-    @api.onchange('code')
-    def _onchange_code_trim(self):
-        if self.code and isinstance(self.code, str):
-            self.code = self.code.strip()
 
     # --- Carga al POS ---------------------------------------------------
 

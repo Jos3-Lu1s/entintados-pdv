@@ -12,12 +12,14 @@ class TintColor(models.Model):
     _name = 'tint.color'
     _description = "Color de la carta"
     _order = 'collection_id, name, id'
-    _inherit = ['pos.load.mixin']
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
-    name = fields.Char(string="Color", required=True, translate=True)
+    name = fields.Char(
+        string="Color", required=True, translate=True,
+        help="Nombre comercial del color de la carta.")
     code = fields.Char(
-        string="Código", copy=False, index='btree_not_null',
-        help="Código del color. Se genera automáticamente si se deja vacío.")
+        copy=False, index='btree_not_null',
+        help="Código del color. Debe capturarse y no puede repetirse.")
     html_color = fields.Char(
         string="Muestra (hex)",
         help="Color aproximado para mostrar en pantalla, en formato #RRGGBB. "
@@ -25,15 +27,22 @@ class TintColor(models.Model):
     
     collection_id = fields.Many2one(
         comodel_name='tint.collection', string="Colección",
-        ondelete='restrict', index=True)
-    notes = fields.Html(string="Notas", translate=True, sanitize=True)
-    active = fields.Boolean(string="Activo", default=True)
+        ondelete='restrict', index=True,
+        help="Carta o colección comercial a la que pertenece el color.")
+    notes = fields.Html(
+        string="Notas", translate=True, sanitize=True,
+        help="Observaciones internas sobre el color.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, el color se archiva y deja de ofrecerse.")
 
     formula_ids = fields.One2many(
         comodel_name='tint.color.formula', inverse_name='color_id',
-        string="Fórmulas")
+        string="Fórmulas",
+        help="Fórmulas de entintado registradas para este color.")
     formula_count = fields.Integer(
-        string="Fórmulas", compute='_compute_formula_count')
+        string="Fórmulas", compute='_compute_formula_count',
+        help="Número de fórmulas registradas para este color.")
     base_type_ids = fields.Many2many(
         comodel_name='tint.base.type', string="Bases compatibles",
         compute='_compute_base_type_ids', search='_search_base_type_ids',
@@ -42,10 +51,6 @@ class TintColor(models.Model):
     _code_uniq = models.Constraint(
         'UNIQUE(code)',
         "Ya existe un color con ese código.",
-    )
-    
-    scheme_id=fields.Many2one(
-        comodel_name='product.schema',string="Esquema"
     )
 
     @api.depends('formula_ids')
@@ -85,28 +90,32 @@ class TintColor(models.Model):
                     value=color.html_color,
                 ))
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if not vals.get('code'):
-                vals['code'] = self.env['ir.sequence'].next_by_code('tint.color.code')
-        return super().create(vals_list)
+    def formula_for(self, base_type, size, gallery=None):
+        """Fórmula de este color para esa base y presentación.
 
-    def formula_for(self, base_type, size):
+        Desde que existen las galerías, la combinación puede repetirse entre
+        recetas de distinto origen. Sin acotar la galería se devuelve la
+        primera que aparezca, que no tiene por qué ser la deseada.
+        """
         self.ensure_one()
         return self.formula_ids.filtered(
-            lambda f: f.base_type_id == base_type and f.size_id == size
+            lambda f: f.base_type_id == base_type
+            and f.size_id == size
+            and (not gallery or f.gallery_id == gallery)
         )[:1]
 
-    def formulas_for_size(self, size):
+    def formulas_for_size(self, size, gallery=None):
         self.ensure_one()
-        return self.formula_ids.filtered(lambda f: f.size_id == size)
+        return self.formula_ids.filtered(
+            lambda f: f.size_id == size
+            and (not gallery or f.gallery_id == gallery)
+        )
 
     # --- Carga al POS ---------------------------------------------------
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id', 'scheme_id', 'base_type_ids',]
+        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id', 'base_type_ids',]
 
     @api.model
     def _load_pos_data_domain(self, data, config):
