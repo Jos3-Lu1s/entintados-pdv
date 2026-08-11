@@ -21,9 +21,7 @@ import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
  * ## El escalonado: galería → presentación → tipo de base
  *
  * La galería es la familia de la receta (catálogo propio, de competencia,
- * histórica). El esquema **no participa en caja**: es una clasificación de
- * catálogo que se usa en el backend para validar la coherencia entre los
- * colorantes y sus fórmulas, pero el cajero no razona con él.
+ * histórica).
  *
  * Cada nivel se calcula sobre las fórmulas que sobrevivieron al anterior, así
  * que nunca se ofrece una combinación sin fórmula registrada.
@@ -301,9 +299,8 @@ export class TintPanel extends Component {
     /**
      * Combinaciones cubiertas por más de una base.
      *
-     * Sin el esquema en la ecuación, `(presentación, tipo de base)` debe
-     * identificar una sola base. Si hay varias, se toma la primera y el
-     * cajero cobraría una u otra sin saberlo.
+     * `(presentación, tipo de base)` debe identificar una sola base. Si hay
+     * varias, se toma la primera y el cajero cobraría una u otra sin saberlo.
      */
     get ambiguousBases() {
         const groups = new Map();

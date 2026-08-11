@@ -83,23 +83,7 @@
         sequence="30"
     />
 
-    <menuitem 
-        id="menu_schema"
-        name="Esquemas"
-        parent="menu_tint_config"
-        action="action_product_schema"
-        sequence="40"
-    />
-
-    <menuitem 
-        id="menu_lines_schema"
-        name="Líneas de esquema"
-        parent="menu_tint_config"
-        action="action_lines_schema"
-        sequence="50"
-    />
-
-    <menuitem 
+    <menuitem
         id="menu_product"
         name="Productos"
         parent="menu_tint_root"

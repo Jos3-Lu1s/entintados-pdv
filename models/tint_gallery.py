@@ -21,21 +21,29 @@ class TintGallery(models.Model):
     _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
-        string="Galería", required=True, translate=True)
+        string="Galería", required=True, translate=True,
+        help="Nombre de la galería, p. ej. Milenium, Comex o Verel.")
     code = fields.Char(
         index='btree_not_null',
         help="Código corto para identificarla en listados y etiquetas.")
-    sequence = fields.Integer(string="Secuencia", default=10)
-    active = fields.Boolean(string="Activa", default=True)
+    sequence = fields.Integer(
+        string="Secuencia", default=10,
+        help="Orden en que se muestra la galería en listados y en caja.")
+    active = fields.Boolean(
+        string="Activa", default=True,
+        help="Si se desmarca, la galería se archiva y deja de ofrecerse.")
 
     description = fields.Html(
-        string="Descripción", translate=True, sanitize=True)
+        string="Descripción", translate=True, sanitize=True,
+        help="Nota interna sobre el origen o el uso de esta galería.")
 
     formula_ids = fields.One2many(
         comodel_name='tint.color.formula', inverse_name='gallery_id',
-        string="Fórmulas")
+        string="Fórmulas",
+        help="Fórmulas de entintado que pertenecen a esta galería.")
     formula_count = fields.Integer(
-        string="Fórmulas", compute='_compute_counts')
+        string="Fórmulas", compute='_compute_counts',
+        help="Número total de fórmulas registradas en esta galería.")
     color_count = fields.Integer(
         string="Colores", compute='_compute_counts',
         help="Colores distintos con al menos una fórmula en esta galería.")

@@ -19,42 +19,51 @@ class TintColorFormula(models.Model):
              "competencia, histórico o desarrollo interno.")
     color_id = fields.Many2one(
         comodel_name='tint.color', string="Color",
-        required=True, ondelete='cascade', index=True)
+        required=True, ondelete='cascade', index=True,
+        help="Color que produce esta fórmula.")
     base_type_id = fields.Many2one(
         comodel_name='tint.base.type', string="Tipo de base",
-        required=True, ondelete='restrict', index=True)
+        required=True, ondelete='restrict', index=True,
+        help="Base de pintura sobre la que se aplica esta fórmula.")
     size_id = fields.Many2one(
         comodel_name='tint.size', string="Presentación",
-        required=True, ondelete='restrict', index=True)
-    active = fields.Boolean(string="Activo", default=True)
+        required=True, ondelete='restrict', index=True,
+        help="Presentación de envase para la que se calculan las dosis.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, la fórmula se archiva y deja de ofrecerse.")
 
     line_ids = fields.One2many(
         comodel_name='tint.color.formula.line', inverse_name='formula_id',
-        string="Dosis de colorante")
-    
-    scheme_id = fields.Many2one(
-        related='color_id.scheme_id', string="Esquema de producto",
-        store=True, readonly=True,)
+        string="Dosis de colorante",
+        help="Colorantes y cantidades que componen esta fórmula.")
 
     total_points = fields.Integer(
-        string="Total (Pts.)", compute='_compute_total_points', store=True)
+        string="Total (Pts.)", compute='_compute_total_points', store=True,
+        help="Suma de los puntos de colorante de todas las dosis.")
     total_points_display = fields.Char(
-        string="Total", compute='_compute_total_points', store=True)
+        string="Total", compute='_compute_total_points', store=True,
+        help="Total del entintado en la notación mixta de la operación, p. ej. 9Y 24.")
     capacity_points = fields.Integer(
-        string="Capacidad del envase (Pts.)", compute='_compute_capacity')
+        string="Capacidad del envase (Pts.)", compute='_compute_capacity',
+        help="Colorante máximo que admite el envase según la matriz de capacidad.")
     capacity_display = fields.Char(
-        string="Capacidad del envase", compute='_compute_capacity')
+        string="Capacidad del envase", compute='_compute_capacity',
+        help="La capacidad del envase en la notación mixta de la operación.")
     remaining_points = fields.Integer(
         string="Holgura (Pts.)", compute='_compute_capacity',
         help="Puntos que aún admite el envase con esta fórmula.")
     fits = fields.Boolean(
         string="Cabe en el envase", compute='_compute_capacity',
-        search='_search_fits')
+        search='_search_fits',
+        help="Falso cuando el total de colorante supera la capacidad del envase.")
 
     requires_extraction = fields.Boolean(
-        related='base_type_id.requires_extraction', readonly=True)
+        related='base_type_id.requires_extraction', readonly=True,
+        help="Indica si la base requiere extracción previa antes de entintar.")
     operator_note = fields.Text(
-        related='base_type_id.operator_note', readonly=True)
+        related='base_type_id.operator_note', readonly=True,
+        help="Instrucción al operador definida en el tipo de base.")
 
     # La galería forma parte de la llave a propósito: el sentido de tener
     # galerías es que dos fabricantes puedan dar recetas distintas para el
@@ -214,8 +223,7 @@ class TintColorFormula(models.Model):
         return [
             'id', 'color_id', 'base_type_id', 'size_id', 'total_points',
             'line_ids',
-            # Primer nivel del filtrado escalonado en caja. El esquema no
-            # viaja: es clasificación de catálogo, no navegación de cajero.
+            # Primer nivel del filtrado escalonado en caja.
             'gallery_id',
         ]
 

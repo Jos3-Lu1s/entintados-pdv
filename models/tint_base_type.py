@@ -14,13 +14,19 @@ class TintBaseType(models.Model):
     _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
-        string="Tipo de base", required=True, translate=True)
+        string="Tipo de base", required=True, translate=True,
+        help="Nombre de la base de pintura sobre la que se entinta.")
     code = fields.Char(
         help="Código de una letra del fabricante: W, M, D, A, N, Y, R.")
     description = fields.Html(
-        string="Descripción", translate=True, sanitize=True)
-    sequence = fields.Integer(string="Secuencia", default=10)
-    active = fields.Boolean(string="Activo", default=True)
+        string="Descripción", translate=True, sanitize=True,
+        help="Nota interna sobre las características o el uso de esta base.")
+    sequence = fields.Integer(
+        string="Secuencia", default=10,
+        help="Orden en que se muestra el tipo de base en listados y en caja.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, el tipo de base se archiva y deja de ofrecerse.")
 
     white_content = fields.Selection(
         selection=[
@@ -62,9 +68,11 @@ class TintBaseType(models.Model):
 
     capacity_ids = fields.One2many(
         comodel_name='tint.base.capacity', inverse_name='base_type_id',
-        string="Capacidades por presentación")
+        string="Capacidades por presentación",
+        help="Colorante máximo que admite esta base en cada presentación.")
     capacity_count = fields.Integer(
-        string="Capacidades definidas", compute='_compute_capacity_count')
+        string="Capacidades definidas", compute='_compute_capacity_count',
+        help="Número de presentaciones con capacidad registrada para esta base.")
 
     _code_uniq = models.Constraint(
         'UNIQUE(code)',

@@ -10,21 +10,28 @@ class TintSize(models.Model):
     _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
-        string="Presentación", required=True, translate=True)
+        string="Presentación", required=True, translate=True,
+        help="Nombre comercial del envase, p. ej. Litro, Galón o Cubeta.")
     code = fields.Char(
         help="Código corto usado por la operación: L = Litro, G = Galón, Q = Cubeta.")
     volume_liters = fields.Float(
         string="Volumen (L)", required=True, digits=(12, 3),
         help="Volumen nominal del envase en litros. Se usa para verificar "
              "la consistencia de la matriz de capacidad de colorante.")
-    sequence = fields.Integer(string="Secuencia", default=10)
-    active = fields.Boolean(string="Activo", default=True)
+    sequence = fields.Integer(
+        string="Secuencia", default=10,
+        help="Orden en que se muestra la presentación en listados y en caja.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, la presentación se archiva y deja de ofrecerse.")
 
     capacity_ids = fields.One2many(
         comodel_name='tint.base.capacity', inverse_name='size_id',
-        string="Capacidades por tipo de base")
+        string="Capacidades por tipo de base",
+        help="Colorante máximo que admite cada tipo de base en esta presentación.")
     capacity_count = fields.Integer(
-        string="Capacidades definidas", compute='_compute_capacity_count')
+        string="Capacidades definidas", compute='_compute_capacity_count',
+        help="Número de tipos de base con capacidad registrada para esta presentación.")
 
     _code_uniq = models.Constraint(
         'UNIQUE(code)',
