@@ -48,6 +48,12 @@ class ProductTemplate(models.Model):
     price_per_point = fields.Float(
         string="Precio por punto", digits='Product Price',
         help="Precio de venta de cada punto dispensado de este colorante.")
+    
+    # --- Esquemas y lineas de producto ----------------------------------
+    lines_product_id = fields.Many2one(
+        comodel_name='lines.product',
+        string='Línea de producto',
+    )
 
     # --- Cálculos -------------------------------------------------------
 
@@ -159,7 +165,7 @@ class ProductTemplate(models.Model):
         field_names = super()._load_pos_data_fields(config)
         return field_names + [
             'tint_role', 'tint_base_type_id', 'tint_size_id',
-            'tint_capacity_points', 'price_per_point',
+            'tint_capacity_points', 'price_per_point', 'standard_price',
         ]
 
     @api.model
@@ -181,5 +187,25 @@ class ProductTemplate(models.Model):
             read += self._load_pos_data_read(missing, config)
         return read
 
-
+    @api.constrains('standard_price', 'list_price')
+    def _check_standard_price_lower_than_list_price(self):
+        for product in self:
+            if not product.standard_price:
+                raise ValidationError(_(
+                    'El costo no puede ser 0 en el producto "%(name)s".',
+                    name=product.display_name,
+                ))
+            if not product.list_price:
+                raise ValidationError(_(
+                    'El precio de venta no puede ser 0 en el producto "%(name)s".',
+                    name=product.display_name,
+                ))
+            if product.standard_price >= product.list_price:
+                raise ValidationError(_(
+                    'El costo ("%(standard)s") no puede ser mayor ni igual '
+                    'al precio de venta ("%(list)s") en el producto "%(name)s".',
+                    standard=product.standard_price,
+                    list=product.list_price,
+                    name=product.display_name,
+                ))
 

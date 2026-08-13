@@ -16,3 +16,7 @@ access_tint_color_formula_line_user,tint.color.formula.line (lectura usuario int
 access_tint_color_formula_line_manager,tint.color.formula.line (administrador de catalogo),model_tint_color_formula_line,entintados_pdv.group_tint_manager,1,1,1,
 access_tint_gallery_user,tint.gallery (lectura usuario interno),model_tint_gallery,base.group_user,1,0,0,0
 access_tint_gallery_manager,tint.gallery (administrador de catalogo),model_tint_gallery,entintados_pdv.group_tint_manager,1,1,1,1
+access_lines_product_user,lines.product (lectura usuario interno),model_lines_product,base.group_user,1,0,0,0
+access_lines_product_manager,lines.product (administrador de catalogo),model_lines_product,entintados_pdv.group_tint_manager,1,1,1,1
+access_lines_product_presentation_user,lines.product.presentation (lectura usuario interno),model_lines_product_presentation,base.group_user,1,0,0,0
+access_lines_product_presentation_manager,lines.product.presentation (administrador de catalogo),model_lines_product_presentation,entintados_pdv.group_tint_manager,1,1,1,1

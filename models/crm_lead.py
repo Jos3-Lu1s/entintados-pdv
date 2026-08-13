@@ -9,6 +9,11 @@ class CrmLead(models.Model):
         string='Tipo de Etapa',
         store=True,
     )
+    
+    draft_quotation_count = fields.Integer(
+        compute='_compute_draft_quotation_count',
+        string='Cotizaciones en Borrador'
+    )
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
         res = super()._prepare_customer_values(partner_name, is_company=is_company, parent_id=parent_id)
@@ -63,10 +68,20 @@ class CrmLead(models.Model):
     def _check_expected_revenue_in_quotation(self):
         for lead in self:
             if lead.stage_id.stage_type == 'quotation' and not lead.expected_revenue:
-                raise ValidationError(_(
-                    'El campo "Ingreso Esperado" es obligatorio para oportunidades '
-                    'en la etapa de Cotización.'
-                ))
+                raise ValidationError(...)
+            
+    @api.depends('order_ids.state')
+    def _compute_draft_quotation_count(self):
+        for lead in self:
+            lead.draft_quotation_count = len(lead.order_ids.filtered(lambda o: o.state == 'draft'))
+            
+    def action_view_sale_quotation(self):
+        action = super().action_view_sale_quotation()
+        domain = action.get('domain', [])
+        if isinstance(domain, list):
+            domain = domain + [('state', '!=', 'cancel')]
+        action['domain'] = domain
+        return action
 
 class CrmStage(models.Model):
     _inherit = 'crm.stage'
@@ -74,8 +89,8 @@ class CrmStage(models.Model):
     stage_type = fields.Selection([
         ('new', 'Prospecto'),
         ('visit', 'Visita de campo'),
-        ('quotation', 'Cotizacion'),
         ('demo', 'Demo'),
+        ('quotation', 'Cotizacion'),
         ('closed', 'Venta Cerrada'),
         ('postsale', 'Post Venta')
         ])

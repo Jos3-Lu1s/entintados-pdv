@@ -64,6 +64,14 @@ class TintColorFormula(models.Model):
     operator_note = fields.Text(
         related='base_type_id.operator_note', readonly=True,
         help="Instrucción al operador definida en el tipo de base.")
+    
+    cost_min = fields.Float(
+        string="Costo", compute='_compute_cost_min', store=True,
+        help="Costo de la fórmula en el menor de los fabricantes.")
+    
+    cost_max = fields.Float(
+        string="Precio de venta", compute='_compute_cost_max', store=True,
+        help="Precio de venta de la fórmula en el mayor de los fabricantes.")
 
     # La galería forma parte de la llave a propósito: el sentido de tener
     # galerías es que dos fabricantes puedan dar recetas distintas para el
@@ -225,8 +233,26 @@ class TintColorFormula(models.Model):
             'line_ids',
             # Primer nivel del filtrado escalonado en caja.
             'gallery_id',
+            'cost_min',
+            'cost_max',
         ]
 
     @api.model
     def _load_pos_data_domain(self, data, config):
         return [('active', '=', True)]
+    
+    @api.depends('line_ids.points', 'line_ids.colorant_id.standard_price')
+    def _compute_cost_min(self):
+        for formula in self:
+            formula.cost_min = sum(
+                line.colorant_id.standard_price * line.points
+                for line in formula.line_ids
+            )
+
+    @api.depends('line_ids.points', 'line_ids.colorant_id.list_price')
+    def _compute_cost_max(self):
+        for formula in self:
+            formula.cost_max = sum(
+                line.colorant_id.list_price * line.points
+                for line in formula.line_ids
+            )
