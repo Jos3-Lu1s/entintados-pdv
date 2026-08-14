@@ -18,13 +18,12 @@ import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
  * `product.template`. La pestaña oculta el contenedor nativo y renderiza
  * este componente en su lugar.
  *
- * ## El escalonado: galería → presentación → tipo de base
+ * ## El recorrido: color → filtros → base concreta
  *
- * La galería es la familia de la receta (catálogo propio, de competencia,
- * histórica).
- *
- * Cada nivel se calcula sobre las fórmulas que sobrevivieron al anterior, así
- * que nunca se ofrece una combinación sin fórmula registrada.
+ * El color es el punto de partida. Elegido el color, los filtros (galería, presentación, tipo de
+ * base) se calculan SOLO sobre las fórmulas de ese color y sirven para
+ * acotar. Al final se ofrecen las BASES CONCRETAS (`product.product`): cada
+ * envase vendible es su propia tarjeta, con su marca y su precio.
  */
 export class TintPanel extends Component {
     static template = "entintados_pdv.TintPanel";
@@ -35,10 +34,14 @@ export class TintPanel extends Component {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.state = useState({
+            // Paso 1 — color
+            colorId: null,
+            search: "",
+            collectionId: null,
+            // Paso 2 — filtros (opcionales, derivados del color)
             galleryId: null,
             sizeId: null,
             baseTypeId: null,
-            search: "",
         });
     }
 
@@ -95,7 +98,7 @@ export class TintPanel extends Component {
         return this.formulas.length > 0 && !this.formulasWithoutGallery;
     }
 
-    // --- Filtrado en cascada --------------------------------------------
+    // --- Catálogo base ---------------------------------------------------
 
     get formulas() {
         return this.pos.models["tint.color.formula"]?.getAll?.() ?? [];
@@ -105,10 +108,98 @@ export class TintPanel extends Component {
         return this.formulas.length;
     }
 
-    /** Fórmulas que sobreviven a los filtros elegidos hasta ahora. */
+    // --- Paso 1: color ---------------------------------------------------
+
+    /** Ids de color que tienen al menos una fórmula registrada. */
+    get colorIdsWithFormula() {
+        const ids = new Set();
+        for (const formula of this.formulas) {
+            if (formula.color_id) {
+                ids.add(formula.color_id.id);
+            }
+        }
+        return ids;
+    }
+
+    get collections() {
+        return this.pos.models["tint.collection"]?.getAll?.() ?? [];
+    }
+
+    get searchTerm() {
+        return this.state.search.trim().toLowerCase();
+    }
+
+    /**
+     * Colores ofrecibles: los que tienen fórmula, filtrados por búsqueda
+     * (nombre o código) y por colección. Sin fórmula no se ofrecen porque no
+     * habría ninguna base que dispensar.
+     */
+    get colors() {
+        const withFormula = this.colorIdsWithFormula;
+        const term = this.searchTerm;
+        return (this.pos.models["tint.color"]?.getAll?.() ?? [])
+            .filter((color) => {
+                if (!withFormula.has(color.id)) {
+                    return false;
+                }
+                if (this.state.collectionId) {
+                    const collectionId = color.collection_id?.id || color.collection_id || false;
+                    if (collectionId !== this.state.collectionId) {
+                        return false;
+                    }
+                }
+                if (term) {
+                    return (
+                        (color.name || "").toLowerCase().includes(term) ||
+                        (color.code || "").toLowerCase().includes(term)
+                    );
+                }
+                return true;
+            })
+            .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
+    get selectedColor() {
+        return this.state.colorId
+            ? this.pos.models["tint.color"]?.get?.(this.state.colorId)
+            : null;
+    }
+
+    selectColor(id) {
+        this.state.colorId = id;
+        // Elegir color reinicia los filtros posteriores.
+        this.state.galleryId = null;
+        this.state.sizeId = null;
+        this.state.baseTypeId = null;
+    }
+
+    clearColor() {
+        Object.assign(this.state, {
+            colorId: null,
+            galleryId: null,
+            sizeId: null,
+            baseTypeId: null,
+        });
+    }
+
+    selectCollection(id) {
+        this.state.collectionId = this.state.collectionId === id ? null : id;
+    }
+
+    // --- Paso 2: filtros en cascada sobre el color -----------------------
+
+    /** Fórmulas del color elegido. Base de todo el filtrado posterior. */
+    get colorFormulas() {
+        if (!this.state.colorId) {
+            return [];
+        }
+        return this.formulas.filter((formula) => formula.color_id?.id === this.state.colorId);
+    }
+
+    /** Fórmulas del color que sobreviven a los filtros elegidos hasta ahora. */
     formulasUpTo(level) {
         const { galleryId, sizeId, baseTypeId } = this.state;
-        return this.formulas.filter((formula) => {
+        return this.colorFormulas.filter((formula) => {
             if (level >= 1 && galleryId && formula.gallery_id?.id !== galleryId) {
                 return false;
             }
@@ -176,52 +267,7 @@ export class TintPanel extends Component {
         ];
     }
 
-    get searchTerm() {
-        return this.state.search.trim().toLowerCase();
-    }
-
-    /**
-     * Con miles de fórmulas no se pinta nada hasta acorralar la combinación.
-     * La búsqueda por color es el atajo para cuando el cliente llega con el
-     * color en la mano.
-     */
-    get showCards() {
-        return Boolean(this.state.baseTypeId) || this.searchTerm.length >= 2;
-    }
-
-    get cards() {
-        if (!this.showCards) {
-            return [];
-        }
-        const term = this.searchTerm;
-        return this.formulasUpTo(3)
-            .filter((formula) => {
-                if (!term) {
-                    return true;
-                }
-                const color = formula.color_id;
-                return (
-                    (color?.name || "").toLowerCase().includes(term) ||
-                    (color?.code || "").toLowerCase().includes(term)
-                );
-            })
-            .map((formula) => this.buildCard(formula))
-            .filter((card) => card.baseProduct)
-            .sort((a, b) => (a.color?.name || "").localeCompare(b.color?.name || ""));
-    }
-
-    buildCard(formula) {
-        const baseProduct = this.resolveBaseProduct(formula);
-        const doses = formulaDoses(this.pos, formula);
-        return {
-            formula,
-            baseProduct,
-            color: formula.color_id,
-            doses,
-            totalPoints: doses.reduce((acc, dose) => acc + dose.points, 0),
-            price: baseProduct ? computeTintedPrice(this.pos, baseProduct, formula) : 0,
-        };
-    }
+    // --- Paso 3: bases concretas ----------------------------------------
 
     /**
      * Bases que sirven para una presentación y un tipo de base.
@@ -241,8 +287,56 @@ export class TintPanel extends Component {
         });
     }
 
-    resolveBaseProduct(formula) {
-        return this.basesFor(formula.size_id?.id, formula.base_type_id?.id)[0];
+    /** ¿El filtro de galería está activo? Decide si la galería se muestra en la tarjeta. */
+    get galleryFilterActive() {
+        return Boolean(this.state.galleryId);
+    }
+
+    /**
+     * Se muestran las bases en cuanto hay color; los filtros solo acotan.
+     */
+    get showCards() {
+        return Boolean(this.state.colorId);
+    }
+
+    /**
+     * Tarjetas de BASE CONCRETA.
+     *
+     * Se itera sobre TODAS las bases de cada fórmula y se emite
+     * una tarjeta por producto: cuando una combinación tiene varias marcas,
+     * cada una aparece con su propio precio y el cajero elige.
+     */
+    get cards() {
+        if (!this.showCards) {
+            return [];
+        }
+        const cards = [];
+        for (const formula of this.formulasUpTo(3)) {
+            for (const baseProduct of this.basesFor(formula.size_id?.id, formula.base_type_id?.id)) {
+                cards.push(this.buildCard(formula, baseProduct));
+            }
+        }
+        return cards.sort(
+            (a, b) =>
+                (a.baseProduct.display_name || "").localeCompare(b.baseProduct.display_name || "") ||
+                a.price - b.price
+        );
+    }
+
+    buildCard(formula, baseProduct) {
+        const doses = formulaDoses(this.pos, formula);
+        return {
+            key: `${formula.id}-${baseProduct.id}`,
+            formula,
+            baseProduct,
+            color: formula.color_id,
+            gallery: formula.gallery_id,
+            baseType: formula.base_type_id,
+            size: formula.size_id,
+            doses,
+            totalPoints: doses.reduce((acc, dose) => acc + dose.points, 0),
+            price: computeTintedPrice(this.pos, baseProduct, formula),
+        };
     }
 
     // --- Diagnóstico de la resolución de base ----------------------------
@@ -253,11 +347,11 @@ export class TintPanel extends Component {
             .join(" · ");
     }
 
-    /** Combinaciones que las fórmulas piden y ningún producto base cubre. */
+    /** Combinaciones que las fórmulas del color piden y ningún producto base cubre. */
     get missingCombos() {
         const seen = new Map();
         for (const formula of this.formulasUpTo(3)) {
-            if (this.resolveBaseProduct(formula)) {
+            if (this.basesFor(formula.size_id?.id, formula.base_type_id?.id).length) {
                 continue;
             }
             const key = [formula.size_id?.id, formula.base_type_id?.id].join("-");
@@ -272,7 +366,9 @@ export class TintPanel extends Component {
         if (!this.showCards) {
             return 0;
         }
-        return this.formulasUpTo(3).filter((f) => !this.resolveBaseProduct(f)).length;
+        return this.formulasUpTo(3).filter(
+            (f) => !this.basesFor(f.size_id?.id, f.base_type_id?.id).length
+        ).length;
     }
 
     /**
@@ -296,22 +392,6 @@ export class TintPanel extends Component {
             });
     }
 
-    /**
-     * Combinaciones cubiertas por más de una base.
-     *
-     * `(presentación, tipo de base)` debe identificar una sola base. Si hay
-     * varias, se toma la primera y el cajero cobraría una u otra sin saberlo.
-     */
-    get ambiguousBases() {
-        const groups = new Map();
-        for (const base of this.loadedBases) {
-            groups.set(base.combo, (groups.get(base.combo) || 0) + 1);
-        }
-        return [...groups.entries()]
-            .filter(([, total]) => total > 1)
-            .map(([combo, total]) => ({ combo, total }));
-    }
-
     // --- Interacción -----------------------------------------------------
 
     selectLevel(key, id) {
@@ -328,12 +408,9 @@ export class TintPanel extends Component {
     }
 
     clearFilters() {
-        Object.assign(this.state, {
-            galleryId: null,
-            sizeId: null,
-            baseTypeId: null,
-            search: "",
-        });
+        this.state.galleryId = null;
+        this.state.sizeId = null;
+        this.state.baseTypeId = null;
     }
 
     async addCard(card) {
