@@ -213,14 +213,21 @@ export class TintPanel extends Component {
         });
     }
 
-    /** Opciones de un nivel, con cuántas fórmulas hay detrás de cada una. */
     optionsFor(level, field, model, sorter) {
         const counts = new Map();
         for (const formula of this.formulasUpTo(level - 1)) {
             const record = formula[field];
-            if (record) {
-                counts.set(record.id, (counts.get(record.id) || 0) + 1);
+            if (!record) {
+                continue;
             }
+            const baseCount = this.basesFor(
+                formula.size_id?.id,
+                formula.base_type_id?.id
+            ).length;
+            if (!baseCount) {
+                continue;
+            }
+            counts.set(record.id, (counts.get(record.id) || 0) + baseCount);
         }
         return (this.pos.models[model]?.getAll?.() ?? [])
             .filter((record) => counts.has(record.id))

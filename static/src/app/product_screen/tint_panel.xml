@@ -7,7 +7,7 @@
             <!-- Barra superior -->
             <div t-if="hasCatalog" class="flex-shrink-0 border-bottom bg-view p-2">
 
-                <!-- sin color elegido -> buscar color -->
+                <!-- Paso 1: sin color elegido -> buscar color -->
                 <div t-if="!state.colorId">
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <span class="badge bg-primary">1</span>
@@ -28,9 +28,9 @@
                 <!-- Color elegido -> mostrar filtros -->
                 <div t-else="">
                     <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="badge rounded-pill border"
-                              t-attf-style="background-color: {{ selectedColor and selectedColor.html_color or '#9E9E9E' }}; width: 1.25rem; height: 1.25rem;"/>
-                        <span class="fw-bold">
+                        <span class="rounded-circle border flex-shrink-0"
+                              t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
+                        <span class="fw-bold text-truncate">
                             <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
                             <t t-esc="selectedColor and selectedColor.name"/>
                         </span>
@@ -114,22 +114,17 @@
 
                 <t t-if="hasCatalog">
 
-                    <!-- rejilla de colores -->
+                    <!-- Paso 1: lista de colores (código protagonista) -->
                     <t t-if="!state.colorId">
-                        <div t-if="colors.length" class="tint-color-grid d-grid gap-2"
-                             style="grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));">
+                        <div t-if="colors.length" class="d-flex flex-column gap-1">
                             <button t-foreach="colors" t-as="color" t-key="color.id"
-                                    class="btn btn-light text-start p-0 border rounded overflow-hidden"
+                                    class="btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2"
                                     t-on-click="() => this.selectColor(color.id)">
-                                <div style="height: 3.5rem;"
-                                     t-attf-style="height: 3.5rem; background-color: {{ color.html_color or '#9E9E9E' }};">
-                                    <span t-if="color.code"
-                                          class="badge bg-dark bg-opacity-75 m-2 d-inline-block"
-                                          t-esc="color.code"/>
-                                </div>
-                                <div class="p-2">
-                                    <div class="fw-bold text-truncate" t-esc="color.name"/>
-                                </div>
+                                <span class="rounded-circle border flex-shrink-0"
+                                      t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
+                                <span t-if="color.code" class="badge bg-secondary flex-shrink-0"
+                                      t-esc="color.code"/>
+                                <span class="fw-bold text-truncate" t-esc="color.name"/>
                             </button>
                         </div>
                         <div t-else=""
@@ -140,7 +135,7 @@
                         </div>
                     </t>
 
-                    <!-- bases concretas del color elegido -->
+                    <!-- Paso 3: lista de bases concretas del color elegido -->
                     <t t-else="">
 
                         <div t-if="unsellableCount" class="alert alert-warning" role="alert">
@@ -178,40 +173,32 @@
                             </div>
                         </div>
 
-                        <div t-if="cards.length" class="tint-formula-grid d-grid gap-2"
-                             style="grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));">
-                            <button t-foreach="cards" t-as="card" t-key="card.key"
-                                    class="btn btn-light text-start p-0 border rounded overflow-hidden"
-                                    t-on-click="() => this.addCard(card)">
-
-                                <div style="height: 3rem;"
-                                     t-attf-style="height: 3rem; background-color: {{ card.color.html_color or '#9E9E9E' }};">
-                                    <span t-if="card.color.code"
-                                          class="badge bg-dark bg-opacity-75 m-2 d-inline-block"
-                                          t-esc="card.color.code"/>
-                                </div>
-
-                                <div class="p-2">
-                                    <div class="fw-bold text-truncate"
-                                         t-esc="card.baseProduct.display_name"/>
-                                    <small class="text-muted d-block text-truncate">
-                                        <t t-esc="card.baseType and card.baseType.name"/>
-                                        <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
-                                    </small>
-                                    <small t-if="!galleryFilterActive and card.gallery"
-                                           class="text-muted d-block text-truncate fst-italic">
-                                        <t t-esc="card.gallery.name"/>
-                                    </small>
-                                    <div class="d-flex justify-content-between align-items-center mt-1">
-                                        <small class="text-muted">
-                                            <t t-esc="formatPoints(card.totalPoints)"/>
+                        <t t-if="cards.length">
+                            <div class="d-flex align-items-center justify-content-between px-1 mb-1">
+                                <small class="text-muted text-uppercase fw-bold">Base a dispensar</small>
+                                <small class="text-muted text-uppercase fw-bold">Precio</small>
+                            </div>
+                            <div class="d-flex flex-column gap-1">
+                                <button t-foreach="cards" t-as="card" t-key="card.key"
+                                        class="btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2"
+                                        t-on-click="() => this.addCard(card)">
+                                    <div class="flex-grow-1" style="min-width: 0;">
+                                        <div class="fw-bold text-truncate"
+                                             t-esc="card.baseProduct.display_name"/>
+                                        <small class="text-muted d-block text-truncate">
+                                            <t t-esc="card.baseType and card.baseType.name"/>
+                                            <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
+                                            <t t-if="!galleryFilterActive and card.gallery"> · <t t-esc="card.gallery.name"/></t>
                                         </small>
-                                        <span class="fw-bold" t-esc="formatPrice(card.price)"/>
                                     </div>
-                                </div>
-
-                            </button>
-                        </div>
+                                    <small class="text-muted text-nowrap">
+                                        <t t-esc="formatPoints(card.totalPoints)"/>
+                                    </small>
+                                    <span class="fw-bold text-nowrap ms-2 fs-6"
+                                          t-esc="formatPrice(card.price)"/>
+                                </button>
+                            </div>
+                        </t>
 
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
