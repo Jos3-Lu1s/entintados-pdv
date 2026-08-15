@@ -36,7 +36,6 @@ export class TintPanel extends Component {
         this.state = useState({
             // Paso 1 — color
             colorId: null,
-            search: "",
             collectionId: null,
             // Paso 2 — filtros (opcionales, derivados del color)
             galleryId: null,
@@ -125,8 +124,11 @@ export class TintPanel extends Component {
         return this.pos.models["tint.collection"]?.getAll?.() ?? [];
     }
 
+    /**
+     * Término de búsqueda: se reutiliza el buscador nativo del POS
+     */
     get searchTerm() {
-        return this.state.search.trim().toLowerCase();
+        return (this.pos.searchProductWord || "").trim().toLowerCase();
     }
 
     /**
@@ -171,6 +173,9 @@ export class TintPanel extends Component {
         this.state.galleryId = null;
         this.state.sizeId = null;
         this.state.baseTypeId = null;
+        // Se limpia el buscador compartido para dejar la caja lista para lo
+        // siguiente; ya no filtra nada en el paso de bases.
+        this.pos.searchProductWord = "";
     }
 
     clearColor() {
@@ -180,6 +185,7 @@ export class TintPanel extends Component {
             sizeId: null,
             baseTypeId: null,
         });
+        this.pos.searchProductWord = "";
     }
 
     selectCollection(id) {
@@ -323,7 +329,19 @@ export class TintPanel extends Component {
                 cards.push(this.buildCard(formula, baseProduct));
             }
         }
-        return cards.sort(
+        // El mismo buscador nativo filtra aquí las bases: por marca/nombre del
+        // producto y, de paso, por tipo de base, galería o presentación.
+        const term = this.searchTerm;
+        const filtered = term
+            ? cards.filter(
+                  (card) =>
+                      (card.baseProduct.display_name || "").toLowerCase().includes(term) ||
+                      (card.baseType?.name || "").toLowerCase().includes(term) ||
+                      (card.gallery?.name || "").toLowerCase().includes(term) ||
+                      (card.size?.name || "").toLowerCase().includes(term)
+              )
+            : cards;
+        return filtered.sort(
             (a, b) =>
                 (a.baseProduct.display_name || "").localeCompare(b.baseProduct.display_name || "") ||
                 a.price - b.price

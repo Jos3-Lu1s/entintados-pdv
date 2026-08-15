@@ -7,13 +7,14 @@
             <!-- Barra superior -->
             <div t-if="hasCatalog" class="flex-shrink-0 border-bottom bg-view p-2">
 
-                <!-- Paso 1: sin color elegido -> buscar color -->
+                <!-- sin color elegido -> elegir color -->
                 <div t-if="!state.colorId">
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <span class="badge bg-primary">1</span>
-                        <input type="text" class="form-control form-control-sm"
-                               placeholder="Busca el color por nombre o código..."
-                               t-model="state.search"/>
+                        <small class="text-muted">
+                            Elige el color — usa el buscador de arriba para filtrarlos
+                            <t t-if="searchTerm"> (filtrando por «<t t-esc="searchTerm"/>»)</t>.
+                        </small>
                     </div>
                     <div t-if="collections.length" class="d-flex flex-wrap gap-1">
                         <button t-foreach="collections" t-as="col" t-key="col.id"
@@ -114,7 +115,7 @@
 
                 <t t-if="hasCatalog">
 
-                    <!-- Paso 1: lista de colores (código protagonista) -->
+                    <!-- lista de colores (código protagonista) -->
                     <t t-if="!state.colorId">
                         <div t-if="colors.length" class="d-flex flex-column gap-1">
                             <button t-foreach="colors" t-as="color" t-key="color.id"
@@ -135,7 +136,7 @@
                         </div>
                     </t>
 
-                    <!-- Paso 3: lista de bases concretas del color elegido -->
+                    <!-- lista de bases concretas del color elegido -->
                     <t t-else="">
 
                         <div t-if="unsellableCount" class="alert alert-warning" role="alert">
@@ -203,8 +204,13 @@
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
                             <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
-                            <h5>No hay bases para esta combinación</h5>
-                            <p class="mb-0">Quita algún filtro o cambia de color.</p>
+                            <h5 t-if="searchTerm">Ninguna base coincide con «<t t-esc="searchTerm"/>»</h5>
+                            <h5 t-else="">No hay bases para esta combinación</h5>
+                            <p class="mb-0">
+                                <t t-if="searchTerm">Limpia el buscador de arriba, </t>
+                                <t t-else="">Quita algún filtro o </t>
+                                cambia de color.
+                            </p>
                         </div>
 
                     </t>
