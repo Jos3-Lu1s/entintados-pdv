@@ -4,35 +4,68 @@
     <t t-name="entintados_pdv.TintPanel">
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
-            <!-- Filtros escalonados -->
+            <!-- Barra superior -->
             <div t-if="hasCatalog" class="flex-shrink-0 border-bottom bg-view p-2">
 
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <input type="text" class="form-control form-control-sm"
-                           placeholder="Buscar color por nombre o código..."
-                           t-model="state.search"/>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
-                            t-on-click="() => this.clearFilters()">
-                        Limpiar
-                    </button>
-                </div>
-
-                <div t-foreach="levels" t-as="level" t-key="level.key"
-                     class="d-flex align-items-center gap-2 mb-1">
-                    <small class="text-muted text-nowrap" style="width: 6.5rem;"
-                           t-esc="level.label"/>
-                    <div t-if="level.options.length" class="d-flex flex-wrap gap-1">
-                        <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
+                <!-- sin color elegido -> elegir color -->
+                <div t-if="!state.colorId">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge bg-primary">1</span>
+                        <small class="text-muted">
+                            Elige el color — usa el buscador de arriba para filtrarlos
+                            <t t-if="searchTerm"> (filtrando por «<t t-esc="searchTerm"/>»)</t>.
+                        </small>
+                    </div>
+                    <div t-if="collections.length" class="d-flex flex-wrap gap-1">
+                        <button t-foreach="collections" t-as="col" t-key="col.id"
                                 class="btn btn-sm text-nowrap"
-                                t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
-                                t-on-click="() => this.selectLevel(level.key, opt.record.id)">
-                            <t t-esc="opt.record.name"/>
-                            <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
+                                t-att-class="state.collectionId === col.id ? 'btn-primary' : 'btn-outline-secondary'"
+                                t-on-click="() => this.selectCollection(col.id)">
+                            <t t-esc="col.name"/>
                         </button>
                     </div>
-                    <small t-else="" class="text-muted fst-italic">
-                        Elige el nivel anterior
-                    </small>
+                </div>
+
+                <!-- Color elegido -> mostrar filtros -->
+                <div t-else="">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="rounded-circle border flex-shrink-0"
+                              t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
+                        <span class="fw-bold text-truncate">
+                            <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
+                            <t t-esc="selectedColor and selectedColor.name"/>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
+                                t-on-click="() => this.clearColor()">
+                            Cambiar color
+                        </button>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <small class="text-muted text-nowrap" style="width: 5rem;">Filtros</small>
+                        <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                                t-on-click="() => this.clearFilters()">
+                            Limpiar filtros
+                        </button>
+                    </div>
+
+                    <div t-foreach="levels" t-as="level" t-key="level.key"
+                         class="d-flex align-items-center gap-2 mb-1">
+                        <small class="text-muted text-nowrap" style="width: 6.5rem;"
+                               t-esc="level.label"/>
+                        <div t-if="level.options.length" class="d-flex flex-wrap gap-1">
+                            <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
+                                    class="btn btn-sm text-nowrap"
+                                    t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
+                                    t-on-click="() => this.selectLevel(level.key, opt.record.id)">
+                                <t t-esc="opt.record.name"/>
+                                <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
+                            </button>
+                        </div>
+                        <small t-else="" class="text-muted fst-italic">
+                            —
+                        </small>
+                    </div>
                 </div>
 
             </div>
@@ -80,42 +113,39 @@
                     </div>
                 </div>
 
-                <div t-if="ambiguousBases.length" class="alert alert-danger" role="alert">
-                    <strong>Hay combinaciones con más de una base.</strong>
-                    <div class="mt-1">
-                        Cada pareja presentación · tipo de base debe corresponder a un
-                        solo producto. Con varias, la caja toma la primera y cobraría
-                        una u otra sin avisar.
-                    </div>
-                    <ul class="mb-0 mt-1 small">
-                        <li t-foreach="ambiguousBases" t-as="amb" t-key="amb.combo">
-                            <t t-esc="amb.combo"/> — <t t-esc="amb.total"/> productos
-                        </li>
-                    </ul>
-                </div>
-
-                <!-- Tarjetas de fórmula -->
                 <t t-if="hasCatalog">
 
-                    <div t-if="!showCards"
-                         class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
-                        <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
-                        <h5>Elige galería, presentación y tipo de base</h5>
-                        <p class="mb-0">
-                            O escribe el nombre o código de un color para ver todas sus opciones.
-                        </p>
-                    </div>
+                    <!-- lista de colores (código protagonista) -->
+                    <t t-if="!state.colorId">
+                        <div t-if="colors.length" class="d-flex flex-column gap-1">
+                            <button t-foreach="colors" t-as="color" t-key="color.id"
+                                    class="btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2"
+                                    t-on-click="() => this.selectColor(color.id)">
+                                <span class="rounded-circle border flex-shrink-0"
+                                      t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
+                                <span t-if="color.code" class="badge bg-secondary flex-shrink-0"
+                                      t-esc="color.code"/>
+                                <span class="fw-bold text-truncate" t-esc="color.name"/>
+                            </button>
+                        </div>
+                        <div t-else=""
+                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                            <i class="fa fa-search fa-3x mb-3 text-secondary"/>
+                            <h5>Ningún color coincide</h5>
+                            <p class="mb-0">Ajusta la búsqueda o la colección.</p>
+                        </div>
+                    </t>
 
+                    <!-- lista de bases concretas del color elegido -->
                     <t t-else="">
 
                         <div t-if="unsellableCount" class="alert alert-warning" role="alert">
                             <strong>
                                 <t t-esc="unsellableCount"/>
-                                <t t-if="unsellableCount === 1"> fórmula oculta</t>
-                                <t t-else=""> fórmulas ocultas</t>
-                                por no encontrar producto base.
+                                <t t-if="unsellableCount === 1"> fórmula sin producto base</t>
+                                <t t-else=""> fórmulas sin producto base</t>
+                                para este color.
                             </strong>
-
                             <div class="row mt-2">
                                 <div class="col-md-6">
                                     <div class="fw-bold small">La fórmula pide</div>
@@ -142,47 +172,45 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="mt-2 small">
-                                La base se identifica solo por presentación y tipo de base: la
-                                galería dice de dónde viene la receta, no qué envase se dispensa.
-                                Ambos atributos se capturan en la pestaña Entintado del producto.
+                        <t t-if="cards.length">
+                            <div class="d-flex align-items-center justify-content-between px-1 mb-1">
+                                <small class="text-muted text-uppercase fw-bold">Base a dispensar</small>
+                                <small class="text-muted text-uppercase fw-bold">Precio</small>
                             </div>
-                        </div>
-
-                        <div t-if="cards.length" class="tint-formula-grid d-grid gap-2"
-                             style="grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));">
-                            <button t-foreach="cards" t-as="card" t-key="card.formula.id"
-                                    class="btn btn-light text-start p-0 border rounded overflow-hidden"
-                                    t-on-click="() => this.addCard(card)">
-
-                                <div style="height: 4.5rem;"
-                                     t-attf-style="height: 4.5rem; background-color: {{ card.color.html_color or '#9E9E9E' }};">
-                                    <span t-if="card.color.code"
-                                          class="badge bg-dark bg-opacity-75 m-2 d-inline-block"
-                                          t-esc="card.color.code"/>
-                                </div>
-
-                                <div class="p-2">
-                                    <div class="fw-bold text-truncate" t-esc="card.color.name"/>
-                                    <small class="text-muted d-block text-truncate">
-                                        <t t-esc="card.baseProduct.display_name"/>
-                                    </small>
-                                    <div class="d-flex justify-content-between align-items-center mt-1">
-                                        <small class="text-muted">
-                                            <t t-esc="formatPoints(card.totalPoints)"/>
+                            <div class="d-flex flex-column gap-1">
+                                <button t-foreach="cards" t-as="card" t-key="card.key"
+                                        class="btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2"
+                                        t-on-click="() => this.addCard(card)">
+                                    <div class="flex-grow-1" style="min-width: 0;">
+                                        <div class="fw-bold text-truncate"
+                                             t-esc="card.baseProduct.display_name"/>
+                                        <small class="text-muted d-block text-truncate">
+                                            <t t-esc="card.baseType and card.baseType.name"/>
+                                            <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
+                                            <t t-if="!galleryFilterActive and card.gallery"> · <t t-esc="card.gallery.name"/></t>
                                         </small>
-                                        <span class="fw-bold" t-esc="formatPrice(card.price)"/>
                                     </div>
-                                </div>
-
-                            </button>
-                        </div>
+                                    <small class="text-muted text-nowrap">
+                                        <t t-esc="formatPoints(card.totalPoints)"/>
+                                    </small>
+                                    <span class="fw-bold text-nowrap ms-2 fs-6"
+                                          t-esc="formatPrice(card.price)"/>
+                                </button>
+                            </div>
+                        </t>
 
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
-                            <i class="fa fa-search fa-3x mb-3 text-secondary"/>
-                            <h5>No hay fórmulas para esta combinación</h5>
+                            <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
+                            <h5 t-if="searchTerm">Ninguna base coincide con «<t t-esc="searchTerm"/>»</h5>
+                            <h5 t-else="">No hay bases para esta combinación</h5>
+                            <p class="mb-0">
+                                <t t-if="searchTerm">Limpia el buscador de arriba, </t>
+                                <t t-else="">Quita algún filtro o </t>
+                                cambia de color.
+                            </p>
                         </div>
 
                     </t>
