@@ -4,16 +4,17 @@
     <t t-name="entintados_pdv.TintPanel">
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
-            <!-- Barra superior -->
-            <div t-if="hasCatalog" class="flex-shrink-0 border-bottom bg-view p-2">
+            <!-- Barra superior / Contenedor de filtros -->
+            <div t-if="hasCatalog" class="flex-shrink-0 border rounded bg-view m-2 p-3">
 
-                <!-- sin color elegido -> elegir color -->
+                <!-- sin color elegido -> filtrar por colección -->
                 <div t-if="!state.colorId">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="badge bg-primary">1</span>
-                        <small class="text-muted">
-                            Elige el color — usa el buscador de arriba para filtrarlos
-                            <t t-if="searchTerm"> (filtrando por «<t t-esc="searchTerm"/>»)</t>.
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                        <small class="text-muted fw-semibold">
+                            Selecciona una colección para filtrar:
+                        </small>
+                        <small t-if="searchTerm" class="text-muted">
+                            Buscando: «<t t-esc="searchTerm"/>»
                         </small>
                     </div>
                     <div t-if="collections.length" class="d-flex flex-wrap gap-1">
@@ -71,7 +72,7 @@
             </div>
 
             <!-- Contenido -->
-            <div class="flex-grow-1 overflow-auto p-3">
+            <div class="flex-grow-1 overflow-auto px-2 pb-2">
 
                 <div t-if="missingModels.length" class="alert alert-danger" role="alert">
                     <strong>Modelos que no existen en el cliente:</strong>
