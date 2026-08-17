@@ -90,9 +90,6 @@
         action="tint_base_capacity_action"
         sequence="30"
     />
-
-<<<<<<< HEAD
-=======
     <menuitem
         id="menu_tint_base_schema"
         name="Esquemas"
@@ -108,6 +105,4 @@
         action="product_template_action_tint"
         sequence="100"
     />
-
->>>>>>> 838858d9bae35ac7e2693b736adcb8b85729da03
 </odoo>
