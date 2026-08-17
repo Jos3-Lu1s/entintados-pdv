@@ -9,10 +9,7 @@ import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 export class TintColorScreen extends Component {
     static template = "entintados_pdv.TintColorScreen";
 
-    /*
-     * El router puede enviar propiedades adicionales.
-     * No limites las props solamente a orderUuid.
-     */
+    /* Admite props adicionales del router además de orderUuid. */
     static props = ["*"];
 
     setup() {
@@ -85,8 +82,7 @@ export class TintColorScreen extends Component {
         const lineTmpl = line?.product_id?.product_tmpl_id;
 
         if (line && lineTmpl?.tint_role === "base") {
-            // Ya hay una base seleccionada en la orden: se resuelve el
-            // entintado sobre ella sin pedir de nuevo base ni presentación.
+            // Entinta directamente sobre la base seleccionada en la orden.
             const baseProduct = line.product_id;
             const qty = line.qty || 1;
 
@@ -104,7 +100,7 @@ export class TintColorScreen extends Component {
                 order.uiState.selectedTintColorId = null;
             }
         } else {
-            // No base line selected -> Store active color and return to ProductScreen
+            // Guarda el color activo en la orden y regresa a ProductScreen.
             this.notification.add(
                 _t(
                     "Color %s seleccionado. Ahora selecciona una base de pintura entintable.",

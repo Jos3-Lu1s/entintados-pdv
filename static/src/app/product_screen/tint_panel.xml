@@ -4,10 +4,10 @@
     <t t-name="entintados_pdv.TintPanel">
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
-            <!-- Barra superior / Contenedor de filtros -->
+            <!-- Barra superior / Filtros -->
             <div t-if="hasCatalog" class="flex-shrink-0 border rounded bg-view m-2 p-3">
 
-                <!-- sin color elegido -> filtrar por colección -->
+                <!-- Sin color seleccionado: filtro por colección -->
                 <div t-if="!state.colorId">
                     <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
                         <small class="text-muted fw-semibold">
@@ -27,7 +27,7 @@
                     </div>
                 </div>
 
-                <!-- Color elegido -> mostrar filtros -->
+                <!-- Color seleccionado: filtros en cascada -->
                 <div t-else="">
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <span class="rounded-circle border flex-shrink-0"
@@ -112,22 +112,25 @@
 
                 <t t-if="hasCatalog">
 
-                    <!-- lista de colores (código protagonista) -->
+                    <!-- Tabla de colores -->
                     <t t-if="!state.colorId">
-                        <div t-if="colors.length" class="d-flex flex-column gap-1">
-                            <TintListRow t-foreach="colors" t-as="color" t-key="color.id"
-                                         onClick="() => this.selectColor(color.id)">
-                                <t t-set-slot="leading">
-                                    <span class="rounded-circle border flex-shrink-0"
-                                          t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
-                                    <span t-if="color.code" class="badge bg-secondary flex-shrink-0"
-                                          t-esc="color.code"/>
-                                </t>
-                                <t t-set-slot="title">
-                                    <t t-esc="color.name"/>
-                                </t>
-                            </TintListRow>
-                        </div>
+                        <TintTable t-if="colors.length" columns="colorColumns">
+                            <t t-set-slot="rows">
+                                <tr t-foreach="colors" t-as="color" t-key="color.id"
+                                    class="o-tint-row-tr"
+                                    t-on-click="() => this.selectColor(color.id)">
+                                    <td class="o-tint-td-swatch">
+                                        <span class="rounded-circle border d-inline-block align-middle"
+                                              t-attf-style="width: 1.5rem; height: 1.5rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
+                                    </td>
+                                    <td class="text-nowrap">
+                                        <span t-if="color.code" class="badge bg-secondary" t-esc="color.code"/>
+                                        <span t-else="" class="text-muted">—</span>
+                                    </td>
+                                    <td class="fw-semibold" t-esc="color.name"/>
+                                </tr>
+                            </t>
+                        </TintTable>
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
                             <i class="fa fa-search fa-3x mb-3 text-secondary"/>
@@ -136,7 +139,7 @@
                         </div>
                     </t>
 
-                    <!-- lista de bases concretas del color elegido -->
+                    <!-- Tabla de bases del color seleccionado -->
                     <t t-else="">
 
                         <div t-if="unsellableCount" class="alert alert-warning" role="alert">
@@ -174,32 +177,24 @@
                             </div>
                         </div>
 
-                        <t t-if="cards.length">
-                            <div class="d-flex align-items-center justify-content-between px-1 mb-1">
-                                <small class="text-muted text-uppercase fw-bold">Base a dispensar</small>
-                                <small class="text-muted text-uppercase fw-bold">Precio</small>
-                            </div>
-                            <div class="d-flex flex-column gap-1">
-                                <TintListRow t-foreach="cards" t-as="card" t-key="card.key"
-                                             onClick="() => this.addCard(card)">
-                                    <t t-set-slot="title">
-                                        <t t-esc="card.baseProduct.display_name"/>
-                                    </t>
-                                    <t t-set-slot="subtitle">
+                        <TintTable t-if="cards.length" columns="baseColumns">
+                            <t t-set-slot="rows">
+                                <tr t-foreach="cards" t-as="card" t-key="card.key"
+                                    class="o-tint-row-tr"
+                                    t-on-click="() => this.addCard(card)">
+                                    <td class="fw-semibold" t-esc="card.baseProduct.display_name"/>
+                                    <td class="text-muted small">
                                         <t t-esc="card.baseType and card.baseType.name"/>
                                         <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
                                         <t t-if="!galleryFilterActive and card.gallery"> · <t t-esc="card.gallery.name"/></t>
-                                    </t>
-                                    <t t-set-slot="trailing">
-                                        <small class="text-muted text-nowrap d-block">
-                                            <t t-esc="formatPoints(card.totalPoints)"/>
-                                        </small>
-                                        <span class="fw-bold text-nowrap fs-6"
-                                              t-esc="formatPrice(card.price)"/>
-                                    </t>
-                                </TintListRow>
-                            </div>
-                        </t>
+                                    </td>
+                                    <td class="text-end text-muted text-nowrap"
+                                        t-esc="formatPoints(card.totalPoints)"/>
+                                    <td class="text-end fw-bold text-nowrap"
+                                        t-esc="formatPrice(card.price)"/>
+                                </tr>
+                            </t>
+                        </TintTable>
 
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">

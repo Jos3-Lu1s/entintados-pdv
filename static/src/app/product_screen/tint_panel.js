@@ -8,27 +8,15 @@ import {
     formulaDoses,
 } from "@entintados_pdv/app/utils/tint_order";
 import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
-import { TintListRow } from "@entintados_pdv/app/components/tint_list_row/tint_list_row";
+import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
 
 /**
- * Panel de entintado — ocupa el lugar de la grilla cuando la pestaña
- * «Entintados» está activa.
- *
- * Deliberadamente NO se apoya en la grilla del núcleo. No parchea
- * `productsToDisplay` ni `addProductToOrder`, y sus tarjetas no fingen ser
- * `product.template`. La pestaña oculta el contenedor nativo y renderiza
- * este componente en su lugar.
- *
- * ## El recorrido: color → filtros → base concreta
- *
- * El color es el punto de partida. Elegido el color, los filtros (galería, presentación, tipo de
- * base) se calculan SOLO sobre las fórmulas de ese color y sirven para
- * acotar. Al final se ofrecen las BASES CONCRETAS (`product.product`): cada
- * envase vendible es su propia tarjeta, con su marca y su precio.
+ * Panel de entintado. Permite seleccionar color, filtrar por galería,
+ * presentación y tipo de base, y elegir la base a dispensar mediante TintTable.
  */
 export class TintPanel extends Component {
     static template = "entintados_pdv.TintPanel";
-    static components = { TintListRow };
+    static components = { TintTable };
     static props = {};
 
     setup() {
@@ -36,17 +24,36 @@ export class TintPanel extends Component {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.state = useState({
-            // Paso 1 — color
+            // Paso 1: color
             colorId: null,
             collectionId: null,
-            // Paso 2 — filtros (opcionales, derivados del color)
+            // Paso 2: filtros derivados del color
             galleryId: null,
             sizeId: null,
             baseTypeId: null,
         });
     }
 
-    // --- Diagnóstico del catálogo ---------------------------------------
+    // Columnas de tablas
+
+    get colorColumns() {
+        return [
+            { label: "Muestra", class: "o-tint-th-swatch" },
+            { label: "Código", class: "text-nowrap" },
+            { label: "Color" },
+        ];
+    }
+
+    get baseColumns() {
+        return [
+            { label: "Base a dispensar" },
+            { label: "Detalle" },
+            { label: "Puntos", class: "text-end text-nowrap" },
+            { label: "Precio", class: "text-end text-nowrap" },
+        ];
+    }
+
+    // Diagnóstico del catálogo
 
     get catalogStats() {
         const count = (model) => this.pos.models[model]?.getAll?.().length ?? null;
@@ -60,18 +67,12 @@ export class TintPanel extends Component {
         ];
     }
 
-    /** Modelos que ni siquiera existen en el cliente. */
+    /** Modelos no cargados en el cliente. */
     get missingModels() {
         return this.catalogStats.filter((stat) => stat.value === null);
     }
 
-    /**
-     * Modelos registrados pero sin registros.
-     *
-     * Se distingue de `missingModels` a propósito: «no existe» apunta a
-     * `_load_pos_data_models` o al registro en `tint_models.js`, mientras que
-     * «existe y está vacío» apunta al servidor.
-     */
+    /** Modelos registrados sin registros cargados desde el servidor. */
     get emptyModels() {
         return this.catalogStats.filter((stat) => stat.value === 0);
     }
@@ -80,14 +81,7 @@ export class TintPanel extends Component {
         return this.pos.models["tint.gallery"]?.getAll?.().length ?? 0;
     }
 
-    /**
-     * Fórmulas sin galería asignada.
-     *
-     * Solo tiene sentido preguntarlo si hay galerías cargadas: en el cliente,
-     * `gallery_id` es una relación que se resuelve contra los `tint.gallery`
-     * en memoria, así que con cero cargadas TODA fórmula parece huérfana
-     * aunque tenga galería en la base de datos.
-     */
+    /** Cantidad de fórmulas sin galería asignada (evaluado si hay galerías cargadas). */
     get formulasWithoutGallery() {
         if (!this.galleriesLoaded) {
             return 0;
@@ -99,7 +93,7 @@ export class TintPanel extends Component {
         return this.formulas.length > 0 && !this.formulasWithoutGallery;
     }
 
-    // --- Catálogo base ---------------------------------------------------
+    // Catálogo base
 
     get formulas() {
         return this.pos.models["tint.color.formula"]?.getAll?.() ?? [];
@@ -109,9 +103,9 @@ export class TintPanel extends Component {
         return this.formulas.length;
     }
 
-    // --- Paso 1: color ---------------------------------------------------
+    // Paso 1: color
 
-    /** Ids de color que tienen al menos una fórmula registrada. */
+    /** IDs de color con al menos una fórmula registrada. */
     get colorIdsWithFormula() {
         const ids = new Set();
         for (const formula of this.formulas) {
@@ -126,18 +120,12 @@ export class TintPanel extends Component {
         return this.pos.models["tint.collection"]?.getAll?.() ?? [];
     }
 
-    /**
-     * Término de búsqueda: se reutiliza el buscador nativo del POS
-     */
+    /** Término de búsqueda obtenido del buscador nativo del POS. */
     get searchTerm() {
         return (this.pos.searchProductWord || "").trim().toLowerCase();
     }
 
-    /**
-     * Colores ofrecibles: los que tienen fórmula, filtrados por búsqueda
-     * (nombre o código) y por colección. Sin fórmula no se ofrecen porque no
-     * habría ninguna base que dispensar.
-     */
+    /** Colores con fórmula disponibles, filtrados por búsqueda (nombre/código) y colección. */
     get colors() {
         const withFormula = this.colorIdsWithFormula;
         const term = this.searchTerm;
@@ -171,12 +159,11 @@ export class TintPanel extends Component {
 
     selectColor(id) {
         this.state.colorId = id;
-        // Elegir color reinicia los filtros posteriores.
+        // Reinicia los filtros posteriores al cambiar de color.
         this.state.galleryId = null;
         this.state.sizeId = null;
         this.state.baseTypeId = null;
-        // Se limpia el buscador compartido para dejar la caja lista para lo
-        // siguiente; ya no filtra nada en el paso de bases.
+        // Limpia el buscador para no arrastrar el filtro de color al paso de bases.
         this.pos.searchProductWord = "";
     }
 
@@ -194,9 +181,9 @@ export class TintPanel extends Component {
         this.state.collectionId = this.state.collectionId === id ? null : id;
     }
 
-    // --- Paso 2: filtros en cascada sobre el color -----------------------
+    // Paso 2: filtros en cascada
 
-    /** Fórmulas del color elegido. Base de todo el filtrado posterior. */
+    /** Fórmulas asociadas al color seleccionado. */
     get colorFormulas() {
         if (!this.state.colorId) {
             return [];
@@ -204,7 +191,7 @@ export class TintPanel extends Component {
         return this.formulas.filter((formula) => formula.color_id?.id === this.state.colorId);
     }
 
-    /** Fórmulas del color que sobreviven a los filtros elegidos hasta ahora. */
+    /** Fórmulas filtradas según el nivel de filtro aplicado. */
     formulasUpTo(level) {
         const { galleryId, sizeId, baseTypeId } = this.state;
         return this.colorFormulas.filter((formula) => {
@@ -282,15 +269,9 @@ export class TintPanel extends Component {
         ];
     }
 
-    // --- Paso 3: bases concretas ----------------------------------------
+    // Paso 3: bases concretas
 
-    /**
-     * Bases que sirven para una presentación y un tipo de base.
-     *
-     * La galería NO participa: identifica el origen de la receta, no el
-     * envase. Aunque la fórmula venga del catálogo de la competencia, la base
-     * que se dispensa y se cobra es la propia.
-     */
+    /** Obtiene los productos base para una presentación y tipo de base específicos. */
     basesFor(sizeId, baseTypeId) {
         return this.pos.models["product.product"].getAll().filter((product) => {
             const tmpl = product.product_tmpl_id;
@@ -302,25 +283,17 @@ export class TintPanel extends Component {
         });
     }
 
-    /** ¿El filtro de galería está activo? Decide si la galería se muestra en la tarjeta. */
+    /** Indica si el filtro de galería está activo para condicionar su visibilidad en fila. */
     get galleryFilterActive() {
         return Boolean(this.state.galleryId);
     }
 
-    /**
-     * Se muestran las bases en cuanto hay color; los filtros solo acotan.
-     */
+    /** Determina si se muestran las bases (requiere color seleccionado). */
     get showCards() {
         return Boolean(this.state.colorId);
     }
 
-    /**
-     * Tarjetas de BASE CONCRETA.
-     *
-     * Se itera sobre TODAS las bases de cada fórmula y se emite
-     * una tarjeta por producto: cuando una combinación tiene varias marcas,
-     * cada una aparece con su propio precio y el cajero elige.
-     */
+    /** Tarjetas de bases disponibles para las fórmulas filtradas, ordenadas y filtradas por búsqueda. */
     get cards() {
         if (!this.showCards) {
             return [];
@@ -331,8 +304,7 @@ export class TintPanel extends Component {
                 cards.push(this.buildCard(formula, baseProduct));
             }
         }
-        // El mismo buscador nativo filtra aquí las bases: por marca/nombre del
-        // producto y, de paso, por tipo de base, galería o presentación.
+        // Filtra bases por nombre, tipo de base, galería o presentación.
         const term = this.searchTerm;
         const filtered = term
             ? cards.filter(
@@ -366,7 +338,7 @@ export class TintPanel extends Component {
         };
     }
 
-    // --- Diagnóstico de la resolución de base ----------------------------
+    // Diagnóstico de resolución de bases
 
     comboLabel(size, baseType) {
         return [size?.name, baseType?.name]
@@ -374,7 +346,7 @@ export class TintPanel extends Component {
             .join(" · ");
     }
 
-    /** Combinaciones que las fórmulas del color piden y ningún producto base cubre. */
+    /** Combinaciones requeridas por las fórmulas del color sin producto base disponible. */
     get missingCombos() {
         const seen = new Map();
         for (const formula of this.formulasUpTo(3)) {
@@ -398,13 +370,7 @@ export class TintPanel extends Component {
         ).length;
     }
 
-    /**
-     * Bases que llegaron a la caja, con los dos atributos que las identifican.
-     *
-     * Si esta lista sale vacía, el problema no son los atributos sino que los
-     * productos no llegan al POS: revisar «Disponible en PdV» y «Puede
-     * venderse» en la ficha.
-     */
+    /** Productos base cargados en el POS con su combinación de presentación y tipo. */
     get loadedBases() {
         return this.pos.models["product.product"]
             .getAll()
@@ -419,7 +385,7 @@ export class TintPanel extends Component {
             });
     }
 
-    // --- Interacción -----------------------------------------------------
+    // Interacción
 
     selectLevel(key, id) {
         if (key === "gallery") {
@@ -448,7 +414,7 @@ export class TintPanel extends Component {
         });
     }
 
-    // --- Formato ---------------------------------------------------------
+    // Formato
 
     formatPoints(points) {
         return formatPoints(points);
