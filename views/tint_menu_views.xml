@@ -98,6 +98,14 @@
         sequence="40"
     />
 
+    <menuitem 
+        id="lines_product_menu"
+        name="Líneas de producto"
+        parent="menu_tint_config"
+        action="lines_product_action"
+        sequence="50"
+    />
+
     <menuitem
         id="menu_product"
         name="Productos"

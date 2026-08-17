@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <list string="Líneas de producto">
                 <field name="name"/>
+                <field name="scheme"/>
             </list>
         </field>
     </record>
@@ -39,12 +40,5 @@
         <field name="res_model">lines.product</field>
         <field name="view_mode">list,form</field>
     </record>
-
-    <menuitem id="lines_product_menu"
-        name="Líneas de producto"
-        action="lines_product_action"
-        parent="stock.menu_stock_config_settings"
-        sequence="50"
-    />
 
 </odoo>

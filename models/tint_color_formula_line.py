@@ -16,10 +16,16 @@ class TintColorFormulaLine(models.Model):
         comodel_name='tint.color.formula', string="Fórmula",
         required=True, ondelete='cascade', index=True,
         help="Fórmula de entintado a la que pertenece esta dosis.")
+    line_scheme_id = fields.Many2one(
+        comodel_name='lines.product', string='Línea de producto',
+        related='formula_id.line_scheme_id', store=True, readonly=True,)
+    scheme_id = fields.Many2one(
+        comodel_name='tint.schema', string='Esquema',
+        related='formula_id.scheme_id', store=True, readonly=True,)
     colorant_id = fields.Many2one(
         comodel_name='product.product', string="Colorante",
         required=True, ondelete='restrict', index=True,
-        domain="[('tint_role', '=', 'colorant')]",
+        domain="[('tint_role', '=', 'colorant'), ('line_scheme_id', '=', line_scheme_id), ('scheme_id', '=', scheme_id)]",
         help="Producto colorante que se dispensa en esta línea.")
     points = fields.Integer(
         string="Dosis (Pts.)", required=True, default=1,

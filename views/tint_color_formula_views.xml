@@ -94,6 +94,10 @@
                             <field name="cost_min" readonly="1" />
                             <field name="cost_max" readonly="1" />
                         </group>
+                        <group string="Esquemas">
+                            <field name="scheme_id" />
+                            <field name="line_scheme_id" />
+                        </group>
                     </group>
                     <div
                         class="alert alert-danger"
@@ -127,7 +131,7 @@
                                     <field
                                         name="colorant_id"
                                         options="{'no_create': True}"
-                                        domain="[('tint_role', '=', 'colorant')]"
+                                        domain="[('tint_role', '=', 'colorant'), ('lines_product_id', '=', line_scheme_id), ('scheme_id', '=', scheme_id)]"
                                     />
                                     <field name="points" sum="Total" />
                                     <field name="points_display" string="Notación" />

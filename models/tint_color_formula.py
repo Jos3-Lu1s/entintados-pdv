@@ -72,6 +72,19 @@ class TintColorFormula(models.Model):
     cost_max = fields.Float(
         string="Precio de venta", compute='_compute_cost_max', store=True,
         help="Precio de venta de la fórmula en el mayor de los fabricantes.")
+    
+    # --- Lineas y esquemas --------------------------------------------------
+    line_scheme_id = fields.Many2one(
+        comodel_name='lines.product',
+        string='Lineas de producto',
+    )
+    scheme_id = fields.Many2one(
+        comodel_name='tint.schema',
+        string='Esquemas',
+        related='line_scheme_id.scheme',
+        store=True,
+        readonly=True,
+    )
 
     # La galería forma parte de la llave a propósito: el sentido de tener
     # galerías es que dos fabricantes puedan dar recetas distintas para el
