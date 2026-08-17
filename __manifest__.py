@@ -101,6 +101,7 @@ Catálogo de entintado
         'views/portal_templates.xml',
         'views/res_config_risk_view.xml',
         'views/res_partner_risk_view.xml',
+        'views/lines_producto_views.xml',
         "wizards/partner_risk_exceeded_view.xml",
     ],
     'demo': [],

@@ -151,6 +151,14 @@ export async function addTintedBaseToOrder(
         return undefined;
     }
 
+    const pricelist =
+        order.pricelist ||
+        pos.pricelist ||
+        pos.default_pricelist ||
+        pos.config?.pricelist_id ||
+        (pos.models["product.pricelist"]?.getAll?.()?.[0]) ||
+        false;
+
     const baseTmpl = baseProduct.product_tmpl_id;
     const baseType = baseTmpl?.tint_base_type_id;
     const size = baseTmpl?.tint_size_id;
@@ -166,6 +174,8 @@ export async function addTintedBaseToOrder(
             // entintado, no del tarifario general, así que no debe
             // recalcularse al cambiar la cantidad.
             price_type: "manual",
+            manual_price: true,
+            pricelist: pricelist,
             tax_ids: productTaxes(dose.colorant).map((tax) => ["link", tax]),
             customer_note: _t(
                 "Entintado de %(base)s · %(points)s",
@@ -186,7 +196,9 @@ export async function addTintedBaseToOrder(
             qty,
             combo_line_ids: comboLines,
         },
-        {},
+        {
+            pricelist: pricelist,
+        },
         false
     );
 

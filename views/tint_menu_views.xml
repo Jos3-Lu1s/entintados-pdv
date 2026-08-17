@@ -53,6 +53,14 @@
     />
 
     <menuitem
+        id="menu_product"
+        name="Productos"
+        parent="menu_tint_root"
+        action="product_template_action_tint"
+        sequence="20"
+    />
+
+    <menuitem
         id="menu_tint_config"
         name="Configuración"
         parent="menu_tint_root"

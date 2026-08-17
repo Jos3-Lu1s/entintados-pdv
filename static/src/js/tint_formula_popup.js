@@ -33,6 +33,9 @@ export class TintFormulaPopup extends Component {
 
     setup() {
         this.pos = useService("pos");
+        const galleries = this.pos.models["tint.gallery"]?.getAll() || [];
+        const defaultGallery = [...galleries].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))[0];
+
         this.state = useState({
             activeTab: "tint", // "tint" | "create_color"
             search: "",
@@ -46,7 +49,8 @@ export class TintFormulaPopup extends Component {
             newColorCollectionId: "",
             newColorNotes: "",
 
-            // Selección de Base y Presentación para la fórmula inicial
+            // Selección de Galería, Base y Presentación para la fórmula inicial
+            newGalleryId: defaultGallery ? String(defaultGallery.id) : "",
             newBaseTypeId: this.props.baseTypeId ? String(this.props.baseTypeId) : "",
             newSizeId: this.props.sizeId ? String(this.props.sizeId) : "",
 
@@ -69,6 +73,14 @@ export class TintFormulaPopup extends Component {
 
     onColorInput(ev) {
         this.state.newColorHtml = ev.target.value;
+    }
+
+    get galleries() {
+        if (!this.pos.models["tint.gallery"]) {
+            return [];
+        }
+        return [...this.pos.models["tint.gallery"].getAll()]
+            .sort((a, b) => (a.sequence || 0) - (b.sequence || 0) || (a.name || "").localeCompare(b.name || ""));
     }
 
     get collections() {
@@ -124,6 +136,53 @@ export class TintFormulaPopup extends Component {
         return this.state.newFormulaLines.reduce((acc, l) => acc + (l.points || 0), 0);
     }
 
+    get newFormulaCostMin() {
+        return this.state.newFormulaLines.reduce((acc, l) => {
+            const colorant = this.pos.models["product.product"].get(l.colorantId);
+            const cost = colorant?.standard_price || 0;
+            return acc + (l.points || 0) * cost;
+        }, 0);
+    }
+
+    get newFormulaCostMax() {
+        return this.state.newFormulaLines.reduce((acc, l) => {
+            const colorant = this.pos.models["product.product"].get(l.colorantId);
+            const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.price_per_point ?? 0;
+            return acc + (l.points || 0) * price;
+        }, 0);
+    }
+
+    get selectedFormulaCostMin() {
+        if (!this.selectedFormula) return 0;
+        if (typeof this.selectedFormula.cost_min === "number" && this.selectedFormula.cost_min > 0) {
+            return this.selectedFormula.cost_min;
+        }
+        return this.doses.reduce((acc, dose) => {
+            const colorant = this.pos.models["product.product"].get(dose.colorantId || dose.id);
+            const cost = colorant?.standard_price || 0;
+            return acc + (dose.points || 0) * cost;
+        }, 0);
+    }
+
+    get selectedFormulaCostMax() {
+        if (!this.selectedFormula) return 0;
+        if (typeof this.selectedFormula.cost_max === "number" && this.selectedFormula.cost_max > 0) {
+            return this.selectedFormula.cost_max;
+        }
+        return this.doses.reduce((acc, dose) => {
+            const colorant = this.pos.models["product.product"].get(dose.colorantId || dose.id);
+            const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.price_per_point ?? 0;
+            return acc + (dose.points || 0) * price;
+        }, 0);
+    }
+
+    formatCurrency(amount) {
+        if (this.env.utils?.formatCurrency) {
+            return this.env.utils.formatCurrency(amount);
+        }
+        return "$" + Number(amount || 0).toFixed(2);
+    }
+
     addColorantLine() {
         const colorantId = parseInt(this.state.selectedColorantId);
         const points = parseInt(this.state.newColorantPoints);
@@ -162,12 +221,13 @@ export class TintFormulaPopup extends Component {
             return;
         }
 
+        const galleryId = parseInt(this.state.newGalleryId);
         const baseTypeId = parseInt(this.state.newBaseTypeId);
         const sizeId = parseInt(this.state.newSizeId);
 
         if (this.state.newFormulaLines.length > 0) {
-            if (!baseTypeId || !sizeId) {
-                this.state.createColorError = _t("Para registrar la fórmula debes seleccionar el Tipo de Base y la Presentación.");
+            if (!galleryId || !baseTypeId || !sizeId) {
+                this.state.createColorError = _t("Para registrar la fórmula debes seleccionar la Galería, el Tipo de Base y la Presentación.");
                 return;
             }
             if (this.newCapacityPoints > 0 && this.newFormulaTotalPoints > this.newCapacityPoints) {
@@ -212,10 +272,11 @@ export class TintFormulaPopup extends Component {
 
             const colorId = colorRecord ? (colorRecord.id || colorRecord) : false;
 
-            // 2. Si hay líneas de dosis y se seleccionó base + presentación, crear fórmula
-            if (colorId && this.state.newFormulaLines.length > 0 && baseTypeId && sizeId) {
+            // 2. Si hay líneas de dosis y se seleccionó galería + base + presentación, crear fórmula
+            if (colorId && this.state.newFormulaLines.length > 0 && galleryId && baseTypeId && sizeId) {
                 const formulaVals = {
                     color_id: colorId,
+                    gallery_id: galleryId,
                     base_type_id: baseTypeId,
                     size_id: sizeId,
                 };
@@ -252,6 +313,9 @@ export class TintFormulaPopup extends Component {
             this.state.newColorHtml = "#ffffff";
             this.state.newColorCollectionId = "";
             this.state.newColorNotes = "";
+            const galleries = this.pos.models["tint.gallery"]?.getAll() || [];
+            const defaultGallery = [...galleries].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))[0];
+            this.state.newGalleryId = defaultGallery ? String(defaultGallery.id) : "";
             this.state.newBaseTypeId = this.props.baseTypeId ? String(this.props.baseTypeId) : "";
             this.state.newSizeId = this.props.sizeId ? String(this.props.sizeId) : "";
             this.state.newFormulaLines = [];

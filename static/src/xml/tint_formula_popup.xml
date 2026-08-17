@@ -92,7 +92,7 @@
                                     </tbody>
                                     <tfoot>
                                         <tr class="fw-bold">
-                                            <td>Total</td>
+                                            <td>Total Dosis</td>
                                             <td class="text-end">
                                                 <t t-esc="formatPoints(totalPoints)"/>
                                                 <small class="text-muted ms-1">≈ <t t-esc="totalPoints"/> Pts.</small>
@@ -101,6 +101,14 @@
                                         <tr class="text-muted">
                                             <td>Holgura del envase</td>
                                             <td class="text-end"><t t-esc="remainingPoints"/> Pts.</td>
+                                        </tr>
+                                        <tr class="table-light">
+                                            <td>Costo del entintado (<code class="text-muted small">cost_min</code>)</td>
+                                            <td class="text-end fw-semibold"><t t-esc="formatCurrency(selectedFormulaCostMin)"/></td>
+                                        </tr>
+                                        <tr class="table-light">
+                                            <td>Precio de venta (<code class="text-muted small">cost_max</code>)</td>
+                                            <td class="text-end fw-bold text-success"><t t-esc="formatCurrency(selectedFormulaCostMax)"/></td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -196,9 +204,18 @@
                             </span>
                         </div>
 
-                        <!-- Selección de Base y Presentación -->
+                        <!-- Selección de Galería, Base y Presentación -->
                         <div class="row g-2 mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold mb-1">Galería <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" t-model="state.newGalleryId">
+                                    <option value="">— Seleccionar Galería —</option>
+                                    <option t-foreach="galleries" t-as="g" t-key="g.id" t-att-value="g.id">
+                                        <t t-esc="g.name"/> <t t-if="g.code">(<t t-esc="g.code"/>)</t>
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
                                 <label class="form-label small fw-bold mb-1">Tipo de Base</label>
                                 <select class="form-select form-select-sm" t-model="state.newBaseTypeId">
                                     <option value="">— Seleccionar Base —</option>
@@ -207,7 +224,7 @@
                                     </option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label class="form-label small fw-bold mb-1">Presentación</label>
                                 <select class="form-select form-select-sm" t-model="state.newSizeId">
                                     <option value="">— Seleccionar Presentación —</option>
@@ -279,6 +296,22 @@
                                     </tr>
                                 </tfoot>
                             </table>
+
+                            <!-- Resumen informativo de Costo (cost_min) y Precio de Venta (cost_max) -->
+                            <div class="row g-2 mt-2 pt-2 border-top">
+                                <div class="col-6">
+                                    <div class="p-2 rounded bg-light border">
+                                        <small class="text-muted d-block fw-semibold">Costo estimado (<code class="text-secondary">cost_min</code>)</small>
+                                        <span class="fs-6 fw-bold text-dark"><t t-esc="formatCurrency(newFormulaCostMin)"/></span>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 rounded bg-light border">
+                                        <small class="text-muted d-block fw-semibold">Precio de venta estimado (<code class="text-secondary">cost_max</code>)</small>
+                                        <span class="fs-6 fw-bold text-success"><t t-esc="formatCurrency(newFormulaCostMax)"/></span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div t-else="" class="text-muted fst-italic small">
                             (Opcional) Agrega los colorantes y dosis en puntos para registrar la fórmula de este color sobre la base actual.
