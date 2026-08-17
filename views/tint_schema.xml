@@ -7,7 +7,23 @@
         <field name="arch" type="xml">
             <list string="Esquemas" editable="bottom">
                 <field name="name" />
+                <field name="line_ids" widget="many2many_tags"/>
             </list>
+        </field>
+    </record>
+
+    <record id="tint_schema_view_form" model="ir.ui.view">
+        <field name="name">tint.schema.form</field>
+        <field name="model">tint.schema</field>
+        <field name="arch" type="xml">
+            <form string="Esquema">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                    </group>
+                    <field name="line_ids" widget="many2many_tags"/>
+                </sheet>
+            </form>
         </field>
     </record>
 

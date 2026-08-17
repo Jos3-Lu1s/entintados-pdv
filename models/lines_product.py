@@ -12,6 +12,11 @@ class LinesProduct(models.Model):
         inverse_name='line_id',
         string='Presentaciones',
     )
+    scheme = fields.Many2one(
+        comodel_name='tint.schema',
+        string='Esquema',
+        required=True,
+    )
     
 
 class LinesProductPresentation(models.Model):

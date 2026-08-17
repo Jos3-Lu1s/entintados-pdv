@@ -54,6 +54,13 @@ class ProductTemplate(models.Model):
         comodel_name='lines.product',
         string='Línea de producto',
     )
+    
+    scheme_id = fields.Many2one(
+        related='lines_product_id.scheme',
+        string='Esquema',
+        store=True,
+        readonly=True,
+    )
 
     # --- Cálculos -------------------------------------------------------
 
@@ -187,19 +194,29 @@ class ProductTemplate(models.Model):
             read += self._load_pos_data_read(missing, config)
         return read
 
-    @api.constrains('standard_price', 'list_price')
-    def _check_standard_price_lower_than_list_price(self):
-        for product in self:
+    @api.model_create_multi
+    def create(self, vals_list):
+        products = super().create(vals_list)
+
+        for product in products:
+
+            # Si pertenece a un esquema de entintados,
+            # no hacemos esta validación.
+            if product.scheme_id:
+                continue
+
             if not product.standard_price:
                 raise ValidationError(_(
                     'El costo no puede ser 0 en el producto "%(name)s".',
                     name=product.display_name,
                 ))
+
             if not product.list_price:
                 raise ValidationError(_(
                     'El precio de venta no puede ser 0 en el producto "%(name)s".',
                     name=product.display_name,
                 ))
+
             if product.standard_price >= product.list_price:
                 raise ValidationError(_(
                     'El costo ("%(standard)s") no puede ser mayor ni igual '
@@ -209,3 +226,10 @@ class ProductTemplate(models.Model):
                     name=product.display_name,
                 ))
 
+        return products
+
+    @api.onchange('lines_product_id')
+    def _onchange_lines_product_id(self):
+        if self.lines_product_id:
+            self.scheme_id = self.lines_product_id.scheme
+        

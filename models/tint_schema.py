@@ -11,4 +11,9 @@ class TintSchema(models.Model):
     name = fields.Char(
             string="Nombre", required=True, translate=True,
             help="Nombre del esquema para la base.")
- 
+
+    line_ids = fields.One2many(
+        comodel_name='lines.product',
+        inverse_name='scheme',
+        string='Líneas de producto',
+    )

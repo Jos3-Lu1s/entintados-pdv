@@ -14,6 +14,7 @@
                         </group>
                         <group name="tint_prices" string="Esquemas">
                             <field name="lines_product_id" />
+                            <field name="scheme_id" readonly="1"/>
                         </group>
                     </group>
                     <group invisible="tint_role != 'base'">
