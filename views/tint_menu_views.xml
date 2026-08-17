@@ -84,6 +84,14 @@
     />
 
     <menuitem
+        id="menu_tint_base_schema"
+        name="Esquemas"
+        parent="menu_tint_config"
+        action="tint_schema_action"
+        sequence="40"
+    />
+
+    <menuitem
         id="menu_product"
         name="Productos"
         parent="menu_tint_root"

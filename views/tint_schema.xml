@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="tint_schema_view_list" model="ir.ui.view">
+        <field name="name">tint.schema.list</field>
+        <field name="model">tint.schema</field>
+        <field name="arch" type="xml">
+            <list string="Esquemas" editable="bottom">
+                <field name="name" />
+            </list>
+        </field>
+    </record>
+
+    <record id="tint_schema_action" model="ir.actions.act_window">
+        <field name="name">Esquemas</field>
+        <field name="res_model">tint.schema</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registre un Esquema</p>
+            <p>
+                El volumen en litros se usa para verificar la consistencia de la
+                matriz de capacidad de colorante.
+            </p>
+        </field>
+    </record>
+
+</odoo>

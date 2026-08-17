@@ -10,6 +10,7 @@ from . import tint_gallery
 from . import tint_color
 from . import tint_color_formula
 from . import tint_color_formula_line
+from . import tint_schema
 from . import pos_session
 from . import res_partner
 from . import crm_lead
