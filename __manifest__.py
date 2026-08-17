@@ -84,6 +84,7 @@ Catálogo de entintado
         'views/tint_gallery_views.xml',
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
+        'views/tint_schema.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
