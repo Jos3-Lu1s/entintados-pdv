@@ -32,6 +32,8 @@ export class TintPanel extends Component {
             sizeId: null,
             baseTypeId: null,
         });
+        // Modo debug para diagnósticos del catálogo
+        this.isDebug = Boolean(odoo.debug);
     }
 
     // Columnas de tablas
@@ -56,6 +58,9 @@ export class TintPanel extends Component {
     // Diagnóstico del catálogo
 
     get catalogStats() {
+        if (!this.isDebug) {
+            return [];
+        }
         const count = (model) => this.pos.models[model]?.getAll?.().length ?? null;
         return [
             { label: "Galerías", value: count("tint.gallery") },
@@ -81,16 +86,16 @@ export class TintPanel extends Component {
         return this.pos.models["tint.gallery"]?.getAll?.().length ?? 0;
     }
 
-    /** Cantidad de fórmulas sin galería asignada (evaluado si hay galerías cargadas). */
+    /** Fórmulas sin galería asignada (solo evaluado en modo debug). */
     get formulasWithoutGallery() {
-        if (!this.galleriesLoaded) {
+        if (!this.isDebug || !this.galleriesLoaded) {
             return 0;
         }
         return this.formulas.filter((formula) => !formula.gallery_id).length;
     }
 
     get hasCatalog() {
-        return this.formulas.length > 0 && !this.formulasWithoutGallery;
+        return this.formulas.length > 0;
     }
 
     // Catálogo base
@@ -105,14 +110,20 @@ export class TintPanel extends Component {
 
     // Paso 1: color
 
-    /** IDs de color con al menos una fórmula registrada. */
+    /** IDs de color con al menos una fórmula registrada (con caché). */
     get colorIdsWithFormula() {
+        const formulas = this.formulas;
+        if (this._colorIdsCache && this._colorIdsCacheLen === formulas.length) {
+            return this._colorIdsCache;
+        }
         const ids = new Set();
-        for (const formula of this.formulas) {
+        for (const formula of formulas) {
             if (formula.color_id) {
                 ids.add(formula.color_id.id);
             }
         }
+        this._colorIdsCache = ids;
+        this._colorIdsCacheLen = formulas.length;
         return ids;
     }
 

@@ -6,6 +6,9 @@ import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
  * Utilidades para transformar fórmulas y bases en líneas de orden enlazadas (padre e hijas de colorante).
  */
 
+// Colorantes ya advertidos por falta de precio en la sesión actual.
+const _warnedColorantsWithoutPrice = new Set();
+
 /** Obtiene el precio de venta por punto del colorante. */
 export function colorantPointPrice(colorant) {
     if (!colorant) {
@@ -13,7 +16,8 @@ export function colorantPointPrice(colorant) {
     }
     const tmpl = colorant.product_tmpl_id;
     const price = tmpl?.price_per_point ?? colorant.price_per_point ?? 0;
-    if (!price) {
+    if (!price && !_warnedColorantsWithoutPrice.has(colorant.id)) {
+        _warnedColorantsWithoutPrice.add(colorant.id);
         console.warn(
             "[ENTINTADOS] El colorante «%s» no tiene precio por punto: se cobrará en cero. " +
                 "Revisa el campo «Precio por punto» en la pestaña Entintado del producto.",

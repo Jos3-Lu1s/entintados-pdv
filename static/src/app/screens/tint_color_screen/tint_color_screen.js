@@ -21,8 +21,6 @@ export class TintColorScreen extends Component {
             search: "",
             collectionId: null,
         });
-
-        console.log("[ENTINTADOS] TintColorScreen inicializada");
     }
 
     get colors() {
@@ -132,5 +130,3 @@ registry.category("pos_pages").add("TintColorScreen", {
         orderUuid: true,
     },
 });
-
-console.log("[ENTINTADOS] TintColorScreen registrada");
