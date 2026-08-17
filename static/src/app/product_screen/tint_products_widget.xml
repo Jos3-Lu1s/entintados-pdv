@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
 
     <!--
-      Pestañas de la pantalla de productos.
+      Pestañas de la pantalla de productos + toggle de vista (cuadrícula/lista).
 
       La pestaña intercambia el COMPONENTE, no los datos: se le añade `d-none`
       al contenedor nativo de la grilla y se renderiza `TintPanel` como
@@ -12,7 +12,7 @@
     <t t-name="entintados_pdv.ProductScreenTintTabs" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="before">
-            <div class="o-tint-tabs d-flex gap-2 px-2 pt-2 flex-shrink-0">
+            <div class="o-tint-tabs d-flex align-items-center gap-2 px-2 pt-2 flex-shrink-0">
                 <button class="btn btn-sm text-nowrap"
                         t-att-class="tintUi.tab === 'products' ? 'btn-primary' : 'btn-outline-secondary'"
                         t-on-click="() => this.setTintTab('products')">
@@ -25,6 +25,22 @@
                     <i class="fa fa-paint-brush me-1" role="img" aria-label="Entintados"/>
                     Entintados
                 </button>
+
+                <!-- Toggle cuadrícula/lista: solo aplica a la pestaña Productos -->
+                <div t-if="tintUi.tab === 'products'" class="btn-group btn-group-sm ms-auto flex-shrink-0" role="group" aria-label="Vista de productos">
+                    <button class="btn"
+                            t-att-class="tintUi.viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'"
+                            t-on-click="() => this.setProductViewMode('grid')"
+                            title="Cuadrícula">
+                        <i class="fa fa-th-large" role="img" aria-label="Cuadrícula"/>
+                    </button>
+                    <button class="btn"
+                            t-att-class="tintUi.viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'"
+                            t-on-click="() => this.setProductViewMode('list')"
+                            title="Lista">
+                        <i class="fa fa-bars" role="img" aria-label="Lista"/>
+                    </button>
+                </div>
             </div>
         </xpath>
 
@@ -34,6 +50,43 @@
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="after">
             <TintPanel t-if="tintUi.tab === 'tint'"/>
+        </xpath>
+
+        <!-- En modo lista se oculta la rejilla de tarjetas nativa sin tocar el
+             selector de categorías ni el buscador, que siguen arriba. -->
+        <xpath expr="//div[@t-on-scroll='onScroll']" position="attributes">
+            <attribute name="t-attf-class">{{ tintUi.tab !== 'tint' and tintUi.viewMode === 'list' ? 'd-none' : '' }}</attribute>
+        </xpath>
+
+        <!-- Lista de productos (filas reutilizables). Antes del botón «Buscar
+             más» para no romper la cadena t-if/t-elif/t-else de la rejilla. -->
+        <xpath expr="//div[hasclass('search-more-button')]" position="before">
+            <div t-if="tintUi.tab !== 'tint' and tintUi.viewMode === 'list' and pos.productsToDisplay.length"
+                 class="o-tint-list flex-grow-1 overflow-y-auto px-2 pb-2 d-flex flex-column gap-1">
+                <TintListRow t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
+                             onClick="() => this.addProductToOrder(product)">
+                    <t t-set-slot="leading">
+                        <img t-if="pos.config.show_product_images and getProductImage(product)"
+                             class="o-tint-list-img"
+                             t-att-src="getProductImage(product)"
+                             t-att-alt="getProductName(product)"
+                             draggable="false"/>
+                    </t>
+                    <t t-set-slot="title">
+                        <t t-esc="getProductName(product)"/>
+                        <span t-if="state.quantityByProductTmplId[product.id]"
+                              class="badge bg-primary ms-2"
+                              t-esc="state.quantityByProductTmplId[product.id]"/>
+                    </t>
+                    <t t-set-slot="subtitle">
+                        <t t-esc="product.default_code or '—'"/>
+                        <t t-if="product.uom_id"> · <t t-esc="product.uom_id.name"/></t>
+                    </t>
+                    <t t-set-slot="trailing">
+                        <span class="fw-bold text-nowrap fs-6" t-esc="tintRowPriceFormatted(product)"/>
+                    </t>
+                </TintListRow>
+            </div>
         </xpath>
 
     </t>

@@ -8,6 +8,7 @@ import {
     formulaDoses,
 } from "@entintados_pdv/app/utils/tint_order";
 import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
+import { TintListRow } from "@entintados_pdv/app/components/tint_list_row/tint_list_row";
 
 /**
  * Panel de entintado — ocupa el lugar de la grilla cuando la pestaña
@@ -27,6 +28,7 @@ import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
  */
 export class TintPanel extends Component {
     static template = "entintados_pdv.TintPanel";
+    static components = { TintListRow };
     static props = {};
 
     setup() {

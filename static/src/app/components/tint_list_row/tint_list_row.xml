@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!--
+      Fila de lista reutilizable. La misma estructura para productos, colores
+      y bases: zona izquierda (leading), cuerpo (título + subtítulo) y zona
+      derecha (trailing). Cada zona es opcional salvo el título.
+    -->
+    <t t-name="entintados_pdv.TintListRow">
+        <button class="o-tint-row btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2 w-100"
+                t-on-click="(ev) => props.onClick(ev)">
+            <div t-if="props.slots and props.slots.leading"
+                 class="o-tint-row-leading flex-shrink-0 d-flex align-items-center gap-2">
+                <t t-slot="leading"/>
+            </div>
+            <div class="flex-grow-1" style="min-width: 0;">
+                <div class="fw-bold text-truncate">
+                    <t t-slot="title"/>
+                </div>
+                <small t-if="props.slots and props.slots.subtitle"
+                       class="text-muted d-block text-truncate">
+                    <t t-slot="subtitle"/>
+                </small>
+            </div>
+            <div t-if="props.slots and props.slots.trailing"
+                 class="o-tint-row-trailing flex-shrink-0 text-end ms-2">
+                <t t-slot="trailing"/>
+            </div>
+        </button>
+    </t>
+
+</templates>

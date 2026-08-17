@@ -37,16 +37,12 @@
                             <t t-esc="selectedColor and selectedColor.name"/>
                         </span>
                         <button class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
-                                t-on-click="() => this.clearColor()">
-                            Cambiar color
-                        </button>
-                    </div>
-
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <small class="text-muted text-nowrap" style="width: 5rem;">Filtros</small>
-                        <button class="btn btn-sm btn-outline-secondary text-nowrap"
                                 t-on-click="() => this.clearFilters()">
                             Limpiar filtros
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                                t-on-click="() => this.clearColor()">
+                            Cambiar color
                         </button>
                     </div>
 
@@ -119,15 +115,18 @@
                     <!-- lista de colores (código protagonista) -->
                     <t t-if="!state.colorId">
                         <div t-if="colors.length" class="d-flex flex-column gap-1">
-                            <button t-foreach="colors" t-as="color" t-key="color.id"
-                                    class="btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2"
-                                    t-on-click="() => this.selectColor(color.id)">
-                                <span class="rounded-circle border flex-shrink-0"
-                                      t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
-                                <span t-if="color.code" class="badge bg-secondary flex-shrink-0"
-                                      t-esc="color.code"/>
-                                <span class="fw-bold text-truncate" t-esc="color.name"/>
-                            </button>
+                            <TintListRow t-foreach="colors" t-as="color" t-key="color.id"
+                                         onClick="() => this.selectColor(color.id)">
+                                <t t-set-slot="leading">
+                                    <span class="rounded-circle border flex-shrink-0"
+                                          t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
+                                    <span t-if="color.code" class="badge bg-secondary flex-shrink-0"
+                                          t-esc="color.code"/>
+                                </t>
+                                <t t-set-slot="title">
+                                    <t t-esc="color.name"/>
+                                </t>
+                            </TintListRow>
                         </div>
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
@@ -181,24 +180,24 @@
                                 <small class="text-muted text-uppercase fw-bold">Precio</small>
                             </div>
                             <div class="d-flex flex-column gap-1">
-                                <button t-foreach="cards" t-as="card" t-key="card.key"
-                                        class="btn btn-light text-start d-flex align-items-center gap-2 border rounded p-2"
-                                        t-on-click="() => this.addCard(card)">
-                                    <div class="flex-grow-1" style="min-width: 0;">
-                                        <div class="fw-bold text-truncate"
-                                             t-esc="card.baseProduct.display_name"/>
-                                        <small class="text-muted d-block text-truncate">
-                                            <t t-esc="card.baseType and card.baseType.name"/>
-                                            <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
-                                            <t t-if="!galleryFilterActive and card.gallery"> · <t t-esc="card.gallery.name"/></t>
+                                <TintListRow t-foreach="cards" t-as="card" t-key="card.key"
+                                             onClick="() => this.addCard(card)">
+                                    <t t-set-slot="title">
+                                        <t t-esc="card.baseProduct.display_name"/>
+                                    </t>
+                                    <t t-set-slot="subtitle">
+                                        <t t-esc="card.baseType and card.baseType.name"/>
+                                        <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
+                                        <t t-if="!galleryFilterActive and card.gallery"> · <t t-esc="card.gallery.name"/></t>
+                                    </t>
+                                    <t t-set-slot="trailing">
+                                        <small class="text-muted text-nowrap d-block">
+                                            <t t-esc="formatPoints(card.totalPoints)"/>
                                         </small>
-                                    </div>
-                                    <small class="text-muted text-nowrap">
-                                        <t t-esc="formatPoints(card.totalPoints)"/>
-                                    </small>
-                                    <span class="fw-bold text-nowrap ms-2 fs-6"
-                                          t-esc="formatPrice(card.price)"/>
-                                </button>
+                                        <span class="fw-bold text-nowrap fs-6"
+                                              t-esc="formatPrice(card.price)"/>
+                                    </t>
+                                </TintListRow>
                             </div>
                         </t>
 
