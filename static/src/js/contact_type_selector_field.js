@@ -5,48 +5,7 @@ import { useRecordObserver } from "@web/model/relational_model/utils";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
 /**
- * Selector de campos boolean mostrados como insignias.
- * Es un widget GENÉRICO, Toda la configuración vive en la vista, vía el
- * atributo `options` del campo:
- *
- *   <field name="is_customer" widget="boolean_group_selector" options="{
- *       'fields': [
- *           {'field': 'is_customer', 'group': 'sales', 'color': 1, 'icon': 'fa-shopping-cart'},
- *           {'field': 'is_supplier', 'group': 'purchase', 'color': 4, 'icon': 'fa-truck'},
- *           {'field': 'is_creditor', 'group': 'purchase', 'color': 3, 'icon': 'fa-money'},
- *           {'field': 'is_distributor', 'group': 'sales', 'color': 6, 'icon': 'fa-share-alt'},
- *       ],
- *       'context_key': 'res_partner_search_mode',
- *       'group_values': {'sales': 'customer', 'purchase': 'supplier'},
- *   }"/>
- *   <field name="is_supplier" column_invisible="1"/>
- *   <field name="is_creditor" column_invisible="1"/>
- *   <field name="is_distributor" column_invisible="1"/>
- *
- * - `fields`: lista de campos boolean a mostrar. Cada entrada admite:
- *     - `field` (obligatorio): nombre técnico del campo boolean.
- *     - `group` (opcional): para filtrar por `context_key`/`group_values`.
- *     - `label` (opcional): si se omite, se usa el `string` ya definido en
- *       el propio campo del modelo Python (una sola fuente de verdad).
- *     - `color` (opcional): número de color de la paleta nativa de tags de
- *       Odoo (clase `o_tag_color_N`, 0-11). Si se omite, se asigna
- *       automáticamente uno distinto por campo según su posición en
- *       `fields`, así el widget se ve bien sin configurar nada.
- *     - `icon` (opcional): clase de ícono Font Awesome (ej. 'fa-truck').
- * - `context_key` / `group_values`: opcionales. Permiten mostrar solo un
- *   subconjunto ("grupo") de las opciones según el valor de una clave de
- *   contexto. Si no se define `context_key`, siempre se muestran todos los
- *   campos de `fields`.
- *
- * Reutilizable en cualquier modelo y con cualquier conjunto de campos
- * boolean: para usarlo en otro caso no se toca este archivo, solo se
- * declara un `options` distinto en la vista correspondiente (Open/Closed:
- * cerrado a modificación, abierto a configuración).
- *
- * Requisito: cada campo listado en `fields` (salvo el que lleva el widget)
- * debe declararse también como <field> en el arch (puede ir con
- * column_invisible="1"/invisible="1") para que su valor viaje junto con el
- * registro; el widget no carga campos por su cuenta.
+ * Selector de campos boolean mostrados como pastillas/insignias interactivas.
  */
 export class BooleanGroupSelectorField extends Component {
     static template = "entintados_pdv.BooleanGroupSelectorField";
@@ -60,8 +19,7 @@ export class BooleanGroupSelectorField extends Component {
         contextKey: false,
         groupValues: {},
     };
-    // Paleta por defecto: índices de la paleta nativa de colores de tags
-    // de Odoo (clases o_tag_color_0 .. o_tag_color_11).
+    // Paleta por defecto para colores de tags nativos de Odoo (o_tag_color_N).
     static COLOR_PALETTE = [1, 4, 3, 6, 2, 5, 7, 8, 9, 10, 11, 0];
 
     setup() {
@@ -75,11 +33,7 @@ export class BooleanGroupSelectorField extends Component {
         });
     }
 
-    /**
-     * Devuelve las opciones a mostrar. Si hay `contextKey` configurada y su
-     * valor actual coincide con alguno de los `groupValues`, se filtra al
-     * grupo correspondiente; en cualquier otro caso se muestran todas.
-     */
+    /** Opciones de campos a mostrar, filtradas por grupo de contexto si aplica. */
     get options() {
         const { contextKey, groupValues, fieldsConfig } = this.props;
         if (!contextKey) {
@@ -95,11 +49,7 @@ export class BooleanGroupSelectorField extends Component {
         return fieldsConfig.filter((option) => option.group === activeGroup);
     }
 
-    /**
-     * Etiqueta a mostrar: la explícita en `options.fields[].label` si se
-     * definió, o si no, el `string` del campo tal como está definido en el
-     * modelo (fuente única, evita duplicar textos entre Python y la vista).
-     */
+    /** Obtiene la etiqueta del campo (opción configurada o string del modelo). */
     getLabel(option) {
         if (option.label) {
             return option.label;
@@ -108,13 +58,7 @@ export class BooleanGroupSelectorField extends Component {
         return field ? field.string : option.field;
     }
 
-    /**
-     * Color estable por campo (índice de la paleta nativa de tags de Odoo,
-     * clase `o_tag_color_N`): el explícito en `option.color`, o si no, uno
-     * tomado de una paleta por defecto según la posición del campo en
-     * `fieldsConfig` (no en `options`, que puede estar filtrada por
-     * contexto — el color de un campo debe ser siempre el mismo).
-     */
+    /** Obtiene el índice de color para la opción según configuración o paleta. */
     getColor(option) {
         if (option.color !== undefined && option.color !== false) {
             return option.color;
@@ -137,8 +81,7 @@ export class BooleanGroupSelectorField extends Component {
         await this.props.record.update({ [fieldName]: newValue }, { save: true });
     }
 
-    /** El indicador es un <span>, no un <button>: activarlo por teclado
-     * (Enter/Espacio) igual que un control nativo. */
+    /** Maneja la activación por teclado (Enter/Espacio) sobre el elemento. */
     onKeydown(ev, fieldName) {
         if (ev.key === "Enter" || ev.key === " ") {
             ev.preventDefault();

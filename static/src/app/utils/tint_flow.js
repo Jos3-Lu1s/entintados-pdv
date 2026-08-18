@@ -9,26 +9,14 @@ import {
 } from "@entintados_pdv/app/utils/tint_order";
 
 /**
- * El recorrido de entintar, de principio a fin, en un solo lugar.
- *
- * `tint_order.js` sabe convertir una fórmula en líneas de orden. Este módulo
- * sabe la secuencia que lleva hasta ahí: validar la base, preguntar el color,
- * resolver la fórmula y avisar al cajero.
- *
- * Están separados a propósito: uno es lógica de negocio pura y comprobable,
- * el otro necesita diálogos y notificaciones. Antes esta secuencia estaba
- * repetida en los tres puntos de entrada —botón de control, clic en la
- * grilla y pantalla de colores—, que es donde se colaban las diferencias de
- * comportamiento entre una vía y otra.
+ * Flujo interactivo de entintado: valida la base, solicita color/fórmula y agrega el producto entintado.
  */
 
 /**
- * @param {Object} ctx            componente con `pos`, `dialog` y `notification`
- * @param {Object} baseProduct    `product.product` de la base a entintar
- * @param {Object} [replaceLine]  línea suelta a sustituir por el grupo entintado
- * @param {Number} [qty=1]        envases a vender
- * @param {Number|false} [initialColorId]  color preseleccionado en el popup
- * @returns {Object|undefined} la línea padre creada, o undefined si se canceló
+ * Ejecuta el flujo de entintado abriendo el popup de selección de fórmula.
+ * @param {Object} ctx - Contexto con servicios pos, dialog y notification.
+ * @param {Object} params - Parámetros de la base, línea a reemplazar, cantidad y color inicial.
+ * @returns {Promise<Object|undefined>} Línea padre creada o undefined si se cancela.
  */
 export async function runTintFlow(
     ctx,
@@ -64,7 +52,7 @@ export async function runTintFlow(
     const formula = ctx.pos.models["tint.color.formula"].get(payload.formulaId);
     const color = ctx.pos.models["tint.color"].get(payload.colorId);
 
-    // Una línea suelta no puede convertirse en padre: hay que recrearla.
+    // Elimina la línea original para sustituirla por la estructura entintada.
     replaceLine?.delete();
 
     const parent = await addTintedBaseToOrder(ctx.pos, {
@@ -83,14 +71,7 @@ export async function runTintFlow(
     return parent;
 }
 
-/**
- * Entintado desde una tarjeta del panel.
- *
- * Aquí no hace falta el popup: la tarjeta ya es una fórmula concreta, así que
- * base, presentación y color están decididos. Lo único que sigue requiriendo
- * intervención es el acuse de extracción previa, y solo en las bases que lo
- * exigen.
- */
+/** Agrega un entintado directamente desde una tarjeta del panel, solicitando confirmación de extracción si aplica. */
 export async function addTintedFromCard(ctx, { baseProduct, formula, color, qty = 1 }) {
     const tmpl = baseProduct?.product_tmpl_id;
     const baseType = tmpl?.tint_base_type_id;

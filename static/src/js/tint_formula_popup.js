@@ -1,4 +1,4 @@
-import { Component, useState } from "@odoo/owl";
+import { Component, useState, onWillStart } from "@odoo/owl";
 import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
@@ -6,12 +6,7 @@ import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
 import { formulaDoses } from "@entintados_pdv/app/utils/tint_order";
 
 /**
- * Popup de entintado en caja.
- *
- * La base y la presentación las fija el producto de la línea seleccionada
- * (se reciben por props). El cajero solo elige el color de la carta; el
- * sistema resuelve la fórmula correspondiente, muestra las dosis y, si la
- * base lo requiere, exige el acuse de extracción previa.
+ * Diálogo para seleccionar el color y fórmula sobre una base, o registrar un nuevo color/fórmula.
  */
 export class TintFormulaPopup extends Component {
     static template = "entintados_pdv.TintFormulaPopup";
@@ -42,19 +37,19 @@ export class TintFormulaPopup extends Component {
             colorId: this.props.initialColorId || false,
             extractionDone: false,
 
-            // Formulario para crear nuevo color (tint.color)
+            // Datos para nuevo color (tint.color)
             newColorName: "",
             newColorCode: "",
             newColorHtml: "#ffffff",
             newColorCollectionId: "",
             newColorNotes: "",
 
-            // Selección de Galería, Base y Presentación para la fórmula inicial
+            // Galería, base y presentación para la fórmula
             newGalleryId: defaultGallery ? String(defaultGallery.id) : "",
             newBaseTypeId: this.props.baseTypeId ? String(this.props.baseTypeId) : "",
             newSizeId: this.props.sizeId ? String(this.props.sizeId) : "",
 
-            // Fórmula inicial (tint.color.formula y tint.color.formula.line)
+            // Líneas de fórmula y dosis
             selectedColorantId: "",
             newColorantPoints: 1,
             newFormulaLines: [],
@@ -63,6 +58,24 @@ export class TintFormulaPopup extends Component {
             createColorError: "",
             createColorSuccess: "",
         });
+
+        // Carga bajo demanda de fórmulas para la base y presentación.
+        onWillStart(async () => {
+            await this.loadFormulasForLine();
+        });
+    }
+
+    async loadFormulasForLine() {
+        if (!this.props.baseTypeId || !this.props.sizeId) {
+            return;
+        }
+        await this.pos.data.callRelated("tint.color.formula", "get_pos_formulas", [
+            this.pos.config.id,
+            [
+                ["base_type_id", "=", this.props.baseTypeId],
+                ["size_id", "=", this.props.sizeId],
+            ],
+        ]);
     }
 
     setTab(tab) {
@@ -272,7 +285,7 @@ export class TintFormulaPopup extends Component {
 
             const colorId = colorRecord ? (colorRecord.id || colorRecord) : false;
 
-            // 2. Si hay líneas de dosis y se seleccionó galería + base + presentación, crear fórmula
+            // 2. Crear fórmula y líneas de dosis si fueron configuradas
             if (colorId && this.state.newFormulaLines.length > 0 && galleryId && baseTypeId && sizeId) {
                 const formulaVals = {
                     color_id: colorId,
@@ -356,7 +369,7 @@ export class TintFormulaPopup extends Component {
             : null;
     }
 
-    /** Capacidad del envase para esta base y presentación (puntos). */
+    /** Capacidad máxima en puntos para la base y presentación seleccionadas. */
     get capacityPoints() {
         const cap = this.pos.models["tint.base.capacity"]
             .getAll()
@@ -368,7 +381,7 @@ export class TintFormulaPopup extends Component {
         return cap ? cap.max_points : 0;
     }
 
-    /** Fórmulas cuya base y presentación coinciden con la línea. */
+    /** Fórmulas compatibles con la base y presentación actuales. */
     get formulasForLine() {
         return this.pos.models["tint.color.formula"]
             .getAll()
@@ -379,13 +392,13 @@ export class TintFormulaPopup extends Component {
             );
     }
 
-    /** Colores capturables sobre esta base/presentación, filtrados por búsqueda. */
+    /** Colores disponibles para la base y presentación actuales, filtrados por búsqueda. */
     get availableColors() {
         const term = this.state.search.trim().toLowerCase();
         const formulaColors = this.formulasForLine.map((f) => f.color_id).filter((c) => c);
         const colors = [...formulaColors];
 
-        // Incluir el color seleccionado actualmente (ej. recién creado)
+        // Incluye el color seleccionado si no está en la lista
         if (this.state.colorId && this.pos.models["tint.color"]) {
             const selected = this.pos.models["tint.color"].get(this.state.colorId);
             if (selected && !colors.some((c) => c.id === selected.id)) {
@@ -418,7 +431,7 @@ export class TintFormulaPopup extends Component {
             : null;
     }
 
-    /** Dosis de la fórmula, ordenadas por secuencia. */
+    /** Dosis de colorante de la fórmula seleccionada. */
     get doses() {
         return this.selectedFormula
             ? formulaDoses(this.pos, this.selectedFormula)
@@ -437,7 +450,7 @@ export class TintFormulaPopup extends Component {
         return Boolean(this.baseType && this.baseType.requires_extraction);
     }
 
-    /** Litros a extraer antes de entintar, derivados de la base y la presentación. */
+    /** Litros a extraer según el porcentaje de la base y volumen del envase. */
     get extractionLiters() {
         if (!this.requiresExtraction || !this.size) {
             return 0;
@@ -460,14 +473,7 @@ export class TintFormulaPopup extends Component {
         this.state.extractionDone = false;
     }
 
-    /**
-     * El popup solo decide qué fórmula se aplica.
-     *
-     * El resumen de la nota y las líneas de colorante los arma
-     * `tint_order.js` a partir de la fórmula. Antes se devolvían aquí ya
-     * calculados, duplicando esa lógica y dejando al popup opinando sobre
-     * cómo se escribe una orden.
-     */
+    /** Retorna el color y fórmula seleccionados al llamador y cierra el diálogo. */
     confirm() {
         if (!this.canConfirm) {
             return;

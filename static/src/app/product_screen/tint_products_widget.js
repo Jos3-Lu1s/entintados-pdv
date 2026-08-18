@@ -4,32 +4,52 @@ import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product
 import { patch } from "@web/core/utils/patch";
 import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 import { TintPanel } from "@entintados_pdv/app/product_screen/tint_panel";
+import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
 
-// El panel se registra como subcomponente de ProductScreen para poder
-// renderizarlo desde la plantilla heredada.
-ProductScreen.components = { ...ProductScreen.components, TintPanel };
+// Registro de subcomponentes TintPanel y TintTable en ProductScreen.
+ProductScreen.components = { ...ProductScreen.components, TintPanel, TintTable };
 
 /**
- * Atajo de mostrador: color activo + clic en una base.
- *
- * Se engancha en `addProductToOrder`, que es el manejador real del clic en la
- * grilla del POS 19. Recibe un `product.template`, no un `product.product`:
- * la plantilla llama `this.addProductToOrder(product)` sobre los registros de
- * `pos.productToDisplayByCateg`, que son plantillas.
- *
- * Aquí ya no se inyectan colores como productos falsos: los colores viven en
- * `tint.color` y se eligen desde la pantalla del asistente.
+ * Extensión de ProductScreen para soportar vista cuadrícula/lista y
+ * el flujo de entintado al seleccionar una base con color activo.
  */
 patch(ProductScreen.prototype, {
     setup() {
         super.setup();
-        // Estado de la pestaña activa. Vive en el componente, no en el store,
-        // para que cada apertura de la pantalla arranque en «Productos».
-        this.tintUi = useState({ tab: "products" });
+        // Estado local de pestaña activa y modo de vista (cuadrícula/lista).
+        this.tintUi = useState({ tab: "products", viewMode: "grid" });
     },
 
     setTintTab(tab) {
         this.tintUi.tab = tab;
+    },
+
+    setProductViewMode(mode) {
+        this.tintUi.viewMode = mode;
+    },
+
+    /** Columnas para la tabla de productos en modo lista. */
+    get productListColumns() {
+        return [
+            { label: "Imagen", class: "o-tint-th-img" },
+            { label: "Nombre" },
+            { label: "Código", class: "text-nowrap" },
+            { label: "UdM", class: "text-nowrap" },
+            { label: "Precio", class: "text-end text-nowrap" },
+        ];
+    },
+
+    /** Precio de venta del producto considerando la tarifa de la orden activa. */
+    tintRowPrice(product) {
+        const order = this.pos.getOrder();
+        return product.getPrice(order?.pricelist_id || false, 1);
+    },
+
+    tintRowPriceFormatted(product) {
+        const price = this.tintRowPrice(product);
+        return this.env.utils?.formatCurrency
+            ? this.env.utils.formatCurrency(price)
+            : String(price);
     },
 
     async addProductToOrder(productTmpl) {

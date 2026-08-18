@@ -5,7 +5,7 @@
         <Dialog title="props.title" size="'lg'">
             <div class="entintado-popup p-2">
 
-                <!-- Navegación por Pestañas -->
+                <!-- Pestañas de navegación -->
                 <ul class="nav nav-tabs mb-3">
                     <li class="nav-item">
                         <button class="nav-link"
@@ -23,9 +23,9 @@
                     </li>
                 </ul>
 
-                <!-- Pestaña 1: Entintado (Actual) -->
+                <!-- Pestaña: Entintado -->
                 <div t-if="state.activeTab === 'tint'">
-                    <!-- Contexto: la base y presentación vienen de la línea -->
+                    <!-- Información de base y presentación -->
                     <div class="d-flex align-items-center gap-2 mb-2 text-muted">
                         <i class="fa fa-flask" role="img"/>
                         <span>
@@ -43,7 +43,7 @@
                            placeholder="Buscar color por nombre o código…"/>
 
                     <div class="row g-2">
-                        <!-- Carta de color -->
+                        <!-- Lista de colores -->
                         <div class="col-5">
                             <div class="list-group entintado-color-list"
                                  style="max-height: 340px; overflow-y: auto;">
@@ -66,7 +66,7 @@
                             </div>
                         </div>
 
-                        <!-- Fórmula del color seleccionado -->
+                        <!-- Detalle de fórmula seleccionada -->
                         <div class="col-7">
                             <div t-if="!selectedFormula"
                                  class="text-muted fst-italic p-3 text-center">
@@ -113,7 +113,7 @@
                                     </tfoot>
                                 </table>
 
-                                <!-- Aviso de extracción previa (bases Y/R) -->
+                                <!-- Aviso de extracción previa -->
                                 <div t-if="requiresExtraction" class="alert alert-warning">
                                     <div class="fw-bold">
                                         <i class="fa fa-exclamation-triangle me-1" role="img"/>
@@ -136,7 +136,7 @@
                     </div>
                 </div>
 
-                <!-- Pestaña 2: Crear Color -->
+                <!-- Pestaña: Crear Color -->
                 <div t-if="state.activeTab === 'create_color'" class="p-2" style="max-height: 480px; overflow-y: auto;">
                     <h6 class="fw-bold mb-3">Nuevo Color de la Carta y Fórmula</h6>
 
@@ -193,7 +193,7 @@
                         </div>
                     </div>
 
-                    <!-- Sección para la Fórmula asociada -->
+                    <!-- Configuración de fórmula asociada -->
                     <div class="border rounded p-3 bg-light mt-3">
                         <div class="d-flex align-items-center justify-content-between mb-3">
                             <h6 class="fw-bold mb-0 text-primary">
@@ -204,7 +204,7 @@
                             </span>
                         </div>
 
-                        <!-- Selección de Galería, Base y Presentación -->
+                        <!-- Selección de galería, base y presentación -->
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
                                 <label class="form-label small fw-bold mb-1">Galería <span class="text-danger">*</span></label>
@@ -235,7 +235,7 @@
                             </div>
                         </div>
 
-                        <!-- Agregar línea de colorante -->
+                        <!-- Agregar colorante -->
                         <div class="row g-2 align-items-end mb-3">
                             <div class="col-6">
                                 <label class="form-label small fw-bold mb-1">Colorante</label>
@@ -260,7 +260,7 @@
                             </div>
                         </div>
 
-                        <!-- Tabla de dosis agregadas -->
+                        <!-- Tabla de dosis de la fórmula -->
                         <div t-if="state.newFormulaLines.length" class="table-responsive">
                             <table class="table table-sm table-bordered bg-white mb-2">
                                 <thead>
@@ -297,7 +297,7 @@
                                 </tfoot>
                             </table>
 
-                            <!-- Resumen informativo de Costo (cost_min) y Precio de Venta (cost_max) -->
+                            <!-- Resumen de costo y precio de venta -->
                             <div class="row g-2 mt-2 pt-2 border-top">
                                 <div class="col-6">
                                     <div class="p-2 rounded bg-light border">
