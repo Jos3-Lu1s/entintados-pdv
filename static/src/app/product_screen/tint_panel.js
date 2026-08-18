@@ -26,7 +26,6 @@ export class TintPanel extends Component {
         this.state = useState({
             // Paso 1: color
             colorId: null,
-            collectionId: null,
             // Paso 2: filtros derivados del color
             galleryId: null,
             sizeId: null,
@@ -115,28 +114,18 @@ export class TintPanel extends Component {
 
     // Paso 1: color
 
-    get collections() {
-        return this.pos.models["tint.collection"]?.getAll?.() ?? [];
-    }
-
     /** Término de búsqueda obtenido del buscador nativo del POS. */
     get searchTerm() {
         return (this.pos.searchProductWord || "").trim().toLowerCase();
     }
 
-    /** Colores con fórmula disponibles, filtrados por búsqueda (nombre/código) y colección. */
+    /** Colores con fórmula disponibles, filtrados por búsqueda (nombre/código). */
     get colors() {
         const term = this.searchTerm;
         return (this.pos.models["tint.color"]?.getAll?.() ?? [])
             .filter((color) => {
                 if (!color.has_formula) {
                     return false;
-                }
-                if (this.state.collectionId) {
-                    const collectionId = color.collection_id?.id || color.collection_id || false;
-                    if (collectionId !== this.state.collectionId) {
-                        return false;
-                    }
                 }
                 if (term) {
                     return (
@@ -190,10 +179,6 @@ export class TintPanel extends Component {
             baseTypeId: null,
         });
         this.pos.searchProductWord = "";
-    }
-
-    selectCollection(id) {
-        this.state.collectionId = this.state.collectionId === id ? null : id;
     }
 
     // Paso 2: filtros en cascada

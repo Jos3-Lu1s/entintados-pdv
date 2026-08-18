@@ -5,25 +5,14 @@
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
             <!-- Barra superior / Filtros -->
-            <div t-if="hasCatalog" class="flex-shrink-0 border rounded bg-view m-2 p-3">
+            <div t-if="hasCatalog and (state.colorId or searchTerm)" class="flex-shrink-0 border rounded bg-view m-2 p-3">
 
-                <!-- Sin color seleccionado: filtro por colección -->
+                <!-- Sin color seleccionado: búsqueda activa -->
                 <div t-if="!state.colorId">
-                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                        <small class="text-muted fw-semibold">
-                            Selecciona una colección para filtrar:
-                        </small>
+                    <div class="d-flex align-items-center justify-content-between gap-2">
                         <small t-if="searchTerm" class="text-muted">
-                            Buscando: «<t t-esc="searchTerm"/>»
+                            Buscando color: «<t t-esc="searchTerm"/>»
                         </small>
-                    </div>
-                    <div t-if="collections.length" class="d-flex flex-wrap gap-1">
-                        <button t-foreach="collections" t-as="col" t-key="col.id"
-                                class="btn btn-sm text-nowrap"
-                                t-att-class="state.collectionId === col.id ? 'btn-primary' : 'btn-outline-secondary'"
-                                t-on-click="() => this.selectCollection(col.id)">
-                            <t t-esc="col.name"/>
-                        </button>
                     </div>
                 </div>
 
@@ -135,7 +124,7 @@
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
                             <i class="fa fa-search fa-3x mb-3 text-secondary"/>
                             <h5>Ningún color coincide</h5>
-                            <p class="mb-0">Ajusta la búsqueda o la colección.</p>
+                            <p class="mb-0">Ajusta el término de búsqueda.</p>
                         </div>
                     </t>
 

@@ -11,7 +11,7 @@ HEX_COLOR = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
 class TintColor(models.Model):
     _name = 'tint.color'
     _description = "Color de la carta"
-    _order = 'collection_id, name, id'
+    _order = 'name, id'
     _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
@@ -24,11 +24,6 @@ class TintColor(models.Model):
         string="Muestra (hex)",
         help="Color aproximado para mostrar en pantalla, en formato #RRGGBB. "
              "Es una referencia visual, no un valor colorimétrico.")
-    
-    collection_id = fields.Many2one(
-        comodel_name='tint.collection', string="Colección",
-        ondelete='restrict', index=True,
-        help="Carta o colección comercial a la que pertenece el color.")
     notes = fields.Html(
         string="Notas", translate=True, sanitize=True,
         help="Observaciones internas sobre el color.")
@@ -124,7 +119,7 @@ class TintColor(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         # 'base_type_ids' omitido: campo calculado no requerido por el POS.
-        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id', 'has_formula']
+        return ['id', 'name', 'display_name', 'code', 'html_color', 'has_formula']
 
     @api.model
     def _load_pos_data_domain(self, data, config):

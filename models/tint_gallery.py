@@ -9,10 +9,8 @@ class TintGallery(models.Model):
     Una galería agrupa las fórmulas que vienen de una misma fuente: el
     catálogo propio, el de un fabricante de la competencia, los colores
     descontinuados que aún se reproducen, o los desarrollos internos.
-
-    No confundir con `tint.collection`, que agrupa **colores** en cartas
-    comerciales. La galería agrupa **fórmulas**: un mismo color puede
-    resolverse con dosis distintas según de quién sea la receta.
+    La galería agrupa **fórmulas**: un mismo color puede resolverse con
+    dosis distintas según de quién sea la receta.
     """
 
     _name = 'tint.gallery'

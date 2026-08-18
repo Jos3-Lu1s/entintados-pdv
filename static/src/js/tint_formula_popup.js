@@ -41,7 +41,6 @@ export class TintFormulaPopup extends Component {
             newColorName: "",
             newColorCode: "",
             newColorHtml: "#ffffff",
-            newColorCollectionId: "",
             newColorNotes: "",
 
             // Galería, base y presentación para la fórmula
@@ -94,14 +93,6 @@ export class TintFormulaPopup extends Component {
         }
         return [...this.pos.models["tint.gallery"].getAll()]
             .sort((a, b) => (a.sequence || 0) - (b.sequence || 0) || (a.name || "").localeCompare(b.name || ""));
-    }
-
-    get collections() {
-        if (!this.pos.models["tint.collection"]) {
-            return [];
-        }
-        return [...this.pos.models["tint.collection"].getAll()]
-            .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     }
 
     get baseTypes() {
@@ -266,9 +257,6 @@ export class TintFormulaPopup extends Component {
             if (this.state.newColorCode.trim()) {
                 vals.code = this.state.newColorCode.trim();
             }
-            if (this.state.newColorCollectionId) {
-                vals.collection_id = parseInt(this.state.newColorCollectionId);
-            }
             if (this.state.newColorNotes.trim()) {
                 vals.notes = this.state.newColorNotes.trim();
             }
@@ -324,7 +312,6 @@ export class TintFormulaPopup extends Component {
             this.state.newColorName = "";
             this.state.newColorCode = "";
             this.state.newColorHtml = "#ffffff";
-            this.state.newColorCollectionId = "";
             this.state.newColorNotes = "";
             const galleries = this.pos.models["tint.gallery"]?.getAll() || [];
             const defaultGallery = [...galleries].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))[0];
