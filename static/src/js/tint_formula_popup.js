@@ -1,4 +1,4 @@
-import { Component, useState } from "@odoo/owl";
+import { Component, useState, onWillStart } from "@odoo/owl";
 import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
@@ -58,6 +58,24 @@ export class TintFormulaPopup extends Component {
             createColorError: "",
             createColorSuccess: "",
         });
+
+        // Carga bajo demanda de fórmulas para la base y presentación.
+        onWillStart(async () => {
+            await this.loadFormulasForLine();
+        });
+    }
+
+    async loadFormulasForLine() {
+        if (!this.props.baseTypeId || !this.props.sizeId) {
+            return;
+        }
+        await this.pos.data.callRelated("tint.color.formula", "get_pos_formulas", [
+            this.pos.config.id,
+            [
+                ["base_type_id", "=", this.props.baseTypeId],
+                ["size_id", "=", this.props.sizeId],
+            ],
+        ]);
     }
 
     setTab(tab) {

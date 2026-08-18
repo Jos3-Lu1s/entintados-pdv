@@ -239,8 +239,21 @@ class TintColorFormula(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        return [('active', '=', True)]
-    
+        # Carga bajo demanda: se inicializa vacío y se consulta vía get_pos_formulas.
+        return [('id', '=', False)]
+
+    @api.model
+    def get_pos_formulas(self, config_id, domain):
+        """Retorna fórmulas y dosis en formato POS para carga bajo demanda."""
+        config = self.env['pos.config'].browse(config_id)
+        formulas = self.search((domain or []) + [('active', '=', True)])
+        lines = formulas.line_ids
+        return {
+            'tint.color.formula': self._load_pos_data_read(formulas, config),
+            'tint.color.formula.line':
+                self.env['tint.color.formula.line']._load_pos_data_read(lines, config),
+        }
+
     @api.depends('line_ids.points', 'line_ids.colorant_id.standard_price')
     def _compute_cost_min(self):
         for formula in self:

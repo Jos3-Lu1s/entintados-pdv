@@ -43,6 +43,9 @@ class TintColor(models.Model):
     formula_count = fields.Integer(
         string="Fórmulas", compute='_compute_formula_count',
         help="Número de fórmulas registradas para este color.")
+    has_formula = fields.Boolean(
+        string="Tiene fórmula", compute='_compute_has_formula', store=True,
+        help="Indica si el color tiene al menos una fórmula registrada.")
     base_type_ids = fields.Many2many(
         comodel_name='tint.base.type', string="Bases compatibles",
         compute='_compute_base_type_ids', search='_search_base_type_ids',
@@ -63,6 +66,11 @@ class TintColor(models.Model):
         counts = {color.id: count for color, count in data}
         for color in self:
             color.formula_count = counts.get(color.id, 0)
+
+    @api.depends('formula_ids')
+    def _compute_has_formula(self):
+        for color in self:
+            color.has_formula = bool(color.formula_ids)
 
     @api.depends('formula_ids.base_type_id')
     def _compute_base_type_ids(self):
@@ -116,7 +124,7 @@ class TintColor(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         # 'base_type_ids' omitido: campo calculado no requerido por el POS.
-        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id']
+        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id', 'has_formula']
 
     @api.model
     def _load_pos_data_domain(self, data, config):

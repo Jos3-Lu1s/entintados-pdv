@@ -72,5 +72,5 @@ class TintColorFormulaLine(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        # Sin campo `active`: las dosis se cargan junto con sus fórmulas.
-        return []
+        # Carga bajo demanda: las dosis se cargan junto con sus fórmulas.
+        return [('id', '=', False)]

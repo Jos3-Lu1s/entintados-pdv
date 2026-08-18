@@ -31,8 +31,11 @@ export class TintPanel extends Component {
             galleryId: null,
             sizeId: null,
             baseTypeId: null,
+            formulasVersion: 0,
+            loadingFormulas: false,
         });
-        // Modo debug para diagnósticos del catálogo
+        this._loadedColorIds = new Set();
+        // Modo debug para diagnósticos del catálogo.
         this.isDebug = Boolean(odoo.debug);
     }
 
@@ -95,7 +98,9 @@ export class TintPanel extends Component {
     }
 
     get hasCatalog() {
-        return this.formulas.length > 0;
+        return (this.pos.models["tint.color"]?.getAll?.() ?? []).some(
+            (color) => color.has_formula
+        );
     }
 
     // Catálogo base
@@ -110,23 +115,6 @@ export class TintPanel extends Component {
 
     // Paso 1: color
 
-    /** IDs de color con al menos una fórmula registrada (con caché). */
-    get colorIdsWithFormula() {
-        const formulas = this.formulas;
-        if (this._colorIdsCache && this._colorIdsCacheLen === formulas.length) {
-            return this._colorIdsCache;
-        }
-        const ids = new Set();
-        for (const formula of formulas) {
-            if (formula.color_id) {
-                ids.add(formula.color_id.id);
-            }
-        }
-        this._colorIdsCache = ids;
-        this._colorIdsCacheLen = formulas.length;
-        return ids;
-    }
-
     get collections() {
         return this.pos.models["tint.collection"]?.getAll?.() ?? [];
     }
@@ -138,11 +126,10 @@ export class TintPanel extends Component {
 
     /** Colores con fórmula disponibles, filtrados por búsqueda (nombre/código) y colección. */
     get colors() {
-        const withFormula = this.colorIdsWithFormula;
         const term = this.searchTerm;
         return (this.pos.models["tint.color"]?.getAll?.() ?? [])
             .filter((color) => {
-                if (!withFormula.has(color.id)) {
+                if (!color.has_formula) {
                     return false;
                 }
                 if (this.state.collectionId) {
@@ -168,14 +155,31 @@ export class TintPanel extends Component {
             : null;
     }
 
-    selectColor(id) {
+    async selectColor(id) {
         this.state.colorId = id;
-        // Reinicia los filtros posteriores al cambiar de color.
         this.state.galleryId = null;
         this.state.sizeId = null;
         this.state.baseTypeId = null;
-        // Limpia el buscador para no arrastrar el filtro de color al paso de bases.
         this.pos.searchProductWord = "";
+        await this.loadColorFormulas(id);
+    }
+
+    /** Carga bajo demanda las fórmulas del color indicado. */
+    async loadColorFormulas(colorId) {
+        if (!colorId || this._loadedColorIds.has(colorId)) {
+            return;
+        }
+        this.state.loadingFormulas = true;
+        try {
+            await this.pos.data.callRelated("tint.color.formula", "get_pos_formulas", [
+                this.pos.config.id,
+                [["color_id", "=", colorId]],
+            ]);
+            this._loadedColorIds.add(colorId);
+            this.state.formulasVersion++;
+        } finally {
+            this.state.loadingFormulas = false;
+        }
     }
 
     clearColor() {
@@ -196,6 +200,8 @@ export class TintPanel extends Component {
 
     /** Fórmulas asociadas al color seleccionado. */
     get colorFormulas() {
+        // Reactividad ante carga bajo demanda.
+        void this.state.formulasVersion;
         if (!this.state.colorId) {
             return [];
         }

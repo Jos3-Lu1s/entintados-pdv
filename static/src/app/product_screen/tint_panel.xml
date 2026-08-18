@@ -177,7 +177,13 @@
                             </div>
                         </div>
 
-                        <TintTable t-if="cards.length" columns="baseColumns">
+                        <div t-if="state.loadingFormulas and !cards.length"
+                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                            <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
+                            <h5>Cargando fórmulas…</h5>
+                        </div>
+
+                        <TintTable t-elif="cards.length" columns="baseColumns">
                             <t t-set-slot="rows">
                                 <tr t-foreach="cards" t-as="card" t-key="card.key"
                                     class="o-tint-row-tr"
