@@ -4,59 +4,44 @@
     <t t-name="entintados_pdv.TintPanel">
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
-            <!-- Barra superior / Filtros -->
-            <div t-if="hasCatalog and (state.colorId or searchTerm)" class="flex-shrink-0 border rounded bg-view m-2 p-3">
-
-                <!-- Sin color seleccionado: búsqueda activa -->
-                <div t-if="!state.colorId">
-                    <div class="d-flex align-items-center justify-content-between gap-2">
-                        <small t-if="searchTerm" class="text-muted">
-                            Buscando color: «<t t-esc="searchTerm"/>»
-                        </small>
-                    </div>
+            <!-- Filtros de base y color seleccionado -->
+            <div t-if="ui.colorId" class="flex-shrink-0 border rounded bg-view mx-2 mb-2 p-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="rounded-circle border flex-shrink-0"
+                          t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
+                    <span class="fw-bold text-truncate">
+                        <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
+                        <t t-esc="selectedColor and selectedColor.name"/>
+                    </span>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
+                            t-on-click="() => this.clearFilters()">
+                        Limpiar filtros
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                            t-on-click="() => this.clearColor()">
+                        Cambiar color
+                    </button>
                 </div>
 
-                <!-- Color seleccionado: filtros en cascada -->
-                <div t-else="">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="rounded-circle border flex-shrink-0"
-                              t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
-                        <span class="fw-bold text-truncate">
-                            <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
-                            <t t-esc="selectedColor and selectedColor.name"/>
-                        </span>
-                        <button class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
-                                t-on-click="() => this.clearFilters()">
-                            Limpiar filtros
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary text-nowrap"
-                                t-on-click="() => this.clearColor()">
-                            Cambiar color
+                <div t-foreach="levels" t-as="level" t-key="level.key"
+                     class="d-flex align-items-center gap-2 mb-1">
+                    <small class="text-muted text-nowrap" style="width: 6.5rem;"
+                           t-esc="level.label"/>
+                    <div t-if="level.options.length" class="d-flex flex-wrap gap-1">
+                        <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
+                                class="btn btn-sm text-nowrap"
+                                t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
+                                t-on-click="() => this.selectLevel(level.key, opt.record.id)">
+                            <t t-esc="opt.record.name"/>
+                            <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
                         </button>
                     </div>
-
-                    <div t-foreach="levels" t-as="level" t-key="level.key"
-                         class="d-flex align-items-center gap-2 mb-1">
-                        <small class="text-muted text-nowrap" style="width: 6.5rem;"
-                               t-esc="level.label"/>
-                        <div t-if="level.options.length" class="d-flex flex-wrap gap-1">
-                            <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
-                                    class="btn btn-sm text-nowrap"
-                                    t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
-                                    t-on-click="() => this.selectLevel(level.key, opt.record.id)">
-                                <t t-esc="opt.record.name"/>
-                                <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
-                            </button>
-                        </div>
-                        <small t-else="" class="text-muted fst-italic">
-                            —
-                        </small>
-                    </div>
+                    <small t-else="" class="text-muted fst-italic">
+                        —
+                    </small>
                 </div>
-
             </div>
 
-            <!-- Contenido -->
             <div class="flex-grow-1 overflow-auto px-2 pb-2">
 
                 <div t-if="missingModels.length" class="alert alert-danger" role="alert">
@@ -66,26 +51,6 @@
                         Falta registrarlos en <code>_load_pos_data_models</code>
                         (<code>pos_session.py</code>) o en <code>tint_models.js</code>.
                     </div>
-                </div>
-
-                <div t-if="emptyModels.length" class="alert alert-warning" role="alert">
-                    <strong>Modelos cargados pero sin registros:</strong>
-                    <t t-esc="emptyModels.map(m => m.label).join(', ')"/>.
-                    <div class="mt-1">
-                        El cliente conoce el modelo, así que el problema está del lado del
-                        servidor. Dos causas, en este orden:
-                    </div>
-                    <ol class="mb-0 mt-1">
-                        <li>
-                            El servidor no recargó el Python. Añadir <code>pos.load.mixin</code>
-                            exige reiniciar Odoo con <code>-u entintados_pdv</code>; no basta
-                            con refrescar el navegador ni reabrir la sesión.
-                        </li>
-                        <li>
-                            No hay registros que cargar. Compruébalo en
-                            <em>Entintados → Configuración</em>.
-                        </li>
-                    </ol>
                 </div>
 
                 <div t-if="formulasWithoutGallery" class="alert alert-warning" role="alert">
@@ -99,11 +64,35 @@
                     </div>
                 </div>
 
-                <t t-if="hasCatalog">
+                <t t-if="galleryOptions.length">
 
-                    <!-- Tabla de colores -->
-                    <t t-if="!state.colorId">
-                        <TintTable t-if="colors.length" columns="colorColumns">
+                    <!-- Paso 1: Selección de galería -->
+                    <t t-if="!ui.galleryId">
+                        <div class="px-1 pb-2 pt-1">
+                            <small class="text-muted fw-semibold d-block mb-2">
+                                Elige una galería para empezar:
+                            </small>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button t-foreach="galleryOptions" t-as="gallery" t-key="gallery.id"
+                                        class="btn btn-outline-primary text-nowrap"
+                                        t-on-click="() => this.selectGallery(gallery.id)">
+                                    <i class="fa fa-folder-open-o me-1" role="img" aria-label="Galería"/>
+                                    <t t-if="gallery.code">[<t t-esc="gallery.code"/>] </t>
+                                    <t t-esc="gallery.name"/>
+                                </button>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Paso 2: Selección de color -->
+                    <t t-elif="!ui.colorId">
+                        <div t-if="ui.loadingColors and !colors.length"
+                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                            <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
+                            <h5>Cargando colores…</h5>
+                        </div>
+
+                        <TintTable t-elif="colors.length" columns="colorColumns">
                             <t t-set-slot="rows">
                                 <tr t-foreach="colors" t-as="color" t-key="color.id"
                                     class="o-tint-row-tr"
@@ -120,15 +109,21 @@
                                 </tr>
                             </t>
                         </TintTable>
+
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
                             <i class="fa fa-search fa-3x mb-3 text-secondary"/>
-                            <h5>Ningún color coincide</h5>
-                            <p class="mb-0">Ajusta el término de búsqueda.</p>
+                            <h5 t-if="searchTerm">Ningún color coincide con «<t t-esc="searchTerm"/>»</h5>
+                            <h5 t-else="">Esta galería no tiene colores</h5>
+                            <p class="mb-0">
+                                <t t-if="searchTerm">Ajusta el término de búsqueda o </t>
+                                <t t-else="">Prueba otra galería o </t>
+                                revisa las fórmulas de esta galería.
+                            </p>
                         </div>
                     </t>
 
-                    <!-- Tabla de bases del color seleccionado -->
+                    <!-- Paso 3: Selección de base -->
                     <t t-else="">
 
                         <div t-if="unsellableCount" class="alert alert-warning" role="alert">
@@ -166,7 +161,7 @@
                             </div>
                         </div>
 
-                        <div t-if="state.loadingFormulas and !cards.length"
+                        <div t-if="ui.loadingFormulas and !cards.length"
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
                             <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
                             <h5>Cargando fórmulas…</h5>
@@ -181,7 +176,6 @@
                                     <td class="text-muted small">
                                         <t t-esc="card.baseType and card.baseType.name"/>
                                         <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
-                                        <t t-if="!galleryFilterActive and card.gallery"> · <t t-esc="card.gallery.name"/></t>
                                     </td>
                                     <td class="text-end text-muted text-nowrap"
                                         t-esc="formatPoints(card.totalPoints)"/>
@@ -206,6 +200,14 @@
                     </t>
 
                 </t>
+
+                <div t-else="" class="alert alert-warning" role="alert">
+                    <strong>No hay galerías cargadas en la caja.</strong>
+                    <div class="mt-1">
+                        Crea al menos una galería en <em>Entintados → Configuración</em> y
+                        reinicia la sesión de POS.
+                    </div>
+                </div>
 
             </div>
 
