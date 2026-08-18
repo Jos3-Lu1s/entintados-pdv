@@ -1,22 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
 
-    <!--
-      Un solo punto de extensión de los botones de control.
-
-      Antes había dos plantillas distintas extendiendo `ControlButtons`, cada
-      una con su propio botón de pincel. Dos botones con el mismo icono y
-      nombres parecidos hacían imposible saber cuál se estaba pulsando.
-    -->
+    <!-- Botón de acción para entintar la línea seleccionada -->
     <t t-name="entintados_pdv.ControlButtonsTint"
        t-inherit="point_of_sale.ControlButtons"
        t-inherit-mode="extension">
 
-        <!--
-          El botón «Colores» se eliminó: su función la cubre ahora la pestaña
-          «Entintados» de la pantalla de productos. Queda solo el botón que
-          entinta la línea base ya seleccionada en la orden.
-        -->
+        <!-- Botón de entintado en la barra de control -->
         <xpath expr="//SelectPartnerButton" position="after">
             <button t-if="!props.showRemainingButtons"
                     class="btn btn-light btn-lg lh-lg o-tint-button"

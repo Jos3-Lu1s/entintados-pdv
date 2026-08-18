@@ -41,6 +41,9 @@ Catálogo de entintado
     "assets": {
         "point_of_sale._assets_pos": [
             "entintados_pdv/static/src/css/tint.css",
+            # Tabla de lista reutilizable (productos, colores y bases)
+            "entintados_pdv/static/src/app/components/tint_table/tint_table.js",
+            "entintados_pdv/static/src/app/components/tint_table/tint_table.xml",
             "entintados_pdv/static/src/app/utils/tint_points.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
@@ -51,7 +54,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/xml/tint_control_button.xml",
             "entintados_pdv/static/src/xml/tint_formula_popup.xml",
             "entintados_pdv/static/src/xml/contact_type_selector_field.xml",
-            
+
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.js",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.xml",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.scss",
@@ -109,4 +112,3 @@ Catálogo de entintado
     "installable": True,
     "application": False,
 }
-

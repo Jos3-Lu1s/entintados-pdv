@@ -3,12 +3,7 @@ import { registry } from "@web/core/registry";
 import { Base } from "@point_of_sale/app/models/related_models";
 
 /**
- * Modelos de entintado disponibles en caja.
- *
- * Ninguno necesita comportamiento propio en el cliente todavía: existen para
- * que el POS sepa instanciarlos. Se declaran en una lista y se registran en
- * bucle en lugar de repetir siete bloques idénticos; añadir un modelo es
- * añadir una línea.
+ * Registro de modelos de entintado para su disponibilidad e instanciación en el POS.
  */
 export class TintCollection extends Base {
     static pythonModel = "tint.collection";
