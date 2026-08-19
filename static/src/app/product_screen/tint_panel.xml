@@ -6,18 +6,19 @@
 
             <!-- Filtros de base y color seleccionado -->
             <div t-if="ui.colorId" class="flex-shrink-0 border rounded bg-view mx-2 mb-2 p-3">
-                <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="d-flex align-items-center gap-2" t-att-class="{ 'mb-2': levels.length }">
                     <span class="rounded-circle border flex-shrink-0"
                           t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
                     <span class="fw-bold text-truncate">
                         <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
                         <t t-esc="selectedColor and selectedColor.name"/>
                     </span>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
+                    <button t-if="hasActiveFilters" class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
                             t-on-click="() => this.clearFilters()">
                         Limpiar filtros
                     </button>
                     <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                            t-att-class="{ 'ms-auto': !hasActiveFilters }"
                             t-on-click="() => this.clearColor()">
                         Cambiar color
                     </button>
@@ -27,18 +28,17 @@
                      class="d-flex align-items-center gap-2 mb-1">
                     <small class="text-muted text-nowrap" style="width: 6.5rem;"
                            t-esc="level.label"/>
-                    <div t-if="level.options.length" class="d-flex flex-wrap gap-1">
+                    <div class="d-flex flex-wrap gap-1">
                         <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
                                 class="btn btn-sm text-nowrap"
                                 t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
                                 t-on-click="() => this.selectLevel(level.key, opt.record.id)">
                             <t t-esc="opt.record.name"/>
-                            <span class="badge bg-secondary bg-opacity-50 ms-1" t-esc="opt.count"/>
+                            <span class="badge ms-1"
+                                  t-att-class="level.selected === opt.record.id ? 'bg-white text-primary fw-bold' : 'bg-secondary text-dark'"
+                                  t-esc="opt.count"/>
                         </button>
                     </div>
-                    <small t-else="" class="text-muted fst-italic">
-                        —
-                    </small>
                 </div>
             </div>
 
@@ -185,12 +185,20 @@
                                         <span t-else="" class="text-muted">—</span>
                                     </td>
                                     <td class="fw-semibold" t-esc="card.baseProduct.display_name"/>
-                                    <td class="text-muted small">
-                                        <t t-esc="card.baseType and card.baseType.name"/>
-                                        <t t-if="card.size"> · <t t-esc="card.size.name"/></t>
+                                    <td class="text-muted small text-nowrap">
+                                        <t t-if="card.baseType and card.baseType.name" t-esc="card.baseType.name"/>
+                                        <span t-else="" class="text-muted">—</span>
                                     </td>
-                                    <td class="text-end text-muted text-nowrap"
-                                        t-esc="formatPoints(card.totalPoints)"/>
+                                    <td class="text-muted small text-nowrap">
+                                        <t t-if="card.size and card.size.name" t-esc="card.size.name"/>
+                                        <span t-else="" class="text-muted">—</span>
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <span class="text-muted" t-esc="formatPoints(card.totalPoints)"/>
+                                        <small t-if="card.totalPoints >= 48" class="text-muted ms-1">
+                                            (<t t-esc="card.totalPoints"/> Pts.)
+                                        </small>
+                                    </td>
                                     <td class="text-end fw-bold text-nowrap"
                                         t-esc="formatPrice(card.price)"/>
                                 </tr>

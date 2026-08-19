@@ -42,7 +42,7 @@ export class TintPanel extends Component {
             { label: "Código", class: "text-nowrap" },
             { label: "Color" },
             { label: "Galería", class: "text-nowrap" },
-            { label: "Bases" },
+            { label: "Tipos de base" },
         ];
     }
 
@@ -50,7 +50,8 @@ export class TintPanel extends Component {
         return [
             { label: "Código", class: "text-nowrap" },
             { label: "Base a dispensar" },
-            { label: "Detalle" },
+            { label: "Tipo de base", class: "text-nowrap" },
+            { label: "Presentación", class: "text-nowrap" },
             { label: "Puntos", class: "text-end text-nowrap" },
             { label: "Precio", class: "text-end text-nowrap" },
         ];
@@ -294,9 +295,13 @@ export class TintPanel extends Component {
         return this.optionsFor(3, "base_type_id", "tint.base.type", this.bySequence);
     }
 
+    get hasActiveFilters() {
+        return Boolean(this.ui.sizeId || this.ui.baseTypeId);
+    }
+
     get levels() {
         // Niveles de filtro dentro del color seleccionado.
-        return [
+        const allLevels = [
             {
                 key: "size",
                 label: "Presentación",
@@ -310,6 +315,7 @@ export class TintPanel extends Component {
                 selected: this.ui.baseTypeId,
             },
         ];
+        return allLevels.filter((level) => level.options.length > 1);
     }
 
     // Paso 3: bases concretas
