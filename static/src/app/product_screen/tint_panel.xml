@@ -106,6 +106,14 @@
                                         <span t-else="" class="text-muted">—</span>
                                     </td>
                                     <td class="fw-semibold" t-esc="color.name"/>
+                                    <td class="text-nowrap text-muted small">
+                                        <t t-if="selectedGallery and selectedGallery.code">[<t t-esc="selectedGallery.code"/>] </t>
+                                        <t t-esc="selectedGallery and selectedGallery.name"/>
+                                    </td>
+                                    <td class="text-muted small">
+                                        <t t-if="color.base_type_summary" t-esc="color.base_type_summary"/>
+                                        <span t-else="">—</span>
+                                    </td>
                                 </tr>
                             </t>
                         </TintTable>
@@ -172,6 +180,10 @@
                                 <tr t-foreach="cards" t-as="card" t-key="card.key"
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.addCard(card)">
+                                    <td class="text-nowrap">
+                                        <span t-if="card.baseProduct.default_code" class="badge bg-secondary" t-esc="card.baseProduct.default_code"/>
+                                        <span t-else="" class="text-muted">—</span>
+                                    </td>
                                     <td class="fw-semibold" t-esc="card.baseProduct.display_name"/>
                                     <td class="text-muted small">
                                         <t t-esc="card.baseType and card.baseType.name"/>

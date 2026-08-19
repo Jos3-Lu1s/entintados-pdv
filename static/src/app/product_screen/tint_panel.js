@@ -41,16 +41,26 @@ export class TintPanel extends Component {
             { label: "Muestra", class: "o-tint-th-swatch" },
             { label: "Código", class: "text-nowrap" },
             { label: "Color" },
+            { label: "Galería", class: "text-nowrap" },
+            { label: "Bases" },
         ];
     }
 
     get baseColumns() {
         return [
+            { label: "Código", class: "text-nowrap" },
             { label: "Base a dispensar" },
             { label: "Detalle" },
             { label: "Puntos", class: "text-end text-nowrap" },
             { label: "Precio", class: "text-end text-nowrap" },
         ];
+    }
+
+    /** Galería seleccionada (fija durante el listado de colores). */
+    get selectedGallery() {
+        return this.ui.galleryId
+            ? this.pos.models["tint.gallery"]?.get?.(this.ui.galleryId)
+            : null;
     }
 
     // Diagnóstico del catálogo
