@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- Vistas de análisis de actividades (pivot, gráfico, lista y búsqueda) -->
+
+    <record id="mail_activity_view_pivot" model="ir.ui.view">
+        <field name="name">mail.activity.view.pivot</field>
+        <field name="model">mail.activity</field>
+        <field name="arch" type="xml">
+            <pivot string="Análisis de actividades" sample="1">
+                <field name="user_id" type="row" />
+                <field name="activity_type_id" type="col" />
+            </pivot>
+        </field>
+    </record>
+
+    <record id="mail_activity_view_graph" model="ir.ui.view">
+        <field name="name">mail.activity.view.graph</field>
+        <field name="model">mail.activity</field>
+        <field name="arch" type="xml">
+            <graph string="Análisis de actividades" type="bar" sample="1">
+                <field name="activity_type_id" />
+                <field name="user_id" />
+            </graph>
+        </field>
+    </record>
+
+    <!-- Vista de lista para análisis de actividades -->
+    <record id="mail_activity_view_tree_analysis" model="ir.ui.view">
+        <field name="name">mail.activity.view.list.analysis</field>
+        <field name="model">mail.activity</field>
+        <field name="inherit_id" ref="mail.mail_activity_view_tree" />
+        <field name="mode">primary</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <!-- Deshabilita la creación directa desde la lista de análisis -->
+                <attribute name="create">0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='date_done']" position="attributes">
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='res_name']" position="after">
+                <field name="res_model_id" string="Modelo" optional="show" />
+                <field name="create_uid" string="Creada por" optional="hide" />
+                <field name="create_date" string="Fecha de creación" optional="hide" />
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Filtros y agrupaciones para búsqueda de actividades -->
+    <record id="mail_activity_view_search_analysis" model="ir.ui.view">
+        <field name="name">mail.activity.search.analisis</field>
+        <field name="model">mail.activity</field>
+        <field name="inherit_id" ref="mail.mail_activity_view_search" />
+        <field name="arch" type="xml">
+            <field name="activity_type_id" position="after">
+                <field name="res_model_id" string="Modelo" />
+            </field>
+            <filter name="filter_archived" position="before">
+                <filter
+                    string="Pendientes"
+                    name="filter_pending"
+                    domain="[('active', '=', True)]"
+                    help="Actividades que todavía no se marcan como hechas"
+                />
+            </filter>
+            <filter name="filter_archived" position="after">
+                <separator />
+                <filter
+                    string="Realizadas este mes"
+                    name="filter_date_done_month"
+                    domain="[
+                        ('date_done', '&gt;=', '=1d'),
+                        ('date_done', '&lt;', '=1d +1m'),
+                    ]"
+                    help="Actividades completadas dentro del mes en curso"
+                />
+                <filter
+                    string="Realizadas este año"
+                    name="filter_date_done_year"
+                    domain="[
+                        ('date_done', '&gt;=', '=1m =1d'),
+                        ('date_done', '&lt;', '=1m =1d +1y'),
+                    ]"
+                    help="Actividades completadas dentro del año en curso"
+                />
+            </filter>
+            <filter name="activittype" position="after">
+                <filter
+                    string="Fecha de realización"
+                    name="group_by_date_done"
+                    context="{'group_by': 'date_done'}"
+                />
+                <filter
+                    string="Fecha de creación"
+                    name="group_by_create_date"
+                    context="{'group_by': 'create_date'}"
+                />
+            </filter>
+        </field>
+    </record>
+
+    <!-- Acción general de actividades (pendientes y realizadas) -->
+    <record id="mail_activity_action_all" model="ir.actions.act_window">
+        <field name="name">Actividades</field>
+        <field name="res_model">mail.activity</field>
+        <field name="view_mode">list,pivot,graph,calendar,form</field>
+        <field name="search_view_id" ref="mail.mail_activity_view_search" />
+        <field name="context">{
+            'active_test': False,
+            'force_search_count': 1,
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Todavía no hay actividades registradas</p>
+            <p>
+                Las actividades se programan desde el chatter de cualquier documento
+                (contactos, oportunidades, pedidos, facturas). Aquí se concentran todas,
+                pendientes y realizadas.
+            </p>
+        </field>
+    </record>
+
+    <record id="mail_activity_action_all_view_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1" />
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="mail_activity_view_tree_analysis" />
+        <field name="act_window_id" ref="mail_activity_action_all" />
+    </record>
+    <record id="mail_activity_action_all_view_pivot" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2" />
+        <field name="view_mode">pivot</field>
+        <field name="view_id" ref="mail_activity_view_pivot" />
+        <field name="act_window_id" ref="mail_activity_action_all" />
+    </record>
+    <record id="mail_activity_action_all_view_graph" model="ir.actions.act_window.view">
+        <field name="sequence" eval="3" />
+        <field name="view_mode">graph</field>
+        <field name="view_id" ref="mail_activity_view_graph" />
+        <field name="act_window_id" ref="mail_activity_action_all" />
+    </record>
+    <record id="mail_activity_action_all_view_calendar" model="ir.actions.act_window.view">
+        <field name="sequence" eval="4" />
+        <field name="view_mode">calendar</field>
+        <field name="view_id" ref="mail.mail_activity_view_calendar" />
+        <field name="act_window_id" ref="mail_activity_action_all" />
+    </record>
+    <record id="mail_activity_action_all_view_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="5" />
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="mail.mail_activity_view_form" />
+        <field name="act_window_id" ref="mail_activity_action_all" />
+    </record>
+
+    <!-- Acción para análisis agrupado por usuario y tipo de actividad -->
+    <record id="mail_activity_action_analysis" model="ir.actions.act_window">
+        <field name="name">Análisis de actividades</field>
+        <field name="res_model">mail.activity</field>
+        <field name="view_mode">pivot,graph,list</field>
+        <field name="search_view_id" ref="mail.mail_activity_view_search" />
+        <field name="context">{
+            'active_test': False,
+            'force_search_count': 1,
+            'search_default_group_by_user_id': 1,
+            'search_default_activittype': 1,
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Todavía no hay actividades que analizar</p>
+            <p>
+                Agrupe por responsable, tipo de actividad, modelo o fecha de realización
+                para medir el trabajo registrado en el chatter.
+            </p>
+        </field>
+    </record>
+
+    <record id="mail_activity_action_analysis_view_pivot" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1" />
+        <field name="view_mode">pivot</field>
+        <field name="view_id" ref="mail_activity_view_pivot" />
+        <field name="act_window_id" ref="mail_activity_action_analysis" />
+    </record>
+    <record id="mail_activity_action_analysis_view_graph" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2" />
+        <field name="view_mode">graph</field>
+        <field name="view_id" ref="mail_activity_view_graph" />
+        <field name="act_window_id" ref="mail_activity_action_analysis" />
+    </record>
+    <record id="mail_activity_action_analysis_view_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="3" />
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="mail_activity_view_tree_analysis" />
+        <field name="act_window_id" ref="mail_activity_action_analysis" />
+    </record>
+</odoo>

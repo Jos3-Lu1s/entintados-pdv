@@ -36,7 +36,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr'],
+    'depends': ['base', 'contacts', 'account', 'mail', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -107,6 +107,9 @@ Catálogo de entintado
         'views/lines_producto_views.xml',
         'views/product_pricelist_item_views.xml',
         'wizards/partner_risk_exceeded_view.xml',
+        # Reportes y vistas de actividades
+        'views/mail_activity_views.xml',
+        'views/mail_activity_menu_views.xml',
     ],
     'demo': [],
     "installable": True,
