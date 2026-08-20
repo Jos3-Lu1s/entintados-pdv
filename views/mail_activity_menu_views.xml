@@ -20,7 +20,7 @@
         id="menu_activity_my"
         name="Mis actividades"
         parent="menu_activity_operations"
-        action="mail.mail_activity_action_my"
+        action="mail_activity_action_my"
         sequence="10"
     />
 
