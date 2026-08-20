@@ -21,3 +21,4 @@ from . import res_partner_risk
 from . import lines_product
 from . import product_pricelist_item
 from . import mail_activity
+from . import product_pricelist

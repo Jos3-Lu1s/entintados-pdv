@@ -72,6 +72,12 @@ class ResPartner(models.Model):
         help="Marca este contacto como cliente de crédito.",
     )
 
+    discount=fields.Float(
+        string="Descuento",
+        digits=(16, 2),
+        help="El porcentaje colocado se aplicara sobre la lista de precios correspondiente",
+    )
+
     @api.depends('is_customer', 'is_distributor')
     def _compute_is_sales_contact(self):
         for partner in self:

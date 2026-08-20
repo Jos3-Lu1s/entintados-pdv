@@ -1,6 +1,9 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 
+CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
+CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_quotation'
+
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
 
@@ -27,11 +30,11 @@ class CrmLead(models.Model):
                 old_stage = record.stage_id
                 if not old_stage or not new_stage or old_stage.id == new_stage.id:
                     continue
-                
-                if new_stage.stage_type == 'quotation':
+
+                if new_stage.stage_type in ('quotation', 'closed'):
                     raise ValidationError(_(
                         'No puedes mover manualmente la oportunidad a "%s". '
-                        'Esta etapa se asigna automáticamente al generar una cotización.'
+                        'Esta etapa se asigna automáticamente por el flujo de ventas.'
                     ) % new_stage.name)
 
                 ordered_stages = self.env['crm.stage'].search([], order='sequence, id')
@@ -68,7 +71,10 @@ class CrmLead(models.Model):
     def _check_expected_revenue_in_quotation(self):
         for lead in self:
             if lead.stage_id.stage_type == 'quotation' and not lead.expected_revenue:
-                raise ValidationError(...)
+                raise ValidationError(_(
+                'No puedes mover la oportunidad a la etapa "%s" sin un '
+                'ingreso esperado (importe de la cotización) mayor a cero.'
+            ) % lead.stage_id.name)
             
     @api.depends('order_ids.state')
     def _compute_draft_quotation_count(self):
@@ -82,6 +88,53 @@ class CrmLead(models.Model):
             domain = domain + [('state', '!=', 'cancel')]
         action['domain'] = domain
         return action
+    
+    def _schedule_create_quotation_activity(self, order):
+        """Asigna al vendedor de la oportunidad una actividad al crearse una cotización."""
+        self.ensure_one()
+        activity_type = self.env.ref(CREATE_QUOTATION_ACTIVITY_XMLID, raise_if_not_found=False)
+        if not activity_type:
+            return
+        # Evita duplicar la actividad si ya hay una abierta de este tipo
+        already_open = self.activity_ids.filtered(
+            lambda a: a.activity_type_id.id == activity_type.id
+        )
+        if already_open:
+            return
+        self.activity_schedule(
+            activity_type_id=activity_type.id,
+            user_id=self.user_id.id or self.env.uid,
+            summary=activity_type.summary,
+            note=_('Se creó la cotización %s.') % order.name,
+        )
+        
+    def _schedule_confirm_quotation_activity(self, order):
+        """Marca hecha la actividad de creación y asigna la de confirmación al vendedor."""
+        self.ensure_one()
+        
+        create_activity_type = self.env.ref(CREATE_QUOTATION_ACTIVITY_XMLID, raise_if_not_found=False)
+        if create_activity_type:
+            pending = self.activity_ids.filtered(
+                lambda a: a.activity_type_id.id == create_activity_type.id
+            )
+            if pending:
+                pending.action_feedback(feedback=_('Cotización %s confirmada.') % order.name)
+
+        confirm_activity_type = self.env.ref(CONFIRM_QUOTATION_ACTIVITY_XMLID, raise_if_not_found=False)
+        if not confirm_activity_type:
+            return
+        # Evita duplicar la actividad si ya hay una abierta de este tipo
+        already_open = self.activity_ids.filtered(
+            lambda a: a.activity_type_id.id == confirm_activity_type.id
+        )
+        if already_open:
+            return
+        self.activity_schedule(
+            activity_type_id=confirm_activity_type.id,
+            user_id=self.user_id.id or self.env.uid,
+            summary=confirm_activity_type.summary,
+            note=_('Se confirmó la orden de venta %s.') % order.name,
+        )
 
 class CrmStage(models.Model):
     _inherit = 'crm.stage'

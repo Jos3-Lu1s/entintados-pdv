@@ -194,7 +194,7 @@ class ProductTemplate(models.Model):
             read += self._load_pos_data_read(missing, config)
         return read
 
-    @api.model_create_multi
+    """ @api.model_create_multi
     def create(self, vals_list):
         products = super().create(vals_list)
 
@@ -226,7 +226,7 @@ class ProductTemplate(models.Model):
                     name=product.display_name,
                 ))
 
-        return products
+        return products """
 
     @api.onchange('lines_product_id')
     def _onchange_lines_product_id(self):
