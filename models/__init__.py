@@ -21,3 +21,4 @@ from . import res_config_risk
 from . import res_partner_risk
 from . import lines_product
 from . import product_pricelist_item
+from . import product_pricelist

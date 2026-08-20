@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="view_pricelist_form_inherit_partners" model="ir.ui.view">
+        <field name="name">product.pricelist.form.inherit.partners</field>
+        <field name="model">product.pricelist</field>
+        <field name="inherit_id" ref="product.product_pricelist_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Descuentos por cliente" name="contactos">
+                    <field name="partner_ids" options="{'no_open': True}">
+                        <list delete="0">
+                            <field name="name" readonly="1"/>
+                            <field name="email" readonly="1"/>
+                            <field name="vat" readonly="1"/>
+                            <field name="discount" widget="percentage"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

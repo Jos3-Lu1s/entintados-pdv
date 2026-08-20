@@ -106,6 +106,7 @@ Catálogo de entintado
         'views/res_partner_risk_view.xml',
         'views/lines_producto_views.xml',
         'views/product_pricelist_item_views.xml',
+        'views/product_pricelist_views.xml',
         'wizards/partner_risk_exceeded_view.xml',
     ],
     'demo': [],
