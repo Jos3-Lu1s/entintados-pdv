@@ -5,7 +5,6 @@ from . import tint_size
 from . import tint_base_type
 from . import tint_base_capacity
 from . import product_template
-from . import tint_collection
 from . import tint_gallery
 from . import tint_color
 from . import tint_color_formula

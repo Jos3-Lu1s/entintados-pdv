@@ -22,27 +22,6 @@
                 />
             </div>
 
-            <!-- Selector de colecciones -->
-            <div t-if="collections.length" class="d-flex align-items-center gap-2 px-3 py-2 bg-light border-bottom overflow-auto flex-shrink-0">
-                <button
-                    class="btn btn-sm text-nowrap"
-                    t-att-class="!state.collectionId ? 'btn-primary' : 'btn-outline-secondary'"
-                    t-on-click="() => this.clearCollection()"
-                >
-                    Todas las Colecciones
-                </button>
-                <button
-                    t-foreach="collections"
-                    t-as="col"
-                    t-key="col.id"
-                    class="btn btn-sm text-nowrap"
-                    t-att-class="state.collectionId === col.id ? 'btn-primary' : 'btn-outline-secondary'"
-                    t-on-click="() => this.selectCollection(col.id)"
-                >
-                    <t t-esc="col.name"/>
-                </button>
-            </div>
-
             <div class="flex-grow-1 overflow-auto p-3">
 
                 <div
@@ -72,11 +51,6 @@
                             <strong
                                 class="d-block text-dark text-truncate"
                                 t-esc="color.name"
-                            />
-                            <small
-                                t-if="color.collection_id"
-                                class="text-muted text-truncate d-block"
-                                t-esc="color.collection_id.name || ''"
                             />
                         </div>
                     </button>

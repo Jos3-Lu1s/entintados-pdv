@@ -16,8 +16,19 @@ ProductScreen.components = { ...ProductScreen.components, TintPanel, TintTable }
 patch(ProductScreen.prototype, {
     setup() {
         super.setup();
-        // Estado local de pestaña activa y modo de vista (cuadrícula/lista).
-        this.tintUi = useState({ tab: "products", viewMode: "grid" });
+        // Estado reactivo compartido para la navegación de entintados y filtros.
+        this.tintUi = useState({
+            tab: "products",
+            viewMode: "grid",
+            galleryId: null,
+            colorId: null,
+            sizeId: null,
+            baseTypeId: null,
+            galleryColorIds: [],
+            loadingColors: false,
+            formulasVersion: 0,
+            loadingFormulas: false,
+        });
     },
 
     setTintTab(tab) {
@@ -26,6 +37,25 @@ patch(ProductScreen.prototype, {
 
     setProductViewMode(mode) {
         this.tintUi.viewMode = mode;
+    },
+
+    /** Galería seleccionada actualmente. */
+    get tintSelectedGallery() {
+        return this.tintUi.galleryId
+            ? this.pos.models["tint.gallery"]?.get?.(this.tintUi.galleryId)
+            : null;
+    },
+
+    /** Reinicia la selección de galería y filtros de entintado. */
+    changeTintGallery() {
+        Object.assign(this.tintUi, {
+            galleryId: null,
+            colorId: null,
+            sizeId: null,
+            baseTypeId: null,
+            galleryColorIds: [],
+        });
+        this.pos.searchProductWord = "";
     },
 
     /** Columnas para la tabla de productos en modo lista. */
@@ -39,7 +69,7 @@ patch(ProductScreen.prototype, {
         ];
     },
 
-    /** Precio de venta del producto considerando la tarifa de la orden activa. */
+    /** Precio de venta del producto según la lista de precios activa. */
     tintRowPrice(product) {
         const order = this.pos.getOrder();
         return product.getPrice(order?.pricelist_id || false, 1);
