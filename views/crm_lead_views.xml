@@ -43,16 +43,7 @@
         </field>
     </record>
 
-    <record id="crm_lead_view_form_hide_quotation_button" model="ir.ui.view">
-        <field name="name">crm.lead.form.hide.quotation.button</field>
-        <field name="model">crm.lead</field>
-        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//button[@name='action_sale_quotations_new']" position="attributes">
-                <attribute name="invisible">stage_type != 'demo' and stage_type != 'quotation'</attribute>
-            </xpath>
-        </field>
-    </record>
+    
 
     <record id="crm_lead_view_form_quotation_requirements" model="ir.ui.view">
         <field name="name">crm.lead.form.quotation.requirements</field>

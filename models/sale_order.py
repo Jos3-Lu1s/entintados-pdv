@@ -19,6 +19,8 @@ class SaleOrder(models.Model):
             if vals.get('state') == 'sale' and order.state == 'sale':
                 order._cancel_sibling_quotations()
                 order._advance_opportunity_to_closed()
+                if order.opportunity_id:
+                    order.opportunity_id._schedule_confirm_quotation_activity(order)
         return res
 
     def _sync_opportunity_stage(self):
@@ -35,6 +37,8 @@ class SaleOrder(models.Model):
                 lead.with_context(skip_stage_sequence_check=True).write({
                     'expected_revenue': order.amount_total
                 })
+                
+            lead._schedule_create_quotation_activity(order)
             
             if lead.stage_id.id == quotation_stage.id:
                 continue
