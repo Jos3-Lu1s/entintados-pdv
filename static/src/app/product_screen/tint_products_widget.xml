@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
 
-    <!-- Pestañas de productos / entintados y alternador de vista cuadrícula / lista -->
+    <!-- Pestañas de navegación y alternador de vista -->
     <t t-name="entintados_pdv.ProductScreenTintTabs" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="before">
-            <div class="o-tint-tabs d-flex align-items-center gap-2 px-2 pt-2 flex-shrink-0">
+            <div class="o-tint-tabs d-flex align-items-center gap-2 p-2 flex-shrink-0">
                 <button class="btn btn-sm text-nowrap"
                         t-att-class="tintUi.tab === 'products' ? 'btn-primary' : 'btn-outline-secondary'"
                         t-on-click="() => this.setTintTab('products')">
@@ -19,7 +19,22 @@
                     Entintados
                 </button>
 
-                <!-- Alternador cuadrícula/lista (pestaña Productos) -->
+                <!-- Indicador y botón para cambiar de galería -->
+                <div t-if="tintUi.tab === 'tint' and tintUi.galleryId"
+                     class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                    <span class="badge bg-info-subtle text-info-emphasis text-nowrap">Galería</span>
+                    <span class="fw-bold text-truncate" style="max-width: 18rem;">
+                        <t t-if="tintSelectedGallery and tintSelectedGallery.code">[<t t-esc="tintSelectedGallery.code"/>] </t>
+                        <t t-esc="tintSelectedGallery and tintSelectedGallery.name"/>
+                    </span>
+                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                            t-on-click="() => this.changeTintGallery()">
+                        <i class="fa fa-exchange me-1" role="img" aria-label="Cambiar galería"/>
+                        Cambiar galería
+                    </button>
+                </div>
+
+                <!-- Alternador de vista cuadrícula / lista -->
                 <div t-if="tintUi.tab === 'products'" class="btn-group btn-group-sm ms-auto flex-shrink-0" role="group" aria-label="Vista de productos">
                     <button class="btn"
                             t-att-class="tintUi.viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'"
@@ -42,7 +57,7 @@
         </xpath>
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="after">
-            <TintPanel t-if="tintUi.tab === 'tint'"/>
+            <TintPanel t-if="tintUi.tab === 'tint'" uiState="tintUi"/>
         </xpath>
 
         <!-- Oculta la cuadrícula nativa en modo lista -->
@@ -52,9 +67,9 @@
 
         <!-- Tabla de productos en modo lista -->
         <xpath expr="//div[hasclass('search-more-button')]" position="before">
-            <div t-if="tintUi.tab !== 'tint' and tintUi.viewMode === 'list' and pos.productsToDisplay.length"
+            <div t-if="tintUi.tab !== 'tint' and tintUi.viewMode === 'list'"
                  class="o-tint-list flex-grow-1 overflow-y-auto px-2 pb-2">
-                <TintTable columns="productListColumns">
+                <TintTable t-if="pos.productsToDisplay.length" columns="productListColumns">
                     <t t-set-slot="rows">
                         <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
@@ -78,6 +93,10 @@
                         </tr>
                     </t>
                 </TintTable>
+                <div t-else="" class="h-100 d-flex flex-column align-items-center justify-content-center text-muted py-5">
+                    <i class="fa fa-search fa-3x mb-3 text-secondary"/>
+                    <h5>No se encontraron productos</h5>
+                </div>
             </div>
         </xpath>
 

@@ -73,7 +73,7 @@ class TintColorFormula(models.Model):
         string="Precio de venta", compute='_compute_cost_max', store=True,
         help="Precio de venta de la fórmula en el mayor de los fabricantes.")
     
-    # --- Lineas y esquemas --------------------------------------------------
+    # --- Líneas y esquemas --------------------------------------------------
     line_scheme_id = fields.Many2one(
         comodel_name='lines.product',
         string='Lineas de producto',
@@ -86,10 +86,7 @@ class TintColorFormula(models.Model):
         readonly=True,
     )
 
-    # La galería forma parte de la llave a propósito: el sentido de tener
-    # galerías es que dos fabricantes puedan dar recetas distintas para el
-    # mismo color sobre la misma base y presentación. Sin ella en la llave,
-    # registrar la equivalencia de un color de la competencia sería imposible.
+    # Permite recetas distintas para un mismo color, base y presentación según la galería.
     _gallery_color_base_size_uniq = models.Constraint(
         'UNIQUE(gallery_id, color_id, base_type_id, size_id)',
         "Esa galería ya tiene una fórmula para ese color sobre esa base y "
@@ -107,11 +104,7 @@ class TintColorFormula(models.Model):
 
     @api.depends('base_type_id', 'size_id', 'total_points')
     def _compute_capacity(self):
-        """Tolerante a propósito: no interrumpe la captura.
-
-        La exigencia de que la fórmula quepa vive en `_check_fits`, que
-        actúa al guardar.
-        """
+        """Calcula capacidad y holgura sin bloquear la captura (validado en _check_fits)."""
         for formula in self:
             capacity = 0
             if formula.base_type_id and formula.size_id:
@@ -123,13 +116,7 @@ class TintColorFormula(models.Model):
             formula.fits = bool(capacity) and formula.total_points <= capacity
 
     def _search_fits(self, operator, value):
-        """Permite filtrar por «cabe en el envase» pese a ser campo calculado.
-
-        `fits` no se almacena a propósito, para que siempre refleje la matriz
-        de capacidad vigente. Sin este método, cualquier filtro sobre él
-        fallaría al validar la vista. La comparación se resuelve contra la
-        matriz completa, que son pocas decenas de registros.
-        """
+        """Permite filtrar por el campo calculado 'fits' usando la matriz de capacidad."""
         if operator not in ('=', '!=') or not isinstance(value, bool):
             raise UserError(_(
                 "El filtro «Cabe en el envase» solo admite comparación por "
@@ -162,7 +149,7 @@ class TintColorFormula(models.Model):
 
     @api.constrains('base_type_id', 'size_id', 'total_points')
     def _check_fits(self):
-        """Una fórmula que no cabe en el envase se derrama al dispensar."""
+        """Valida que la fórmula no exceda la capacidad máxima del envase."""
         for formula in self:
             capacity = formula.base_type_id.capacity_for(formula.size_id)
             if formula.total_points > capacity:
@@ -179,13 +166,7 @@ class TintColorFormula(models.Model):
     # --- Acciones -------------------------------------------------------
 
     def action_generate_other_sizes(self):
-        """Crea las fórmulas de las demás presentaciones escalando las dosis.
-
-        Evita capturar tres veces el mismo color. El escalado es una
-        propuesta, no una verdad: las dosis quedan editables porque la
-        fuente de verdad es la carta del fabricante, que puede no escalar
-        de forma perfectamente lineal.
-        """
+        """Genera fórmulas para las demás presentaciones escalando las dosis proporcionalmente."""
         creadas = self.env['tint.color.formula']
         for formula in self:
             if not formula.line_ids:
@@ -202,13 +183,11 @@ class TintColorFormula(models.Model):
                 ))
             otras = self.env['tint.size'].search([('id', '!=', formula.size_id.id)])
             for size in otras:
-                # Solo cuenta lo que ya exista en LA MISMA galería: que Comex
-                # tenga la fórmula en galón no significa que la nuestra la tenga.
                 if formula.color_id.formula_for(
                         formula.base_type_id, size, gallery=formula.gallery_id):
-                    continue  # ya existe: no se sobreescribe trabajo capturado
+                    continue  # Ya existe fórmula para esta galería
                 if not formula.base_type_id.capacity_for(size, raise_if_missing=False):
-                    continue  # combinación fuera de la matriz
+                    continue  # Presentación fuera de la matriz de capacidad
                 factor = size.volume_liters / origen
                 lineas = [
                     (0, 0, {
@@ -244,7 +223,6 @@ class TintColorFormula(models.Model):
         return [
             'id', 'color_id', 'base_type_id', 'size_id', 'total_points',
             'line_ids',
-            # Primer nivel del filtrado escalonado en caja.
             'gallery_id',
             'cost_min',
             'cost_max',
@@ -252,7 +230,7 @@ class TintColorFormula(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        # Carga bajo demanda: se inicializa vacío y se consulta vía get_pos_formulas.
+        # Carga bajo demanda vía get_pos_formulas.
         return [('id', '=', False)]
 
     @api.model
@@ -266,6 +244,15 @@ class TintColorFormula(models.Model):
             'tint.color.formula.line':
                 self.env['tint.color.formula.line']._load_pos_data_read(lines, config),
         }
+
+    @api.model
+    def get_color_ids_for_gallery(self, gallery_id):
+        """Retorna IDs de colores con fórmulas activas en la galería para filtrado en POS."""
+        formulas = self.search([
+            ('gallery_id', '=', gallery_id),
+            ('active', '=', True),
+        ])
+        return formulas.color_id.ids
 
     @api.depends('line_ids.points', 'line_ids.colorant_id.standard_price')
     def _compute_cost_min(self):

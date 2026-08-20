@@ -45,14 +45,6 @@
     />
 
     <menuitem
-        id="menu_tint_collection"
-        name="Colecciones"
-        parent="menu_tint_catalog"
-        action="tint_collection_action"
-        sequence="30"
-    />
-
-    <menuitem
         id="menu_product"
         name="Productos"
         parent="menu_tint_root"
