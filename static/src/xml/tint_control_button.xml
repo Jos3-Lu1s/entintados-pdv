@@ -1,15 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
 
+    <!-- Botón de acción para entintar la línea seleccionada -->
     <t t-name="entintados_pdv.ControlButtonsTint"
        t-inherit="point_of_sale.ControlButtons"
        t-inherit-mode="extension">
 
+        <!-- Botón de entintado en la barra de control -->
         <xpath expr="//SelectPartnerButton" position="after">
             <button t-if="!props.showRemainingButtons"
                     class="btn btn-light btn-lg lh-lg o-tint-button"
                     t-on-click="() => this.onClickTint()">
                 <i class="fa fa-paint-brush me-1" role="img" aria-label="Entintado"/>
+                <span>Entintado</span>
+            </button>
+        </xpath>
+
+        <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
+            <button t-att-class="buttonClass"
+                    t-on-click="() => this.onClickTint()">
+                <i class="fa fa-paint-brush me-2" role="img" aria-label="Entintado"/>
                 <span>Entintado</span>
             </button>
         </xpath>

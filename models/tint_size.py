@@ -1,0 +1,69 @@
+# -*- coding: utf-8 -*-
+
+from odoo import api, fields, models
+
+
+class TintSize(models.Model):
+    _name = 'tint.size'
+    _description = "Presentación de envase de pintura"
+    _order = 'sequence, volume_liters, id'
+    _inherit = ['pos.load.mixin', 'tint.code.mixin']
+
+    name = fields.Char(
+        string="Presentación", required=True, translate=True,
+        help="Nombre comercial del envase, p. ej. Litro, Galón o Cubeta.")
+    code = fields.Char(
+        help="Código corto usado por la operación: L = Litro, G = Galón, Q = Cubeta.")
+    volume_liters = fields.Float(
+        string="Volumen (L)", required=True, digits=(12, 3),
+        help="Volumen nominal del envase en litros. Se usa para verificar "
+             "la consistencia de la matriz de capacidad de colorante.")
+    sequence = fields.Integer(
+        string="Secuencia", default=10,
+        help="Orden en que se muestra la presentación en listados y en caja.")
+    active = fields.Boolean(
+        string="Activo", default=True,
+        help="Si se desmarca, la presentación se archiva y deja de ofrecerse.")
+
+    capacity_ids = fields.One2many(
+        comodel_name='tint.base.capacity', inverse_name='size_id',
+        string="Capacidades por tipo de base",
+        help="Colorante máximo que admite cada tipo de base en esta presentación.")
+    capacity_count = fields.Integer(
+        string="Capacidades definidas", compute='_compute_capacity_count',
+        help="Número de tipos de base con capacidad registrada para esta presentación.")
+
+    _code_uniq = models.Constraint(
+        'UNIQUE(code)',
+        "Ya existe una presentación con ese código.",
+    )
+    _volume_positive = models.Constraint(
+        'CHECK (volume_liters > 0)',
+        "El volumen del envase debe ser mayor que cero.",
+    )
+
+    @api.depends('capacity_ids')
+    def _compute_capacity_count(self):
+        data = self.env['tint.base.capacity']._read_group(
+            domain=[('size_id', 'in', self.ids)],
+            groupby=['size_id'],
+            aggregates=['__count'],
+        )
+        counts = {size.id: count for size, count in data}
+        for size in self:
+            size.capacity_count = counts.get(size.id, 0)
+
+    @api.depends('name', 'code')
+    def _compute_display_name(self):
+        for size in self:
+            size.display_name = "%s (%s)" % (size.name, size.code) if size.code else size.name
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'name', 'code', 'volume_liters', 'sequence']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return [('active', '=', True)]

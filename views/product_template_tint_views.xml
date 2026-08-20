@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="product_template_form_view_tint" model="ir.ui.view">
+        <field name="name">product.template.form.entintado</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Entintado" name="tint">
+                    <group>
+                        <group name="tint_role" string="Rol">
+                            <field name="tint_role" />
+                        </group>
+                        <group name="tint_prices" string="Esquemas">
+                            <field name="lines_product_id" />
+                            <field name="scheme_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <group invisible="tint_role != 'base'">
+                        <group name="tint_base" string="Envase">
+                            <field
+                                name="tint_base_type_id"
+                                required="tint_role == 'base'"
+                                options="{'no_create': True}"
+                            />
+                            <field
+                                name="tint_size_id"
+                                required="tint_role == 'base'"
+                                options="{'no_create': True}"
+                            />
+                        </group>
+                        <group name="tint_capacity" string="Capacidad de colorante">
+                            <field name="tint_capacity_display" />
+                            <field name="tint_capacity_points" />
+                        </group>
+                    </group>
+                    <group
+                        name="tint_extraction"
+                        string="Extracción previa"
+                        invisible="tint_role != 'base' or not tint_requires_extraction"
+                    >
+                        <field name="tint_requires_extraction" invisible="1" />
+                        <field name="tint_extraction_liters" />
+                        <field name="tint_operator_note" />
+                    </group>
+                    <group invisible="tint_role != 'colorant'">
+                        <group name="tint_colorant" string="Colorante">
+                            <field name="uom_id" readonly="1" />
+                            <field name="price_per_point" />
+                        </group>
+                    </group>
+                    <div
+                        class="alert alert-info"
+                        role="alert"
+                        invisible="tint_role != 'base'"
+                    >
+                        La capacidad se resuelve automáticamente desde la matriz
+                        de capacidad a partir del tipo de base y la presentación.
+                        No se captura a mano.
+                    </div>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_action_tint" model="ir.actions.act_window">
+        <field name="name">Productos</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="domain">[('tint_role', '!=', False)]</field>
+        <field name="context">{'search_default_filter_to_sell': 0}</field>
+    </record>
+
+    <record id="product_template_search_view_tint" model="ir.ui.view">
+        <field name="name">product.template.search.entintado</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <separator />
+                <filter
+                    name="tint_base"
+                    string="Bases de pintura"
+                    domain="[('tint_role', '=', 'base')]"
+                />
+                <filter
+                    name="tint_colorant"
+                    string="Colorantes"
+                    domain="[('tint_role', '=', 'colorant')]"
+                />
+                <group>
+                    <filter
+                        name="group_tint_base_type"
+                        string="Tipo de base"
+                        domain="[]"
+                        context="{'group_by': 'tint_base_type_id'}"
+                    />
+                    <filter
+                        name="group_tint_size"
+                        string="Presentación"
+                        domain="[]"
+                        context="{'group_by': 'tint_size_id'}"
+                    />
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_form_view_required_prices" model="ir.ui.view">
+        <field name="name">product.template.form.required.prices</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='list_price']" position="attributes">
+                <attribute name="required">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='standard_price']" position="attributes">
+                <attribute name="required">1</attribute>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

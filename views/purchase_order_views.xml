@@ -6,7 +6,8 @@
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="attributes">
-                <attribute name="domain">[('is_supplier', '=', True)]</attribute>
+                <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
+                <attribute name="context">{'default_is_supplier': True, 'entintados_partner_scope': 'supplier'}</attribute>
             </xpath>
         </field>
     </record>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- El menú "Customers" de CRM usa una acción propia para mostrar solo
+          clientes (is_sales_contact=True) y crear nuevos registros como
+          Persona (default_is_company=False), sin afectar la acción estándar
+          de Contactos/Ventas/Facturación, que sigue creando Empresas.
+
+          Al sobrescribir el menú es necesario mantener parent, name y
+          sequence; de lo contrario, Odoo lo convierte en un menú raíz. -->
+    <menuitem id="crm.res_partner_menu_customer"
+              name="Customers"
+              parent="crm.crm_menu_sales"
+              action="crm_res_partner_action_customer"
+              sequence="5"/>
+</odoo>

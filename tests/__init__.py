@@ -1,0 +1,10 @@
+# -*- coding: utf-8 -*-
+
+from . import test_res_partner_phone
+from . import test_res_partner_vat
+from . import test_tint_points
+from . import test_tint_capacity
+from . import test_tint_base_type_code
+from . import test_tint_size_code
+from . import test_tint_product
+from . import test_tint_color

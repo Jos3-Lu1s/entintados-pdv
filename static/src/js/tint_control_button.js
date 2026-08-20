@@ -1,31 +1,35 @@
-/** @odoo-module **/
-
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
-import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
-import { TintFormulaPopup } from "@entintados_pdv/js/tint_formula_popup";
+import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 
 patch(ControlButtons.prototype, {
+    /** Entinta la línea base seleccionada en la orden. */
     async onClickTint() {
         const order = this.pos.getOrder();
         const line = order?.getSelectedOrderline();
 
         if (!line) {
             this.notification.add(
-                _t("Selecciona primero un producto en la orden para asignarle el entintado."),
+                _t("Selecciona primero una base de pintura en la orden para entintarla."),
                 { type: "warning" }
             );
             return;
         }
 
-        const payload = await makeAwaitable(this.dialog, TintFormulaPopup, { base: "" });
-        if (!payload) {
+        if (line.combo_line_ids?.length) {
+            this.notification.add(
+                _t("Esta línea ya está entintada. Elimínala y vuelve a agregarla para cambiar el color."),
+                { type: "warning" }
+            );
             return;
         }
 
-        line.setNote(payload.text);
-
-        this.notification.add(_t("Entintado guardado en la línea."), { type: "success" });
+        await runTintFlow(this, {
+            baseProduct: line.product_id,
+            replaceLine: line,
+            qty: line.qty || 1,
+            initialColorId: order.uiState?.selectedTintColorId || false,
+        });
     },
 });

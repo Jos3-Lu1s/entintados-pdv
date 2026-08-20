@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_move_form" model="ir.ui.view">
+        <field name="name">account.move.view.form.inherit.entintados_pdv</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <!-- El campo original es uno solo, compartido entre facturas de
+                 cliente y facturas de proveedor (Odoo solo cambia la
+                 etiqueta según move_type). Lo separamos en dos campos,
+                 igual al patrón que ya usa el propio core en
+                 account.payment (dos <field name="partner_id"> con su
+                 propio invisible), para poder darle a cada uno su domain
+                 sin depender de una expresión condicional dentro del
+                 domain. -->
+            <xpath expr="//field[@name='partner_id'][@widget='res_partner_many2one']" position="replace">
+                <field name="partner_id" widget="res_partner_many2one" nolabel="1"
+                       context="{
+                        'res_partner_search_mode': (context.get('default_move_type', 'entry') in ('out_invoice', 'out_refund', 'out_receipt') and 'customer') or (context.get('default_move_type', 'entry') in ('in_invoice', 'in_refund', 'in_receipt') and 'supplier') or False,
+                        'entintados_partner_scope': 'customer',
+                        'show_address': 1, 'default_is_company': True, 'show_vat': True, 'default_is_customer': True}"
+                       options='{"no_quick_create": True}'
+                       default_focus="1"
+                       domain="[('is_sales_contact', '=', True)]"
+                       invisible="move_type not in ('out_invoice', 'out_refund', 'out_receipt')"
+                       placeholder="Search a name or Tax ID..."
+                       readonly="state != 'draft'"/>
+                <field name="partner_id" widget="res_partner_many2one" nolabel="1"
+                       context="{
+                        'res_partner_search_mode': (context.get('default_move_type', 'entry') in ('out_invoice', 'out_refund', 'out_receipt') and 'customer') or (context.get('default_move_type', 'entry') in ('in_invoice', 'in_refund', 'in_receipt') and 'supplier') or False,
+                        'entintados_partner_scope': 'supplier',
+                        'show_address': 1, 'default_is_company': True, 'show_vat': True, 'default_is_supplier': True}"
+                       options='{"no_quick_create": True}'
+                       default_focus="1"
+                       domain="[('is_purchase_contact', '=', True)]"
+                       invisible="move_type not in ('in_invoice', 'in_refund', 'in_receipt')"
+                       placeholder="Search a name or Tax ID..."
+                       readonly="state != 'draft'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

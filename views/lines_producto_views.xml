@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="lines_product_view_list" model="ir.ui.view">
+        <field name="name">lines.product.view.list</field>
+        <field name="model">lines.product</field>
+        <field name="arch" type="xml">
+            <list string="Líneas de producto">
+                <field name="name"/>
+                <field name="scheme"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="lines_product_view_form" model="ir.ui.view">
+        <field name="name">lines.product.view.form</field>
+        <field name="model">lines.product</field>
+        <field name="arch" type="xml">
+            <form string="Línea de producto">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="scheme"/>
+                    </group>
+                    <field name="presentation_line_ids">
+                        <list editable="bottom">
+                            <field name="presentation_id" options="{'no_create': True}"/>
+                            <field name="price_osel"/>
+                            <field name="price_min"/>
+                            <field name="price_max"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="lines_product_action" model="ir.actions.act_window">
+        <field name="name">Líneas de producto</field>
+        <field name="res_model">lines.product</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

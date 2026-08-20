@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--
+      Matriz de capacidad maxima de colorante: 7 tipos de base x 3
+      presentaciones = 21 combinaciones.
+
+      Los valores provienen de la tabla del fabricante y se almacenan
+      de forma explicita, no calculada, porque la tabla puede tener
+      excepciones que no sigan la relacion lineal. La relacion
+      `puntos por litro x litros` se verifica en las pruebas
+      (tests/test_tint_capacity.py) y en el campo `is_consistent`.
+
+      Este archivo se genera de forma programatica a partir de la tabla
+      original para descartar errores de captura.
+
+      TODO antes de salida a produccion: cambiar a noupdate="1".
+    -->
+    <data noupdate="1">
+
+        <!-- W: 24 puntos por litro -->
+        <record id="tint_cap_w_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_w" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">24</field>  <!-- 24 Pts. -->
+        </record>
+        <record id="tint_cap_w_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_w" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">96</field>  <!-- 2Y -->
+        </record>
+        <record id="tint_cap_w_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_w" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">456</field>  <!-- 9Y 24 -->
+        </record>
+
+        <!-- M: 48 puntos por litro -->
+        <record id="tint_cap_m_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_m" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">48</field>  <!-- 1Y -->
+        </record>
+        <record id="tint_cap_m_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_m" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">192</field>  <!-- 4Y -->
+        </record>
+        <record id="tint_cap_m_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_m" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">912</field>  <!-- 19Y -->
+        </record>
+
+        <!-- D: 96 puntos por litro -->
+        <record id="tint_cap_d_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_d" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">96</field>  <!-- 2Y -->
+        </record>
+        <record id="tint_cap_d_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_d" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">384</field>  <!-- 8Y -->
+        </record>
+        <record id="tint_cap_d_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_d" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">1824</field>  <!-- 38Y -->
+        </record>
+
+        <!-- A: 144 puntos por litro -->
+        <record id="tint_cap_a_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_a" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">144</field>  <!-- 3Y -->
+        </record>
+        <record id="tint_cap_a_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_a" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">576</field>  <!-- 12Y -->
+        </record>
+        <record id="tint_cap_a_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_a" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">2736</field>  <!-- 57Y -->
+        </record>
+
+        <!-- N: 144 puntos por litro -->
+        <record id="tint_cap_n_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_n" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">144</field>  <!-- 3Y -->
+        </record>
+        <record id="tint_cap_n_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_n" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">576</field>  <!-- 12Y -->
+        </record>
+        <record id="tint_cap_n_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_n" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">2736</field>  <!-- 57Y -->
+        </record>
+
+        <!-- Y: 144 puntos por litro -->
+        <record id="tint_cap_y_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_y" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">144</field>  <!-- 3Y -->
+        </record>
+        <record id="tint_cap_y_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_y" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">576</field>  <!-- 12Y -->
+        </record>
+        <record id="tint_cap_y_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_y" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">2736</field>  <!-- 57Y -->
+        </record>
+
+        <!-- R: 144 puntos por litro -->
+        <record id="tint_cap_r_l" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_r" />
+            <field name="size_id" ref="tint_size_liter" />
+            <field name="max_points">144</field>  <!-- 3Y -->
+        </record>
+        <record id="tint_cap_r_g" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_r" />
+            <field name="size_id" ref="tint_size_gallon" />
+            <field name="max_points">576</field>  <!-- 12Y -->
+        </record>
+        <record id="tint_cap_r_q" model="tint.base.capacity">
+            <field name="base_type_id" ref="tint_base_type_r" />
+            <field name="size_id" ref="tint_size_bucket" />
+            <field name="max_points">2736</field>  <!-- 57Y -->
+        </record>
+
+    </data>
+</odoo>

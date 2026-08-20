@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="view_pricelist_item_form_inherit_esquema" model="ir.ui.view">
+        <field name="name">product.pricelist.item.form.inherit.esquema</field>
+        <field name="model">product.pricelist.item</field>
+        <field name="inherit_id" ref="product.product_pricelist_item_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='categ_id']" position="after">
+                <field name="esquema_id"
+                    invisible="display_applied_on != '3_esquema'"
+                    required="display_applied_on == '3_esquema'"
+                    placeholder="Elige una opción"/>
+                <field name="linea_id"
+                    invisible="not esquema_id" placeholder="Todas"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

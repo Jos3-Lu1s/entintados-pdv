@@ -1,2 +1,24 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_entintados_pdv_entintados_pdv,entintados_pdv.entintados_pdv,model_entintados_pdv_entintados_pdv,base.group_user,1,1,1,1
+access_partner_risk_exceeded_wiz_user,Partner Risk Exceeded Wizard (Internal user),model_partner_risk_exceeded_wiz,base.group_user,1,1,1,1
+access_tint_size_user,tint.size (lectura usuario interno),model_tint_size,base.group_user,1,0,0,0
+access_tint_size_manager,tint.size (administrador de catalogo),model_tint_size,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_base_type_user,tint.base.type (lectura usuario interno),model_tint_base_type,base.group_user,1,0,0,0
+access_tint_base_type_manager,tint.base.type (administrador de catalogo),model_tint_base_type,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_base_capacity_user,tint.base.capacity (lectura usuario interno),model_tint_base_capacity,base.group_user,1,0,0,0
+access_tint_base_capacity_manager,tint.base.capacity (administrador de catalogo),model_tint_base_capacity,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_collection_user,tint.collection (lectura usuario interno),model_tint_collection,base.group_user,1,0,0,0
+access_tint_collection_manager,tint.collection (administrador de catalogo),model_tint_collection,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_color_user,tint.color (lectura usuario interno),model_tint_color,base.group_user,1,0,0,0
+access_tint_color_manager,tint.color (administrador de catalogo),model_tint_color,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_color_formula_user,tint.color.formula (lectura usuario interno),model_tint_color_formula,base.group_user,1,0,0,0
+access_tint_color_formula_manager,tint.color.formula (administrador de catalogo),model_tint_color_formula,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_color_formula_line_user,tint.color.formula.line (lectura usuario interno),model_tint_color_formula_line,base.group_user,1,0,0,0
+access_tint_color_formula_line_manager,tint.color.formula.line (administrador de catalogo),model_tint_color_formula_line,entintados_pdv.group_tint_manager,1,1,1,
+access_tint_gallery_user,tint.gallery (lectura usuario interno),model_tint_gallery,base.group_user,1,0,0,0
+access_tint_gallery_manager,tint.gallery (administrador de catalogo),model_tint_gallery,entintados_pdv.group_tint_manager,1,1,1,1
+access_lines_product_user,lines.product (lectura usuario interno),model_lines_product,base.group_user,1,0,0,0
+access_lines_product_manager,lines.product (administrador de catalogo),model_lines_product,entintados_pdv.group_tint_manager,1,1,1,1
+access_lines_product_presentation_user,lines.product.presentation (lectura usuario interno),model_lines_product_presentation,base.group_user,1,0,0,0
+access_lines_product_presentation_manager,lines.product.presentation (administrador de catalogo),model_lines_product_presentation,entintados_pdv.group_tint_manager,1,1,1,1
+access_tint_schema_user,tint.schema (lectura usuario interno),model_tint_schema,base.group_user,1,0,0,0
+access_tint_schema_manager,tint.schema (administrador de catalogo),model_tint_schema,entintados_pdv.group_tint_manager,1,1,1,1

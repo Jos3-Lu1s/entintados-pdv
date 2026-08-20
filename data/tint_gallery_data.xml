@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!--
+      Galerías de fórmulas en operación.
+    -->
+    <data noupdate="1">
+
+        <record id="tint_gallery_berel" model="tint.gallery">
+            <field name="name">Berel</field>
+            <field name="code">BER</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="tint_gallery_comex" model="tint.gallery">
+            <field name="name">Comex</field>
+            <field name="code">CMX</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <record id="tint_gallery_historicos" model="tint.gallery">
+            <field name="name">Históricos</field>
+            <field name="code">HIS</field>
+            <field name="sequence">30</field>
+            <field
+                name="description"
+            ><![CDATA[<p>Colores y fórmulas de catálogos anteriores que se siguen reproduciendo bajo pedido.</p>]]></field>
+        </record>
+
+        <record id="tint_gallery_kit_generales" model="tint.gallery">
+            <field name="name">Kit Generales</field>
+            <field name="code">KIT</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <record id="tint_gallery_milennium" model="tint.gallery">
+            <field name="name">Milennium</field>
+            <field name="code">MIL</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <record id="tint_gallery_soi_manual" model="tint.gallery">
+            <field name="name">SOI Manual</field>
+            <field name="code">SOI</field>
+            <field name="sequence">60</field>
+        </record>
+
+        <record id="tint_gallery_tranquility" model="tint.gallery">
+            <field name="name">Tranquility</field>
+            <field name="code">TRQ</field>
+            <field name="sequence">70</field>
+        </record>
+
+        <record id="tint_gallery_transicion" model="tint.gallery">
+            <field name="name">Transición</field>
+            <field name="code">TRS</field>
+            <field name="sequence">80</field>
+        </record>
+
+    </data>
+</odoo>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="entintados_pdv.TintColorScreen">
+
+        <div class="tint-color-screen d-flex flex-column h-100">
+
+            <div class="d-flex align-items-center gap-2 p-2 bg-white border-bottom">
+                <button
+                    class="btn btn-secondary btn-lg flex-shrink-0"
+                    t-on-click="() => this.goBack()"
+                >
+                    <i class="fa fa-arrow-left me-2"/>
+                    Regresar
+                </button>
+
+                <input
+                    type="text"
+                    class="form-control form-control-lg flex-grow-1"
+                    placeholder="Buscar por código o nombre de color..."
+                    t-model="state.search"
+                />
+            </div>
+
+            <!-- Selector de colecciones -->
+            <div t-if="collections.length" class="d-flex align-items-center gap-2 px-3 py-2 bg-light border-bottom overflow-auto flex-shrink-0">
+                <button
+                    class="btn btn-sm text-nowrap"
+                    t-att-class="!state.collectionId ? 'btn-primary' : 'btn-outline-secondary'"
+                    t-on-click="() => this.clearCollection()"
+                >
+                    Todas las Colecciones
+                </button>
+                <button
+                    t-foreach="collections"
+                    t-as="col"
+                    t-key="col.id"
+                    class="btn btn-sm text-nowrap"
+                    t-att-class="state.collectionId === col.id ? 'btn-primary' : 'btn-outline-secondary'"
+                    t-on-click="() => this.selectCollection(col.id)"
+                >
+                    <t t-esc="col.name"/>
+                </button>
+            </div>
+
+            <div class="flex-grow-1 overflow-auto p-3">
+
+                <div
+                    t-if="colors.length"
+                    class="tint-color-grid"
+                >
+                    <button
+                        t-foreach="colors"
+                        t-as="color"
+                        t-key="color.id"
+                        class="tint-color-card text-start border-0 shadow-sm rounded-3 overflow-hidden p-0"
+                        t-on-click="() => this.selectColor(color)"
+                    >
+                        <div
+                            class="tint-color-sample w-100"
+                            t-att-style="
+                                'background-color: ' +
+                                (color.html_color || '#CCCCCC')
+                            "
+                        >
+                            <span t-if="color.code" class="badge bg-dark bg-opacity-75 m-2 position-relative z-1 fs-6">
+                                <t t-esc="color.code"/>
+                            </span>
+                        </div>
+
+                        <div class="p-2 bg-white">
+                            <strong
+                                class="d-block text-dark text-truncate"
+                                t-esc="color.name"
+                            />
+                            <small
+                                t-if="color.collection_id"
+                                class="text-muted text-truncate d-block"
+                                t-esc="color.collection_id.name || ''"
+                            />
+                        </div>
+                    </button>
+                </div>
+
+                <div
+                    t-else=""
+                    class="h-100 d-flex flex-column align-items-center justify-content-center text-muted"
+                >
+                    <i class="fa fa-paint-brush fa-3x mb-3 text-secondary"/>
+                    <h4>No se encontraron colores registrados</h4>
+                </div>
+
+            </div>
+
+        </div>
+
+    </t>
+
+</templates>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_account_payment_form" model="ir.ui.view">
+        <field name="name">account.payment.view.form.inherit.entintados_pdv</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id'][contains(@invisible,'customer')]" position="attributes">
+                <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
+                <attribute name="context">{'default_is_company': True, 'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='partner_id'][contains(@invisible,'supplier')]" position="attributes">
+                <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
+                <attribute name="context">{'default_is_company': True, 'default_is_supplier': True, 'entintados_partner_scope': 'supplier'}</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

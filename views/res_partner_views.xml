@@ -8,40 +8,62 @@
             <field name="arch" type="xml">
                 <xpath expr="//div[@name='partner_address_country']/../../.." position="after">
                     <div class="row g-3">
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-shopping-cart text-muted" title="Cliente"/>
-                                <label for="is_customer" class="mb-0">Cliente</label>
-                                <field class="mt-2" name="is_customer" widget="boolean_toggle" nolabel="1"/>
-                            </div>
+                        <div class="col-12">
+                            <label for="is_customer" string="Tipo de contacto" class="mb-1 d-block"/>
+                            <field name="is_customer" widget="boolean_group_selector" nolabel="1"
+                                   help="Clasificación del contacto. Puede tener más de una a la vez: haz clic en una insignia para activarla o desactivarla."
+                                   options="{
+                                       'fields': [
+                                           {'field': 'is_customer', 'group': 'sales', 'color': 1, 'icon': 'fa-shopping-cart'},
+                                           {'field': 'is_supplier', 'group': 'purchase', 'color': 4, 'icon': 'fa-truck'},
+                                           {'field': 'is_creditor', 'group': 'purchase', 'color': 3, 'icon': 'fa-money'},
+                                           {'field': 'is_distributor', 'group': 'sales', 'color': 6, 'icon': 'fa-share-alt'},
+                                       ],
+                                       'context_key': 'entintados_partner_scope',
+                                       'group_values': {'sales': 'customer', 'purchase': 'supplier'},
+                                   }"/>
+                            <field name="is_supplier" invisible="1"/>
+                            <field name="is_creditor" invisible="1"/>
+                            <field name="is_distributor" invisible="1"/>
                         </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-truck text-muted" title="Proveedor"/>
-                                <label for="is_supplier" class="mb-0">Proveedor</label>
-                                <field class="mt-2" name="is_supplier" widget="boolean_toggle" nolabel="1"/>
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-money text-muted" title="Acreedor"/>
-                                <label for="is_creditor" class="mb-0">Acreedor</label>
-                                <field class="mt-2" name="is_creditor" widget="boolean_toggle" nolabel="1"/>
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="fa fa-share-alt text-muted" title="Distribuidor"/>
-                                <label for="is_distributor" class="mb-0">Distribuidor</label>
-                                <field class="mt-2" name="is_distributor" widget="boolean_toggle" nolabel="1"/>
-                            </div>
-                        </div>
-
                     </div>
+                </xpath>
+                <xpath expr="(//field[@name='website'])[1]" position="before">
+                    <label
+                        for="is_told"
+                        string="Condición de pago"
+                    />
+                                
+                    <div class="o_row" colspan="1">
+                        <field
+                            name="is_told"
+                            widget="boolean_group_selector"
+                            nolabel="1"
+                            options="{
+                                'fields': [
+                                    {
+                                        'field': 'is_told',
+                                        'group': 'sales',
+                                        'color': 1,
+                                        'icon': 'fa-shopping-cart'
+                                    },
+                                    {
+                                        'field': 'is_credit',
+                                        'group': 'sales',
+                                        'color': 2,
+                                        'icon': 'fa-credit-card'
+                                    }
+                                ],
+                                'context_key': 'entintados_partner_scope',
+                                'group_values': {
+                                    'sales': 'customer',
+                                    'purchase': 'supplier'
+                                }
+                            }"
+                        />
+                    </div>
+                
+                    <field name="is_credit" invisible="1"/>
                 </xpath>
             </field>
         </record>
@@ -51,28 +73,106 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="account.res_partner_view_search"/>
             <field name="arch" type="xml">
-                <xpath expr="//filter[@name='customer']" position="attributes">
-                    <attribute name="string">Clientes y distribuidores</attribute>
-                    <attribute name="domain">["|", ("is_customer", "=", True), ("is_distributor", "!=", False)]</attribute>
+                <!-- entintados_partner_scope: clave de contexto PROPIA de este
+                     módulo (no confundir con res_partner_search_mode, que es
+                     nativa de Odoo y otros módulos como CRM también la usan
+                     por su cuenta para fines ajenos, p. ej. orden de
+                     resultados). Solo nuestras propias acciones
+                     (account.res_partner_action_customer/_supplier, más
+                     abajo) la setean, así que estos filtros solo se ocultan
+                     en las pantallas donde nosotros decidimos que se oculten,
+                     nunca por un contexto ajeno que no controlamos. -->
+                <xpath expr="//filter[@name='customer']" position="replace">
+                    <group>
+                        <filter string="Clientes" name="only_customer"
+                                domain="[('is_customer', '=', True)]"
+                                invisible="context.get('entintados_partner_scope') == 'supplier'"/>
+                        <filter string="Distribuidores" name="only_distributor"
+                                domain="[('is_distributor', '!=', False)]"
+                                invisible="context.get('entintados_partner_scope') == 'supplier'"/>
+                    </group>
                 </xpath>
-                <xpath expr="//filter[@name='supplier']" position="attributes">
-                    <attribute name="string">Proveedores y acreedores</attribute>
-                    <attribute name="domain">["|", ("is_supplier", "!=", False), ("is_creditor", "!=", False)]</attribute>
+                <xpath expr="//filter[@name='supplier']" position="replace">
+                    <group>
+                        <filter string="Proveedores" name="only_supplier"
+                                domain="[('is_supplier', '!=', False)]"
+                                invisible="context.get('entintados_partner_scope') == 'customer'"/>
+                        <filter string="Acreedores" name="only_creditor"
+                                domain="[('is_creditor', '!=', False)]"
+                                invisible="context.get('entintados_partner_scope') == 'customer'"/>
+                    </group>
                 </xpath>
             </field>
         </record>
 
-        <!-- A un contacto creado desde el menú "Clientes"/"Proveedores" de
-             Contabilidad hay que marcarlo con nuestros campos también,
-             o desaparecería de inmediato del filtro que acabamos de cambiar. -->
+        <!-- Vista Lista de Contactos -->
+        <record id="view_partner_tree" model="ir.ui.view">
+            <field name="name">res.partner.view.list.inherit.entintados_pdv</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='category_id']" position="after">
+                    <!-- context_key usa nuestra propia clave
+                         (entintados_partner_scope), NO res_partner_search_mode
+                         (nativa de Odoo, que otros módulos como CRM también
+                         setean por su cuenta para fines ajenos). Como solo
+                         nuestras 2 acciones (más abajo) setean esta clave,
+                         aquí se muestran las 4 clasificaciones por defecto en
+                         cualquier módulo (Contactos, CRM, etc.) y solo se
+                         recorta a 2 en las pantallas donde nosotros mismos lo
+                         activamos explícitamente (Ventas > Clientes, Compras >
+                         Proveedores). -->
+                    <field name="is_customer" widget="boolean_group_selector"
+                           string="Tipo de contacto" optional="show"
+                           help="Clasificación del contacto. Puede tener más de una a la vez: haz clic en una insignia para activarla o desactivarla."
+                           options="{
+                               'fields': [
+                                   {'field': 'is_customer', 'group': 'sales', 'color': 1, 'icon': 'fa-shopping-cart'},
+                                   {'field': 'is_supplier', 'group': 'purchase', 'color': 4, 'icon': 'fa-truck'},
+                                   {'field': 'is_creditor', 'group': 'purchase', 'color': 3, 'icon': 'fa-money'},
+                                   {'field': 'is_distributor', 'group': 'sales', 'color': 6, 'icon': 'fa-share-alt'},
+                               ],
+                               'context_key': 'entintados_partner_scope',
+                               'group_values': {'sales': 'customer', 'purchase': 'supplier'},
+                           }"/>
+                    <field name="is_supplier" column_invisible="1"/>
+                    <field name="is_creditor" column_invisible="1"/>
+                    <field name="is_distributor" column_invisible="1"/>
+                </xpath>
+            </field>
+        </record>
+
         <record id="account.res_partner_action_customer" model="ir.actions.act_window">
-            <field name="domain">["|", ("is_customer", "=", True), ("is_distributor", "!=", False)]</field>
-            <field name="context">{'search_default_customer': 1, 'res_partner_search_mode': 'customer', 'default_is_company': True, 'default_customer_rank': 1, 'default_is_customer': True}</field>
+            <field name="domain">[('is_sales_contact', '=', True)]</field>
+            <!-- res_partner_search_mode: se mantiene por su efecto nativo de
+                 Odoo (prioriza el orden de resultados), no por visibilidad.
+                 entintados_partner_scope: nuestra propia clave, exclusiva de
+                 este módulo, la que realmente activa el recorte a 2 opciones
+                 en el widget de la lista y en los filtros de búsqueda. -->
+            <field name="context">{'res_partner_search_mode': 'customer', 'entintados_partner_scope': 'customer', 'default_is_company': True, 'default_customer_rank': 1, 'default_is_customer': True}</field>
         </record>
 
         <record id="account.res_partner_action_supplier" model="ir.actions.act_window">
-            <field name="domain">["|", ("is_supplier", "=", True), ("is_creditor", "!=", False)]</field>
-            <field name="context">{'search_default_supplier': 1, 'res_partner_search_mode': 'supplier', 'default_is_company': True, 'default_supplier_rank': 1, 'default_is_supplier': True}</field>
+            <field name="domain">[('is_purchase_contact', '=', True)]</field>
+            <field name="context">{'res_partner_search_mode': 'supplier', 'entintados_partner_scope': 'supplier', 'default_is_company': True, 'default_supplier_rank': 1, 'default_is_supplier': True}</field>
+        </record>
+
+        <!-- Copia de la acción estándar de Clientes para CRM, ajustada para
+            crear nuevos clientes como Persona en lugar de Empresa. -->
+        <record id="crm_res_partner_action_customer" model="ir.actions.act_window">
+            <field name="name">Customers</field>
+            <field name="res_model">res.partner</field>
+            <field name="path">crm-customers</field>
+            <field name="view_mode">list,kanban,form</field>
+            <field name="domain">[('is_sales_contact', '=', True)]</field>
+            <field name="context">{'res_partner_search_mode': 'customer', 'entintados_partner_scope': 'customer', 'default_is_company': False, 'default_customer_rank': 1, 'default_is_customer': True}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create a new customer in your address book
+                </p><p>
+                    Odoo helps you easily track all activities related to a customer.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>
