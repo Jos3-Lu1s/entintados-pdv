@@ -148,31 +148,21 @@
                     </div>
 
                     <div class="row g-3">
-                        <div class="col-md-8">
+                        <div class="col-md-5">
                             <label class="form-label fw-bold">Nombre del Color <span class="text-danger">*</span></label>
                             <input type="text" class="form-control"
                                    t-model="state.newColorName"
                                    placeholder="Ej: Azul Rey, Rojo Pasión…"/>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Código</label>
                             <input type="text" class="form-control"
                                    t-model="state.newColorCode"
                                    placeholder="Autogenerado si está vacío"/>
                         </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Colección / Carta</label>
-                            <select class="form-select" t-model="state.newColorCollectionId">
-                                <option value="">— Sin colección —</option>
-                                <option t-foreach="collections" t-as="col" t-key="col.id" t-att-value="col.id">
-                                    <t t-esc="col.name"/>
-                                </option>
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-bold">Muestra (Hex)</label>
                             <div class="input-group">
                                 <input type="color" class="form-control form-control-color"

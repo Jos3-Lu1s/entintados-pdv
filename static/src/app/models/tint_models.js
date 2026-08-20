@@ -5,10 +5,6 @@ import { Base } from "@point_of_sale/app/models/related_models";
 /**
  * Registro de modelos de entintado para su disponibilidad e instanciación en el POS.
  */
-export class TintCollection extends Base {
-    static pythonModel = "tint.collection";
-}
-
 export class TintGallery extends Base {
     static pythonModel = "tint.gallery";
 }
@@ -38,7 +34,6 @@ export class TintColorFormulaLine extends Base {
 }
 
 const TINT_MODELS = [
-    TintCollection,
     TintGallery,
     TintColor,
     TintSize,

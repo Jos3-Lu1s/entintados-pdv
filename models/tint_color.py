@@ -11,7 +11,7 @@ HEX_COLOR = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
 class TintColor(models.Model):
     _name = 'tint.color'
     _description = "Color de la carta"
-    _order = 'collection_id, name, id'
+    _order = 'name, id'
     _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(
@@ -24,11 +24,6 @@ class TintColor(models.Model):
         string="Muestra (hex)",
         help="Color aproximado para mostrar en pantalla, en formato #RRGGBB. "
              "Es una referencia visual, no un valor colorimétrico.")
-    
-    collection_id = fields.Many2one(
-        comodel_name='tint.collection', string="Colección",
-        ondelete='restrict', index=True,
-        help="Carta o colección comercial a la que pertenece el color.")
     notes = fields.Html(
         string="Notas", translate=True, sanitize=True,
         help="Observaciones internas sobre el color.")
@@ -50,6 +45,10 @@ class TintColor(models.Model):
         comodel_name='tint.base.type', string="Bases compatibles",
         compute='_compute_base_type_ids', search='_search_base_type_ids',
         help="Tipos de base sobre los que este color tiene fórmula registrada.")
+    base_type_summary = fields.Char(
+        string="Bases", compute='_compute_base_type_summary', store=True,
+        help="Nombres de los tipos de base con fórmula para este color. Se carga "
+             "a la caja para mostrarlos junto al color sin abrir sus fórmulas.")
 
     _code_uniq = models.Constraint(
         'UNIQUE(code)',
@@ -79,6 +78,13 @@ class TintColor(models.Model):
 
     def _search_base_type_ids(self, operator, value):
         return [('formula_ids.base_type_id', operator, value)]
+
+    @api.depends('formula_ids.base_type_id')
+    def _compute_base_type_summary(self):
+        for color in self:
+            # base_type_ids ya viene ordenado por secuencia del tipo de base.
+            names = color.formula_ids.base_type_id.mapped('name')
+            color.base_type_summary = " · ".join(dict.fromkeys(names))
 
     @api.depends('name', 'code')
     def _compute_display_name(self):
@@ -123,8 +129,9 @@ class TintColor(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        # 'base_type_ids' omitido: campo calculado no requerido por el POS.
-        return ['id', 'name', 'display_name', 'code', 'html_color', 'collection_id', 'has_formula']
+        # 'base_type_ids' omitido: el resumen almacenado basta para la caja.
+        return ['id', 'name', 'display_name', 'code', 'html_color',
+                'has_formula', 'base_type_summary']
 
     @api.model
     def _load_pos_data_domain(self, data, config):

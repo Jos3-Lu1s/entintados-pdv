@@ -19,7 +19,6 @@ export class TintColorScreen extends Component {
 
         this.state = useState({
             search: "",
-            collectionId: null,
         });
     }
 
@@ -37,31 +36,9 @@ export class TintColorScreen extends Component {
         return colors.filter((color) => {
             const name = String(color.name || "").toLocaleLowerCase();
             const code = String(color.code || "").toLocaleLowerCase();
-            const collectionId =
-                color.collection_id?.id || color.collection_id || false;
 
-            const matchesSearch =
-                !search || name.includes(search) || code.includes(search);
-
-            const matchesCollection =
-                !this.state.collectionId ||
-                collectionId === this.state.collectionId;
-
-            return matchesSearch && matchesCollection;
+            return !search || name.includes(search) || code.includes(search);
         });
-    }
-
-    get collections() {
-        const model = this.pos.models["tint.collection"];
-        return model?.getAll?.() || [];
-    }
-
-    selectCollection(collectionId) {
-        this.state.collectionId = collectionId;
-    }
-
-    clearCollection() {
-        this.state.collectionId = null;
     }
 
     async selectColor(color) {
