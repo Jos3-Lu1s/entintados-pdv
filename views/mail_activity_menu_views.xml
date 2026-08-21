@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
     <!-- Menú principal de Actividades -->
+    <!-- Raíz del módulo: visible solo con el privilegio de Actividades (Usuario o
+         Administrador). Si el privilegio está en "no", el usuario no ve el módulo. -->
     <menuitem
         id="menu_activity_root"
         name="Actividades"
         sequence="86"
-        groups="base.group_user"
+        groups="entintados_pdv.group_activity_user"
     />
 
     <menuitem
@@ -22,21 +24,26 @@
         parent="menu_activity_operations"
         action="mail_activity_action_my"
         sequence="10"
+        groups="entintados_pdv.group_activity_user"
     />
 
+    <!-- "Todas las actividades": solo para el administrador de actividades -->
     <menuitem
         id="menu_activity_all"
         name="Todas las actividades"
         parent="menu_activity_operations"
         action="mail_activity_action_all"
         sequence="20"
+        groups="entintados_pdv.group_activity_manager"
     />
 
+    <!-- Sección de Reportes: solo para el administrador de actividades -->
     <menuitem
         id="menu_activity_reporting"
         name="Reportes"
         parent="menu_activity_root"
         sequence="50"
+        groups="entintados_pdv.group_activity_manager"
     />
 
     <menuitem
@@ -45,14 +52,16 @@
         parent="menu_activity_reporting"
         action="mail_activity_action_analysis"
         sequence="10"
+        groups="entintados_pdv.group_activity_manager"
     />
 
+    <!-- Configuración: visible solo para el administrador de actividades -->
     <menuitem
         id="menu_activity_config"
         name="Configuración"
         parent="menu_activity_root"
         sequence="90"
-        groups="base.group_system"
+        groups="entintados_pdv.group_activity_manager"
     />
 
     <menuitem
@@ -61,6 +70,7 @@
         parent="menu_activity_config"
         action="mail.mail_activity_type_action"
         sequence="10"
+        groups="entintados_pdv.group_activity_manager"
     />
 
     <menuitem
@@ -69,5 +79,6 @@
         parent="menu_activity_config"
         action="mail.mail_activity_plan_action"
         sequence="20"
+        groups="entintados_pdv.group_activity_manager"
     />
 </odoo>
