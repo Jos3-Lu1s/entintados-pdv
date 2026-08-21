@@ -19,12 +19,20 @@ POINTS_PER_OUNCE = 48
 #: Símbolo con el que la operación denota las onzas en la notación mixta.
 OUNCE_SYMBOL = "Y"
 
-# Acepta "9Y24", "9Y 24", "9 Y 24", "2Y", "456", "456 Pts.", "9 onzas 24 pts"
+# Acepta "9Y24", "9Y 24", "9Y 24.5", "9 Y 24", "2Y", "456", "456.5", "456 Pts.", "0.5 Pts.", "9 onzas 24 pts"
 _MIXED_RE = re.compile(
-    r"^\s*(?:(?P<ounces>\d+)\s*(?:%s|onzas?|oz)\s*)?"
-    r"(?:(?P<points>\d+)\s*(?:pts?\.?|puntos?)?)?\s*$" % OUNCE_SYMBOL,
+    r"^\s*(?:(?P<ounces>\d+(?:\.\d+)?)\s*(?:%s|onzas?|oz)\s*)?"
+    r"(?:(?P<points>\d+(?:\.\d+)?)\s*(?:pts?\.?|puntos?)?)?\s*$" % OUNCE_SYMBOL,
     re.IGNORECASE,
 )
+
+
+def _fmt_num(val):
+    """Formatea un número omitiendo decimales si es entero o mostrando decimales limpios."""
+    fval = float(val or 0)
+    if fval.is_integer():
+        return str(int(fval))
+    return f"{round(fval, 4):.4f}".rstrip('0').rstrip('.')
 
 
 def split_points(points):
@@ -34,13 +42,17 @@ def split_points(points):
     (9, 24)
     >>> split_points(96)
     (2, 0)
-    >>> split_points(24)
-    (0, 24)
+    >>> split_points(24.5)
+    (0, 24.5)
     """
-    total = int(points or 0)
+    total = float(points or 0)
     sign = -1 if total < 0 else 1
     total = abs(total)
-    return sign * (total // POINTS_PER_OUNCE), sign * (total % POINTS_PER_OUNCE)
+    ounces = int(total // POINTS_PER_OUNCE)
+    rest = round(total % POINTS_PER_OUNCE, 4)
+    if rest.is_integer():
+        rest = int(rest)
+    return sign * ounces, sign * rest
 
 
 def format_points(points):
@@ -48,10 +60,12 @@ def format_points(points):
 
     Sigue exactamente la convención de las tablas del fabricante:
     con onzas y resto ``9Y 24``; con onzas exactas ``2Y``; sin onzas
-    ``24 Pts.``.
+    ``24 Pts.`` o ``24.5 Pts.``.
 
     >>> format_points(456)
     '9Y 24'
+    >>> format_points(456.5)
+    '9Y 24.5'
     >>> format_points(96)
     '2Y'
     >>> format_points(24)
@@ -59,15 +73,15 @@ def format_points(points):
     >>> format_points(0)
     '0 Pts.'
     """
-    total = int(points or 0)
+    total = float(points or 0)
     if total < 0:
         return "-%s" % format_points(-total)
     ounces, rest = split_points(total)
     if ounces and rest:
-        return "%d%s %d" % (ounces, OUNCE_SYMBOL, rest)
+        return "%d%s %s" % (ounces, OUNCE_SYMBOL, _fmt_num(rest))
     if ounces:
         return "%d%s" % (ounces, OUNCE_SYMBOL)
-    return "%d Pts." % rest
+    return "%s Pts." % _fmt_num(rest)
 
 
 def format_points_long(points):
@@ -75,17 +89,18 @@ def format_points_long(points):
 
     >>> format_points_long(456)
     '9 Onzas 24 Pts. (456 Pts.)'
-    >>> format_points_long(24)
-    '24 Pts.'
+    >>> format_points_long(24.5)
+    '24.5 Pts.'
     """
-    total = int(points or 0)
+    total = float(points or 0)
     ounces, rest = split_points(abs(total))
+    fmt_total = _fmt_num(total)
     if not ounces:
-        return "%d Pts." % total
+        return "%s Pts." % _fmt_num(total)
     parts = ["%d %s" % (ounces, "Onza" if ounces == 1 else "Onzas")]
     if rest:
-        parts.append("%d Pts." % rest)
-    return "%s (%d Pts.)" % (" ".join(parts), total)
+        parts.append("%s Pts." % _fmt_num(rest))
+    return "%s (%s Pts.)" % (" ".join(parts), fmt_total)
 
 
 def to_points(ounces=0, points=0):
@@ -93,34 +108,34 @@ def to_points(ounces=0, points=0):
 
     >>> to_points(9, 24)
     456
-    >>> to_points(ounces=2)
-    96
+    >>> to_points(9, 24.5)
+    456.5
     """
-    return int(ounces or 0) * POINTS_PER_OUNCE + int(points or 0)
+    res = float(ounces or 0) * POINTS_PER_OUNCE + float(points or 0)
+    return int(res) if res.is_integer() else round(res, 4)
 
 
 def parse_points(value):
     """Interpreta texto en notación mixta y devuelve puntos totales.
 
-    Acepta ``"9Y 24"``, ``"9Y24"``, ``"2Y"``, ``"456"``, ``"456 Pts."``
+    Acepta ``"9Y 24"``, ``"9Y 24.5"``, ``"2Y"``, ``"456"``, ``"456.5 Pts."``
     y ``"9 onzas 24 pts"``. Devuelve ``None`` si no puede interpretarlo,
     de forma que el llamador decida cómo reportar el error en lugar de
     recibir un cero silencioso.
 
     >>> parse_points("9Y 24")
     456
-    >>> parse_points("2Y")
-    96
-    >>> parse_points("456")
-    456
+    >>> parse_points("9Y 24.5")
+    456.5
     >>> parse_points("no es un numero") is None
     True
     """
     if value is None:
         return None
     if isinstance(value, (int, float)):
-        return int(value)
-    match = _MIXED_RE.match(str(value))
+        val = float(value)
+        return int(val) if val.is_integer() else val
+    match = _MIXED_RE.match(str(value).strip())
     if not match:
         return None
     ounces, points = match.group("ounces"), match.group("points")

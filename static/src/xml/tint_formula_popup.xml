@@ -238,7 +238,7 @@
                             </div>
                             <div class="col-3">
                                 <label class="form-label small fw-bold mb-1">Dosis (Pts)</label>
-                                <input type="number" min="1" class="form-control form-control-sm"
+                                <input type="number" min="0.01" step="any" class="form-control form-control-sm"
                                        t-model="state.newColorantPoints"/>
                             </div>
                             <div class="col-3">

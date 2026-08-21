@@ -58,9 +58,6 @@
                 <field name="activity_type_id" string="Tipo de actividad" />
                 <field name="user_id" string="Asignado a" />
 
-                <!-- Filtros de fecha genéricos: Odoo arma automáticamente el menú de
-                     periodos (Hoy, Esta semana, Este mes, Este trimestre, Este año, etc.)
-                     y sus comparativas -->
                 <filter name="filter_date_deadline" string="Fecha límite" date="date_deadline" />
                 <filter name="filter_date_done" string="Fecha de realización" date="date_done" />
                 <separator />

@@ -189,7 +189,7 @@ export class TintFormulaPopup extends Component {
 
     addColorantLine() {
         const colorantId = parseInt(this.state.selectedColorantId);
-        const points = parseInt(this.state.newColorantPoints);
+        const points = parseFloat(this.state.newColorantPoints);
         if (!colorantId || isNaN(colorantId)) {
             return;
         }
@@ -203,7 +203,7 @@ export class TintFormulaPopup extends Component {
 
         const existing = this.state.newFormulaLines.find((l) => l.colorantId === colorantId);
         if (existing) {
-            existing.points += points;
+            existing.points = Number((existing.points + points).toFixed(4));
         } else {
             this.state.newFormulaLines.push({
                 colorantId,

@@ -38,8 +38,9 @@ class TintColorFormula(models.Model):
         string="Dosis de colorante",
         help="Colorantes y cantidades que componen esta fórmula.")
 
-    total_points = fields.Integer(
+    total_points = fields.Float(
         string="Total (Pts.)", compute='_compute_total_points', store=True,
+        digits='Product Unit of Measure',
         help="Suma de los puntos de colorante de todas las dosis.")
     total_points_display = fields.Char(
         string="Total", compute='_compute_total_points', store=True,
@@ -50,8 +51,9 @@ class TintColorFormula(models.Model):
     capacity_display = fields.Char(
         string="Capacidad del envase", compute='_compute_capacity',
         help="La capacidad del envase en la notación mixta de la operación.")
-    remaining_points = fields.Integer(
+    remaining_points = fields.Float(
         string="Holgura (Pts.)", compute='_compute_capacity',
+        digits='Product Unit of Measure',
         help="Puntos que aún admite el envase con esta fórmula.")
     fits = fields.Boolean(
         string="Cabe en el envase", compute='_compute_capacity',
@@ -192,7 +194,7 @@ class TintColorFormula(models.Model):
                 lineas = [
                     (0, 0, {
                         'colorant_id': line.colorant_id.id,
-                        'points': max(1, round(line.points * factor)),
+                        'points': max(0.01, round(line.points * factor, 4)),
                         'sequence': line.sequence,
                     })
                     for line in formula.line_ids

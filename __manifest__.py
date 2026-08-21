@@ -89,6 +89,10 @@ Catálogo de entintado
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
         'views/tint_schema.xml',
+        # lines_producto_views.xml debe cargarse antes que tint_menu_views.xml:
+        # este último tiene un <menuitem action="lines_product_action"/> y esa
+        # acción se define ahí.
+        'views/lines_producto_views.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
@@ -105,7 +109,6 @@ Catálogo de entintado
         'views/portal_templates.xml',
         'views/res_config_risk_view.xml',
         'views/res_partner_risk_view.xml',
-        'views/lines_producto_views.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
         'wizards/partner_risk_exceeded_view.xml',
