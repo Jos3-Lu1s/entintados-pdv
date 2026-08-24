@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_material_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-set="vals" t-value="o._get_material_report_values()"/>
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h2 class="text-center">Solicitud de Salida de Material</h2>
+
+                        <table class="table table-sm" style="border:none;">
+                            <tr>
+                                <td style="width:35%;"><strong>Fecha:</strong></td>
+                                <td><span t-esc="vals['date']"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Agente de Ventas:</strong></td>
+                                <td><span t-esc="vals['salesperson'].name or ''"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Enc. de Área / Jefe directo:</strong></td>
+                                <td><span t-esc="vals['approver'].name or ''"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Cliente / Obra:</strong></td>
+                                <td><span t-esc="vals['partner'].name or ''"/></td>
+                            </tr>
+                            <tr t-if="vals['picking']">
+                                <td><strong>Salida:</strong></td>
+                                <td><span t-esc="vals['picking'].name or ''"/></td>
+                            </tr>
+                        </table>
+
+                        <table class="table table-bordered table-sm" style="margin-top:20px;">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción del producto</th>
+                                    <th class="text-right">Cantidad</th>
+                                    <th>UM</th>
+                                    <th>Detalles de uso</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="vals['lines']" t-as="line">
+                                    <td><span t-esc="line.product_id.default_code or ''"/></td>
+                                    <td><span t-esc="line.product_id.display_name"/></td>
+                                    <td class="text-right"><span t-esc="line.quantity"/></td>
+                                    <td><span t-esc="line.uom_id.name or ''"/></td>
+                                    <!-- <td><span t-esc="line.description or ''"/></td> -->
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="2" class="text-right"><strong>Total:</strong></td>
+                                    <td class="text-right">
+                                        <strong t-esc="sum(vals['lines'].mapped('quantity'))"/>
+                                    </td>
+                                    <td colspan="2"/>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <table class="table table-sm" style="margin-top:60px; border:none;">
+                            <tr>
+                                <td style="width:50%; text-align:center; border-top:1px solid #000; padding-top:6px;">
+                                    <span t-esc="vals['salesperson'].name or ''"/><br/>
+                                    <small>Solicita — Agente de Ventas</small>
+                                </td>
+                                <td style="width:50%; text-align:center; border-top:1px solid #000; padding-top:6px;">
+                                    <span t-esc="vals['approver'].name or ''"/><br/>
+                                    <small>Autoriza — Jefe directo</small>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

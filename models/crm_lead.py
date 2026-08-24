@@ -1,5 +1,5 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 
 CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
 CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_quotation'
@@ -16,6 +16,12 @@ class CrmLead(models.Model):
     draft_quotation_count = fields.Integer(
         compute='_compute_draft_quotation_count',
         string='Cotizaciones en Borrador'
+    )
+    
+    material_line_ids = fields.One2many(
+        "crm.material.line",
+        "lead_id",
+        string="Solicitudes de materiales",
     )
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
@@ -135,6 +141,119 @@ class CrmLead(models.Model):
             summary=confirm_activity_type.summary,
             note=_('Se confirmó la orden de venta %s.') % order.name,
         )
+        
+    def action_request_material_output(self):
+        self.ensure_one()
+        if not self.material_line_ids:
+            raise UserError(_("No hay líneas de material para solicitar salida."))
+        if self.picking_count > 0:
+            raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
+
+        warehouse = self.env['stock.warehouse'].search(
+            [('company_id', '=', self.company_id.id or self.env.company.id)], limit=1
+        )
+        if not warehouse:
+            raise UserError(_("No se encontró un almacén configurado."))
+
+        picking_type = warehouse.out_type_id  # tipo "Salidas"
+
+        picking = self.env['stock.picking'].create({
+            'picking_type_id': picking_type.id,
+            'location_id': picking_type.default_location_src_id.id,
+            'location_dest_id': picking_type.default_location_dest_id.id,
+            'origin': self.name,
+            'partner_id': self.partner_id.id,
+            'crm_lead_id': self.id,
+        })
+        
+        if picking.material_approver_id:
+            picking.activity_schedule(
+                activity_type_id=self.env.ref('mail.mail_activity_data_todo').id,
+                user_id=picking.material_approver_id.id,
+                summary='Aprobación de salida de material',
+                note=_('La salida %s requiere tu aprobación como jefe directo del vendedor.') % picking.name,
+            )
+
+        for line in self.material_line_ids:
+            self.env['stock.move'].create({
+                'product_id': line.product_id.id,
+                'product_uom_qty': line.quantity,
+                'product_uom': line.uom_id.id,
+                'picking_id': picking.id,
+                'location_id': picking_type.default_location_src_id.id,
+                'location_dest_id': picking_type.default_location_dest_id.id,
+            })
+
+        picking.action_confirm()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'view_mode': 'form',
+            'res_id': picking.id,
+        }
+        
+    picking_ids = fields.One2many(
+        comodel_name="stock.picking",
+        inverse_name="crm_lead_id",
+        string="Salidas",
+    )
+
+    picking_count = fields.Integer(
+        string="Salidas",
+        compute="_compute_picking_count",
+    )
+
+    @api.depends("picking_ids")
+    def _compute_picking_count(self):
+        for lead in self:
+            lead.picking_count = len(lead.picking_ids)
+
+    def action_view_pickings(self):
+        self.ensure_one()
+
+        action = {
+            "type": "ir.actions.act_window",
+            "name": "Salidas",
+            "res_model": "stock.picking",
+            "view_mode": "list,form",
+            "domain": [
+                ("crm_lead_id", "=", self.id),
+            ],
+            "context": {
+                "default_crm_lead_id": self.id,
+                "default_partner_id": self.partner_id.id,
+            },
+        }
+
+        # Si solamente existe una salida,
+        # abrirla directamente en formulario.
+        if self.picking_count == 1:
+            action.update({
+                "view_mode": "form",
+                "res_id": self.picking_ids.id,
+            })
+
+        return action
+    
+    def _get_material_report_values(self):
+        self.ensure_one()
+        return {
+            'lead': self,
+            'picking': self.picking_ids[:1],
+            'partner': self.partner_id,
+            'salesperson': self.user_id,
+            'approver': self._get_material_approver(),
+            'lines': self.material_line_ids,
+            'date': fields.Date.context_today(self),
+        }
+    
+    def _get_material_approver(self):
+        self.ensure_one()
+        employee = self.user_id.employee_id if self.user_id else False
+        if employee and employee.parent_id and employee.parent_id.user_id:
+            return employee.parent_id.user_id
+        return self.env['res.users']
 
 class CrmStage(models.Model):
     _inherit = 'crm.stage'

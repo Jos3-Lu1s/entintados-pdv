@@ -17,6 +17,21 @@
                 <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
                 <attribute name="context">{'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
             </xpath>
+            <xpath expr="//page[@name='lead']" position="after">
+                <page name="material" string="Solicitudes de materiales" invisible="stage_type != 'demo' and not material_line_ids">
+                    <button name="action_request_material_output" string="Solicitud de salida" type="object" invisible="picking_count > 0"/>
+                    <group>
+                        <field name="material_line_ids" nolabel="1" readonly="picking_count > 0">
+                            <list string="Solicitudes de materiales" editable="bottom">
+                                <field name="product_id"/>
+                                <field name="code_product"/>
+                                <field name="quantity"/>
+                                <field name="uom_id" readonly="1" force_save="1"/>
+                            </list>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
         </field>
     </record>
 
@@ -75,6 +90,30 @@
         <field name="arch" type="xml">
             <xpath expr="//button[@name='action_view_sale_quotation']" position="attributes">
                 <attribute name="invisible">draft_quotation_count == 0</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="crm_lead_view_form_inherit_stock_picking" model="ir.ui.view">
+        <field name="name">crm.lead.form.stock.picking</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="action_view_pickings"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-truck"
+                    invisible="picking_count == 0">
+
+                    <field
+                        name="picking_count"
+                        string="Salidas"
+                        widget="statinfo"
+                    />
+
+                </button>
             </xpath>
         </field>
     </record>

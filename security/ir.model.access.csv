@@ -20,3 +20,5 @@ access_lines_product_presentation_user,lines.product.presentation (lectura usuar
 access_lines_product_presentation_manager,lines.product.presentation (administrador de catalogo),model_lines_product_presentation,entintados_pdv.group_tint_manager,1,1,1,1
 access_tint_schema_user,tint.schema (lectura usuario interno),model_tint_schema,base.group_user,1,0,0,0
 access_tint_schema_manager,tint.schema (administrador de catalogo),model_tint_schema,entintados_pdv.group_tint_manager,1,1,1,1
+access_crm_material_line_user,crm.material.line (lectura usuario interno),model_crm_material_line,base.group_user,1,0,0,0
+access_crm_material_line_manager,crm.material.line (administrador de catalogo),model_crm_material_line,entintados_pdv.group_tint_manager,1,1,1,1
