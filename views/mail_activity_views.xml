@@ -101,6 +101,41 @@
         </field>
     </record>
 
+    <!-- Vista de calendario con panel lateral de filtros por usuario y tipo -->
+    <record id="mail_activity_view_calendar_custom" model="ir.ui.view">
+        <field name="name">mail.activity.calendar.custom</field>
+        <field name="model">mail.activity</field>
+        <field name="arch" type="xml">
+            <calendar string="Actividades"
+                      date_start="activity_date_start"
+                      date_stop="activity_date_stop"
+                      all_day="activity_all_day"
+                      color="user_id"
+                      js_class="activity_calendar"
+                      create="0"
+                      event_open_popup="true"
+                      event_limit="5"
+                      mode="month">
+                <!-- Filtro por usuario asignado -->
+                <field name="user_id" avatar_field="avatar_128" filters="1"
+                       options="{'icon': 'fa fa-user-o'}" />
+                <!-- Filtro por tipo de actividad -->
+                <field name="activity_type_id" filters="1"
+                       options="{'icon': 'fa fa-tag'}" />
+                <!-- Detalle del evento -->
+                <field name="res_name" string="Documento"
+                       options="{'icon': 'fa fa-link'}" />
+                <field name="summary" string="Resumen" />
+                <field name="date_deadline" />
+                <!-- Campos de control horario y visualización -->
+                <field name="activity_date_start" invisible="1" />
+                <field name="activity_date_stop" invisible="1" />
+                <field name="activity_all_day" invisible="1" />
+                <field name="activity_is_meeting" invisible="1" />
+            </calendar>
+        </field>
+    </record>
+
     <!-- Acción general de actividades (pendientes y realizadas) -->
     <record id="mail_activity_action_all" model="ir.actions.act_window">
         <field name="name">Actividades</field>
@@ -148,7 +183,7 @@
     <record id="mail_activity_action_all_view_calendar" model="ir.actions.act_window.view">
         <field name="sequence" eval="5" />
         <field name="view_mode">calendar</field>
-        <field name="view_id" ref="mail.mail_activity_view_calendar" />
+        <field name="view_id" ref="mail_activity_view_calendar_custom" />
         <field name="act_window_id" ref="mail_activity_action_all" />
     </record>
 
@@ -187,7 +222,7 @@
     <record id="mail_activity_action_my_view_calendar" model="ir.actions.act_window.view">
         <field name="sequence" eval="3" />
         <field name="view_mode">calendar</field>
-        <field name="view_id" ref="mail.mail_activity_view_calendar" />
+        <field name="view_id" ref="mail_activity_view_calendar_custom" />
         <field name="act_window_id" ref="mail_activity_action_my" />
     </record>
 
