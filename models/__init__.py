@@ -14,6 +14,7 @@ from . import pos_session
 from . import res_partner
 from . import crm_lead
 from . import sale_order
+from . import sale_order_line
 from . import account_invoice_risk
 from . import res_company_risk
 from . import res_config_risk
@@ -22,5 +23,9 @@ from . import lines_product
 from . import product_pricelist_item
 from . import mail_activity
 from . import product_pricelist
+<<<<<<< Updated upstream
 from . import crm_material_line
 from . import stock_picking
+=======
+from . import product_pricelist_wizard
+>>>>>>> Stashed changes
