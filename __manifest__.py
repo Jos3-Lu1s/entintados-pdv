@@ -80,7 +80,7 @@ Catálogo de entintado
         'data/tint_base_type_data.xml',
         'data/tint_base_capacity_data.xml',
         'data/tint_gallery_data.xml',
-        'data/activitys_crm.xml',
+        'data/mail_activity_type_data.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',

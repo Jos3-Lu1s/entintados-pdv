@@ -1,6 +1,10 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 
+CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
+CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_quotation'
+
+
 class SaleOrder(models.Model):
     _inherit = "sale.order"
     
@@ -20,7 +24,7 @@ class SaleOrder(models.Model):
                 order._cancel_sibling_quotations()
                 order._advance_opportunity_to_closed()
                 if order.opportunity_id:
-                    order.opportunity_id._schedule_confirm_quotation_activity(order)
+                    order._schedule_confirm_quotation_activity()
         return res
 
     def _sync_opportunity_stage(self):
@@ -38,7 +42,7 @@ class SaleOrder(models.Model):
                     'expected_revenue': order.amount_total
                 })
                 
-            lead._schedule_create_quotation_activity(order)
+            order._schedule_create_quotation_activity()
             
             if lead.stage_id.id == quotation_stage.id:
                 continue
@@ -81,3 +85,24 @@ class SaleOrder(models.Model):
             lead.with_context(skip_stage_sequence_check=True).write({
                 'stage_id': closed_stage.id
             })
+
+    def _schedule_create_quotation_activity(self):
+        """Registra la creación de la cotización como actividad ya realizada (permite duplicados)."""
+        self._log_quotation_activity(CREATE_QUOTATION_ACTIVITY_XMLID, _('Se creó la cotización %s.') % self.name)
+
+    def _schedule_confirm_quotation_activity(self):
+        """Registra la confirmación de venta como actividad ya realizada."""
+        self._log_quotation_activity(CONFIRM_QUOTATION_ACTIVITY_XMLID, _('Se confirmó la orden de venta %s.') % self.name)
+
+    def _log_quotation_activity(self, activity_xmlid, note):
+        """Agenda la actividad en la cotización a nombre del vendedor y la marca como hecha."""
+        self.ensure_one()
+        activity_type = self.env.ref(activity_xmlid, raise_if_not_found=False)
+        if not activity_type:
+            return
+        self.activity_schedule(
+            activity_type_id=activity_type.id,
+            user_id=self.opportunity_id.user_id.id or self.env.uid,
+            summary=activity_type.summary,
+            note=note,
+        ).action_feedback(feedback=note)

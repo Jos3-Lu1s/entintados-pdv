@@ -1,8 +1,8 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
 
-CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
-CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_quotation'
+DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
+
 
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
@@ -72,7 +72,20 @@ class CrmLead(models.Model):
                     ) % old_stage.name)
 
         return super().write(vals)
-    
+
+    def _schedule_demo_activity(self):
+        """Programa una actividad de demostración pendiente (evita duplicar si ya hay una abierta)."""
+        self.ensure_one()
+        activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        if not activity_type or self.activity_ids.filtered(lambda a: a.activity_type_id == activity_type):
+            return
+        self.activity_schedule(
+            activity_type_id=activity_type.id,
+            user_id=self.user_id.id or self.env.uid,
+            summary=activity_type.summary,
+            note=_('Se solicitó la salida de material para la demostración.'),
+        )
+
     @api.constrains('stage_id', 'expected_revenue')
     def _check_expected_revenue_in_quotation(self):
         for lead in self:
@@ -95,53 +108,6 @@ class CrmLead(models.Model):
         action['domain'] = domain
         return action
     
-    def _schedule_create_quotation_activity(self, order):
-        """Asigna al vendedor de la oportunidad una actividad al crearse una cotización."""
-        self.ensure_one()
-        activity_type = self.env.ref(CREATE_QUOTATION_ACTIVITY_XMLID, raise_if_not_found=False)
-        if not activity_type:
-            return
-        # Evita duplicar la actividad si ya hay una abierta de este tipo
-        already_open = self.activity_ids.filtered(
-            lambda a: a.activity_type_id.id == activity_type.id
-        )
-        if already_open:
-            return
-        self.activity_schedule(
-            activity_type_id=activity_type.id,
-            user_id=self.user_id.id or self.env.uid,
-            summary=activity_type.summary,
-            note=_('Se creó la cotización %s.') % order.name,
-        )
-        
-    def _schedule_confirm_quotation_activity(self, order):
-        """Marca hecha la actividad de creación y asigna la de confirmación al vendedor."""
-        self.ensure_one()
-        
-        create_activity_type = self.env.ref(CREATE_QUOTATION_ACTIVITY_XMLID, raise_if_not_found=False)
-        if create_activity_type:
-            pending = self.activity_ids.filtered(
-                lambda a: a.activity_type_id.id == create_activity_type.id
-            )
-            if pending:
-                pending.action_feedback(feedback=_('Cotización %s confirmada.') % order.name)
-
-        confirm_activity_type = self.env.ref(CONFIRM_QUOTATION_ACTIVITY_XMLID, raise_if_not_found=False)
-        if not confirm_activity_type:
-            return
-        # Evita duplicar la actividad si ya hay una abierta de este tipo
-        already_open = self.activity_ids.filtered(
-            lambda a: a.activity_type_id.id == confirm_activity_type.id
-        )
-        if already_open:
-            return
-        self.activity_schedule(
-            activity_type_id=confirm_activity_type.id,
-            user_id=self.user_id.id or self.env.uid,
-            summary=confirm_activity_type.summary,
-            note=_('Se confirmó la orden de venta %s.') % order.name,
-        )
-        
     def action_request_material_output(self):
         self.ensure_one()
         if not self.material_line_ids:
@@ -185,6 +151,8 @@ class CrmLead(models.Model):
             })
 
         picking.action_confirm()
+
+        self._schedule_demo_activity()
 
         return {
             'type': 'ir.actions.act_window',
