@@ -40,4 +40,48 @@
             name="comment"
         >Can edit risk limit and overpass partner risk exceptions</field>
     </record>
+
+    <!-- Privilegio y grupo de administración de actividades -->
+    <record id="module_category_activity" model="ir.module.category">
+        <field name="name">Actividades</field>
+        <field name="sequence" eval="21" />
+    </record>
+    <record id="privilege_activity" model="res.groups.privilege">
+        <field name="name">Actividades</field>
+        <field name="category_id" ref="entintados_pdv.module_category_activity" />
+    </record>
+    <!-- Nivel 1: Usuario de actividades. Accede al módulo y gestiona SOLO sus propias actividades. -->
+    <record id="group_activity_user" model="res.groups">
+        <field name="name">Usuario de actividades</field>
+        <field name="privilege_id" ref="privilege_activity" />
+        <field
+            name="comment"
+        >Permite acceder al módulo de Actividades y gestionar y dar seguimiento a sus propias actividades.</field>
+    </record>
+    <!-- Nivel 2: Administrador de actividades. Implica al usuario y añade el análisis global. -->
+    <record id="group_activity_manager" model="res.groups">
+        <field name="name">Administrador de actividades</field>
+        <field name="privilege_id" ref="privilege_activity" />
+        <field
+            name="implied_ids"
+            eval="[Command.link(ref('entintados_pdv.group_activity_user'))]"
+        />
+        <field
+            name="comment"
+        >Permite consultar y analizar las actividades de todos los usuarios y documentos.</field>
+    </record>
+
+    <!-- Regla de registro: lectura GLOBAL de actividades para el administrador.
+         Hace explícito y declarativo el acceso de solo-lectura a todas las actividades
+         (complementa/documenta el bypass en MailActivity._search / _check_access). -->
+    <record id="mail_activity_rule_manager_global_read" model="ir.rule">
+        <field name="name">Actividad: lectura global (administrador de actividades)</field>
+        <field name="model_id" ref="mail.model_mail_activity" />
+        <field name="groups" eval="[Command.link(ref('entintados_pdv.group_activity_manager'))]" />
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="False" />
+    </record>
 </odoo>

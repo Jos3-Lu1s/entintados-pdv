@@ -83,6 +83,16 @@ class TestTintColor(TransactionCase):
         self.assertEqual(formula.remaining_points, 336)
         self.assertTrue(formula.fits)
 
+    def test_formula_with_decimal_doses(self):
+        formula = self._create_formula(
+            self.deep, self.gallon, [(self.colorant_a, 24.5), (self.colorant_b, 0.5)])
+        self.assertEqual(formula.total_points, 25.0)
+        self.assertEqual(formula.total_points_display, '25 Pts.')
+        self.assertEqual(formula.remaining_points, 359.0)
+        self.assertTrue(formula.fits)
+        line_a = formula.line_ids.filtered(lambda l: l.colorant_id == self.colorant_a)
+        self.assertEqual(line_a.points_display, '24.5 Pts.')
+
     def test_formula_exceeding_capacity_rejected(self):
         """Una fórmula que no cabe se derramaría al dispensar."""
         with self.assertRaises(ValidationError):

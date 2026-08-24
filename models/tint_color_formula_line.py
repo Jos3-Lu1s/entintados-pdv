@@ -27,8 +27,9 @@ class TintColorFormulaLine(models.Model):
         required=True, ondelete='restrict', index=True,
         domain="[('tint_role', '=', 'colorant'), ('line_scheme_id', '=', line_scheme_id), ('scheme_id', '=', scheme_id)]",
         help="Producto colorante que se dispensa en esta línea.")
-    points = fields.Integer(
-        string="Dosis (Pts.)", required=True, default=1,
+    points = fields.Float(
+        string="Dosis (Pts.)", required=True, default=1.0,
+        digits='Product Unit of Measure',
         help="Puntos de colorante a dispensar. Una onza equivale a 48 puntos.")
     points_display = fields.Char(
         string="Dosis", compute='_compute_points_display',
