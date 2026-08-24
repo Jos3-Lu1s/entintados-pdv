@@ -20,6 +20,7 @@ class ProductPricelist(models.Model):
         compute='_compute_partner_ids',
     )
 
+
     def _compute_partner_ids(self):
         all_partners = self.env['res.partner'].search([])
         for pricelist in self:
@@ -31,3 +32,17 @@ class ProductPricelist(models.Model):
     
     def _inverse_partner_ids(self):
         pass
+
+    def action_open_product_wizard(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Agregar productos',
+            'res_model': 'product.pricelist.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_pricelist_id': self.id,
+            },
+        }
