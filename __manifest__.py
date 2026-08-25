@@ -40,33 +40,37 @@ Catálogo de entintado
 
     "assets": {
         "point_of_sale._assets_pos": [
-            "entintados_pdv/static/src/css/tint.css",
-            # Tabla de lista reutilizable (productos, colores y bases)
+            # Estilos del POS
+            "entintados_pdv/static/src/app/style/tint.scss",
+            # Componentes reutilizables (js + xml co-localizados)
             "entintados_pdv/static/src/app/components/tint_table/tint_table.js",
             "entintados_pdv/static/src/app/components/tint_table/tint_table.xml",
+            "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.js",
+            "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.xml",
+            # Modelos del POS
+            "entintados_pdv/static/src/app/models/tint_models.js",
+            # Utilidades
             "entintados_pdv/static/src/app/utils/tint_points.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
-            "entintados_pdv/static/src/js/tint_control_button.js",
-            "entintados_pdv/static/src/js/tint_formula_popup.js",
-            "entintados_pdv/static/src/js/pos_partner_defaults.js",
-            "entintados_pdv/static/src/js/contact_type_selector_field.js",
-            "entintados_pdv/static/src/xml/tint_control_button.xml",
-            "entintados_pdv/static/src/xml/tint_formula_popup.xml",
-            "entintados_pdv/static/src/xml/contact_type_selector_field.xml",
-
+            # Pantalla de seleccion de color
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.js",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.xml",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.scss",
-            "entintados_pdv/static/src/app/product_screen/tint_panel.js",
-            "entintados_pdv/static/src/app/product_screen/tint_panel.xml",
-            "entintados_pdv/static/src/app/product_screen/tint_products_widget.js",
-            "entintados_pdv/static/src/app/product_screen/tint_products_widget.xml",
-            "entintados_pdv/static/src/app/models/tint_models.js",
+            # Product screen: panel de entintado y pestanas
+            "entintados_pdv/static/src/app/screens/product_screen/tint_panel.js",
+            "entintados_pdv/static/src/app/screens/product_screen/tint_panel.xml",
+            "entintados_pdv/static/src/app/screens/product_screen/tint_products_widget.js",
+            "entintados_pdv/static/src/app/screens/product_screen/tint_products_widget.xml",
+            # Overrides (patch) a componentes/servicios del core POS
+            "entintados_pdv/static/src/app/overrides/pos_store.js",
+            "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
+            "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.xml",
         ],
         "web.assets_backend": [
-            "entintados_pdv/static/src/js/contact_type_selector_field.js",
-            "entintados_pdv/static/src/xml/contact_type_selector_field.xml",
+            # Widget de campo del backend (usado en la vista de res.partner)
+            "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
+            "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
         ],
     },
 

@@ -2,7 +2,7 @@
 import { _t } from "@web/core/l10n/translation";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
-import { TintFormulaPopup } from "@entintados_pdv/js/tint_formula_popup";
+import { TintFormulaPopup } from "@entintados_pdv/app/components/tint_formula_popup/tint_formula_popup";
 import {
     addTintedBaseToOrder,
     extractionLiters,
