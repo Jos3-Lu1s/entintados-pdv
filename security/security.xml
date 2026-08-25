@@ -56,7 +56,7 @@
         <field name="privilege_id" ref="privilege_activity" />
         <field
             name="comment"
-        >Permite acceder al módulo de Actividades y gestionar y dar seguimiento a sus propias actividades.</field>
+        >Permite acceder al módulo de Actividades, gestionar y dar seguimiento a sus propias actividades.</field>
     </record>
     <!-- Nivel 2: Administrador de actividades. Implica al usuario y añade el análisis global. -->
     <record id="group_activity_manager" model="res.groups">

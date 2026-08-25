@@ -6,7 +6,7 @@
             <field name="name">Cotización</field>
             <field name="category">default</field>
             <field name="icon">fa-file-text-o</field>
-            <field name="summary">Creacion de la cotizacion relacionada</field>
+            <field name="summary">Creación de la cotización relacionada</field>
             <field name="res_model">sale.order</field>
         </record>
 
@@ -21,8 +21,16 @@
         <record id="mail_activity_type_demo" model="mail.activity.type">
             <field name="name">Demostración</field>
             <field name="category">meeting</field>
-            <field name="icon">fa-users</field>
+            <field name="icon">fa-paint-brush</field>
             <field name="summary">Programación de demostración</field>
+            <field name="res_model">crm.lead</field>
+        </record>
+
+        <record id="mail_activity_type_field_visit" model="mail.activity.type">
+            <field name="name">Visita de campo</field>
+            <field name="category">meeting</field>
+            <field name="icon">fa-map-marker</field>
+            <field name="summary">Programación de visita de campo</field>
             <field name="res_model">crm.lead</field>
         </record>
 

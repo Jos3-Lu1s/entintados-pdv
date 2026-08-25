@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from odoo import api, fields, models
 
@@ -10,12 +10,6 @@ class MailActivity(models.Model):
     _inherit = 'mail.activity'
 
     # --- Campos para vista de calendario -------------------------------------
-    activity_is_meeting = fields.Boolean(
-        string="Es reunión",
-        compute="_compute_calendar_slot",
-        store=True,
-        help="Indica si la actividad proviene de una reunión con horario.",
-    )
     activity_date_start = fields.Datetime(
         string="Inicio (calendario)",
         compute="_compute_calendar_slot",
@@ -37,9 +31,19 @@ class MailActivity(models.Model):
         help="Indica si la actividad se muestra como evento de día completo.",
     )
 
+    activity_involved_user_ids = fields.Many2many(
+        "res.users",
+        "mail_activity_involved_users_rel",
+        "activity_id",
+        "user_id",
+        string="Involucrados",
+        compute="_compute_involved_user_ids",
+        store=True,
+        help="Usuarios involucrados en la actividad (responsable y asistentes internos de la reunión).",
+    )
+
     @api.depends(
         "date_deadline",
-        "activity_type_id.category",
         "calendar_event_id",
         "calendar_event_id.start",
         "calendar_event_id.stop",
@@ -51,7 +55,6 @@ class MailActivity(models.Model):
             timed_meeting = bool(event and not event.allday and event.start and event.stop)
             if timed_meeting:
                 # Reunión con horario definido
-                activity.activity_is_meeting = True
                 activity.activity_all_day = False
                 activity.activity_date_start = event.start
                 activity.activity_date_stop = event.stop
@@ -62,7 +65,6 @@ class MailActivity(models.Model):
                     base_date = event.start.date()
                 elif activity.date_deadline:
                     base_date = activity.date_deadline
-                activity.activity_is_meeting = activity.activity_type_id.category == "meeting"
                 activity.activity_all_day = True
                 if base_date:
                     # 12:00 UTC para evitar desfases por zona horaria
@@ -74,13 +76,31 @@ class MailActivity(models.Model):
                     activity.activity_date_stop = False
 
     def _inverse_calendar_slot(self):
-        """Actualiza la fecha límite o el evento de calendario al arrastrar en la vista."""
+        """Actualiza fechas en el evento o la actividad al moverla en el calendario."""
         for activity in self:
             start = activity.activity_date_start
             if not start:
                 continue
             event = activity.calendar_event_id
-            if event and not event.allday:
+            if not event:
+                new_deadline = start.date()
+                if new_deadline != activity.date_deadline:
+                    activity.date_deadline = new_deadline
+                continue
+            if event.allday:
+                # Evento de día completo: actualiza fechas manteniendo la duración en días
+                new_start_date = start.date()
+                duration_days = 0
+                if event.start_date and event.stop_date:
+                    duration_days = (event.stop_date - event.start_date).days
+                new_stop_date = new_start_date + timedelta(days=duration_days)
+                if event.start_date != new_start_date or event.stop_date != new_stop_date:
+                    event.write({
+                        "start_date": new_start_date,
+                        "stop_date": new_stop_date,
+                    })
+            else:
+                # Evento con horario: actualiza inicio y fin
                 vals = {}
                 if event.start != start:
                     vals["start"] = start
@@ -88,10 +108,32 @@ class MailActivity(models.Model):
                     vals["stop"] = activity.activity_date_stop
                 if vals:
                     event.write(vals)
-            else:
-                new_deadline = start.date()
-                if new_deadline != activity.date_deadline:
-                    activity.date_deadline = new_deadline
+
+    @api.depends("user_id", "calendar_event_id", "calendar_event_id.partner_ids")
+    def _compute_involved_user_ids(self):
+        """Calcula usuarios internos involucrados (responsable y asistentes del evento)."""
+        all_partner_ids = set()
+        for activity in self:
+            if activity.calendar_event_id:
+                all_partner_ids.update(activity.calendar_event_id.partner_ids.ids)
+
+        partner_to_users = {}
+        if all_partner_ids:
+            internal_users = self.env["res.users"].search([
+                ("partner_id", "in", list(all_partner_ids)),
+                ("share", "=", False),
+            ])
+            for user in internal_users:
+                partner_to_users.setdefault(user.partner_id.id, self.env["res.users"])
+                partner_to_users[user.partner_id.id] |= user
+
+        for activity in self:
+            users = activity.user_id
+            event = activity.calendar_event_id
+            if event:
+                for partner_id in event.partner_ids.ids:
+                    users |= partner_to_users.get(partner_id, self.env["res.users"])
+            activity.activity_involved_user_ids = users
 
     # --- Permisos de administrador de actividades ----------------------------
     def _is_activity_analyst(self):
