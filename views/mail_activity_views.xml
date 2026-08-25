@@ -73,19 +73,26 @@
                 <field name="summary" string="Actividad" />
                 <field name="activity_type_id" string="Tipo de actividad" />
                 <field name="user_id" string="Asignado a" />
+                <field name="activity_involved_user_ids" string="Involucrados" />
                 <field name="res_model_id" string="Modelo del documento" />
                 
                 <filter name="filter_pending" string="Pendientes" domain="[('active', '=', True)]" />
                 <filter name="filter_done" string="Realizadas" domain="[('active', '=', False)]" />
                 <separator />
 
-                <!-- Origen: distingue el trabajo humano de lo generado por el sistema -->
+                <!-- Filtro por origen -->
                 <filter name="filter_manual" string="Manuales" domain="[('automated', '=', False)]" />
                 <filter name="filter_automated" string="Automatizadas" domain="[('automated', '=', True)]" />
                 <separator />
 
+                <!-- Filtros por tipo y participación -->
+                <filter name="filter_meetings" string="Reuniones" domain="[('activity_type_id.category', '=', 'meeting')]" />
+                <filter name="filter_my_involved" string="En las que participo" domain="[('activity_involved_user_ids', 'in', [uid])]" />
+                <separator />
+
                 <filter name="filter_date_deadline" string="Fecha límite" date="date_deadline" />
                 <filter name="filter_date_done" string="Fecha de realización" date="date_done" />
+                <filter name="filter_date_start" string="Inicio en calendario" date="activity_date_start" />
                 <separator />
 
                 <!-- Agrupaciones -->
@@ -94,10 +101,49 @@
                     <filter name="group_by_date_done" string="Fecha de realización" context="{'group_by': 'date_done'}" />
                     <filter name="group_by_res_model_id" string="Modelo del documento" context="{'group_by': 'res_model_id'}" />
                     <filter name="group_by_user_id" string="Asignado a" context="{'group_by': 'user_id'}" />
+                    <!-- Agrupación por usuarios involucrados -->
+                    <filter name="group_by_involved" string="Involucrados" context="{'group_by': 'activity_involved_user_ids'}" />
                     <filter name="group_by_create_uid" string="Creada por" context="{'group_by': 'create_uid'}" />
                     <filter name="group_by_activity_type_id" string="Tipo de actividad" context="{'group_by': 'activity_type_id'}" />
                 </group>
             </search>
+        </field>
+    </record>
+
+    <!-- Vista de calendario -->
+    <record id="mail_activity_view_calendar_custom" model="ir.ui.view">
+        <field name="name">mail.activity.calendar.custom</field>
+        <field name="model">mail.activity</field>
+        <field name="arch" type="xml">
+            <calendar string="Actividades"
+                      date_start="activity_date_start"
+                      date_stop="activity_date_stop"
+                      all_day="activity_all_day"
+                      color="user_id"
+                      js_class="activity_calendar"
+                      create="0"
+                      event_open_popup="true"
+                      event_limit="5"
+                      mode="month">
+                <!-- Filtro por usuarios involucrados (responsable y asistentes) -->
+                <field name="activity_involved_user_ids" string="Involucrados"
+                       avatar_field="avatar_128" filters="1"
+                       options="{'icon': 'fa fa-user-o'}" />
+                <!-- Color por usuario responsable -->
+                <field name="user_id" invisible="1" />
+                <!-- Filtro por tipo de actividad -->
+                <field name="activity_type_id" filters="1"
+                       options="{'icon': 'fa fa-tag'}" />
+                <!-- Detalle del evento -->
+                <field name="res_name" string="Documento"
+                       options="{'icon': 'fa fa-link'}" />
+                <field name="summary" string="Resumen" />
+                <field name="date_deadline" />
+                <!-- Campos de control horario y visualización -->
+                <field name="activity_date_start" invisible="1" />
+                <field name="activity_date_stop" invisible="1" />
+                <field name="activity_all_day" invisible="1" />
+            </calendar>
         </field>
     </record>
 
@@ -109,7 +155,7 @@
         <field name="search_view_id" ref="mail_activity_view_search" />
         <!-- Acción restringida al administrador de actividades -->
         <field name="group_ids" eval="[Command.link(ref('entintados_pdv.group_activity_manager'))]" />
-        <!-- Incluye actividades realizadas (archivadas) pero abre filtrado en Pendientes -->
+        <!-- Incluye actividades realizadas con filtro inicial en Pendientes -->
         <field name="context">{'active_test': False, 'search_default_filter_pending': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Todavía no hay actividades registradas</p>
@@ -148,20 +194,20 @@
     <record id="mail_activity_action_all_view_calendar" model="ir.actions.act_window.view">
         <field name="sequence" eval="5" />
         <field name="view_mode">calendar</field>
-        <field name="view_id" ref="mail.mail_activity_view_calendar" />
+        <field name="view_id" ref="mail_activity_view_calendar_custom" />
         <field name="act_window_id" ref="mail_activity_action_all" />
     </record>
 
-    <!-- Acción de las actividades del usuario (sin creación, abre el documento origen) -->
+    <!-- Acción de actividades del usuario -->
     <record id="mail_activity_action_my" model="ir.actions.act_window">
         <field name="name">Mis actividades</field>
         <field name="res_model">mail.activity</field>
         <field name="view_mode">list,kanban,calendar</field>
-        <field name="domain">[('user_id', '=', uid)]</field>
+        <field name="domain">[('activity_involved_user_ids', 'in', [uid])]</field>
         <field name="search_view_id" ref="mail_activity_view_search" />
         <!-- Acción restringida al privilegio de actividades (usuario o administrador) -->
         <field name="group_ids" eval="[Command.link(ref('entintados_pdv.group_activity_user'))]" />
-        <!-- Incluye las realizadas del usuario pero abre filtrado en Pendientes -->
+        <!-- Incluye actividades realizadas con filtro inicial en Pendientes -->
         <field name="context">{'active_test': False, 'search_default_filter_pending': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No tiene actividades pendientes</p>
@@ -187,7 +233,7 @@
     <record id="mail_activity_action_my_view_calendar" model="ir.actions.act_window.view">
         <field name="sequence" eval="3" />
         <field name="view_mode">calendar</field>
-        <field name="view_id" ref="mail.mail_activity_view_calendar" />
+        <field name="view_id" ref="mail_activity_view_calendar_custom" />
         <field name="act_window_id" ref="mail_activity_action_my" />
     </record>
 

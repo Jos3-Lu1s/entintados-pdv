@@ -8,7 +8,7 @@
             <xpath expr="//notebook" position="inside">
                 <page string="Descuentos por cliente" name="contactos">
                     <field name="partner_ids" options="{'no_open': True}">
-                        <list delete="0">
+                        <list editable="bottom" readonly="1">
                             <field name="name" readonly="1"/>
                             <field name="email" readonly="1"/>
                             <field name="vat" readonly="1"/>
@@ -17,6 +17,65 @@
                     </field>
                 </page>
             </xpath>
+            <xpath expr="//header" position="inside">
+                <button name="action_open_product_wizard"
+                        type="object"
+                        string="Agrega Productos"
+                        class="btn-primary"/>
+            </xpath>
         </field>
     </record>
+     <record id="view_pricelist_product_wizard_form" model="ir.ui.view">
+        <field name="name">product.pricelist.wizard.form</field>
+        <field name="model">product.pricelist.wizard</field>
+        <field name="arch" type="xml">
+
+             <form string="Agregar productos">
+
+                <group>
+                    <field name="pricelist_id" invisible="1"/>
+
+                    <field name="action_type"
+                        widget="radio"
+                        options="{'horizontal': true}"/>
+                        
+                    <field name="apply_by"
+                        widget="radio"
+                        options="{'horizontal': true}"/>
+                </group>
+
+                <group>
+                    <field name="esquema_id"
+                        invisible="apply_by != 'esquema'"
+                        required="apply_by == 'esquema'"/>
+
+                    <field name="linea_id"
+                        invisible="apply_by != 'linea'"
+                        required="apply_by == 'linea'"/>
+                </group>
+
+                <footer>
+                    <button name="action_add_products"
+                            type="object"
+                            string="Aceptar"
+                            class="btn-primary"/>
+
+                    <button string="Cancelar"
+                            special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+
+            </form>
+        </field>
+    </record>
+    <record id="action_pricelist_product_wizard" model="ir.actions.act_window">
+
+        <field name="name">Agregar productos</field>
+        <field name="res_model">product.pricelist.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+
+    </record>
+
+
 </odoo>

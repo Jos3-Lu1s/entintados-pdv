@@ -3,7 +3,7 @@ import { useState } from "@odoo/owl";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { patch } from "@web/core/utils/patch";
 import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
-import { TintPanel } from "@entintados_pdv/app/product_screen/tint_panel";
+import { TintPanel } from "@entintados_pdv/app/screens/product_screen/tint_panel";
 import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
 
 // Registro de subcomponentes TintPanel y TintTable en ProductScreen.
