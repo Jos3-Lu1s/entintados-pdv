@@ -25,6 +25,10 @@ class CrmMaterialLine(models.Model):
         related="product_id.default_code",
         readonly=True,
     )
+    
+    description = fields.Text(
+        string="Descripción",
+    )
 
     quantity = fields.Float(
         string="Cantidad solicitada",

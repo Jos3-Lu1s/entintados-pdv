@@ -24,3 +24,5 @@ from . import mail_activity
 from . import product_pricelist
 from . import crm_material_line
 from . import stock_picking
+from . import res_users
+

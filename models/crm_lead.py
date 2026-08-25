@@ -155,7 +155,14 @@ class CrmLead(models.Model):
         if not warehouse:
             raise UserError(_("No se encontró un almacén configurado."))
 
-        picking_type = warehouse.out_type_id  # tipo "Salidas"
+        picking_type = self.env.ref(
+            'entintados_pdv.picking_type_material_output', raise_if_not_found=False
+        )
+        if not picking_type:
+            raise UserError(_(
+                "No se encontró el tipo de operación 'Salida de material'. "
+                "Verifica que el módulo esté correctamente instalado/actualizado."
+            ))
 
         picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type.id,
@@ -176,6 +183,7 @@ class CrmLead(models.Model):
 
         for line in self.material_line_ids:
             self.env['stock.move'].create({
+                'description_picking': line.description,
                 'product_id': line.product_id.id,
                 'product_uom_qty': line.quantity,
                 'product_uom': line.uom_id.id,
@@ -238,19 +246,41 @@ class CrmLead(models.Model):
     
     def _get_material_report_values(self):
         self.ensure_one()
+        picking = self.picking_ids[:1]
+        approver = picking.material_approver_id if picking else self._get_material_approver()
+        signature = picking._get_approver_signature() if picking else self._get_user_digital_signature(approver)
         return {
             'lead': self,
-            'picking': self.picking_ids[:1],
+            'picking': picking,
             'partner': self.partner_id,
-            'salesperson': self.user_id,
-            'approver': self._get_material_approver(),
+            'salesperson': self.user_id or self.create_uid,
+            'approver': approver,
             'lines': self.material_line_ids,
             'date': fields.Date.context_today(self),
+            'approval_state': picking.material_approval_state if picking else 'to_approve',
+            'signature': signature,
+            'signature_date': picking.signature_date if picking else False,
         }
+
+    def _get_user_digital_signature(self, user):
+        if not user:
+            return False
+        if getattr(user, 'digital_signature', None):
+            return user.digital_signature
+        if getattr(user, 'sign_signature', None):
+            return user.sign_signature
+        if user.partner_id and getattr(user.partner_id, 'signature', None):
+            return user.partner_id.signature
+        employee = self.env['hr.employee'].search([('user_id', '=', user.id)], limit=1)
+        if employee and getattr(employee, 'signature', None):
+            return employee.signature
+        return False
     
     def _get_material_approver(self):
         self.ensure_one()
-        employee = self.user_id.employee_id if self.user_id else False
+        if not self.user_id:
+            return self.env['res.users']
+        employee = self.env['hr.employee'].search([('user_id', '=', self.user_id.id)], limit=1)
         if employee and employee.parent_id and employee.parent_id.user_id:
             return employee.parent_id.user_id
         return self.env['res.users']
