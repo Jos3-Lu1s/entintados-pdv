@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_loyalty_reward_wizard_custom" model="ir.ui.view">
+        <field name="name">sale.loyalty.reward.wizard.custom</field>
+        <field name="model">sale.loyalty.reward.wizard</field>
+        <field name="inherit_id" ref="sale_loyalty.sale_loyalty_reward_wizard_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_apply']" position="attributes">
+                <attribute name="name">action_apply_custom</attribute>
+            </xpath>
+            <xpath expr="//group" position="attributes">
+                <attribute name="name">rewards</attribute>
+            </xpath>
+            <xpath expr="//group[@name='rewards']" position="before">
+                <group name="message">
+                    <field name="loyalty_action_type" widget="radio" options="{'horizontal': true}"/>
+                </group>
+            </xpath>
+            <xpath expr="//group[@name='rewards']" position="attributes">
+                <attribute name="invisible">loyalty_action_type != 'reward'</attribute>
+            </xpath>
+            <xpath expr="//group[@name='rewards']" position="after">
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Advertencia:</strong>
+                        Este cliente ya cuenta con un descuento.
+                    </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

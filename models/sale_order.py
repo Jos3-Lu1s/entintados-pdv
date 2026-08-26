@@ -106,3 +106,10 @@ class SaleOrder(models.Model):
             summary=activity_type.summary,
             note=note,
         ).action_feedback(feedback=note)
+    def action_open_reward_wizard(self):
+        self.ensure_one()
+        self._update_programs_and_rewards()
+        claimable_rewards = self._get_claimable_rewards()
+        if not claimable_rewards:
+            return True
+        return self.env['ir.actions.actions']._for_xml_id('sale_loyalty.sale_loyalty_reward_wizard_action')

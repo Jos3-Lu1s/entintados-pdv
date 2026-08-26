@@ -124,6 +124,7 @@ Catálogo de entintado
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
+        'views/sale_loyalty_reward_wizard_views.xml',
     ],
     'demo': [],
     "installable": True,

@@ -27,4 +27,5 @@ from . import crm_material_line
 from . import stock_picking
 from . import product_pricelist_wizard
 from . import res_users
+from . import sale_loyalty_reward_wizard
 
