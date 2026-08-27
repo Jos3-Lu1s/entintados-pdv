@@ -18,8 +18,7 @@
                 <attribute name="context">{'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
             </xpath>
             <xpath expr="//header" position="inside">
-                <field name="field_visit_scheduled" invisible="1"/>
-                <button name="action_schedule_field_visit" string="Agendar visita de campo" type="object" invisible="stage_type != 'visit' or field_visit_scheduled"/>
+                <button name="action_schedule_field_visit" string="Agendar visita de campo" type="object" invisible="stage_type != 'visit'"/>
             </xpath>
             <xpath expr="//page[@name='lead']" position="after">
                 <page name="material" string="Solicitudes de materiales" invisible="stage_type != 'demo' and not material_line_ids">

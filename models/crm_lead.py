@@ -84,6 +84,10 @@ class CrmLead(models.Model):
         if self.picking_count > 0:
             raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
 
+    crm_meeting_ids = fields.One2many(
+        'calendar.event', 'crm_lead_id', string="Reuniones CRM",
+    )
+
     demo_meeting_scheduled = fields.Boolean(
         string="Demostración agendada",
         compute="_compute_meeting_scheduled",
@@ -98,11 +102,11 @@ class CrmLead(models.Model):
     )
 
     @api.depends(
-        'activity_ids.activity_type_id',
-        'activity_ids.calendar_event_id',
-        'activity_ids.calendar_event_id.start',
-        'activity_ids.calendar_event_id.stop',
-        'activity_ids.calendar_event_id.allday',
+        'crm_meeting_ids.crm_activity_type_id',
+        'crm_meeting_ids.active',
+        'crm_meeting_ids.start',
+        'crm_meeting_ids.stop',
+        'crm_meeting_ids.allday',
     )
     def _compute_meeting_scheduled(self):
         demo_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
@@ -111,37 +115,79 @@ class CrmLead(models.Model):
             lead.demo_meeting_scheduled = lead._is_meeting_scheduled(demo_type)
             lead.field_visit_scheduled = lead._is_meeting_scheduled(visit_type)
 
-    def _get_meeting_activity(self, activity_type):
-        """Actividad (de reunión) del tipo dado en la oportunidad, o un recordset vacío."""
+    def _get_meeting_activities(self, activity_type):
+        """Actividades (de reunión) del tipo dado en la oportunidad (recordset)."""
         self.ensure_one()
         if not activity_type:
             return self.env['mail.activity']
         return self.activity_ids.filtered(
             lambda a: a.activity_type_id == activity_type
-        )[:1]
+        )
 
     def _is_meeting_scheduled(self, activity_type):
-        """True si esa reunión ya tiene horario (evento de calendario con inicio y fin)."""
-        self.ensure_one()
-        event = self._get_meeting_activity(activity_type).calendar_event_id
-        return bool(event and not event.allday and event.start and event.stop)
+        """True si la oportunidad tiene una reunión (activa y con horario) de ese tipo.
 
-    def _get_or_create_meeting_activity(self, activity_type):
-        """Garantiza que exista la actividad de reunión para enlazarla al calendario."""
+        Se apoya en el evento de calendario etiquetado (no en la actividad) para
+        que el estado sobreviva aunque la actividad se marque como hecha, ya que
+        Odoo elimina el mail.activity al completarlo.
+        """
         self.ensure_one()
         if not activity_type:
-            return self.env['mail.activity']
-        activity = self._get_meeting_activity(activity_type)
-        if activity:
-            return activity
+            return False
+        return bool(self.env['calendar.event'].sudo().search_count([
+            ('crm_lead_id', '=', self.id),
+            ('crm_activity_type_id', '=', activity_type.id),
+            ('allday', '=', False),
+            ('start', '!=', False),
+            ('stop', '!=', False),
+        ]))
+
+    def _create_meeting_activity(self, activity_type):
+        """Crea una nueva actividad de reunión del tipo indicado."""
+        self.ensure_one()
         return self.activity_schedule(
             activity_type_id=activity_type.id,
             user_id=self.user_id.id or self.env.uid,
             summary=activity_type.summary,
         )
 
+    def _get_or_create_meeting_activity(self, activity_type):
+        """Devuelve la actividad de reunión existente o crea una si no hay ninguna."""
+        self.ensure_one()
+        if not activity_type:
+            return self.env['mail.activity']
+        activity = self._get_meeting_activities(activity_type)[:1]
+        return activity or self._create_meeting_activity(activity_type)
+
+    def _open_calendar_for_activity(self, activity, activity_type):
+        """Abre el calendario para agendar (bloque de horario y campos) la actividad dada."""
+        self.ensure_one()
+        # Reutiliza el flujo nativo de Odoo (actividad de reunión -> calendario)
+        # cuando está disponible; si no, abre el calendario con el evento enlazado.
+        if hasattr(activity, 'action_create_calendar_event'):
+            action = activity.action_create_calendar_event()
+        else:
+            action = self.env['ir.actions.act_window']._for_xml_id(
+                'calendar.action_calendar_event'
+            )
+        context = action.get('context')
+        context = dict(context) if isinstance(context, dict) else {}
+        # Etiqueta el evento con la oportunidad y el tipo de reunión, para que el
+        # estado de "agendada" persista aunque la actividad se marque como hecha.
+        context.update({
+            'default_crm_lead_id': self.id,
+            'default_crm_activity_type_id': activity_type.id,
+            'default_activity_ids': [(6, 0, activity.ids)],
+            'default_res_model': 'crm.lead',
+            'default_res_id': self.id,
+            'default_name': activity.summary or activity_type.name,
+            'default_user_id': self.user_id.id or self.env.uid,
+        })
+        action['context'] = context
+        return action
+
     def _action_schedule_meeting(self, activity_xmlid):
-        """Abre el calendario para agendar (bloque de horario y campos) la reunión indicada."""
+        """Agenda la reunión indicada: reabre la existente activa o abre el calendario."""
         self.ensure_one()
         activity_type = self.env.ref(activity_xmlid, raise_if_not_found=False)
         if not activity_type:
@@ -150,21 +196,23 @@ class CrmLead(models.Model):
                 "Verifica que el módulo esté correctamente instalado/actualizado."
             ))
         activity = self._get_or_create_meeting_activity(activity_type)
-        # Reutiliza el flujo nativo de Odoo (actividad de reunión -> calendario)
-        # cuando está disponible; si no, abre el calendario con el evento enlazado.
-        if hasattr(activity, 'action_create_calendar_event'):
-            return activity.action_create_calendar_event()
-        action = self.env['ir.actions.act_window']._for_xml_id(
-            'calendar.action_calendar_event'
-        )
-        action['context'] = {
-            'default_activity_ids': [(6, 0, activity.ids)],
-            'default_res_model': 'crm.lead',
-            'default_res_id': self.id,
-            'default_name': activity.summary or activity_type.name,
-            'default_user_id': self.user_id.id or self.env.uid,
-        }
-        return action
+        event = activity.calendar_event_id
+        if event and event.active:
+            # Ya hay una reunión agendada: abre ese evento para consultarlo o
+            # reagendarlo, en vez de crear uno nuevo (evita duplicados/huérfanos).
+            return {
+                'type': 'ir.actions.act_window',
+                'name': activity_type.name,
+                'res_model': 'calendar.event',
+                'res_id': event.id,
+                'view_mode': 'form',
+                'target': 'new',
+            }
+        if event:
+            # El evento anterior fue cancelado/archivado: se desvincula para
+            # poder agendar uno nuevo desde cero.
+            activity.calendar_event_id = False
+        return self._open_calendar_for_activity(activity, activity_type)
 
     def action_schedule_demo_meeting(self):
         """Agenda la demostración en el calendario (requiere líneas de material)."""
@@ -172,13 +220,35 @@ class CrmLead(models.Model):
         self._ensure_material_request_allowed()
         return self._action_schedule_meeting(DEMO_ACTIVITY_XMLID)
 
-    def action_schedule_field_visit(self):
-        """Agenda la visita de campo en el calendario."""
+    def _create_field_visit_meeting(self):
+        """Crea una nueva visita de campo y abre el calendario para agendarla."""
         self.ensure_one()
-        return self._action_schedule_meeting(FIELD_VISIT_ACTIVITY_XMLID)
+        activity_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
+        if not activity_type:
+            raise UserError(_(
+                "No está configurado el tipo de actividad 'Visita de campo'. "
+                "Verifica que el módulo esté correctamente instalado/actualizado."
+            ))
+        activity = self._create_meeting_activity(activity_type)
+        return self._open_calendar_for_activity(activity, activity_type)
+
+    def action_schedule_field_visit(self):
+        """Agenda una visita de campo; si ya existe una actividad, pide confirmación."""
+        self.ensure_one()
+        activity_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
+        if activity_type and self._get_meeting_activities(activity_type):
+            return {
+                'type': 'ir.actions.act_window',
+                'name': _('Visita de campo ya registrada'),
+                'res_model': 'crm.field.visit.confirm.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_lead_id': self.id},
+            }
+        return self._create_field_visit_meeting()
 
     def _check_field_visit_before_leaving(self, old_stage, new_stage):
-        """Exige la visita de campo agendada (con horario) para avanzar de esa etapa."""
+        """Exige la visita de campo agendada (con horario) y realizada para avanzar de esa etapa."""
         if old_stage.stage_type != 'visit':
             return
         ordered_ids = self.env['crm.stage'].search([], order='sequence, id').ids
@@ -190,6 +260,12 @@ class CrmLead(models.Model):
             raise ValidationError(_(
                 "Antes de avanzar desde la etapa \"%s\" debes agendar la visita de "
                 "campo en el calendario con horario de inicio y fin."
+            ) % old_stage.name)
+        visit_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
+        if visit_type and self._get_meeting_activities(visit_type):
+            raise ValidationError(_(
+                "Antes de avanzar desde la etapa \"%s\" debes marcar como realizada "
+                "(hecha) la actividad de Visita de campo."
             ) % old_stage.name)
 
     @api.constrains('stage_id', 'expected_revenue')

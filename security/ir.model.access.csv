@@ -26,3 +26,4 @@ access_product_pricelist_wizard_user,product.pricelist_wizard (lectura usuario i
 access_product_pricelist_wizard_manager,product.pricelist_wizard (administrador de catalogo),model_product_pricelist_wizard,entintados_pdv.group_tint_manager,1,1,1,1
 access_sale_loyalty_reward_wizard_user,sale.loyalty_wizard (lectura usuario interno),model_sale_loyalty_reward_wizard,base.group_user,1,0,0,0
 access_sale_loyalty_reward_wizard_manager,sale.loyalty_wizard (administrador de catalogo),model_sale_loyalty_reward_wizard,entintados_pdv.group_tint_manager,1,1,1,1
+access_crm_field_visit_confirm_wizard_user,crm.field.visit.confirm.wizard (usuario interno),model_crm_field_visit_confirm_wizard,base.group_user,1,1,1,1
