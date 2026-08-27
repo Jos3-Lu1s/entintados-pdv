@@ -2,6 +2,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
 
 DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
+FIELD_VISIT_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_field_visit'
 
 
 class CrmLead(models.Model):
@@ -36,6 +37,8 @@ class CrmLead(models.Model):
                 old_stage = record.stage_id
                 if not old_stage or not new_stage or old_stage.id == new_stage.id:
                     continue
+
+                record._check_field_visit_before_leaving(old_stage, new_stage)
 
                 if new_stage.stage_type in ('quotation', 'closed'):
                     raise ValidationError(_(
@@ -73,18 +76,121 @@ class CrmLead(models.Model):
 
         return super().write(vals)
 
-    def _schedule_demo_activity(self):
-        """Programa una actividad de demostración pendiente (evita duplicar si ya hay una abierta)."""
+    def _ensure_material_request_allowed(self):
+        """Valida que la oportunidad pueda solicitar salida de material."""
         self.ensure_one()
-        activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
-        if not activity_type or self.activity_ids.filtered(lambda a: a.activity_type_id == activity_type):
-            return
-        self.activity_schedule(
+        if not self.material_line_ids:
+            raise UserError(_("No hay líneas de material para solicitar salida."))
+        if self.picking_count > 0:
+            raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
+
+    demo_meeting_scheduled = fields.Boolean(
+        string="Demostración agendada",
+        compute="_compute_meeting_scheduled",
+        help="Verdadero cuando la demostración ya tiene una reunión con horario "
+             "(inicio y fin) en el calendario.",
+    )
+    field_visit_scheduled = fields.Boolean(
+        string="Visita de campo agendada",
+        compute="_compute_meeting_scheduled",
+        help="Verdadero cuando la visita de campo ya tiene una reunión con horario "
+             "(inicio y fin) en el calendario.",
+    )
+
+    @api.depends(
+        'activity_ids.activity_type_id',
+        'activity_ids.calendar_event_id',
+        'activity_ids.calendar_event_id.start',
+        'activity_ids.calendar_event_id.stop',
+        'activity_ids.calendar_event_id.allday',
+    )
+    def _compute_meeting_scheduled(self):
+        demo_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        visit_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
+        for lead in self:
+            lead.demo_meeting_scheduled = lead._is_meeting_scheduled(demo_type)
+            lead.field_visit_scheduled = lead._is_meeting_scheduled(visit_type)
+
+    def _get_meeting_activity(self, activity_type):
+        """Actividad (de reunión) del tipo dado en la oportunidad, o un recordset vacío."""
+        self.ensure_one()
+        if not activity_type:
+            return self.env['mail.activity']
+        return self.activity_ids.filtered(
+            lambda a: a.activity_type_id == activity_type
+        )[:1]
+
+    def _is_meeting_scheduled(self, activity_type):
+        """True si esa reunión ya tiene horario (evento de calendario con inicio y fin)."""
+        self.ensure_one()
+        event = self._get_meeting_activity(activity_type).calendar_event_id
+        return bool(event and not event.allday and event.start and event.stop)
+
+    def _get_or_create_meeting_activity(self, activity_type):
+        """Garantiza que exista la actividad de reunión para enlazarla al calendario."""
+        self.ensure_one()
+        if not activity_type:
+            return self.env['mail.activity']
+        activity = self._get_meeting_activity(activity_type)
+        if activity:
+            return activity
+        return self.activity_schedule(
             activity_type_id=activity_type.id,
             user_id=self.user_id.id or self.env.uid,
             summary=activity_type.summary,
-            note=_('Se solicitó la salida de material para la demostración.'),
         )
+
+    def _action_schedule_meeting(self, activity_xmlid):
+        """Abre el calendario para agendar (bloque de horario y campos) la reunión indicada."""
+        self.ensure_one()
+        activity_type = self.env.ref(activity_xmlid, raise_if_not_found=False)
+        if not activity_type:
+            raise UserError(_(
+                "No está configurado el tipo de actividad requerido. "
+                "Verifica que el módulo esté correctamente instalado/actualizado."
+            ))
+        activity = self._get_or_create_meeting_activity(activity_type)
+        # Reutiliza el flujo nativo de Odoo (actividad de reunión -> calendario)
+        # cuando está disponible; si no, abre el calendario con el evento enlazado.
+        if hasattr(activity, 'action_create_calendar_event'):
+            return activity.action_create_calendar_event()
+        action = self.env['ir.actions.act_window']._for_xml_id(
+            'calendar.action_calendar_event'
+        )
+        action['context'] = {
+            'default_activity_ids': [(6, 0, activity.ids)],
+            'default_res_model': 'crm.lead',
+            'default_res_id': self.id,
+            'default_name': activity.summary or activity_type.name,
+            'default_user_id': self.user_id.id or self.env.uid,
+        }
+        return action
+
+    def action_schedule_demo_meeting(self):
+        """Agenda la demostración en el calendario (requiere líneas de material)."""
+        self.ensure_one()
+        self._ensure_material_request_allowed()
+        return self._action_schedule_meeting(DEMO_ACTIVITY_XMLID)
+
+    def action_schedule_field_visit(self):
+        """Agenda la visita de campo en el calendario."""
+        self.ensure_one()
+        return self._action_schedule_meeting(FIELD_VISIT_ACTIVITY_XMLID)
+
+    def _check_field_visit_before_leaving(self, old_stage, new_stage):
+        """Exige la visita de campo agendada (con horario) para avanzar de esa etapa."""
+        if old_stage.stage_type != 'visit':
+            return
+        ordered_ids = self.env['crm.stage'].search([], order='sequence, id').ids
+        if old_stage.id not in ordered_ids or new_stage.id not in ordered_ids:
+            return
+        if ordered_ids.index(new_stage.id) <= ordered_ids.index(old_stage.id):
+            return  # no avanza (retrocede o permanece)
+        if not self.field_visit_scheduled:
+            raise ValidationError(_(
+                "Antes de avanzar desde la etapa \"%s\" debes agendar la visita de "
+                "campo en el calendario con horario de inicio y fin."
+            ) % old_stage.name)
 
     @api.constrains('stage_id', 'expected_revenue')
     def _check_expected_revenue_in_quotation(self):
@@ -109,11 +215,20 @@ class CrmLead(models.Model):
         return action
     
     def action_request_material_output(self):
+        """Genera la salida de material; exige que la demostración ya esté agendada."""
         self.ensure_one()
-        if not self.material_line_ids:
-            raise UserError(_("No hay líneas de material para solicitar salida."))
-        if self.picking_count > 0:
-            raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
+        self._ensure_material_request_allowed()
+        if not self.demo_meeting_scheduled:
+            raise UserError(_(
+                "Primero agenda la demostración en el calendario "
+                "(marca el horario de inicio y fin del evento)."
+            ))
+        return self._create_material_output()
+
+    def _create_material_output(self):
+        """Genera la salida de material (picking) con sus movimientos y abre el picking."""
+        self.ensure_one()
+        self._ensure_material_request_allowed()
 
         warehouse = self.env['stock.warehouse'].search(
             [('company_id', '=', self.company_id.id or self.env.company.id)], limit=1
@@ -159,8 +274,6 @@ class CrmLead(models.Model):
             })
 
         picking.action_confirm()
-
-        self._schedule_demo_activity()
 
         return {
             'type': 'ir.actions.act_window',
