@@ -248,24 +248,34 @@ class CrmLead(models.Model):
         return self._create_field_visit_meeting()
 
     def _check_field_visit_before_leaving(self, old_stage, new_stage):
-        """Exige la visita de campo agendada (con horario) y realizada para avanzar de esa etapa."""
+        """Valida avance y retroceso en etapa de visita de campo."""
         if old_stage.stage_type != 'visit':
             return
         ordered_ids = self.env['crm.stage'].search([], order='sequence, id').ids
         if old_stage.id not in ordered_ids or new_stage.id not in ordered_ids:
             return
-        if ordered_ids.index(new_stage.id) <= ordered_ids.index(old_stage.id):
-            return  # no avanza (retrocede o permanece)
+
+        old_index = ordered_ids.index(old_stage.id)
+        new_index = ordered_ids.index(new_stage.id)
+        visit_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
+        has_pending_activity = bool(visit_type and self._get_meeting_activities(visit_type))
+
+        if new_index < old_index:
+            if self.field_visit_scheduled or has_pending_activity:
+                raise ValidationError(_(
+                    'No puedes regresar a "%s" si la oportunidad ya tiene una visita de campo registrada.'
+                ) % new_stage.name)
+            return
+
         if not self.field_visit_scheduled:
             raise ValidationError(_(
-                "Antes de avanzar desde la etapa \"%s\" debes agendar la visita de "
-                "campo en el calendario con horario de inicio y fin."
+                'Antes de avanzar desde la etapa "%s" debes agendar la visita de '
+                'campo en el calendario con horario de inicio y fin.'
             ) % old_stage.name)
-        visit_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
-        if visit_type and self._get_meeting_activities(visit_type):
+        if has_pending_activity:
             raise ValidationError(_(
-                "Antes de avanzar desde la etapa \"%s\" debes marcar como realizada "
-                "(hecha) la actividad de Visita de campo."
+                'Antes de avanzar desde la etapa "%s" debes marcar como realizada '
+                '(hecha) la actividad de Visita de campo.'
             ) % old_stage.name)
 
     @api.constrains('stage_id', 'expected_revenue')

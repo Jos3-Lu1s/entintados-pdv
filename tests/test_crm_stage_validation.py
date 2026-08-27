@@ -102,3 +102,36 @@ class TestCrmStageValidation(TransactionCase):
         # Debe permitir cambiar la etapa a Demo sin error
         lead.stage_id = self.stage_demo.id
         self.assertEqual(lead.stage_id.id, self.stage_demo.id)
+
+    def test_can_return_to_prospect_without_field_visit(self):
+        """Permite regresar de Visita a Prospecto si no hay visita agendada ni actividad abierta."""
+        lead = self._create_lead(self.stage_visit)
+        lead.stage_id = self.stage_new.id
+        self.assertEqual(lead.stage_id.id, self.stage_new.id)
+
+    def test_cannot_return_to_prospect_with_scheduled_visit(self):
+        """No permite regresar de Visita a Prospecto si ya tiene visita agendada."""
+        lead = self._create_lead(self.stage_visit)
+        now = datetime.now()
+        self.env['calendar.event'].create({
+            'name': 'Visita agendada',
+            'start': now + timedelta(days=1),
+            'stop': now + timedelta(days=1, hours=1),
+            'allday': False,
+            'crm_lead_id': lead.id,
+            'crm_activity_type_id': self.visit_activity_type.id,
+        })
+        with self.assertRaises(ValidationError) as cm:
+            lead.stage_id = self.stage_new.id
+        self.assertIn("ya tiene una visita de campo registrada", str(cm.exception))
+
+    def test_cannot_return_to_prospect_with_pending_visit_activity(self):
+        """No permite regresar de Visita a Prospecto si tiene una actividad de visita abierta."""
+        lead = self._create_lead(self.stage_visit)
+        lead.activity_schedule(
+            activity_type_id=self.visit_activity_type.id,
+            summary='Visita pendiente',
+        )
+        with self.assertRaises(ValidationError) as cm:
+            lead.stage_id = self.stage_new.id
+        self.assertIn("ya tiene una visita de campo registrada", str(cm.exception))
