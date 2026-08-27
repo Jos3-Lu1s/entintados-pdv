@@ -32,26 +32,24 @@
                         t-foreach="colors"
                         t-as="color"
                         t-key="color.id"
-                        class="tint-color-card text-start border-0 shadow-sm rounded-3 overflow-hidden p-0"
+                        class="tint-color-card text-start border shadow-sm rounded-3 overflow-hidden p-3 bg-white d-flex flex-column justify-content-between"
                         t-on-click="() => this.selectColor(color)"
                     >
-                        <div
-                            class="tint-color-sample w-100"
-                            t-att-style="
-                                'background-color: ' +
-                                (color.html_color || '#CCCCCC')
-                            "
-                        >
-                            <span t-if="color.code" class="badge bg-dark bg-opacity-75 m-2 position-relative z-1 fs-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span t-if="color.code" class="badge bg-secondary fs-6">
                                 <t t-esc="color.code"/>
                             </span>
+                            <i class="fa fa-paint-brush text-primary fs-5" role="img"/>
                         </div>
 
-                        <div class="p-2 bg-white">
+                        <div>
                             <strong
-                                class="d-block text-dark text-truncate"
+                                class="d-block text-dark text-truncate fs-5"
                                 t-esc="color.name"
                             />
+                            <small t-if="color.base_type_summary" class="text-muted d-block text-truncate mt-1">
+                                Bases: <t t-esc="color.base_type_summary"/>
+                            </small>
                         </div>
                     </button>
                 </div>

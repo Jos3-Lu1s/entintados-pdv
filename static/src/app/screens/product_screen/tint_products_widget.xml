@@ -108,7 +108,7 @@
             <t t-set="activeOrder" t-value="pos.getOrder()"/>
             <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor" class="o-active-tint-banner">
                 <div class="d-flex align-items-center">
-                    <span class="tint-sample" t-att-style="'background-color:' + (activeOrder.uiState.selectedTintColor.html_color || '#9E9E9E')"/>
+                    <i class="fa fa-paint-brush text-white me-2 fs-5" role="img"/>
                     <div>
                         <strong>Color seleccionado: </strong>
                         <span class="fw-bold me-1">

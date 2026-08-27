@@ -38,7 +38,6 @@ export class TintPanel extends Component {
 
     get colorColumns() {
         return [
-            { label: "Muestra", class: "o-tint-th-swatch" },
             { label: "Código", class: "text-nowrap" },
             { label: "Color" },
             { label: "Galería", class: "text-nowrap" },

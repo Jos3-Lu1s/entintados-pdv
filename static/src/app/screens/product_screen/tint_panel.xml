@@ -7,10 +7,9 @@
             <!-- Filtros de base y color seleccionado -->
             <div t-if="ui.colorId" class="flex-shrink-0 border rounded bg-view mx-2 mb-2 p-3">
                 <div class="d-flex align-items-center gap-2" t-att-class="{ 'mb-2': levels.length }">
-                    <span class="rounded-circle border flex-shrink-0"
-                          t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
+                    <i class="fa fa-paint-brush text-primary" role="img"/>
                     <span class="fw-bold text-truncate">
-                        <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
+                        <t t-if="selectedColor and selectedColor.code"><span class="badge bg-secondary me-1"><t t-esc="selectedColor.code"/></span></t>
                         <t t-esc="selectedColor and selectedColor.name"/>
                     </span>
                     <button t-if="hasActiveFilters" class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
@@ -97,10 +96,6 @@
                                 <tr t-foreach="colors" t-as="color" t-key="color.id"
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.selectColor(color.id)">
-                                    <td class="o-tint-td-swatch">
-                                        <span class="rounded-circle border d-inline-block align-middle"
-                                              t-attf-style="width: 1.5rem; height: 1.5rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
-                                    </td>
                                     <td class="text-nowrap">
                                         <span t-if="color.code" class="badge bg-secondary" t-esc="color.code"/>
                                         <span t-else="" class="text-muted">—</span>

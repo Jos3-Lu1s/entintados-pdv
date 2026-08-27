@@ -40,7 +40,6 @@ export class TintFormulaPopup extends Component {
             // Datos para nuevo color (tint.color)
             newColorName: "",
             newColorCode: "",
-            newColorHtml: "#ffffff",
             newColorNotes: "",
 
             // Galería, base y presentación para la fórmula
@@ -81,10 +80,6 @@ export class TintFormulaPopup extends Component {
         this.state.activeTab = tab;
         this.state.createColorError = "";
         this.state.createColorSuccess = "";
-    }
-
-    onColorInput(ev) {
-        this.state.newColorHtml = ev.target.value;
     }
 
     get galleries() {
@@ -252,7 +247,6 @@ export class TintFormulaPopup extends Component {
             // 1. Crear tint.color
             const vals = {
                 name: this.state.newColorName.trim(),
-                html_color: this.state.newColorHtml || false,
             };
             if (this.state.newColorCode.trim()) {
                 vals.code = this.state.newColorCode.trim();
@@ -311,7 +305,6 @@ export class TintFormulaPopup extends Component {
             this.state.createColorSuccess = _t("¡Color y fórmula registrados exitosamente!");
             this.state.newColorName = "";
             this.state.newColorCode = "";
-            this.state.newColorHtml = "#ffffff";
             this.state.newColorNotes = "";
             const galleries = this.pos.models["tint.gallery"]?.getAll() || [];
             const defaultGallery = [...galleries].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))[0];

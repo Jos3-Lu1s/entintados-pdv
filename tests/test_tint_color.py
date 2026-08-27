@@ -56,15 +56,6 @@ class TestTintColor(TransactionCase):
         color = self.colors.create({'name': 'Gris Perla', 'code': 'MIO-001'})
         self.assertEqual(color.code, 'MIO-001')
 
-    def test_invalid_hex_color_rejected(self):
-        with self.assertRaises(ValidationError):
-            self.colors.create({'name': 'Color raro', 'html_color': 'rojo'})
-
-    def test_valid_hex_color_accepted(self):
-        for value in ('#C8102E', '#fff'):
-            color = self.colors.create({'name': 'Color %s' % value, 'html_color': value})
-            self.assertEqual(color.html_color, value)
-
     @mute_logger('odoo.sql_db')
     def test_duplicate_color_code_rejected(self):
         self.colors.create({'name': 'Primero', 'code': 'DUP-1'})
