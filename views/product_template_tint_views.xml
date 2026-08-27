@@ -46,8 +46,8 @@
                     </group>
                     <group invisible="tint_role != 'colorant'">
                         <group name="tint_colorant" string="Colorante">
-                            <field name="uom_id" readonly="1" />
-                            <field name="price_per_point" />
+                            <field name="uom_id" options="{'no_create': True}" />
+                            <field name="list_price" />
                         </group>
                     </group>
                     <div

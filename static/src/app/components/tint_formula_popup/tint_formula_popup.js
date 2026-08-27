@@ -151,7 +151,7 @@ export class TintFormulaPopup extends Component {
     get newFormulaCostMax() {
         return this.state.newFormulaLines.reduce((acc, l) => {
             const colorant = this.pos.models["product.product"].get(l.colorantId);
-            const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.price_per_point ?? 0;
+            const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.product_tmpl_id?.list_price ?? 0;
             return acc + (l.points || 0) * price;
         }, 0);
     }
@@ -175,7 +175,7 @@ export class TintFormulaPopup extends Component {
         }
         return this.doses.reduce((acc, dose) => {
             const colorant = this.pos.models["product.product"].get(dose.colorantId || dose.id);
-            const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.price_per_point ?? 0;
+            const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.product_tmpl_id?.list_price ?? 0;
             return acc + (dose.points || 0) * price;
         }, 0);
     }

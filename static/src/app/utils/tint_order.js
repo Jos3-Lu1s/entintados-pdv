@@ -15,12 +15,12 @@ export function colorantPointPrice(colorant) {
         return 0;
     }
     const tmpl = colorant.product_tmpl_id;
-    const price = tmpl?.price_per_point ?? colorant.price_per_point ?? 0;
+    const price = colorant.lst_price ?? colorant.list_price ?? tmpl?.list_price ?? 0;
     if (!price && !_warnedColorantsWithoutPrice.has(colorant.id)) {
         _warnedColorantsWithoutPrice.add(colorant.id);
         console.warn(
-            "[ENTINTADOS] El colorante «%s» no tiene precio por punto: se cobrará en cero. " +
-                "Revisa el campo «Precio por punto» en la pestaña Entintado del producto.",
+            "[ENTINTADOS] El colorante «%s» no tiene precio de venta: se cobrará en cero. " +
+                "Revisa el campo «Precio de venta» en el producto.",
             colorant.display_name || colorant.name || colorant.id
         );
     }
