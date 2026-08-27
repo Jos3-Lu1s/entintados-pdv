@@ -20,9 +20,13 @@
                 <attribute name="invisible">loyalty_action_type != 'reward'</attribute>
             </xpath>
             <xpath expr="//group[@name='rewards']" position="after">
-                    <div class="alert alert-warning" role="alert">
+                    <div class="alert alert-info" role="alert" invisible="loyalty_action_type != 'discount'">
+                        <strong>Aviso:</strong>
+                        Se le aplicará un descuento del <field name="partner_discount"/>% que previamente fue asignado.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="loyalty_action_type != 'reward'">
                         <strong>Advertencia:</strong>
-                        Este cliente ya cuenta con un descuento.
+                        El descuento del <field name="partner_discount"/>% no se tomará en cuenta a la promoción.
                     </div>
             </xpath>
         </field>
