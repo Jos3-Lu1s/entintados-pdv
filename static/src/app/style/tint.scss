@@ -19,6 +19,12 @@
         border: none;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         font-size: 0.85rem;
+        color: #475569;
+
+        &:hover:not(.active):not(.bg-white) {
+            color: #0f172a;
+            background-color: rgba(0, 0, 0, 0.04);
+        }
     }
 }
 
@@ -61,6 +67,10 @@
     justify-content: space-between;
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     animation: fadeInSlide 0.25s ease-out;
+
+    .text-warning {
+        color: #fde047 !important;
+    }
 }
 
 @keyframes fadeInSlide {
@@ -95,9 +105,9 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #475569;
+    color: #334155;
     white-space: nowrap;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #cbd5e1;
     padding: 0.65rem 0.85rem;
 }
 
@@ -113,7 +123,7 @@
 
 .o-tint-table tbody td {
     padding: 0.65rem 0.85rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .o-tint-table tbody tr:last-child td {
@@ -190,6 +200,7 @@
 
             .o-tint-card-subtitle {
                 font-size: 0.75rem;
+                color: #475569;
             }
         }
     }
@@ -259,6 +270,11 @@
                 font-weight: 700;
                 color: #1e293b;
             }
+
+            .o-tint-card-subtitle {
+                font-size: 0.75rem;
+                color: #475569;
+            }
         }
     }
 
@@ -296,4 +312,58 @@
     padding: 0.25rem 0.6rem;
     font-weight: 600;
     letter-spacing: 0.2px;
+}
+
+/* Escala de contraste y legibilidad para entorno de caja (PdV) */
+.text-secondary-emphasis {
+    color: #475569 !important;
+}
+
+.o-tint-code {
+    color: #334155 !important;
+    font-family: var(--font-monospace, monospace);
+}
+
+.o-tint-empty-state {
+    color: #475569;
+    i {
+        color: #64748b;
+    }
+    h4, h5 {
+        color: #1e293b;
+    }
+    p {
+        color: #475569;
+    }
+}
+
+/* Badges con contraste calibrado */
+.badge.bg-light.text-dark {
+    background-color: #f1f5f9 !important;
+    color: #334155 !important;
+    border-color: #cbd5e1 !important;
+}
+
+.badge.bg-primary-subtle {
+    background-color: #ede9fe !important;
+    color: #5b21b6 !important;
+}
+
+.badge.bg-success-subtle {
+    background-color: #dcfce7 !important;
+    color: #166534 !important;
+}
+
+.badge.bg-info-subtle {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+}
+
+/* Alertas operativas en caja */
+.alert-warning {
+    color: #78350f;
+    .text-muted,
+    .text-secondary {
+        color: #92400e !important;
+    }
 }

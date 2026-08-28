@@ -13,12 +13,12 @@
                             <span>Base: <strong class="text-primary"><t t-esc="baseType and baseType.name or '—'"/></strong></span>
                         </div>
                         <div t-if="size" class="d-flex align-items-center gap-1 small text-dark fw-semibold border-start ps-3">
-                            <i class="fa fa-cube text-secondary" role="img"/>
-                            <span>Presentación: <strong class="text-secondary"><t t-esc="size.name"/></strong></span>
+                            <i class="fa fa-cube text-dark" role="img"/>
+                            <span>Presentación: <strong class="text-dark"><t t-esc="size.name"/></strong></span>
                         </div>
                     </div>
                     <div t-if="capacityPoints" class="d-flex align-items-center gap-1">
-                        <span class="badge rounded-pill bg-white text-secondary border px-2 py-1 shadow-xs">
+                        <span class="badge rounded-pill bg-white text-dark border px-2 py-1 shadow-xs">
                             <i class="fa fa-tachometer me-1"/> Capacidad máx: <strong><t t-esc="formatPoints(capacityPoints)"/></strong>
                         </span>
                     </div>
@@ -28,7 +28,7 @@
                 <div class="row g-2 mb-3 align-items-center">
                     <div class="col">
                         <div class="input-group input-group-sm">
-                            <span class="input-group-text bg-white text-muted border-end-0">
+                            <span class="input-group-text bg-white text-secondary-emphasis border-end-0">
                                 <i class="fa fa-search"/>
                             </span>
                             <input type="text" class="form-control ps-2 border-start-0"
@@ -56,7 +56,7 @@
                         <div class="o-tint-card h-100 d-flex flex-column">
                             <div class="o-tint-card-header d-flex align-items-center justify-content-between py-2 px-3">
                                 <span class="o-tint-card-title small mb-0">Colores Compatibles</span>
-                                <span class="badge bg-light text-secondary border text-xxs">
+                                <span class="badge bg-light text-dark border text-xxs">
                                     <t t-esc="availableColors.length"/> disponibles
                                 </span>
                             </div>
@@ -72,7 +72,7 @@
                                                t-att-class="color.id === state.colorId ? 'text-white' : 'text-primary'"/>
                                             <div class="text-truncate">
                                                 <div class="fw-semibold text-truncate"><t t-esc="color.name"/></div>
-                                                <div t-if="color.code" class="text-xxs opacity-75">
+                                                <div t-if="color.code" class="text-xxs text-secondary-emphasis">
                                                     Código: <t t-esc="color.code"/>
                                                 </div>
                                             </div>
@@ -81,8 +81,8 @@
                                     </button>
 
                                     <!-- Estado vacío de búsqueda -->
-                                    <div t-if="!availableColors.length" class="text-center py-4 px-2 text-muted">
-                                        <i class="fa fa-search fa-2x mb-2 text-secondary opacity-50"/>
+                                    <div t-if="!availableColors.length" class="text-center py-4 px-2 o-tint-empty-state">
+                                        <i class="fa fa-search fa-2x mb-2 text-secondary"/>
                                         <p class="small mb-2">No hay fórmulas compatibles para esta base y tamaño.</p>
                                         <button type="button" class="btn btn-xs btn-outline-primary" t-on-click="openCreateColor">
                                             <i class="fa fa-plus me-1"/> Crear este color
@@ -97,11 +97,11 @@
                     <div class="col-md-7">
                         <!-- Sin selección -->
                         <div t-if="!selectedFormula" class="o-tint-card h-100 d-flex flex-column align-items-center justify-content-center text-center p-4 bg-light border-dashed">
-                            <div class="o-tint-header-icon bg-white text-muted mb-2 shadow-xs" style="width: 3rem; height: 3rem; font-size: 1.25rem;">
+                            <div class="o-tint-header-icon bg-white text-secondary-emphasis mb-2 shadow-xs" style="width: 3rem; height: 3rem; font-size: 1.25rem;">
                                 <i class="fa fa-hand-pointer-o"/>
                             </div>
                             <h6 class="text-dark fw-bold mb-1">Selecciona un Color</h6>
-                            <p class="text-muted small mb-0" style="max-width: 280px;">
+                            <p class="text-secondary-emphasis small mb-0" style="max-width: 280px;">
                                 Elige un color de la lista lateral para cargar su fórmula de dosificación y especificaciones de costo.
                             </p>
                         </div>
@@ -114,13 +114,13 @@
                                     <h6 class="o-tint-card-title text-primary mb-0">
                                         <t t-esc="selectedColor.name"/>
                                     </h6>
-                                    <div class="text-xxs text-muted mt-0 d-flex gap-2">
+                                    <div class="text-xxs text-secondary-emphasis mt-0 d-flex gap-2">
                                         <span t-if="selectedFormula.gallery_id">Galería: <strong><t t-esc="selectedFormula.gallery_id.name"/></strong></span>
                                         <span>Base: <strong><t t-esc="baseType ? baseType.name : '—'"/></strong></span>
                                         <span>Presentación: <strong><t t-esc="size ? size.name : '—'"/></strong></span>
                                     </div>
                                 </div>
-                                <span t-if="selectedColor.code" class="badge rounded-pill bg-light text-secondary border px-2 py-1 font-monospace">
+                                <span t-if="selectedColor.code" class="badge rounded-pill bg-light text-dark border px-2 py-1 font-monospace">
                                     <t t-esc="selectedColor.code"/>
                                 </span>
                             </div>
@@ -129,7 +129,7 @@
                                 <!-- Medidor de Capacidad de Envase -->
                                 <div t-if="capacityPoints" class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="small fw-semibold text-muted">
+                                        <span class="small fw-semibold text-secondary-emphasis">
                                             Capacidad utilizada:
                                             <strong t-att-class="isOverCapacity ? 'text-danger' : 'text-primary'">
                                                 <t t-esc="formatPoints(totalPoints)"/> / <t t-esc="formatPoints(capacityPoints)"/>
@@ -155,21 +155,21 @@
                                     <table class="table table-sm table-hover mb-0 align-middle">
                                         <thead class="table-light border-bottom">
                                             <tr>
-                                                <th class="ps-3 py-2 text-secondary text-uppercase text-xs fw-bold">Colorante</th>
-                                                <th class="text-end pe-3 py-2 text-secondary text-uppercase text-xs fw-bold" style="width: 130px;">Dosis</th>
+                                                <th class="ps-3 py-2 text-dark text-uppercase text-xs fw-bold">Colorante</th>
+                                                <th class="text-end pe-3 py-2 text-dark text-uppercase text-xs fw-bold" style="width: 130px;">Dosis</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr t-foreach="doses" t-as="dose" t-key="dose.id || dose.name" class="o-tint-dose-row">
                                                 <td class="ps-3 fw-semibold text-dark">
-                                                    <i class="fa fa-tint text-primary opacity-50 me-2"/>
+                                                    <i class="fa fa-tint text-primary me-2"/>
                                                     <t t-esc="dose.name"/>
                                                 </td>
                                                 <td class="text-end pe-3">
                                                     <span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1 me-1">
                                                         <t t-esc="formatPoints(dose.points)"/>
                                                     </span>
-                                                    <small class="text-muted">(<t t-esc="dose.points"/> Pts)</small>
+                                                    <small class="text-secondary-emphasis">(<t t-esc="dose.points"/> Pts)</small>
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -178,7 +178,7 @@
                                                 <td class="ps-3 text-dark">Total Colorantes</td>
                                                 <td class="text-end pe-3">
                                                     <span class="text-primary fs-6 me-1"><t t-esc="formatPoints(totalPoints)"/></span>
-                                                    <small class="text-muted">(<t t-esc="totalPoints"/> Pts)</small>
+                                                    <small class="text-secondary-emphasis">(<t t-esc="totalPoints"/> Pts)</small>
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -190,8 +190,8 @@
                                     <div class="col-6">
                                         <div class="o-tint-kpi-card p-2 rounded-3 border bg-white shadow-xs">
                                             <div class="d-flex align-items-center justify-content-between mb-1">
-                                                <small class="text-muted fw-semibold">Costo entintado</small>
-                                                <span class="badge rounded-pill bg-light text-muted border text-xxs px-2">cost_min</span>
+                                                <small class="text-secondary-emphasis fw-semibold">Costo entintado</small>
+                                                <span class="badge rounded-pill bg-light text-secondary-emphasis border text-xxs px-2">cost_min</span>
                                             </div>
                                             <div class="fs-6 fw-bold text-dark">
                                                 <t t-esc="formatCurrency(selectedFormulaCostMin)"/>
@@ -201,7 +201,7 @@
                                     <div class="col-6">
                                         <div class="o-tint-kpi-card p-2 rounded-3 border bg-white shadow-xs">
                                             <div class="d-flex align-items-center justify-content-between mb-1">
-                                                <small class="text-muted fw-semibold">Precio de venta</small>
+                                                <small class="text-secondary-emphasis fw-semibold">Precio de venta</small>
                                                 <span class="badge rounded-pill bg-success-subtle text-success border text-xxs px-2">cost_max</span>
                                             </div>
                                             <div class="fs-6 fw-bold text-success">
@@ -221,7 +221,7 @@
                                             Confirmar extracción previa de <span class="text-danger"><t t-esc="extractionLiters.toFixed(1)"/> L</span>
                                         </label>
                                     </div>
-                                    <div t-if="baseType.operator_note" class="text-muted small ps-4">
+                                    <div t-if="baseType.operator_note" class="text-dark small ps-4">
                                         <i class="fa fa-info-circle me-1"/> <t t-esc="baseType.operator_note"/>
                                     </div>
                                 </div>

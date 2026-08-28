@@ -47,7 +47,7 @@
                                 class="d-block text-dark text-truncate fs-5"
                                 t-esc="color.name"
                             />
-                            <small t-if="color.base_type_summary" class="text-muted d-block text-truncate mt-1">
+                            <small t-if="color.base_type_summary" class="text-secondary-emphasis d-block text-truncate mt-1">
                                 Bases: <t t-esc="color.base_type_summary"/>
                             </small>
                         </div>
@@ -56,7 +56,7 @@
 
                 <div
                     t-else=""
-                    class="h-100 d-flex flex-column align-items-center justify-content-center text-muted"
+                    class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state"
                 >
                     <i class="fa fa-paint-brush fa-3x mb-3 text-secondary"/>
                     <h4>No se encontraron colores registrados</h4>
