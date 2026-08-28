@@ -192,6 +192,17 @@ export class TintFormulaPopup extends Component {
         return this.capacityPoints - this.totalPoints;
     }
 
+    get capacityPercent() {
+        if (!this.capacityPoints || this.capacityPoints <= 0) {
+            return 0;
+        }
+        return (this.totalPoints / this.capacityPoints) * 100;
+    }
+
+    get isOverCapacity() {
+        return this.capacityPoints > 0 && this.totalPoints > this.capacityPoints;
+    }
+
     get requiresExtraction() {
         return Boolean(this.baseType && this.baseType.requires_extraction);
     }
