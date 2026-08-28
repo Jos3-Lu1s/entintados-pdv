@@ -110,6 +110,17 @@ export class TintCreateColorPopup extends Component {
         return cap ? cap.max_points : 0;
     }
 
+    get capacityPercent() {
+        if (!this.newCapacityPoints || this.newCapacityPoints <= 0) {
+            return 0;
+        }
+        return (this.newFormulaTotalPoints / this.newCapacityPoints) * 100;
+    }
+
+    get isOverCapacity() {
+        return this.newCapacityPoints > 0 && this.newFormulaTotalPoints > this.newCapacityPoints;
+    }
+
     get newFormulaTotalPoints() {
         return this.state.newFormulaLines.reduce((acc, l) => acc + (l.points || 0), 0);
     }

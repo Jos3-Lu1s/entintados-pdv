@@ -3,173 +3,275 @@
 
     <t t-name="entintados_pdv.TintCreateColorPopup">
         <Dialog title="props.title" size="'lg'">
-            <div class="entintado-create-color-popup p-2">
+            <div class="entintado-create-color-modal p-1">
 
-                <div t-if="state.createColorError" class="alert alert-danger py-2 mb-3">
-                    <t t-esc="state.createColorError"/>
+                <!-- Alertas de notificación/error -->
+                <div t-if="state.createColorError" class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 shadow-sm" role="alert">
+                    <i class="fa fa-exclamation-circle fs-5 flex-shrink-0" role="img"/>
+                    <div class="small fw-semibold"><t t-esc="state.createColorError"/></div>
                 </div>
-                <div t-if="state.createColorSuccess" class="alert alert-success py-2 mb-3">
-                    <t t-esc="state.createColorSuccess"/>
-                </div>
-
-                <!-- Datos básicos del color -->
-                <div class="row g-3">
-                    <div class="col-md-7">
-                        <label class="form-label fw-bold">Nombre del Color <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control"
-                               t-model="state.newColorName"
-                               placeholder="Ej: Azul Rey, Rojo Pasión…"/>
-                    </div>
-
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold">Código</label>
-                        <input type="text" class="form-control"
-                               t-model="state.newColorCode"
-                               placeholder="Autogenerado si está vacío"/>
-                    </div>
-
-                    <div class="col-12">
-                        <label class="form-label fw-bold">Notas</label>
-                        <textarea class="form-control" rows="2"
-                                  t-model="state.newColorNotes"
-                                  placeholder="Detalles u observaciones opcionales sobre este color…"></textarea>
-                    </div>
+                <div t-if="state.createColorSuccess" class="alert alert-success d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 shadow-sm" role="alert">
+                    <i class="fa fa-check-circle fs-5 flex-shrink-0" role="img"/>
+                    <div class="small fw-semibold"><t t-esc="state.createColorSuccess"/></div>
                 </div>
 
-                <!-- Configuración de fórmula asociada -->
-                <div class="border rounded p-3 bg-light mt-3">
-                    <div class="d-flex align-items-center justify-content-between mb-3">
-                        <h6 class="fw-bold mb-0 text-primary">
-                            <i class="fa fa-flask me-1" role="img"/> Configuración de Fórmula Inicial
-                        </h6>
-                        <span t-if="newCapacityPoints" class="badge text-bg-secondary">
-                            Capacidad máx: <t t-esc="formatPoints(newCapacityPoints)"/>
-                        </span>
-                    </div>
-
-                    <!-- Selección de galería, base y presentación -->
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">Galería <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" t-model="state.newGalleryId">
-                                <option value="">— Seleccionar Galería —</option>
-                                <option t-foreach="galleries" t-as="g" t-key="g.id" t-att-value="g.id">
-                                    <t t-esc="g.name"/> <t t-if="g.code">(<t t-esc="g.code"/>)</t>
-                                </option>
-                            </select>
+                <!-- Sección 1: Ficha básica del color -->
+                <div class="o-tint-card mb-3">
+                    <div class="o-tint-card-header d-flex align-items-center gap-2 py-2 px-3">
+                        <div class="o-tint-header-icon bg-primary-subtle text-primary">
+                            <i class="fa fa-paint-brush"/>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">Tipo de Base</label>
-                            <select class="form-select form-select-sm" t-model="state.newBaseTypeId">
-                                <option value="">— Seleccionar Base —</option>
-                                <option t-foreach="baseTypes" t-as="b" t-key="b.id" t-att-value="b.id">
-                                    <t t-esc="b.name"/> <t t-if="b.code">(<t t-esc="b.code"/>)</t>
-                                </option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">Presentación</label>
-                            <select class="form-select form-select-sm" t-model="state.newSizeId">
-                                <option value="">— Seleccionar Presentación —</option>
-                                <option t-foreach="sizes" t-as="s" t-key="s.id" t-att-value="s.id">
-                                    <t t-esc="s.name"/>
-                                </option>
-                            </select>
+                        <div>
+                            <h6 class="o-tint-card-title mb-0">Información del Color</h6>
+                            <span class="o-tint-card-subtitle text-muted">Datos principales para el catálogo</span>
                         </div>
                     </div>
-
-                    <!-- Agregar colorante -->
-                    <div class="row g-2 align-items-end mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold mb-1">Colorante</label>
-                            <select class="form-select form-select-sm" t-model="state.selectedColorantId">
-                                <option value="">— Seleccionar colorante —</option>
-                                <option t-foreach="colorants" t-as="c" t-key="c.id" t-att-value="c.id">
-                                    <t t-esc="c.display_name or c.name"/>
-                                </option>
-                            </select>
-                        </div>
-                        <div class="col-3">
-                            <label class="form-label small fw-bold mb-1">Dosis (Pts)</label>
-                            <input type="number" min="0.01" step="any" class="form-control form-control-sm"
-                                   t-model="state.newColorantPoints"/>
-                        </div>
-                        <div class="col-3">
-                            <button type="button" class="btn btn-sm btn-outline-primary w-100"
-                                    t-on-click="addColorantLine"
-                                    t-att-disabled="!state.selectedColorantId">
-                                <i class="fa fa-plus me-1" role="img"/> Agregar
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Tabla de dosis de la fórmula -->
-                    <div t-if="state.newFormulaLines.length" class="table-responsive">
-                        <table class="table table-sm table-bordered bg-white mb-2">
-                            <thead>
-                                <tr class="table-light">
-                                    <th>Colorante</th>
-                                    <th class="text-end" style="width: 130px;">Dosis</th>
-                                    <th class="text-center" style="width: 50px;"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr t-foreach="state.newFormulaLines" t-as="line" t-key="line_index">
-                                    <td><t t-esc="line.colorantName"/></td>
-                                    <td class="text-end">
-                                        <span class="badge text-bg-info me-1"><t t-esc="formatPoints(line.points)"/></span>
-                                        <small class="text-muted"><t t-esc="line.points"/> Pts.</small>
-                                    </td>
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0"
-                                                t-on-click="() => this.removeColorantLine(line_index)">
-                                            <i class="fa fa-trash" role="img"/>
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr class="fw-bold">
-                                    <td>Total Dosis</td>
-                                    <td class="text-end">
-                                        <t t-esc="formatPoints(newFormulaTotalPoints)"/>
-                                        <small class="text-muted ms-1">(<t t-esc="newFormulaTotalPoints"/> Pts.)</small>
-                                    </td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-
-                        <!-- Resumen de costo y precio de venta -->
-                        <div class="row g-2 mt-2 pt-2 border-top">
-                            <div class="col-6">
-                                <div class="p-2 rounded bg-light border">
-                                    <small class="text-muted d-block fw-semibold">Costo estimado (<code class="text-secondary">cost_min</code>)</small>
-                                    <span class="fs-6 fw-bold text-dark"><t t-esc="formatCurrency(newFormulaCostMin)"/></span>
+                    <div class="o-tint-card-body p-3">
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold text-dark mb-1">
+                                    Nombre del Color <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light text-muted border-end-0">
+                                        <i class="fa fa-tag"/>
+                                    </span>
+                                    <input type="text" class="form-control ps-2"
+                                           t-model="state.newColorName"
+                                           placeholder="Ej: Azul Rey, Blanco Ostión, Rojo Pasión…"
+                                           autofocus="autofocus"/>
                                 </div>
                             </div>
-                            <div class="col-6">
-                                <div class="p-2 rounded bg-light border">
-                                    <small class="text-muted d-block fw-semibold">Precio de venta estimado (<code class="text-secondary">cost_max</code>)</small>
-                                    <span class="fs-6 fw-bold text-success"><t t-esc="formatCurrency(newFormulaCostMax)"/></span>
+
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold text-dark mb-1">
+                                    Código del Color
+                                </label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light text-muted border-end-0">
+                                        <i class="fa fa-barcode"/>
+                                    </span>
+                                    <input type="text" class="form-control ps-2"
+                                           t-model="state.newColorCode"
+                                           placeholder="Autogenerado si está vacío"/>
                                 </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold text-muted mb-1">
+                                    Notas y observaciones (opcional)
+                                </label>
+                                <textarea class="form-control form-control-sm" rows="2"
+                                          t-model="state.newColorNotes"
+                                          placeholder="Detalles sobre el tono, acabados sugeridos o instrucciones especiales…"/>
                             </div>
                         </div>
                     </div>
-                    <div t-else="" class="text-muted fst-italic small">
-                        (Opcional) Agrega los colorantes y dosis en puntos para registrar la fórmula de este color sobre la base y presentación seleccionadas.
+                </div>
+
+                <!-- Sección 2: Configuración de Fórmula Inicial (Opcional) -->
+                <div class="o-tint-card o-tint-formula-card">
+                    <div class="o-tint-card-header d-flex align-items-center justify-content-between py-2 px-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="o-tint-header-icon bg-info-subtle text-info">
+                                <i class="fa fa-flask"/>
+                            </div>
+                            <div>
+                                <h6 class="o-tint-card-title mb-0">Fórmula Inicial (Opcional)</h6>
+                                <span class="o-tint-card-subtitle text-muted">Dosificación por base y presentación</span>
+                            </div>
+                        </div>
+                        <div t-if="newCapacityPoints" class="d-flex align-items-center gap-2">
+                            <span class="badge rounded-pill bg-light text-secondary border px-2 py-1">
+                                <i class="fa fa-tachometer me-1"/> Capacidad: <strong><t t-esc="formatPoints(newCapacityPoints)"/></strong>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="o-tint-card-body p-3">
+                        <!-- Selección de Galería, Base y Presentación -->
+                        <div class="row g-2 p-2 bg-light rounded-3 border mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label text-xs fw-bold text-secondary text-uppercase mb-1">Galería <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" t-model="state.newGalleryId">
+                                    <option value="">— Seleccionar Galería —</option>
+                                    <option t-foreach="galleries" t-as="g" t-key="g.id" t-att-value="g.id">
+                                        <t t-esc="g.name"/> <t t-if="g.code">(<t t-esc="g.code"/>)</t>
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-xs fw-bold text-secondary text-uppercase mb-1">Tipo de Base</label>
+                                <select class="form-select form-select-sm" t-model="state.newBaseTypeId">
+                                    <option value="">— Seleccionar Base —</option>
+                                    <option t-foreach="baseTypes" t-as="b" t-key="b.id" t-att-value="b.id">
+                                        <t t-esc="b.name"/> <t t-if="b.code">(<t t-esc="b.code"/>)</t>
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-xs fw-bold text-secondary text-uppercase mb-1">Presentación</label>
+                                <select class="form-select form-select-sm" t-model="state.newSizeId">
+                                    <option value="">— Seleccionar Presentación —</option>
+                                    <option t-foreach="sizes" t-as="s" t-key="s.id" t-att-value="s.id">
+                                        <t t-esc="s.name"/>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Agregar Colorante y Dosis -->
+                        <div class="o-tint-add-colorant-box p-2 rounded-3 border mb-3">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-dark mb-1">Colorante</label>
+                                    <select class="form-select form-select-sm" t-model="state.selectedColorantId">
+                                        <option value="">— Seleccionar colorante —</option>
+                                        <option t-foreach="colorants" t-as="c" t-key="c.id" t-att-value="c.id">
+                                            <t t-esc="c.display_name or c.name"/>
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <label class="form-label small fw-bold text-dark mb-1">Dosis (Puntos)</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="0.01" step="any" class="form-control"
+                                               t-model="state.newColorantPoints"
+                                               placeholder="1.0"/>
+                                        <span class="input-group-text bg-light text-muted small">Pts</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <button type="button" class="btn btn-sm btn-primary w-100 d-flex align-items-center justify-content-center gap-1"
+                                            t-on-click="addColorantLine"
+                                            t-att-disabled="!state.selectedColorantId">
+                                        <i class="fa fa-plus-circle" role="img"/>
+                                        <span>Agregar</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Medición de Capacidad del Envase -->
+                        <div t-if="newCapacityPoints and state.newFormulaLines.length" class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small fw-semibold text-muted">
+                                    Capacidad utilizada:
+                                    <strong t-att-class="isOverCapacity ? 'text-danger' : 'text-primary'">
+                                        <t t-esc="formatPoints(newFormulaTotalPoints)"/> / <t t-esc="formatPoints(newCapacityPoints)"/>
+                                    </strong>
+                                </span>
+                                <span class="small fw-bold" t-att-class="isOverCapacity ? 'text-danger' : (capacityPercent > 90 ? 'text-warning' : 'text-success')">
+                                    <t t-esc="capacityPercent.toFixed(1)"/>%
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 7px;">
+                                <div class="progress-bar transition-all" role="progressbar"
+                                     t-att-style="'width: ' + Math.min(capacityPercent, 100) + '%;'"
+                                     t-att-class="isOverCapacity ? 'bg-danger' : (capacityPercent > 90 ? 'bg-warning' : 'bg-primary')"/>
+                            </div>
+                            <div t-if="isOverCapacity" class="alert alert-danger py-1 px-2 mt-2 mb-0 small d-flex align-items-center gap-1">
+                                <i class="fa fa-exclamation-triangle" role="img"/>
+                                <span>La fórmula excede la capacidad máxima del envase por <strong t-esc="formatPoints(newFormulaTotalPoints - newCapacityPoints)"/>.</span>
+                            </div>
+                        </div>
+
+                        <!-- Tabla de colorantes agregados -->
+                        <div t-if="state.newFormulaLines.length" class="o-tint-table-wrapper rounded-3 border overflow-hidden mb-3">
+                            <table class="table table-sm table-hover mb-0 align-middle">
+                                <thead class="table-light border-bottom">
+                                    <tr>
+                                        <th class="ps-3 py-2 text-secondary text-uppercase text-xs fw-bold">Colorante</th>
+                                        <th class="text-end py-2 text-secondary text-uppercase text-xs fw-bold" style="width: 140px;">Dosis</th>
+                                        <th class="text-center py-2 text-secondary text-uppercase text-xs fw-bold" style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.newFormulaLines" t-as="line" t-key="line_index" class="o-tint-dose-row">
+                                        <td class="ps-3 fw-semibold text-dark">
+                                            <i class="fa fa-tint text-primary opacity-50 me-2"/>
+                                            <t t-esc="line.colorantName"/>
+                                        </td>
+                                        <td class="text-end">
+                                            <span class="badge bg-primary-subtle text-primary fw-bold me-1">
+                                                <t t-esc="formatPoints(line.points)"/>
+                                            </span>
+                                            <small class="text-muted">(<t t-esc="line.points"/> Pts)</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-icon text-danger p-1 rounded-circle hover-bg-danger-subtle border-0"
+                                                    title="Eliminar dosis"
+                                                    t-on-click="() => this.removeColorantLine(line_index)">
+                                                <i class="fa fa-trash-o" role="img"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="table-light border-top">
+                                    <tr class="fw-bold">
+                                        <td class="ps-3 text-dark">Total Colorantes</td>
+                                        <td class="text-end">
+                                            <span class="text-primary fs-6 me-1"><t t-esc="formatPoints(newFormulaTotalPoints)"/></span>
+                                            <small class="text-muted">(<t t-esc="newFormulaTotalPoints"/> Pts)</small>
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- Resumen Financiero: Costo y Precio de Venta -->
+                        <div t-if="state.newFormulaLines.length" class="row g-2 mb-2">
+                            <div class="col-6">
+                                <div class="o-tint-kpi-card p-2 rounded-3 border bg-white shadow-xs">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <small class="text-muted fw-semibold">Costo estimado</small>
+                                        <span class="badge bg-light text-muted border text-xxs">cost_min</span>
+                                    </div>
+                                    <div class="fs-6 fw-bold text-dark">
+                                        <t t-esc="formatCurrency(newFormulaCostMin)"/>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="o-tint-kpi-card p-2 rounded-3 border bg-white shadow-xs">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <small class="text-muted fw-semibold">Precio de venta est.</small>
+                                        <span class="badge bg-success-subtle text-success border text-xxs">cost_max</span>
+                                    </div>
+                                    <div class="fs-6 fw-bold text-success">
+                                        <t t-esc="formatCurrency(newFormulaCostMax)"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estado vacío cuando no hay colorantes -->
+                        <div t-if="!state.newFormulaLines.length" class="text-center py-3 px-2 bg-light rounded-3 border border-dashed">
+                            <i class="fa fa-info-circle text-muted mb-1 fs-5"/>
+                            <p class="text-muted small mb-0">
+                                Puedes registrar el color solo en el catálogo o agregar aquí la fórmula inicial con sus colorantes y dosis.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
             </div>
 
+            <!-- Footer con Botones -->
             <t t-set-slot="footer">
-                <button class="btn btn-success" t-on-click="saveNewColor" t-att-disabled="state.isCreatingColor || !state.newColorName.trim()">
-                    <i class="fa fa-save me-1" role="img"/> Guardar Color
-                </button>
-                <button class="btn btn-secondary" t-on-click="cancel">
-                    Cancelar
-                </button>
+                <div class="d-flex w-100 align-items-center justify-content-between">
+                    <button class="btn btn-outline-secondary px-3" t-on-click="cancel">
+                        Cancelar
+                    </button>
+                    <button class="btn btn-primary px-4 d-flex align-items-center gap-2 shadow-sm"
+                            t-on-click="saveNewColor"
+                            t-att-disabled="state.isCreatingColor || !state.newColorName.trim()">
+                        <i t-if="state.isCreatingColor" class="fa fa-spin fa-circle-o-notch" role="img"/>
+                        <i t-else="" class="fa fa-check" role="img"/>
+                        <span><t t-esc="state.isCreatingColor ? 'Guardando...' : 'Guardar Color'"/></span>
+                    </button>
+                </div>
             </t>
         </Dialog>
     </t>
