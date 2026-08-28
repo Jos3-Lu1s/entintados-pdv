@@ -33,7 +33,7 @@ class TestTintColor(TransactionCase):
             'name': 'Colorante prueba B', 'uom_id': point.id,
             'tint_role': 'colorant', 'list_price': 3.0,
         })
-        cls.color = cls.colors.create({'name': 'Color de prueba'})
+        cls.color = cls.colors.create({'name': 'Color de prueba', 'code': 'TEST-COL-01'})
 
     def _create_formula(self, base_type, size, doses, color=None):
         return self.formulas.create({
@@ -48,12 +48,13 @@ class TestTintColor(TransactionCase):
 
     # --- Color ----------------------------------------------------------
 
-    def test_color_code_generated_automatically(self):
-        color = self.colors.create({'name': 'Verde Olivo'})
-        self.assertTrue(color.code, "El código debe generarse desde la secuencia")
+    @mute_logger('odoo.sql_db')
+    def test_color_code_required(self):
+        with self.assertRaises(Exception):
+            self.colors.create({'name': 'Verde Olivo'})
 
-    def test_color_code_respected_when_given(self):
-        color = self.colors.create({'name': 'Gris Perla', 'code': 'MIO-001'})
+    def test_color_code_normalized(self):
+        color = self.colors.create({'name': 'Gris Perla', 'code': '  mio-001  '})
         self.assertEqual(color.code, 'MIO-001')
 
     @mute_logger('odoo.sql_db')

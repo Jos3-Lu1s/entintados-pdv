@@ -45,7 +45,7 @@
 
                             <div class="col-md-5">
                                 <label class="form-label small fw-bold text-dark mb-1">
-                                    Código del Color
+                                    Código del Color <span class="text-danger">*</span>
                                 </label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-light text-secondary-emphasis border-end-0">
@@ -53,7 +53,7 @@
                                     </span>
                                     <input type="text" class="form-control ps-2"
                                            t-model="state.newColorCode"
-                                           placeholder="Autogenerado si está vacío"/>
+                                           placeholder="p. ej. D-0001, CL-102…"/>
                                 </div>
                             </div>
 
@@ -69,7 +69,7 @@
                     </div>
                 </div>
 
-                <!-- Sección 2: Configuración de Fórmula Inicial (Opcional) -->
+                <!-- Sección 2: Configuración de Fórmula Inicial -->
                 <div class="o-tint-card o-tint-formula-card">
                     <div class="o-tint-card-header d-flex align-items-center justify-content-between py-2 px-3">
                         <div class="d-flex align-items-center gap-2">
@@ -77,7 +77,7 @@
                                 <i class="fa fa-flask"/>
                             </div>
                             <div>
-                                <h6 class="o-tint-card-title mb-0">Fórmula Inicial (Opcional)</h6>
+                                <h6 class="o-tint-card-title mb-0">Fórmula Inicial</h6>
                                 <span class="o-tint-card-subtitle text-secondary-emphasis">Dosificación por base y presentación</span>
                             </div>
                         </div>
@@ -101,7 +101,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">Tipo de Base</label>
+                                <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">Tipo de Base <span class="text-danger">*</span></label>
                                 <select class="form-select form-select-sm" t-model="state.newBaseTypeId">
                                     <option value="">— Seleccionar Base —</option>
                                     <option t-foreach="baseTypes" t-as="b" t-key="b.id" t-att-value="b.id">
@@ -110,7 +110,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">Presentación</label>
+                                <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">Presentación <span class="text-danger">*</span></label>
                                 <select class="form-select form-select-sm" t-model="state.newSizeId">
                                     <option value="">— Seleccionar Presentación —</option>
                                     <option t-foreach="sizes" t-as="s" t-key="s.id" t-att-value="s.id">
@@ -124,7 +124,7 @@
                         <div class="o-tint-add-colorant-box p-2 rounded-3 border mb-3">
                             <div class="row g-2 align-items-end">
                                 <div class="col-md-6">
-                                    <label class="form-label small fw-bold text-dark mb-1">Colorante</label>
+                                    <label class="form-label small fw-bold text-dark mb-1">Colorante <span class="text-danger">*</span></label>
                                     <select class="form-select form-select-sm" t-model="state.selectedColorantId">
                                         <option value="">— Seleccionar colorante —</option>
                                         <option t-foreach="colorants" t-as="c" t-key="c.id" t-att-value="c.id">
@@ -133,7 +133,7 @@
                                     </select>
                                 </div>
                                 <div class="col-md-3 col-6">
-                                    <label class="form-label small fw-bold text-dark mb-1">Dosis (Puntos)</label>
+                                    <label class="form-label small fw-bold text-dark mb-1">Dosis (Puntos) <span class="text-danger">*</span></label>
                                     <div class="input-group input-group-sm">
                                         <input type="number" min="0.01" step="any" class="form-control"
                                                t-model="state.newColorantPoints"
@@ -247,10 +247,10 @@
                         </div>
 
                         <!-- Estado vacío cuando no hay colorantes -->
-                        <div t-if="!state.newFormulaLines.length" class="text-center py-3 px-2 bg-light rounded-3 border border-dashed">
-                            <i class="fa fa-info-circle text-secondary mb-1 fs-5"/>
-                            <p class="text-secondary-emphasis small mb-0">
-                                Puedes registrar el color solo en el catálogo o agregar aquí la fórmula inicial con sus colorantes y dosis.
+                        <div t-if="!state.newFormulaLines.length" class="text-center py-3 px-2 bg-warning-subtle text-warning-emphasis rounded-3 border border-warning">
+                            <i class="fa fa-exclamation-circle mb-1 fs-5"/>
+                            <p class="small fw-semibold mb-0">
+                                Es obligatorio agregar al menos un colorante con su dosificación en puntos para la fórmula.
                             </p>
                         </div>
                     </div>
@@ -266,7 +266,7 @@
                     </button>
                     <button class="btn btn-primary px-4 d-flex align-items-center gap-2 shadow-sm"
                             t-on-click="saveNewColor"
-                            t-att-disabled="state.isCreatingColor || !state.newColorName.trim()">
+                            t-att-disabled="!canSaveColor">
                         <i t-if="state.isCreatingColor" class="fa fa-spin fa-circle-o-notch" role="img"/>
                         <i t-else="" class="fa fa-check" role="img"/>
                         <span><t t-esc="state.isCreatingColor ? 'Guardando...' : 'Guardar Color'"/></span>

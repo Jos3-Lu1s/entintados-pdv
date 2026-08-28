@@ -184,31 +184,70 @@ export class TintCreateColorPopup extends Component {
         this.state.newFormulaLines.splice(index, 1);
     }
 
+    get canSaveColor() {
+        if (this.state.isCreatingColor) {
+            return false;
+        }
+        if (!this.state.newColorName.trim() || !this.state.newColorCode.trim()) {
+            return false;
+        }
+        if (!parseInt(this.state.newGalleryId) || !parseInt(this.state.newBaseTypeId) || !parseInt(this.state.newSizeId)) {
+            return false;
+        }
+        if (!this.state.newFormulaLines.length || this.newFormulaTotalPoints <= 0) {
+            return false;
+        }
+        if (this.isOverCapacity) {
+            return false;
+        }
+        return true;
+    }
+
     async saveNewColor() {
         if (!this.state.newColorName.trim()) {
             this.state.createColorError = _t("El nombre del color es obligatorio.");
             return;
         }
+        if (!this.state.newColorCode.trim()) {
+            this.state.createColorError = _t("El código del color es obligatorio.");
+            return;
+        }
 
         const galleryId = parseInt(this.state.newGalleryId);
-        const baseTypeId = parseInt(this.state.newBaseTypeId);
-        const sizeId = parseInt(this.state.newSizeId);
+        if (!galleryId) {
+            this.state.createColorError = _t("Debes seleccionar una Galería.");
+            return;
+        }
 
-        if (this.state.newFormulaLines.length > 0) {
-            if (!galleryId || !baseTypeId || !sizeId) {
-                this.state.createColorError = _t(
-                    "Para registrar la fórmula debes seleccionar la Galería, el Tipo de Base y la Presentación."
-                );
-                return;
-            }
-            if (this.newCapacityPoints > 0 && this.newFormulaTotalPoints > this.newCapacityPoints) {
-                this.state.createColorError = _t(
-                    "La dosis total de la fórmula (%s) excede la capacidad del envase (%s).",
-                    this.formatPoints(this.newFormulaTotalPoints),
-                    this.formatPoints(this.newCapacityPoints)
-                );
-                return;
-            }
+        const baseTypeId = parseInt(this.state.newBaseTypeId);
+        if (!baseTypeId) {
+            this.state.createColorError = _t("Debes seleccionar un Tipo de Base.");
+            return;
+        }
+
+        const sizeId = parseInt(this.state.newSizeId);
+        if (!sizeId) {
+            this.state.createColorError = _t("Debes seleccionar una Presentación.");
+            return;
+        }
+
+        if (!this.state.newFormulaLines.length) {
+            this.state.createColorError = _t("Debes agregar al menos un colorante a la fórmula.");
+            return;
+        }
+
+        if (this.newFormulaTotalPoints <= 0) {
+            this.state.createColorError = _t("La dosificación total de la fórmula debe ser mayor a cero.");
+            return;
+        }
+
+        if (this.newCapacityPoints > 0 && this.newFormulaTotalPoints > this.newCapacityPoints) {
+            this.state.createColorError = _t(
+                "La dosis total de la fórmula (%s) excede la capacidad del envase (%s).",
+                this.formatPoints(this.newFormulaTotalPoints),
+                this.formatPoints(this.newCapacityPoints)
+            );
+            return;
         }
 
         this.state.isCreatingColor = true;
@@ -219,10 +258,8 @@ export class TintCreateColorPopup extends Component {
             // 1. Crear tint.color
             const vals = {
                 name: this.state.newColorName.trim(),
+                code: this.state.newColorCode.trim().toUpperCase(),
             };
-            if (this.state.newColorCode.trim()) {
-                vals.code = this.state.newColorCode.trim();
-            }
             if (this.state.newColorNotes.trim()) {
                 vals.notes = this.state.newColorNotes.trim();
             }
@@ -238,41 +275,42 @@ export class TintCreateColorPopup extends Component {
             }
 
             const colorId = colorRecord ? colorRecord.id || colorRecord : false;
-            let formulaId = false;
+            if (!colorId) {
+                throw new Error(_t("No se pudo obtener el identificador del color creado."));
+            }
 
-            // 2. Crear fórmula y líneas de dosis si fueron configuradas
-            if (colorId && this.state.newFormulaLines.length > 0 && galleryId && baseTypeId && sizeId) {
-                const formulaVals = {
-                    color_id: colorId,
-                    gallery_id: galleryId,
-                    base_type_id: baseTypeId,
-                    size_id: sizeId,
-                };
-                let formulaRecord = null;
-                if (this.pos.data && typeof this.pos.data.create === "function") {
-                    const fRes = await this.pos.data.create("tint.color.formula", [formulaVals]);
-                    formulaRecord = Array.isArray(fRes) ? fRes[0] : fRes;
-                } else if (this.pos.orm && typeof this.pos.orm.create === "function") {
-                    const fIds = await this.pos.orm.create("tint.color.formula", [formulaVals]);
-                    const fId = Array.isArray(fIds) ? fIds[0] : fIds;
-                    formulaRecord = this.pos.models["tint.color.formula"]?.get(fId);
-                }
+            // 2. Crear fórmula y líneas de dosis
+            const formulaVals = {
+                color_id: colorId,
+                gallery_id: galleryId,
+                base_type_id: baseTypeId,
+                size_id: sizeId,
+            };
+            let formulaRecord = null;
+            if (this.pos.data && typeof this.pos.data.create === "function") {
+                const fRes = await this.pos.data.create("tint.color.formula", [formulaVals]);
+                formulaRecord = Array.isArray(fRes) ? fRes[0] : fRes;
+            } else if (this.pos.orm && typeof this.pos.orm.create === "function") {
+                const fIds = await this.pos.orm.create("tint.color.formula", [formulaVals]);
+                const fId = Array.isArray(fIds) ? fIds[0] : fIds;
+                formulaRecord = this.pos.models["tint.color.formula"]?.get(fId);
+            }
 
-                formulaId = formulaRecord ? formulaRecord.id || formulaRecord : false;
+            const formulaId = formulaRecord ? formulaRecord.id || formulaRecord : false;
+            if (!formulaId) {
+                throw new Error(_t("No se pudo obtener el identificador de la fórmula creada."));
+            }
 
-                if (formulaId) {
-                    const lineValsList = this.state.newFormulaLines.map((l, idx) => ({
-                        formula_id: formulaId,
-                        colorant_id: l.colorantId,
-                        points: l.points,
-                        sequence: (idx + 1) * 10,
-                    }));
-                    if (this.pos.data && typeof this.pos.data.create === "function") {
-                        await this.pos.data.create("tint.color.formula.line", lineValsList);
-                    } else if (this.pos.orm && typeof this.pos.orm.create === "function") {
-                        await this.pos.orm.create("tint.color.formula.line", lineValsList);
-                    }
-                }
+            const lineValsList = this.state.newFormulaLines.map((l, idx) => ({
+                formula_id: formulaId,
+                colorant_id: l.colorantId,
+                points: l.points,
+                sequence: (idx + 1) * 10,
+            }));
+            if (this.pos.data && typeof this.pos.data.create === "function") {
+                await this.pos.data.create("tint.color.formula.line", lineValsList);
+            } else if (this.pos.orm && typeof this.pos.orm.create === "function") {
+                await this.pos.orm.create("tint.color.formula.line", lineValsList);
             }
 
             this.notification.add(
