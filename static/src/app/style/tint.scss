@@ -10,6 +10,34 @@
     user-select: none;
 }
 
+.o-tint-segmented-control {
+    background-color: #f1f5f9;
+    padding: 3px;
+    gap: 2px;
+
+    .btn {
+        border: none;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        font-size: 0.85rem;
+    }
+}
+
+.o-tint-nav-ribbon {
+    background-color: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+}
+
+.o-tint-header-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+
 /* Tarjeta de muestra de color */
 .tint-color-card {
     border: 2px solid rgba(0, 0, 0, 0.08) !important;

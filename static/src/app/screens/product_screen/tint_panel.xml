@@ -4,42 +4,85 @@
     <t t-name="entintados_pdv.TintPanel">
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
-            <!-- Filtros de base y color seleccionado -->
-            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2">
-                <div class="o-tint-card-header d-flex align-items-center justify-content-between py-2 px-3">
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="o-tint-header-icon bg-primary-subtle text-primary">
-                            <i class="fa fa-paint-brush"/>
+            <!-- Franja de contexto de la galería activa (Paso 2: Selección de color) -->
+            <div t-if="ui.galleryId and !ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs">
+                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2">
+                    <div class="d-flex align-items-center gap-2 min-w-0">
+                        <!-- Botón Volver a Selección de Galería -->
+                        <button class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs text-muted flex-shrink-0"
+                                style="width: 32px; height: 32px;"
+                                title="Volver a lista de galerías"
+                                t-on-click="() => this.changeGallery()">
+                            <i class="fa fa-chevron-left small"/>
+                        </button>
+                        <div class="o-tint-header-icon bg-primary-subtle text-primary flex-shrink-0">
+                            <i class="fa fa-folder-open-o"/>
                         </div>
-                        <div>
-                            <span class="fw-bold fs-6 text-dark">
-                                <t t-esc="selectedColor and selectedColor.name"/>
-                            </span>
-                            <span t-if="selectedColor and selectedColor.code" class="text-secondary font-monospace small ms-2">
-                                (<t t-esc="selectedColor.code"/>)
-                            </span>
+                        <div class="min-w-0">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="fw-bold fs-6 text-dark text-truncate">
+                                    <t t-esc="selectedGallery and selectedGallery.name"/>
+                                </span>
+                                <span t-if="selectedGallery and selectedGallery.code" class="text-secondary font-monospace small">
+                                    (<t t-esc="selectedGallery.code"/>)
+                                </span>
+                            </div>
+                            <small class="text-muted text-truncate d-block" style="font-size: 0.72rem;">
+                                Selecciona un color del catálogo
+                            </small>
                         </div>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <button t-if="hasActiveFilters" class="btn btn-sm btn-outline-secondary text-nowrap"
-                                t-on-click="() => this.clearFilters()">
-                            <i class="fa fa-filter me-1"/> Limpiar filtros
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary text-nowrap"
+                </div>
+            </div>
+
+            <!-- Filtros de base y color seleccionado con navegación de retorno -->
+            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs">
+                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2">
+                    <!-- Left: Botón Volver + Info de Color & Galería -->
+                    <div class="d-flex align-items-center gap-2 min-w-0">
+                        <button class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs text-muted flex-shrink-0"
+                                style="width: 32px; height: 32px;"
+                                title="Volver a lista de colores"
                                 t-on-click="() => this.clearColor()">
-                            <i class="fa fa-exchange me-1"/> Cambiar color
+                            <i class="fa fa-chevron-left small"/>
+                        </button>
+                        <div class="o-tint-header-icon bg-primary-subtle text-primary flex-shrink-0">
+                            <i class="fa fa-paint-brush"/>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="fw-bold fs-6 text-dark text-truncate">
+                                    <t t-esc="selectedColor and selectedColor.name"/>
+                                </span>
+                                <span t-if="selectedColor and selectedColor.code" class="text-secondary font-monospace small">
+                                    (<t t-esc="selectedColor.code"/>)
+                                </span>
+                            </div>
+                            <small class="text-muted text-truncate d-block" style="font-size: 0.72rem;">
+                                Galería: <strong><t t-esc="selectedGallery and selectedGallery.name"/></strong>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Right: Botón Limpiar filtros (solo cuando hay filtros activos) -->
+                    <div t-if="hasActiveFilters" class="d-flex align-items-center gap-2 ms-auto">
+                        <button class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 shadow-xs"
+                                title="Quitar filtros de presentación y tipo de base"
+                                t-on-click="() => this.clearFilters()">
+                            <i class="fa fa-times me-1"/> Limpiar filtros
                         </button>
                     </div>
                 </div>
 
+                <!-- Filtros en cascada (Presentación / Base) -->
                 <div t-if="levels.length" class="o-tint-card-body p-2 px-3 border-top bg-light">
                     <div t-foreach="levels" t-as="level" t-key="level.key"
                          class="d-flex align-items-center gap-2 mb-1">
-                        <small class="text-secondary fw-semibold text-nowrap" style="width: 7rem;"
+                        <small class="text-secondary fw-bold text-uppercase text-nowrap" style="width: 7.5rem; font-size: 0.7rem; letter-spacing: 0.3px;"
                                t-esc="level.label"/>
                         <div class="d-flex flex-wrap gap-1">
                             <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
-                                    class="btn btn-sm text-nowrap rounded-pill px-3 py-1 shadow-xs"
+                                    class="btn btn-sm text-nowrap rounded-pill px-3 py-1 shadow-xs transition-all"
                                     t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary bg-white'"
                                     t-on-click="() => this.selectLevel(level.key, opt.record.id)">
                                 <t t-esc="opt.record.name"/>
