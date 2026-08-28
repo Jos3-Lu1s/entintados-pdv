@@ -19,18 +19,25 @@
                     Entintados
                 </button>
 
-                <!-- Indicador y botón para cambiar de galería -->
-                <div t-if="tintUi.tab === 'tint' and tintUi.galleryId"
+                <!-- Indicador y botón para cambiar de galería y crear color -->
+                <div t-if="tintUi.tab === 'tint'"
                      class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
-                    <span class="badge bg-info-subtle text-info-emphasis text-nowrap">Galería</span>
-                    <span class="fw-bold text-truncate" style="max-width: 18rem;">
-                        <t t-if="tintSelectedGallery and tintSelectedGallery.code">[<t t-esc="tintSelectedGallery.code"/>] </t>
-                        <t t-esc="tintSelectedGallery and tintSelectedGallery.name"/>
-                    </span>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
-                            t-on-click="() => this.changeTintGallery()">
-                        <i class="fa fa-exchange me-1" role="img" aria-label="Cambiar galería"/>
-                        Cambiar galería
+                    <t t-if="tintUi.galleryId">
+                        <span class="badge bg-info-subtle text-info-emphasis text-nowrap">Galería</span>
+                        <span class="fw-bold text-truncate" style="max-width: 14rem;">
+                            <t t-if="tintSelectedGallery and tintSelectedGallery.code">[<t t-esc="tintSelectedGallery.code"/>] </t>
+                            <t t-esc="tintSelectedGallery and tintSelectedGallery.name"/>
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary text-nowrap"
+                                t-on-click="() => this.changeTintGallery()">
+                            <i class="fa fa-exchange me-1" role="img" aria-label="Cambiar galería"/>
+                            Cambiar galería
+                        </button>
+                    </t>
+                    <button class="btn btn-sm btn-outline-primary text-nowrap"
+                            t-on-click="() => this.onClickCreateColorFromTab()">
+                        <i class="fa fa-plus-circle me-1" role="img" aria-label="Crear Color"/>
+                        Crear Color
                     </button>
                 </div>
 

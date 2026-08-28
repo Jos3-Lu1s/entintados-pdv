@@ -47,6 +47,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/components/tint_table/tint_table.xml",
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.js",
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.xml",
+            "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.js",
+            "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.xml",
             # Modelos del POS
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades

@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.TintCreateColorPopup">
+        <Dialog title="props.title" size="'lg'">
+            <div class="entintado-create-color-popup p-2">
+
+                <div t-if="state.createColorError" class="alert alert-danger py-2 mb-3">
+                    <t t-esc="state.createColorError"/>
+                </div>
+                <div t-if="state.createColorSuccess" class="alert alert-success py-2 mb-3">
+                    <t t-esc="state.createColorSuccess"/>
+                </div>
+
+                <!-- Datos básicos del color -->
+                <div class="row g-3">
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold">Nombre del Color <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control"
+                               t-model="state.newColorName"
+                               placeholder="Ej: Azul Rey, Rojo Pasión…"/>
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Código</label>
+                        <input type="text" class="form-control"
+                               t-model="state.newColorCode"
+                               placeholder="Autogenerado si está vacío"/>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Notas</label>
+                        <textarea class="form-control" rows="2"
+                                  t-model="state.newColorNotes"
+                                  placeholder="Detalles u observaciones opcionales sobre este color…"></textarea>
+                    </div>
+                </div>
+
+                <!-- Configuración de fórmula asociada -->
+                <div class="border rounded p-3 bg-light mt-3">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h6 class="fw-bold mb-0 text-primary">
+                            <i class="fa fa-flask me-1" role="img"/> Configuración de Fórmula Inicial
+                        </h6>
+                        <span t-if="newCapacityPoints" class="badge text-bg-secondary">
+                            Capacidad máx: <t t-esc="formatPoints(newCapacityPoints)"/>
+                        </span>
+                    </div>
+
+                    <!-- Selección de galería, base y presentación -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Galería <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" t-model="state.newGalleryId">
+                                <option value="">— Seleccionar Galería —</option>
+                                <option t-foreach="galleries" t-as="g" t-key="g.id" t-att-value="g.id">
+                                    <t t-esc="g.name"/> <t t-if="g.code">(<t t-esc="g.code"/>)</t>
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Tipo de Base</label>
+                            <select class="form-select form-select-sm" t-model="state.newBaseTypeId">
+                                <option value="">— Seleccionar Base —</option>
+                                <option t-foreach="baseTypes" t-as="b" t-key="b.id" t-att-value="b.id">
+                                    <t t-esc="b.name"/> <t t-if="b.code">(<t t-esc="b.code"/>)</t>
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold mb-1">Presentación</label>
+                            <select class="form-select form-select-sm" t-model="state.newSizeId">
+                                <option value="">— Seleccionar Presentación —</option>
+                                <option t-foreach="sizes" t-as="s" t-key="s.id" t-att-value="s.id">
+                                    <t t-esc="s.name"/>
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Agregar colorante -->
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold mb-1">Colorante</label>
+                            <select class="form-select form-select-sm" t-model="state.selectedColorantId">
+                                <option value="">— Seleccionar colorante —</option>
+                                <option t-foreach="colorants" t-as="c" t-key="c.id" t-att-value="c.id">
+                                    <t t-esc="c.display_name or c.name"/>
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label small fw-bold mb-1">Dosis (Pts)</label>
+                            <input type="number" min="0.01" step="any" class="form-control form-control-sm"
+                                   t-model="state.newColorantPoints"/>
+                        </div>
+                        <div class="col-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100"
+                                    t-on-click="addColorantLine"
+                                    t-att-disabled="!state.selectedColorantId">
+                                <i class="fa fa-plus me-1" role="img"/> Agregar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de dosis de la fórmula -->
+                    <div t-if="state.newFormulaLines.length" class="table-responsive">
+                        <table class="table table-sm table-bordered bg-white mb-2">
+                            <thead>
+                                <tr class="table-light">
+                                    <th>Colorante</th>
+                                    <th class="text-end" style="width: 130px;">Dosis</th>
+                                    <th class="text-center" style="width: 50px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="state.newFormulaLines" t-as="line" t-key="line_index">
+                                    <td><t t-esc="line.colorantName"/></td>
+                                    <td class="text-end">
+                                        <span class="badge text-bg-info me-1"><t t-esc="formatPoints(line.points)"/></span>
+                                        <small class="text-muted"><t t-esc="line.points"/> Pts.</small>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0"
+                                                t-on-click="() => this.removeColorantLine(line_index)">
+                                            <i class="fa fa-trash" role="img"/>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="fw-bold">
+                                    <td>Total Dosis</td>
+                                    <td class="text-end">
+                                        <t t-esc="formatPoints(newFormulaTotalPoints)"/>
+                                        <small class="text-muted ms-1">(<t t-esc="newFormulaTotalPoints"/> Pts.)</small>
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <!-- Resumen de costo y precio de venta -->
+                        <div class="row g-2 mt-2 pt-2 border-top">
+                            <div class="col-6">
+                                <div class="p-2 rounded bg-light border">
+                                    <small class="text-muted d-block fw-semibold">Costo estimado (<code class="text-secondary">cost_min</code>)</small>
+                                    <span class="fs-6 fw-bold text-dark"><t t-esc="formatCurrency(newFormulaCostMin)"/></span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded bg-light border">
+                                    <small class="text-muted d-block fw-semibold">Precio de venta estimado (<code class="text-secondary">cost_max</code>)</small>
+                                    <span class="fs-6 fw-bold text-success"><t t-esc="formatCurrency(newFormulaCostMax)"/></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div t-else="" class="text-muted fst-italic small">
+                        (Opcional) Agrega los colorantes y dosis en puntos para registrar la fórmula de este color sobre la base y presentación seleccionadas.
+                    </div>
+                </div>
+
+            </div>
+
+            <t t-set-slot="footer">
+                <button class="btn btn-success" t-on-click="saveNewColor" t-att-disabled="state.isCreatingColor || !state.newColorName.trim()">
+                    <i class="fa fa-save me-1" role="img"/> Guardar Color
+                </button>
+                <button class="btn btn-secondary" t-on-click="cancel">
+                    Cancelar
+                </button>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>

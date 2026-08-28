@@ -1,10 +1,11 @@
-
 import { useState } from "@odoo/owl";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { patch } from "@web/core/utils/patch";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 import { TintPanel } from "@entintados_pdv/app/screens/product_screen/tint_panel";
 import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
+import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
 
 // Registro de subcomponentes TintPanel y TintTable en ProductScreen.
 ProductScreen.components = { ...ProductScreen.components, TintPanel, TintTable };
@@ -56,6 +57,27 @@ patch(ProductScreen.prototype, {
             galleryColorIds: [],
         });
         this.pos.searchProductWord = "";
+    },
+
+    /** Abre el diálogo para crear color desde la pestaña de Entintados */
+    async onClickCreateColorFromTab() {
+        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup, {
+            galleryId: this.tintUi.galleryId || false,
+        });
+        if (payload?.colorId) {
+            if (payload.galleryId && this.tintUi.galleryId !== payload.galleryId) {
+                this.tintUi.galleryId = payload.galleryId;
+            }
+            if (this.tintUi.galleryId) {
+                const ids = await this.pos.data.call(
+                    "tint.color.formula",
+                    "get_color_ids_for_gallery",
+                    [this.tintUi.galleryId]
+                );
+                this.tintUi.galleryColorIds = ids || [];
+            }
+            this.tintUi.colorId = payload.colorId;
+        }
     },
 
     /** Columnas para la tabla de productos en modo lista. */
