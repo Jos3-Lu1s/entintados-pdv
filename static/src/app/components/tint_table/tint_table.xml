@@ -1,20 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
 
-    <!-- Tabla reutilizable con cabecera dinámica y slot de filas -->
+    <!-- Tabla reutilizable con cabecera dinámica, slot de filas y diseño premium -->
     <t t-name="entintados_pdv.TintTable">
-        <div class="o-tint-table-container bg-white border rounded-3 shadow-sm mb-2">
-            <table class="table table-sm table-hover align-middle mb-0 o-tint-table">
-                <thead>
-                    <tr>
-                        <th t-foreach="props.columns" t-as="col" t-key="col_index"
-                            scope="col" t-att-class="col.class" t-esc="col.label"/>
-                    </tr>
-                </thead>
-                <tbody>
-                    <t t-slot="rows"/>
-                </tbody>
-            </table>
+        <div class="o-tint-table-container bg-white border rounded-3 shadow-xs mb-2 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0 o-tint-table">
+                    <thead>
+                        <tr>
+                            <th t-foreach="props.columns" t-as="col" t-key="col_index"
+                                scope="col" t-att-class="col.class" t-att-style="col.style" t-esc="col.label"/>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-slot="rows"/>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </t>
 

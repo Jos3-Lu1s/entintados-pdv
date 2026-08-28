@@ -38,21 +38,21 @@ export class TintPanel extends Component {
 
     get colorColumns() {
         return [
-            { label: "Código", class: "text-nowrap" },
+            { label: "Código", class: "text-nowrap", style: "width: 120px;" },
             { label: "Color" },
-            { label: "Galería", class: "text-nowrap" },
-            { label: "Tipos de base" },
+            { label: "Galería", class: "text-nowrap", style: "width: 160px;" },
+            { label: "Bases disponibles" },
         ];
     }
 
     get baseColumns() {
         return [
-            { label: "Código", class: "text-nowrap" },
+            { label: "Código", class: "text-nowrap", style: "width: 120px;" },
             { label: "Base a dispensar" },
-            { label: "Tipo de base", class: "text-nowrap" },
-            { label: "Presentación", class: "text-nowrap" },
-            { label: "Puntos", class: "text-end text-nowrap" },
-            { label: "Precio", class: "text-end text-nowrap" },
+            { label: "Tipo de base", class: "text-nowrap", style: "width: 130px;" },
+            { label: "Presentación", class: "text-nowrap", style: "width: 130px;" },
+            { label: "Dosis fórmula", class: "text-end text-nowrap", style: "width: 130px;" },
+            { label: "Precio", class: "text-end text-nowrap", style: "width: 120px;" },
         ];
     }
 

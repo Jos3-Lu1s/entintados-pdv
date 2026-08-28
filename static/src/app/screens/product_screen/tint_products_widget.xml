@@ -81,27 +81,29 @@
                         <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
                             t-on-click="() => this.addProductToOrder(product)">
-                            <td class="o-tint-td-img">
-                                <img t-if="pos.config.show_product_images and getProductImage(product)"
-                                     class="o-tint-list-img"
-                                     t-att-src="getProductImage(product)"
-                                     t-att-alt="getProductName(product)"
-                                     draggable="false"/>
+                            <td class="py-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-dark" t-esc="getProductName(product)"/>
+                                    <span t-if="state.quantityByProductTmplId[product.id]"
+                                          class="badge rounded-pill bg-primary shadow-xs"
+                                          style="font-size: 0.65rem;"
+                                          t-esc="state.quantityByProductTmplId[product.id]"/>
+                                    <span t-if="product.tint_role === 'base'" class="text-info small fw-semibold">Base</span>
+                                    <span t-elif="product.tint_role === 'colorant'" class="text-warning-emphasis small fw-semibold">Colorante</span>
+                                </div>
                             </td>
-                            <td>
-                                <span class="fw-semibold" t-esc="getProductName(product)"/>
-                                <span t-if="state.quantityByProductTmplId[product.id]"
-                                      class="badge bg-primary ms-2"
-                                      t-esc="state.quantityByProductTmplId[product.id]"/>
+                            <td class="py-2 text-nowrap">
+                                <span class="text-secondary font-monospace small" t-esc="product.default_code or '—'"/>
                             </td>
-                            <td class="text-muted text-nowrap" t-esc="product.default_code or '—'"/>
-                            <td class="text-muted text-nowrap" t-esc="product.uom_id and product.uom_id.name or ''"/>
-                            <td class="text-end fw-bold text-nowrap" t-esc="tintRowPriceFormatted(product)"/>
+                            <td class="py-2 text-nowrap">
+                                <span class="text-muted small" t-esc="product.uom_id and product.uom_id.name or '—'"/>
+                            </td>
+                            <td class="py-2 text-end fw-bold text-nowrap text-dark fs-6" t-esc="tintRowPriceFormatted(product)"/>
                         </tr>
                     </t>
                 </TintTable>
                 <div t-else="" class="h-100 d-flex flex-column align-items-center justify-content-center text-muted py-5">
-                    <i class="fa fa-search fa-3x mb-3 text-secondary"/>
+                    <i class="fa fa-search fa-3x mb-3 text-secondary opacity-50"/>
                     <h5>No se encontraron productos</h5>
                 </div>
             </div>

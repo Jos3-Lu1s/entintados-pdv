@@ -5,38 +5,49 @@
         <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
 
             <!-- Filtros de base y color seleccionado -->
-            <div t-if="ui.colorId" class="flex-shrink-0 border rounded bg-view mx-2 mb-2 p-3">
-                <div class="d-flex align-items-center gap-2" t-att-class="{ 'mb-2': levels.length }">
-                    <i class="fa fa-paint-brush text-primary" role="img"/>
-                    <span class="fw-bold text-truncate">
-                        <t t-if="selectedColor and selectedColor.code"><span class="badge bg-secondary me-1"><t t-esc="selectedColor.code"/></span></t>
-                        <t t-esc="selectedColor and selectedColor.name"/>
-                    </span>
-                    <button t-if="hasActiveFilters" class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
-                            t-on-click="() => this.clearFilters()">
-                        Limpiar filtros
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
-                            t-att-class="{ 'ms-auto': !hasActiveFilters }"
-                            t-on-click="() => this.clearColor()">
-                        Cambiar color
-                    </button>
+            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2">
+                <div class="o-tint-card-header d-flex align-items-center justify-content-between py-2 px-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="o-tint-header-icon bg-primary-subtle text-primary">
+                            <i class="fa fa-paint-brush"/>
+                        </div>
+                        <div>
+                            <span class="fw-bold fs-6 text-dark">
+                                <t t-esc="selectedColor and selectedColor.name"/>
+                            </span>
+                            <span t-if="selectedColor and selectedColor.code" class="text-secondary font-monospace small ms-2">
+                                (<t t-esc="selectedColor.code"/>)
+                            </span>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button t-if="hasActiveFilters" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                t-on-click="() => this.clearFilters()">
+                            <i class="fa fa-filter me-1"/> Limpiar filtros
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary text-nowrap"
+                                t-on-click="() => this.clearColor()">
+                            <i class="fa fa-exchange me-1"/> Cambiar color
+                        </button>
+                    </div>
                 </div>
 
-                <div t-foreach="levels" t-as="level" t-key="level.key"
-                     class="d-flex align-items-center gap-2 mb-1">
-                    <small class="text-muted text-nowrap" style="width: 6.5rem;"
-                           t-esc="level.label"/>
-                    <div class="d-flex flex-wrap gap-1">
-                        <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
-                                class="btn btn-sm text-nowrap"
-                                t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
-                                t-on-click="() => this.selectLevel(level.key, opt.record.id)">
-                            <t t-esc="opt.record.name"/>
-                            <span class="badge ms-1"
-                                  t-att-class="level.selected === opt.record.id ? 'bg-white text-primary fw-bold' : 'bg-secondary text-dark'"
-                                  t-esc="opt.count"/>
-                        </button>
+                <div t-if="levels.length" class="o-tint-card-body p-2 px-3 border-top bg-light">
+                    <div t-foreach="levels" t-as="level" t-key="level.key"
+                         class="d-flex align-items-center gap-2 mb-1">
+                        <small class="text-secondary fw-semibold text-nowrap" style="width: 7rem;"
+                               t-esc="level.label"/>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
+                                    class="btn btn-sm text-nowrap rounded-pill px-3 py-1 shadow-xs"
+                                    t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary bg-white'"
+                                    t-on-click="() => this.selectLevel(level.key, opt.record.id)">
+                                <t t-esc="opt.record.name"/>
+                                <span class="badge ms-1 rounded-pill"
+                                      t-att-class="level.selected === opt.record.id ? 'bg-white text-primary fw-bold' : 'bg-light text-secondary border'"
+                                      t-esc="opt.count"/>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -73,11 +84,11 @@
                             </small>
                             <div class="d-flex flex-wrap gap-2">
                                 <button t-foreach="galleryOptions" t-as="gallery" t-key="gallery.id"
-                                        class="btn btn-outline-primary text-nowrap"
+                                        class="btn btn-outline-primary text-nowrap rounded-3 shadow-xs py-2 px-3"
                                         t-on-click="() => this.selectGallery(gallery.id)">
                                     <i class="fa fa-folder-open-o me-1" role="img" aria-label="Galería"/>
-                                    <t t-if="gallery.code">[<t t-esc="gallery.code"/>] </t>
-                                    <t t-esc="gallery.name"/>
+                                    <t t-if="gallery.code"><span class="badge bg-primary-subtle text-primary border me-1"><t t-esc="gallery.code"/></span> </t>
+                                    <strong><t t-esc="gallery.name"/></strong>
                                 </button>
                             </div>
                         </div>
@@ -96,18 +107,20 @@
                                 <tr t-foreach="colors" t-as="color" t-key="color.id"
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.selectColor(color.id)">
-                                    <td class="text-nowrap">
-                                        <span t-if="color.code" class="badge bg-secondary" t-esc="color.code"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-secondary font-monospace small" t-esc="color.code or '—'"/>
                                     </td>
-                                    <td class="fw-semibold" t-esc="color.name"/>
-                                    <td class="text-nowrap text-muted small">
-                                        <t t-if="selectedGallery and selectedGallery.code">[<t t-esc="selectedGallery.code"/>] </t>
-                                        <t t-esc="selectedGallery and selectedGallery.name"/>
+                                    <td class="py-2">
+                                        <span class="fw-bold text-dark" t-esc="color.name"/>
                                     </td>
-                                    <td class="text-muted small">
-                                        <t t-if="color.base_type_summary" t-esc="color.base_type_summary"/>
-                                        <span t-else="">—</span>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-muted small">
+                                            <t t-if="selectedGallery and selectedGallery.code">[<t t-esc="selectedGallery.code"/>] </t>
+                                            <t t-esc="selectedGallery and selectedGallery.name"/>
+                                        </span>
+                                    </td>
+                                    <td class="py-2">
+                                        <span class="text-muted small" t-esc="color.base_type_summary or '—'"/>
                                     </td>
                                 </tr>
                             </t>
@@ -115,10 +128,10 @@
 
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
-                            <i class="fa fa-search fa-3x mb-3 text-secondary"/>
+                            <i class="fa fa-search fa-3x mb-3 text-secondary opacity-50"/>
                             <h5 t-if="searchTerm">Ningún color coincide con «<t t-esc="searchTerm"/>»</h5>
                             <h5 t-else="">Esta galería no tiene colores</h5>
-                            <p class="mb-0">
+                            <p class="mb-0 small">
                                 <t t-if="searchTerm">Ajusta el término de búsqueda o </t>
                                 <t t-else="">Prueba otra galería o </t>
                                 revisa las fórmulas de esta galería.
@@ -129,7 +142,7 @@
                     <!-- Paso 3: Selección de base -->
                     <t t-else="">
 
-                        <div t-if="unsellableCount" class="alert alert-warning" role="alert">
+                        <div t-if="unsellableCount" class="alert alert-warning rounded-3 shadow-xs" role="alert">
                             <strong>
                                 <t t-esc="unsellableCount"/>
                                 <t t-if="unsellableCount === 1"> fórmula sin producto base</t>
@@ -175,26 +188,25 @@
                                 <tr t-foreach="cards" t-as="card" t-key="card.key"
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.addCard(card)">
-                                    <td class="text-nowrap">
-                                        <span t-if="card.baseProduct.default_code" class="badge bg-secondary" t-esc="card.baseProduct.default_code"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-secondary font-monospace small" t-esc="card.baseProduct.default_code or '—'"/>
                                     </td>
-                                    <td class="fw-semibold" t-esc="card.baseProduct.display_name"/>
-                                    <td class="text-muted small text-nowrap">
-                                        <t t-if="card.baseType and card.baseType.name" t-esc="card.baseType.name"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2">
+                                        <span class="fw-bold text-dark" t-esc="card.baseProduct.display_name"/>
                                     </td>
-                                    <td class="text-muted small text-nowrap">
-                                        <t t-if="card.size and card.size.name" t-esc="card.size.name"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-dark small" t-esc="card.baseType and card.baseType.name or '—'"/>
                                     </td>
-                                    <td class="text-end text-nowrap">
-                                        <span class="text-muted" t-esc="formatPoints(card.totalPoints)"/>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-muted small" t-esc="card.size and card.size.name or '—'"/>
+                                    </td>
+                                    <td class="py-2 text-end text-nowrap">
+                                        <span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1" t-esc="formatPoints(card.totalPoints)"/>
                                         <small t-if="card.totalPoints >= 48" class="text-muted ms-1">
-                                            (<t t-esc="card.totalPoints"/> Pts.)
+                                            (<t t-esc="card.totalPoints"/> Pts)
                                         </small>
                                     </td>
-                                    <td class="text-end fw-bold text-nowrap"
+                                    <td class="py-2 text-end fw-bold text-nowrap text-success fs-6"
                                         t-esc="formatPrice(card.price)"/>
                                 </tr>
                             </t>
@@ -202,10 +214,10 @@
 
                         <div t-else=""
                              class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
-                            <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
+                            <i class="fa fa-filter fa-3x mb-3 text-secondary opacity-50"/>
                             <h5 t-if="searchTerm">Ninguna base coincide con «<t t-esc="searchTerm"/>»</h5>
                             <h5 t-else="">No hay bases para esta combinación</h5>
-                            <p class="mb-0">
+                            <p class="mb-0 small">
                                 <t t-if="searchTerm">Limpia el buscador de arriba, </t>
                                 <t t-else="">Quita algún filtro o </t>
                                 cambia de color.

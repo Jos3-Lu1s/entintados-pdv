@@ -193,7 +193,7 @@
                                             <t t-esc="line.colorantName"/>
                                         </td>
                                         <td class="text-end">
-                                            <span class="badge bg-primary-subtle text-primary fw-bold me-1">
+                                            <span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1 me-1">
                                                 <t t-esc="formatPoints(line.points)"/>
                                             </span>
                                             <small class="text-muted">(<t t-esc="line.points"/> Pts)</small>
@@ -226,7 +226,7 @@
                                 <div class="o-tint-kpi-card p-2 rounded-3 border bg-white shadow-xs">
                                     <div class="d-flex align-items-center justify-content-between mb-1">
                                         <small class="text-muted fw-semibold">Costo estimado</small>
-                                        <span class="badge bg-light text-muted border text-xxs">cost_min</span>
+                                        <span class="badge rounded-pill bg-light text-muted border text-xxs px-2">cost_min</span>
                                     </div>
                                     <div class="fs-6 fw-bold text-dark">
                                         <t t-esc="formatCurrency(newFormulaCostMin)"/>
@@ -237,7 +237,7 @@
                                 <div class="o-tint-kpi-card p-2 rounded-3 border bg-white shadow-xs">
                                     <div class="d-flex align-items-center justify-content-between mb-1">
                                         <small class="text-muted fw-semibold">Precio de venta est.</small>
-                                        <span class="badge bg-success-subtle text-success border text-xxs">cost_max</span>
+                                        <span class="badge rounded-pill bg-success-subtle text-success border text-xxs px-2">cost_max</span>
                                     </div>
                                     <div class="fs-6 fw-bold text-success">
                                         <t t-esc="formatCurrency(newFormulaCostMax)"/>
