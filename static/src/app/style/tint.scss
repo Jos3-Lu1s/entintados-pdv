@@ -1,19 +1,178 @@
+/* ==========================================================================
+   Variables y Sistema de Breakpoints Responsivos (Bootstrap/Odoo 19)
+   ========================================================================== */
+$tint-breakpoint-xs: 575.98px;
+$tint-breakpoint-sm: 767.98px;
+$tint-breakpoint-md: 991.98px;
+$tint-breakpoint-lg: 1199.98px;
+
+@mixin tint-responsive-xs {
+    @media (max-width: #{$tint-breakpoint-xs}) {
+        @content;
+    }
+}
+
+@mixin tint-responsive-down-sm {
+    @media (max-width: #{$tint-breakpoint-sm}) {
+        @content;
+    }
+}
+
+@mixin tint-responsive-down-md {
+    @media (max-width: #{$tint-breakpoint-md}) {
+        @content;
+    }
+}
+
+/* ==========================================================================
+   Sistema de Contención Global del Módulo
+   ========================================================================== */
+.rightpane {
+    min-width: 0 !important;
+}
+
+.o-tint-panel,
+.tint-color-screen,
+.entintado-formula-modal,
+.entintado-create-color-modal {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0 !important;
+    overflow-x: hidden;
+    touch-action: manipulation;
+}
+
+/* Reglas específicas para TintPanel */
+.o-tint-panel {
+    height: 100%;
+    min-height: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0 !important;
+    overflow: hidden;
+
+    .o-tint-card {
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .o-tint-gallery-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .o-tint-gallery-btn {
+        flex: 1 1 auto;
+        min-width: 130px;
+        max-width: 100%;
+        text-align: left;
+    }
+
+    .o-tint-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.35rem;
+
+        @include tint-responsive-down-sm {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+            margin-bottom: 0.5rem;
+
+            .o-tint-filter-label {
+                width: 100% !important;
+                margin-bottom: 0.15rem;
+            }
+        }
+    }
+}
+
+.o-tint-scroll-touch {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        &:hover {
+            background: rgba(0, 0, 0, 0.35);
+        }
+    }
+}
+
+.o-tint-no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
 .o-tint-button {
     border: 1px solid var(--o-tint-border, #b58900);
-}
-.o-tint-button i.fa-paint-brush {
-    color: #b58900;
+    white-space: nowrap;
+    transition: all 0.15s ease-in-out;
+
+    i.fa-paint-brush {
+        color: #b58900;
+    }
+
+    &:hover {
+        background-color: rgba(181, 137, 0, 0.08);
+    }
 }
 
 /* Barra de pestañas y navegación superior en PdV */
 .o-tint-tabs {
     user-select: none;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
+    scrollbar-width: thin;
+    &::-webkit-scrollbar {
+        height: 3px;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 3px;
+    }
+
+    @include tint-responsive-xs {
+        padding: 0.35rem 0.5rem !important;
+
+        .btn {
+            font-size: 0.78rem;
+            padding: 0.25rem 0.55rem !important;
+        }
+    }
 }
 
 .o-tint-segmented-control {
     background-color: #f1f5f9;
     padding: 3px;
     gap: 2px;
+    flex-shrink: 0;
 
     .btn {
         border: none;
@@ -67,9 +226,22 @@
     justify-content: space-between;
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     animation: fadeInSlide 0.25s ease-out;
+    box-sizing: border-box;
+    max-width: calc(100% - 24px);
 
     .text-warning {
         color: #fde047 !important;
+    }
+
+    @include tint-responsive-xs {
+        margin: 6px 8px;
+        padding: 8px 10px;
+        max-width: calc(100% - 16px);
+
+        .btn {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+        }
     }
 }
 
@@ -88,27 +260,54 @@
 .o-tint-table-container {
     background-color: #ffffff;
     border-color: rgba(0, 0, 0, 0.08) !important;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    box-sizing: border-box;
+
+    .table-responsive {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        overflow-x: auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        overscroll-behavior-y: auto;
+        box-sizing: border-box;
+    }
 }
 
 .o-tint-table {
     --bs-table-bg: #ffffff;
     background-color: #ffffff;
     width: 100%;
+    min-width: max-content;
+    margin-bottom: 0;
 }
 
 .o-tint-table thead th {
     position: sticky;
     top: 0;
-    z-index: 2;
-    background-color: #f8fafc;
+    z-index: 5;
+    background-color: #f8fafc !important;
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #334155;
     white-space: nowrap;
-    border-bottom: 1px solid #cbd5e1;
+    border-bottom: 2px solid #cbd5e1;
     padding: 0.65rem 0.85rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+    @include tint-responsive-down-sm {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.7rem;
+        letter-spacing: 0.2px;
+    }
 }
 
 .o-tint-row-tr {
@@ -124,6 +323,12 @@
 .o-tint-table tbody td {
     padding: 0.65rem 0.85rem;
     border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+
+    @include tint-responsive-down-sm {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.8rem;
+    }
 }
 
 .o-tint-table tbody tr:last-child td {
@@ -167,10 +372,21 @@
 
 .o-tint-list {
     min-height: 0;
+    height: 100%;
 }
 
 /* Modal de Creación de Color */
 .entintado-create-color-modal {
+    max-height: calc(85dvh - 100px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+
+    @include tint-responsive-down-sm {
+        max-height: calc(82dvh - 80px);
+        padding: 0.15rem !important;
+    }
+
     .o-tint-card {
         background-color: #ffffff;
         border: 1px solid rgba(0, 0, 0, 0.08);
@@ -249,6 +465,20 @@
 
 /* Modal de Selección y Registro de Fórmula de Entintado */
 .entintado-formula-modal {
+    max-height: calc(85dvh - 100px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+
+    @include tint-responsive-down-sm {
+        max-height: calc(82dvh - 80px);
+        padding: 0.15rem !important;
+
+        .entintado-color-list-card-body {
+            max-height: 240px !important;
+        }
+    }
+
     .o-tint-context-strip {
         background-color: #f8fafc;
         border-color: #e2e8f0 !important;

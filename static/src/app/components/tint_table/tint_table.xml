@@ -3,8 +3,8 @@
 
     <!-- Tabla reutilizable con cabecera dinámica, slot de filas y diseño premium -->
     <t t-name="entintados_pdv.TintTable">
-        <div class="o-tint-table-container bg-white border rounded-3 shadow-xs mb-2 overflow-hidden">
-            <div class="table-responsive">
+        <div class="o-tint-table-container bg-white border rounded-3 shadow-xs mb-2 d-flex flex-column flex-grow-1 min-h-0 min-w-0 w-100 overflow-hidden">
+            <div class="table-responsive o-tint-scroll-touch w-100 flex-grow-1 min-h-0 min-w-0 mb-0">
                 <table class="table table-sm table-hover align-middle mb-0 o-tint-table">
                     <thead>
                         <tr>

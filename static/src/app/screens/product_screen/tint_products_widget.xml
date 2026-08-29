@@ -5,7 +5,7 @@
     <t t-name="entintados_pdv.ProductScreenTintTabs" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="before">
-            <div class="o-tint-tabs d-flex align-items-center justify-content-between p-2 flex-shrink-0 border-bottom bg-view">
+            <div class="o-tint-tabs d-flex align-items-center justify-content-between p-2 flex-shrink-0 border-bottom bg-view min-w-0 w-100">
                 <!-- Segmented Control Principal: Productos / Entintados -->
                 <div class="o-tint-segmented-control bg-light p-1 rounded-pill border d-inline-flex">
                     <button class="btn btn-sm rounded-pill px-3 py-1 text-nowrap fw-semibold transition-all d-flex align-items-center gap-1"
@@ -70,7 +70,7 @@
         <!-- Tabla de productos en modo lista -->
         <xpath expr="//div[hasclass('search-more-button')]" position="before">
             <div t-if="tintUi.tab !== 'tint' and tintUi.viewMode === 'list'"
-                 class="o-tint-list flex-grow-1 overflow-y-auto px-2 pb-2">
+                 class="o-tint-list d-flex flex-column flex-grow-1 min-h-0 px-2 pb-2 overflow-hidden">
                 <TintTable t-if="pos.productsToDisplay.length" columns="productListColumns">
                     <t t-set-slot="rows">
                         <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
@@ -97,7 +97,7 @@
                         </tr>
                     </t>
                 </TintTable>
-                <div t-else="" class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state py-5">
+                <div t-else="" class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state py-5">
                     <i class="fa fa-search fa-3x mb-3 text-secondary"/>
                     <h5>No se encontraron productos</h5>
                 </div>
@@ -110,21 +110,26 @@
     <t t-name="entintados_pdv.ProductScreenActiveTintBanner" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
         <xpath expr="//ControlButtons" position="before">
             <t t-set="activeOrder" t-value="pos.getOrder()"/>
-            <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor" class="o-active-tint-banner">
-                <div class="d-flex align-items-center">
-                    <i class="fa fa-paint-brush text-white me-2 fs-5" role="img"/>
-                    <div>
-                        <strong>Color seleccionado: </strong>
-                        <span class="fw-bold me-1">
-                            <t t-esc="activeOrder.uiState.selectedTintColor.code ? '[' + activeOrder.uiState.selectedTintColor.code + '] ' : ''"/>
-                            <t t-esc="activeOrder.uiState.selectedTintColor.name"/>
-                        </span>
-                        <small class="text-warning d-block d-sm-inline ms-sm-2">
+            <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor"
+                 class="o-active-tint-banner d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
+                    <i class="fa fa-paint-brush text-white fs-5 flex-shrink-0" role="img"/>
+                    <div class="min-w-0">
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <strong class="text-white text-nowrap">Color seleccionado:</strong>
+                            <span class="fw-bold text-white text-truncate">
+                                <t t-esc="activeOrder.uiState.selectedTintColor.code ? '[' + activeOrder.uiState.selectedTintColor.code + '] ' : ''"/>
+                                <t t-esc="activeOrder.uiState.selectedTintColor.name"/>
+                            </span>
+                        </div>
+                        <small class="text-warning d-block">
                             (Selecciona ahora un producto base de pintura)
                         </small>
                     </div>
                 </div>
-                <button class="btn btn-sm btn-outline-light ms-3" t-on-click="() => this.clearSelectedTintColor()" title="Cancelar selección de color">
+                <button class="btn btn-sm btn-outline-light flex-shrink-0 ms-auto"
+                        t-on-click="() => this.clearSelectedTintColor()"
+                        title="Cancelar selección de color">
                     <i class="fa fa-times me-1"/> Cancelar
                 </button>
             </div>

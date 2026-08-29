@@ -60,7 +60,7 @@
                                     <t t-esc="availableColors.length"/> disponibles
                                 </span>
                             </div>
-                            <div class="o-tint-card-body p-2 flex-grow-1 overflow-y-auto" style="max-height: 380px;">
+                            <div class="o-tint-card-body p-2 flex-grow-1 overflow-y-auto entintado-color-list-card-body o-tint-scroll-touch" style="max-height: 380px;">
                                 <div class="list-group list-group-flush entintado-color-list gap-1">
                                     <button t-foreach="availableColors" t-as="color" t-key="color.id"
                                             type="button"

@@ -123,7 +123,7 @@
                         <!-- Barra de Agregar Colorante y Dosis -->
                         <div class="o-tint-add-colorant-box p-2 rounded-3 border mb-3">
                             <div class="row g-2 align-items-end">
-                                <div class="col-md-6">
+                                <div class="col-md-6 col-12">
                                     <label class="form-label small fw-bold text-dark mb-1">Colorante <span class="text-danger">*</span></label>
                                     <select class="form-select form-select-sm" t-model="state.selectedColorantId">
                                         <option value="">— Seleccionar colorante —</option>

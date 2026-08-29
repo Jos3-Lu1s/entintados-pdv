@@ -2,12 +2,12 @@
 <templates xml:space="preserve">
 
     <t t-name="entintados_pdv.TintPanel">
-        <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
+        <div class="o-tint-panel d-flex flex-column flex-grow-1 min-w-0 min-h-0 overflow-hidden h-100 w-100">
 
             <!-- Franja de contexto de la galería activa (Paso 2: Selección de color) -->
-            <div t-if="ui.galleryId and !ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs">
-                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2">
-                    <div class="d-flex align-items-center gap-2 min-w-0">
+            <div t-if="ui.galleryId and !ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs min-w-0">
+                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2 min-w-0">
+                    <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
                         <!-- Botón Volver a Selección de Galería -->
                         <button class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs text-dark flex-shrink-0"
                                 style="width: 32px; height: 32px;"
@@ -18,12 +18,12 @@
                         <div class="o-tint-header-icon bg-primary-subtle text-primary flex-shrink-0">
                             <i class="fa fa-folder-open-o"/>
                         </div>
-                        <div class="min-w-0">
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <span class="fw-bold fs-6 text-dark text-truncate">
+                        <div class="min-w-0 flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap min-w-0">
+                                <span class="fw-bold fs-6 text-dark text-truncate d-inline-block" style="max-width: 100%;">
                                     <t t-esc="selectedGallery and selectedGallery.name"/>
                                 </span>
-                                <span t-if="selectedGallery and selectedGallery.code" class="text-secondary-emphasis font-monospace small">
+                                <span t-if="selectedGallery and selectedGallery.code" class="text-secondary-emphasis font-monospace small flex-shrink-0">
                                     (<t t-esc="selectedGallery.code"/>)
                                 </span>
                             </div>
@@ -36,10 +36,10 @@
             </div>
 
             <!-- Filtros de base y color seleccionado con navegación de retorno -->
-            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs">
-                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2">
+            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs min-w-0">
+                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2 min-w-0">
                     <!-- Left: Botón Volver + Info de Color & Galería -->
-                    <div class="d-flex align-items-center gap-2 min-w-0">
+                    <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
                         <button class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs text-dark flex-shrink-0"
                                 style="width: 32px; height: 32px;"
                                 title="Volver a lista de colores"
@@ -49,12 +49,12 @@
                         <div class="o-tint-header-icon bg-primary-subtle text-primary flex-shrink-0">
                             <i class="fa fa-paint-brush"/>
                         </div>
-                        <div class="min-w-0">
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <span class="fw-bold fs-6 text-dark text-truncate">
+                        <div class="min-w-0 flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap min-w-0">
+                                <span class="fw-bold fs-6 text-dark text-truncate d-inline-block" style="max-width: 100%;">
                                     <t t-esc="selectedColor and selectedColor.name"/>
                                 </span>
-                                <span t-if="selectedColor and selectedColor.code" class="text-secondary-emphasis font-monospace small">
+                                <span t-if="selectedColor and selectedColor.code" class="text-secondary-emphasis font-monospace small flex-shrink-0">
                                     (<t t-esc="selectedColor.code"/>)
                                 </span>
                             </div>
@@ -65,8 +65,8 @@
                     </div>
 
                     <!-- Right: Botón Limpiar filtros (solo cuando hay filtros activos) -->
-                    <div t-if="hasActiveFilters" class="d-flex align-items-center gap-2 ms-auto">
-                        <button class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 shadow-xs"
+                    <div t-if="hasActiveFilters" class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                        <button class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 shadow-xs text-nowrap"
                                 title="Quitar filtros de presentación y tipo de base"
                                 t-on-click="() => this.clearFilters()">
                             <i class="fa fa-times me-1"/> Limpiar filtros
@@ -75,12 +75,12 @@
                 </div>
 
                 <!-- Filtros en cascada (Presentación / Base) -->
-                <div t-if="levels.length" class="o-tint-card-body p-2 px-3 border-top bg-light">
+                <div t-if="levels.length" class="o-tint-card-body p-2 px-3 border-top bg-light min-w-0">
                     <div t-foreach="levels" t-as="level" t-key="level.key"
-                         class="d-flex align-items-center gap-2 mb-1">
-                        <small class="text-dark fw-bold text-uppercase text-nowrap" style="width: 7.5rem; font-size: 0.7rem; letter-spacing: 0.3px;"
+                         class="o-tint-filter-row">
+                        <small class="text-dark fw-bold text-uppercase text-nowrap o-tint-filter-label" style="width: 7.5rem; font-size: 0.7rem; letter-spacing: 0.3px;"
                                t-esc="level.label"/>
-                        <div class="d-flex flex-wrap gap-1">
+                        <div class="d-flex flex-wrap gap-1 min-w-0">
                             <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
                                      class="btn btn-sm text-nowrap rounded-pill px-3 py-1 shadow-xs transition-all"
                                     t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary bg-white'"
@@ -95,9 +95,9 @@
                 </div>
             </div>
 
-            <div class="flex-grow-1 overflow-auto px-2 pb-2">
+            <div class="flex-grow-1 d-flex flex-column min-h-0 min-w-0 overflow-hidden px-2 pb-2">
 
-                <div t-if="missingModels.length" class="alert alert-danger" role="alert">
+                <div t-if="missingModels.length" class="alert alert-danger flex-shrink-0 mb-2" role="alert">
                     <strong>Modelos que no existen en el cliente:</strong>
                     <t t-esc="missingModels.map(m => m.label).join(', ')"/>.
                     <div class="mt-1">
@@ -106,7 +106,7 @@
                     </div>
                 </div>
 
-                <div t-if="formulasWithoutGallery" class="alert alert-warning" role="alert">
+                <div t-if="formulasWithoutGallery" class="alert alert-warning flex-shrink-0 mb-2" role="alert">
                     <strong>
                         <t t-esc="formulasWithoutGallery"/> de <t t-esc="formulaCount"/> fórmulas
                         no tienen galería.
@@ -121,17 +121,17 @@
 
                     <!-- Paso 1: Selección de galería -->
                     <t t-if="!ui.galleryId">
-                        <div class="px-1 pb-2 pt-1">
+                        <div class="flex-grow-1 overflow-y-auto px-1 pb-2 pt-1 o-tint-scroll-touch min-h-0">
                             <small class="text-secondary-emphasis fw-semibold d-block mb-2">
                                 Elige una galería para empezar:
                             </small>
-                            <div class="d-flex flex-wrap gap-2">
+                            <div class="d-flex flex-wrap gap-2 o-tint-gallery-grid">
                                 <button t-foreach="galleryOptions" t-as="gallery" t-key="gallery.id"
-                                        class="btn btn-outline-primary text-nowrap rounded-3 shadow-xs py-2 px-3"
+                                        class="btn btn-outline-primary text-nowrap rounded-3 shadow-xs py-2 px-3 o-tint-gallery-btn d-flex align-items-center gap-2"
                                         t-on-click="() => this.selectGallery(gallery.id)">
-                                    <i class="fa fa-folder-open-o me-1" role="img" aria-label="Galería"/>
+                                    <i class="fa fa-folder-open-o flex-shrink-0" role="img" aria-label="Galería"/>
                                     <t t-if="gallery.code"><span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1"><t t-esc="gallery.code"/></span> </t>
-                                    <strong><t t-esc="gallery.name"/></strong>
+                                    <strong class="text-truncate"><t t-esc="gallery.name"/></strong>
                                 </button>
                             </div>
                         </div>
@@ -140,7 +140,7 @@
                     <!-- Paso 2: Selección de color -->
                     <t t-elif="!ui.colorId">
                         <div t-if="ui.loadingColors and !colors.length"
-                             class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
                             <h5>Cargando colores…</h5>
                         </div>
@@ -170,7 +170,7 @@
                         </TintTable>
 
                         <div t-else=""
-                             class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-search fa-3x mb-3 text-secondary"/>
                             <h5 t-if="searchTerm">Ningún color coincide con «<t t-esc="searchTerm"/>»</h5>
                             <h5 t-else="">Esta galería no tiene colores</h5>
@@ -185,7 +185,7 @@
                     <!-- Paso 3: Selección de base -->
                     <t t-else="">
 
-                        <div t-if="unsellableCount" class="alert alert-warning rounded-3 shadow-xs" role="alert">
+                        <div t-if="unsellableCount" class="alert alert-warning rounded-3 shadow-xs flex-shrink-0 mb-2" role="alert">
                             <strong>
                                 <t t-esc="unsellableCount"/>
                                 <t t-if="unsellableCount === 1"> fórmula sin producto base</t>
@@ -221,7 +221,7 @@
                         </div>
 
                         <div t-if="ui.loadingFormulas and !cards.length"
-                             class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
                             <h5>Cargando fórmulas…</h5>
                         </div>
@@ -256,7 +256,7 @@
                         </TintTable>
 
                         <div t-else=""
-                             class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
                             <h5 t-if="searchTerm">Ninguna base coincide con «<t t-esc="searchTerm"/>»</h5>
                             <h5 t-else="">No hay bases para esta combinación</h5>
@@ -270,7 +270,7 @@
 
                 </t>
 
-                <div t-else="" class="alert alert-warning" role="alert">
+                <div t-else="" class="alert alert-warning flex-shrink-0" role="alert">
                     <strong>No hay galerías cargadas en la caja.</strong>
                     <div class="mt-1">
                         Crea al menos una galería en <em>Entintados → Configuración</em> y

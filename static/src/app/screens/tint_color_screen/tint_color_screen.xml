@@ -5,24 +5,33 @@
 
         <div class="tint-color-screen d-flex flex-column h-100">
 
-            <div class="d-flex align-items-center gap-2 p-2 bg-white border-bottom">
+            <div class="tint-color-header d-flex align-items-center gap-2 p-2 p-sm-3 bg-white border-bottom flex-shrink-0">
                 <button
-                    class="btn btn-secondary btn-lg flex-shrink-0"
+                    class="btn btn-secondary flex-shrink-0 d-flex align-items-center gap-1 tint-color-back-btn"
                     t-on-click="() => this.goBack()"
+                    title="Regresar"
                 >
-                    <i class="fa fa-arrow-left me-2"/>
-                    Regresar
+                    <i class="fa fa-arrow-left"/>
+                    <span>Regresar</span>
                 </button>
 
-                <input
-                    type="text"
-                    class="form-control form-control-lg flex-grow-1"
-                    placeholder="Buscar por código o nombre de color..."
-                    t-model="state.search"
-                />
+                <div class="input-group flex-grow-1">
+                    <span class="input-group-text bg-white border-end-0 text-secondary-emphasis">
+                        <i class="fa fa-search"/>
+                    </span>
+                    <input
+                        type="text"
+                        class="form-control border-start-0 ps-1 tint-color-search-input"
+                        placeholder="Buscar por código o nombre de color..."
+                        t-model="state.search"
+                    />
+                    <button t-if="state.search" class="btn btn-outline-secondary border-start-0" type="button" t-on-click="() => this.state.search = ''">
+                        <i class="fa fa-times"/>
+                    </button>
+                </div>
             </div>
 
-            <div class="flex-grow-1 overflow-auto p-3">
+            <div class="flex-grow-1 overflow-y-auto p-2 p-sm-3 o-tint-scroll-touch">
 
                 <div
                     t-if="colors.length"
@@ -32,22 +41,22 @@
                         t-foreach="colors"
                         t-as="color"
                         t-key="color.id"
-                        class="tint-color-card text-start border shadow-sm rounded-3 overflow-hidden p-3 bg-white d-flex flex-column justify-content-between"
+                        class="tint-color-card text-start border shadow-xs rounded-3 overflow-hidden p-3 bg-white d-flex flex-column justify-content-between"
                         t-on-click="() => this.selectColor(color)"
                     >
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span t-if="color.code" class="badge bg-secondary fs-6">
+                            <span t-if="color.code" class="badge bg-secondary font-monospace">
                                 <t t-esc="color.code"/>
                             </span>
-                            <i class="fa fa-paint-brush text-primary fs-5" role="img"/>
+                            <i class="fa fa-paint-brush text-primary" role="img"/>
                         </div>
 
                         <div>
                             <strong
-                                class="d-block text-dark text-truncate fs-5"
+                                class="d-block text-dark text-truncate"
                                 t-esc="color.name"
                             />
-                            <small t-if="color.base_type_summary" class="text-secondary-emphasis d-block text-truncate mt-1">
+                            <small t-if="color.base_type_summary" class="text-secondary-emphasis d-block text-truncate mt-1" style="font-size: 0.75rem;">
                                 Bases: <t t-esc="color.base_type_summary"/>
                             </small>
                         </div>
@@ -56,7 +65,7 @@
 
                 <div
                     t-else=""
-                    class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state"
+                    class="h-100 d-flex flex-column align-items-center justify-content-center o-tint-empty-state py-5"
                 >
                     <i class="fa fa-paint-brush fa-3x mb-3 text-secondary"/>
                     <h4>No se encontraron colores registrados</h4>
