@@ -37,7 +37,7 @@
                             <field name="formula_count" widget="statinfo" string="Fórmulas" />
                         </button>
                         <button
-                            name="action_open_formulas"
+                            name="action_open_colors"
                             type="object"
                             class="oe_stat_button"
                             icon="fa-paint-brush"

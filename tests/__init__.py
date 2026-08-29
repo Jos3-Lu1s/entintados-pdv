@@ -8,4 +8,5 @@ from . import test_tint_base_type_code
 from . import test_tint_size_code
 from . import test_tint_product
 from . import test_tint_color
+from . import test_tint_gallery
 from . import test_crm_stage_validation
