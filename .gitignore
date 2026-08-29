@@ -6,3 +6,5 @@ docs/
 .agents
 *.json
 specs/
+AGENTS.md
+GEMINI.md
