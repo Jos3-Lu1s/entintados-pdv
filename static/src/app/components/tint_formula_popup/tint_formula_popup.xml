@@ -19,7 +19,7 @@
                     </div>
                     <div t-if="capacityPoints" class="d-flex align-items-center gap-1">
                         <span class="badge rounded-pill bg-white text-dark border px-2 py-1 shadow-xs">
-                            <i class="fa fa-tachometer me-1"/> Capacidad máx: <strong><t t-esc="formatPoints(capacityPoints)"/></strong>
+                            <i class="fa fa-tachometer me-1"/> Capacidad máx: <strong><t t-esc="formatPoints(capacityPoints)"/></strong> <span class="text-secondary-emphasis fw-normal ms-1">(<t t-esc="capacityPoints"/> Pts)</span>
                         </span>
                     </div>
                 </div>
@@ -72,7 +72,8 @@
                                                t-att-class="color.id === state.colorId ? 'text-white' : 'text-primary'"/>
                                             <div class="text-truncate">
                                                 <div class="fw-semibold text-truncate"><t t-esc="color.name"/></div>
-                                                <div t-if="color.code" class="text-xxs text-secondary-emphasis">
+                                                <div t-if="color.code" class="text-xxs"
+                                                     t-att-class="color.id === state.colorId ? 'text-white-50' : 'text-secondary-emphasis'">
                                                     Código: <t t-esc="color.code"/>
                                                 </div>
                                             </div>

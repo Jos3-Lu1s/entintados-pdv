@@ -83,7 +83,7 @@
                         </div>
                         <div t-if="newCapacityPoints" class="d-flex align-items-center gap-2">
                             <span class="badge rounded-pill bg-light text-dark border px-2 py-1">
-                                <i class="fa fa-tachometer me-1"/> Capacidad: <strong><t t-esc="formatPoints(newCapacityPoints)"/></strong>
+                                <i class="fa fa-tachometer me-1"/> Capacidad: <strong><t t-esc="formatPoints(newCapacityPoints)"/></strong> <span class="text-secondary-emphasis fw-normal ms-1">(<t t-esc="newCapacityPoints"/> Pts)</span>
                             </span>
                         </div>
                     </div>
