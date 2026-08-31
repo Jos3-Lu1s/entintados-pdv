@@ -241,6 +241,11 @@ class ResPartner(models.Model):
                     )) from error
 
     @api.model
+    def _load_pos_data_fields(self, config):
+        fields = super()._load_pos_data_fields(config)
+        return fields + ['discount', 'is_told', 'is_credit']
+
+    @api.model
     def _load_pos_data_domain(self, data, config):
         # EXTENDS point_of_sale
         # Además de los partners ya requeridos por el core (los de órdenes

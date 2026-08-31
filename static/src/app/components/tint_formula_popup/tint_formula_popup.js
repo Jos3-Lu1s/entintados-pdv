@@ -4,7 +4,11 @@ import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
-import { formulaDoses, resolvePresentationRange } from "@entintados_pdv/app/utils/tint_order";
+import {
+    formulaDoses,
+    resolvePresentationRange,
+    computeTintedPriceDetails,
+} from "@entintados_pdv/app/utils/tint_order";
 import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
 
 /**
@@ -143,25 +147,17 @@ export class TintFormulaPopup extends Component {
     }
 
     get presentationRange() {
-        if (!this.pos?.models?.["lines.product.presentation"] || !this.size) {
+        if (!this.pos?.models?.["lines.product.presentation"] || !this.size || !this.props.baseProduct) {
             return null;
         }
-        if (this.props.baseProduct) {
-            const range = resolvePresentationRange(this.pos, this.props.baseProduct);
-            return range.hasRange
-                ? {
-                      price_min: range.priceMin,
-                      price_max: range.priceMax,
-                      price_osel: range.priceOsel,
-                  }
-                : null;
-        }
-        const all = this.pos.models["lines.product.presentation"].getAll?.() || [];
-        const match = all.find((p) => {
-            const pSizeId = p.presentation_id?.id ?? p.presentation_id;
-            return pSizeId === this.size.id;
-        });
-        return match || null;
+        const range = resolvePresentationRange(this.pos, this.props.baseProduct);
+        return range.hasRange
+            ? {
+                  price_min: range.priceMin,
+                  price_max: range.priceMax,
+                  price_osel: range.priceOsel,
+              }
+            : null;
     }
 
     get selectedFormula() {
@@ -206,6 +202,51 @@ export class TintFormulaPopup extends Component {
             const price = colorant?.lst_price ?? colorant?.list_price ?? colorant?.product_tmpl_id?.list_price ?? 0;
             return acc + (dose.points || 0) * price;
         }, 0);
+    }
+
+    get tintedPriceDetails() {
+        if (!this.selectedFormula || !this.props.baseProduct) {
+            return null;
+        }
+        return computeTintedPriceDetails(this.pos, this.props.baseProduct, this.selectedFormula);
+    }
+
+    get basePrice() {
+        return (
+            this.props.baseProduct?.lst_price ??
+            this.props.baseProduct?.product_tmpl_id?.list_price ??
+            0
+        );
+    }
+
+    get colorantsPrice() {
+        return this.tintedPriceDetails
+            ? this.tintedPriceDetails.colorantsPrice
+            : this.selectedFormulaCostMax;
+    }
+
+    get theoreticalPrice() {
+        return this.tintedPriceDetails
+            ? this.tintedPriceDetails.theoreticalPrice
+            : this.basePrice + this.colorantsPrice;
+    }
+
+    get finalPrice() {
+        return this.tintedPriceDetails
+            ? this.tintedPriceDetails.finalPrice
+            : this.theoreticalPrice;
+    }
+
+    get priceStatus() {
+        return this.tintedPriceDetails ? this.tintedPriceDetails.status : "normal";
+    }
+
+    get isAdjustedMin() {
+        return this.priceStatus === "adjusted_min";
+    }
+
+    get isAdjustedMax() {
+        return this.priceStatus === "adjusted_max";
     }
 
     get totalPoints() {

@@ -253,6 +253,16 @@ export async function addTintedBaseToOrder(
         parent.price_type = "manual";
         parent.manual_price = true;
 
+        const partner = order.get_partner?.() || order.partner_id;
+        const partnerDiscount = partner?.discount || 0;
+        if (partnerDiscount > 0) {
+            if (typeof parent.set_discount === "function") {
+                parent.set_discount(partnerDiscount);
+            } else {
+                parent.discount = partnerDiscount;
+            }
+        }
+
         const gallery = formula?.gallery_id;
         parent.setCustomerNote(
             buildCustomerNote({ color, gallery })

@@ -126,9 +126,13 @@ class LinesProductPresentation(models.Model):
     @api.constrains('price_min', 'price_max')
     def _check_price_range(self):
         for presentation in self:
-            if presentation.price_min >= presentation.price_max:
+            if presentation.price_min < 0 or presentation.price_max < 0:
                 raise ValidationError(_(
-                    'El precio mínimo (%(min)s) debe ser menor '
+                    'Los precios mínimo y máximo no pueden ser valores negativos.'
+                ))
+            if presentation.price_max > 0 and presentation.price_min >= presentation.price_max:
+                raise ValidationError(_(
+                    'El precio mínimo (%(min)s) debe ser estrictamente menor '
                     'que el precio máximo (%(max)s).',
                     min=presentation.price_min,
                     max=presentation.price_max,
