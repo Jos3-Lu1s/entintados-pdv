@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="tint_schema_view_list" model="ir.ui.view">
+        <field name="name">tint.schema.list</field>
+        <field name="model">tint.schema</field>
+        <field name="arch" type="xml">
+            <list string="Esquemas">
+                <field name="name" />
+                <field name="line_count" string="Líneas" />
+                <field name="product_count" string="Productos" />
+                <field name="line_ids" widget="many2many_tags" optional="show" />
+                <field name="active" widget="boolean_toggle" optional="hide" />
+            </list>
+        </field>
+    </record>
+
+    <record id="tint_schema_view_form" model="ir.ui.view">
+        <field name="name">tint.schema.form</field>
+        <field name="model">tint.schema</field>
+        <field name="arch" type="xml">
+            <form string="Esquema">
+                <sheet>
+                    <widget
+                        name="web_ribbon"
+                        title="Archivado"
+                        bg_color="text-bg-danger"
+                        invisible="active"
+                    />
+                    <div class="oe_button_box" name="button_box">
+                        <button
+                            name="action_view_lines"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-list-ul"
+                        >
+                            <field name="line_count" widget="statinfo" string="Líneas" />
+                        </button>
+                        <button
+                            name="action_view_products"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-paint-brush"
+                        >
+                            <field name="product_count" widget="statinfo" string="Productos" />
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" />
+                        <h1>
+                            <field name="name" placeholder="p. ej. Esquema Estándar" />
+                        </h1>
+                    </div>
+                    <group>
+                        <field name="active" invisible="1" />
+                    </group>
+                    <notebook>
+                        <page string="Líneas de producto" name="lines">
+                            <field name="line_ids">
+                                <list>
+                                    <field name="name" />
+                                    <field name="presentation_count" string="Presentaciones" />
+                                    <field name="product_count" string="Productos" />
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Notas" name="notes">
+                            <field name="notes" placeholder="Notas internas o consideraciones sobre el esquema..." />
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="tint_schema_view_search" model="ir.ui.view">
+        <field name="name">tint.schema.search</field>
+        <field name="model">tint.schema</field>
+        <field name="arch" type="xml">
+            <search string="Buscar esquema">
+                <field name="name" />
+                <field name="line_ids" string="Línea de producto" />
+                <separator />
+                <filter
+                    name="with_lines"
+                    string="Con líneas"
+                    domain="[('line_ids', '!=', False)]"
+                />
+                <filter
+                    name="without_lines"
+                    string="Sin líneas"
+                    domain="[('line_ids', '=', False)]"
+                />
+                <separator />
+                <filter
+                    name="inactive"
+                    string="Archivados"
+                    domain="[('active', '=', False)]"
+                />
+            </search>
+        </field>
+    </record>
+
+    <record id="tint_schema_action" model="ir.actions.act_window">
+        <field name="name">Esquemas</field>
+        <field name="res_model">tint.schema</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="tint_schema_view_search" />
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registre un esquema de producto</p>
+            <p>
+                Los esquemas permiten agrupar líneas de producto y organizar la
+                estructura de precios y presentaciones para las bases de pintura.
+            </p>
+        </field>
+    </record>
+
+</odoo>

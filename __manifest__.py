@@ -95,11 +95,11 @@ Catálogo de entintado
         'views/tint_gallery_views.xml',
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
-        'views/tint_schema.xml',
-        # lines_producto_views.xml debe cargarse antes que tint_menu_views.xml:
+        'views/tint_schema_views.xml',
+        # lines_product_views.xml debe cargarse antes que tint_menu_views.xml:
         # este último tiene un <menuitem action="lines_product_action"/> y esa
         # acción se define ahí.
-        'views/lines_producto_views.xml',
+        'views/lines_product_views.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',

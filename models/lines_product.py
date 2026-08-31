@@ -7,17 +7,53 @@ class LinesProduct(models.Model):
     _description = 'Línea de producto'
     _inherit = ['pos.load.mixin']
 
+    active = fields.Boolean(
+        string='Activo', default=True,
+        help="Si está desactivado, la línea no aparecerá en búsquedas ni en el punto de venta.")
     name = fields.Char(string='Nombre', required=True)
-    presentation_line_ids = fields.One2many(
-        comodel_name='lines.product.presentation',
-        inverse_name='line_id',
-        string='Presentaciones',
-    )
     scheme = fields.Many2one(
         comodel_name='tint.schema',
         string='Esquema',
         required=True,
     )
+    presentation_line_ids = fields.One2many(
+        comodel_name='lines.product.presentation',
+        inverse_name='line_id',
+        string='Presentaciones',
+    )
+    product_ids = fields.One2many(
+        comodel_name='product.template',
+        inverse_name='lines_product_id',
+        string='Productos',
+    )
+
+    presentation_count = fields.Integer(
+        string='Presentaciones',
+        compute='_compute_counts',
+    )
+    product_count = fields.Integer(
+        string='Productos',
+        compute='_compute_counts',
+    )
+    notes = fields.Html(
+        string='Notas',
+        help="Información adicional o notas sobre esta línea de producto.")
+    
+    @api.depends('presentation_line_ids', 'product_ids')
+    def _compute_counts(self):
+        for line in self:
+            line.presentation_count = len(line.presentation_line_ids)
+            line.product_count = len(line.product_ids)
+
+    def action_view_products(self):
+        self.ensure_one()
+        action = self.env['ir.actions.act_window']._for_xml_id('entintados_pdv.product_template_action_tint')
+        action['domain'] = [('lines_product_id', '=', self.id)]
+        action['context'] = {
+            'search_default_tint_base': 1,
+            'default_lines_product_id': self.id,
+        }
+        return action
     
     @api.depends('name', 'scheme', 'scheme.name')
     def _compute_display_name(self):
@@ -56,7 +92,7 @@ class LinesProduct(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        return []
+        return [('active', '=', True)]
 
 
 class LinesProductPresentation(models.Model):
@@ -113,4 +149,4 @@ class LinesProductPresentation(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        return []
+        return [('line_id.active', '=', True)]

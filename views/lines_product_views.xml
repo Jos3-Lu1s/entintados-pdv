@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="lines_product_view_list" model="ir.ui.view">
+        <field name="name">lines.product.view.list</field>
+        <field name="model">lines.product</field>
+        <field name="arch" type="xml">
+            <list string="Líneas de producto">
+                <field name="name" />
+                <field name="scheme" />
+                <field name="presentation_count" string="Presentaciones" />
+                <field name="product_count" string="Productos" />
+                <field name="active" widget="boolean_toggle" optional="hide" />
+            </list>
+        </field>
+    </record>
+
+    <record id="lines_product_view_form" model="ir.ui.view">
+        <field name="name">lines.product.view.form</field>
+        <field name="model">lines.product</field>
+        <field name="arch" type="xml">
+            <form string="Línea de producto">
+                <sheet>
+                    <widget
+                        name="web_ribbon"
+                        title="Archivado"
+                        bg_color="text-bg-danger"
+                        invisible="active"
+                    />
+                    <div class="oe_button_box" name="button_box">
+                        <button
+                            name="action_view_products"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-paint-brush"
+                        >
+                            <field name="product_count" widget="statinfo" string="Productos" />
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" />
+                        <h1>
+                            <field name="name" placeholder="p. ej. Línea Fácil" />
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="scheme" options="{'no_create_edit': True}" />
+                        </group>
+                        <group>
+                            <field name="active" invisible="1" />
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Rangos por Presentación" name="presentations">
+                            <field name="presentation_line_ids">
+                                <list editable="bottom">
+                                    <field name="presentation_id" options="{'no_create': True}" />
+                                    <field name="price_min" />
+                                    <field name="price_max" />
+                                    <field name="price_osel" readonly="1" optional="show" />
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Notas" name="notes">
+                            <field name="notes" placeholder="Notas internas o directrices sobre esta línea..." />
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="lines_product_view_search" model="ir.ui.view">
+        <field name="name">lines.product.view.search</field>
+        <field name="model">lines.product</field>
+        <field name="arch" type="xml">
+            <search string="Buscar línea de producto">
+                <field name="name" />
+                <field name="scheme" />
+                <separator />
+                <filter
+                    name="with_presentations"
+                    string="Con presentaciones"
+                    domain="[('presentation_line_ids', '!=', False)]"
+                />
+                <filter
+                    name="without_presentations"
+                    string="Sin presentaciones"
+                    domain="[('presentation_line_ids', '=', False)]"
+                />
+                <separator />
+                <filter
+                    name="inactive"
+                    string="Archivados"
+                    domain="[('active', '=', False)]"
+                />
+                <group>
+                    <filter
+                        name="group_scheme"
+                        string="Esquema"
+                        domain="[]"
+                        context="{'group_by': 'scheme'}"
+                    />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="lines_product_action" model="ir.actions.act_window">
+        <field name="name">Líneas de producto</field>
+        <field name="res_model">lines.product</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="lines_product_view_search" />
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Registre una línea de producto</p>
+            <p>
+                Las líneas de producto asocian un esquema de precios con los
+                rangos mínimos y máximos por cada presentación en el punto de venta.
+            </p>
+        </field>
+    </record>
+
+</odoo>
