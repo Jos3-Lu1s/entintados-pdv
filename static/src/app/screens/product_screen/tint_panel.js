@@ -2,6 +2,7 @@
 import { Component } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
 import {
     computeTintedPrice,
@@ -9,6 +10,7 @@ import {
 } from "@entintados_pdv/app/utils/tint_order";
 import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
 import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
+import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
 
 /**
  * Panel de entintado. Permite seleccionar color, filtrar por galería,
@@ -38,22 +40,21 @@ export class TintPanel extends Component {
 
     get colorColumns() {
         return [
-            { label: "Muestra", class: "o-tint-th-swatch" },
-            { label: "Código", class: "text-nowrap" },
+            { label: "Código", class: "text-nowrap", style: "width: 120px;" },
             { label: "Color" },
-            { label: "Galería", class: "text-nowrap" },
-            { label: "Tipos de base" },
+            { label: "Galería", class: "text-nowrap", style: "width: 160px;" },
+            { label: "Bases disponibles" },
         ];
     }
 
     get baseColumns() {
         return [
-            { label: "Código", class: "text-nowrap" },
+            { label: "Código", class: "text-nowrap", style: "width: 120px;" },
             { label: "Base a dispensar" },
-            { label: "Tipo de base", class: "text-nowrap" },
-            { label: "Presentación", class: "text-nowrap" },
-            { label: "Puntos", class: "text-end text-nowrap" },
-            { label: "Precio", class: "text-end text-nowrap" },
+            { label: "Tipo de base", class: "text-nowrap", style: "width: 130px;" },
+            { label: "Presentación", class: "text-nowrap", style: "width: 130px;" },
+            { label: "Dosis fórmula", class: "text-end text-nowrap", style: "width: 130px;" },
+            { label: "Precio", class: "text-end text-nowrap", style: "width: 120px;" },
         ];
     }
 
@@ -230,6 +231,35 @@ export class TintPanel extends Component {
             baseTypeId: null,
         });
         this.pos.searchProductWord = "";
+    }
+
+    /** Limpia la selección de galería y regresa al paso 1. */
+    changeGallery() {
+        Object.assign(this.ui, {
+            galleryId: null,
+            colorId: null,
+            sizeId: null,
+            baseTypeId: null,
+            galleryColorIds: [],
+        });
+        this.pos.searchProductWord = "";
+    }
+
+    /** Abre el modal para crear nuevo color desde el panel. */
+    async onClickCreateColor() {
+        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup, {
+            galleryId: this.ui.galleryId || false,
+        });
+        if (payload?.colorId) {
+            if (payload.galleryId && this.ui.galleryId !== payload.galleryId) {
+                this.ui.galleryId = payload.galleryId;
+            }
+            if (this.ui.galleryId) {
+                await this.loadGalleryColors(this.ui.galleryId);
+            }
+            this.ui.colorId = payload.colorId;
+            await this.loadColorFormulas(payload.colorId);
+        }
     }
 
     // Paso 3: filtros en cascada de la base

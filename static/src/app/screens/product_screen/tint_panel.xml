@@ -2,49 +2,102 @@
 <templates xml:space="preserve">
 
     <t t-name="entintados_pdv.TintPanel">
-        <div class="o-tint-panel d-flex flex-column flex-grow-1 overflow-hidden">
+        <div class="o-tint-panel d-flex flex-column flex-grow-1 min-w-0 min-h-0 overflow-hidden h-100 w-100">
 
-            <!-- Filtros de base y color seleccionado -->
-            <div t-if="ui.colorId" class="flex-shrink-0 border rounded bg-view mx-2 mb-2 p-3">
-                <div class="d-flex align-items-center gap-2" t-att-class="{ 'mb-2': levels.length }">
-                    <span class="rounded-circle border flex-shrink-0"
-                          t-attf-style="width: 1.25rem; height: 1.25rem; background-color: {{ selectedColor and selectedColor.html_color or '#E0E0E0' }};"/>
-                    <span class="fw-bold text-truncate">
-                        <t t-if="selectedColor and selectedColor.code">[<t t-esc="selectedColor.code"/>] </t>
-                        <t t-esc="selectedColor and selectedColor.name"/>
-                    </span>
-                    <button t-if="hasActiveFilters" class="btn btn-sm btn-outline-secondary text-nowrap ms-auto"
-                            t-on-click="() => this.clearFilters()">
-                        Limpiar filtros
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
-                            t-att-class="{ 'ms-auto': !hasActiveFilters }"
-                            t-on-click="() => this.clearColor()">
-                        Cambiar color
-                    </button>
-                </div>
-
-                <div t-foreach="levels" t-as="level" t-key="level.key"
-                     class="d-flex align-items-center gap-2 mb-1">
-                    <small class="text-muted text-nowrap" style="width: 6.5rem;"
-                           t-esc="level.label"/>
-                    <div class="d-flex flex-wrap gap-1">
-                        <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
-                                class="btn btn-sm text-nowrap"
-                                t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary'"
-                                t-on-click="() => this.selectLevel(level.key, opt.record.id)">
-                            <t t-esc="opt.record.name"/>
-                            <span class="badge ms-1"
-                                  t-att-class="level.selected === opt.record.id ? 'bg-white text-primary fw-bold' : 'bg-secondary text-dark'"
-                                  t-esc="opt.count"/>
+            <!-- Franja de contexto de la galería activa (Paso 2: Selección de color) -->
+            <div t-if="ui.galleryId and !ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs min-w-0">
+                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2 min-w-0">
+                    <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
+                        <!-- Botón Volver a Selección de Galería -->
+                        <button class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs text-dark flex-shrink-0"
+                                style="width: 32px; height: 32px;"
+                                title="Volver a lista de galerías"
+                                t-on-click="() => this.changeGallery()">
+                            <i class="fa fa-chevron-left small"/>
                         </button>
+                        <div class="o-tint-header-icon bg-primary-subtle text-primary flex-shrink-0">
+                            <i class="fa fa-folder-open-o"/>
+                        </div>
+                        <div class="min-w-0 flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap min-w-0">
+                                <span class="fw-bold fs-6 text-dark text-truncate d-inline-block" style="max-width: 100%;">
+                                    <t t-esc="selectedGallery and selectedGallery.name"/>
+                                </span>
+                                <span t-if="selectedGallery and selectedGallery.code" class="text-secondary-emphasis font-monospace small flex-shrink-0">
+                                    (<t t-esc="selectedGallery.code"/>)
+                                </span>
+                            </div>
+                            <small class="text-secondary-emphasis text-truncate d-block" style="font-size: 0.72rem;">
+                                Selecciona un color del catálogo
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="flex-grow-1 overflow-auto px-2 pb-2">
+            <!-- Filtros de base y color seleccionado con navegación de retorno -->
+            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs min-w-0">
+                <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2 min-w-0">
+                    <!-- Left: Botón Volver + Info de Color & Galería -->
+                    <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
+                        <button class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center shadow-xs text-dark flex-shrink-0"
+                                style="width: 32px; height: 32px;"
+                                title="Volver a lista de colores"
+                                t-on-click="() => this.clearColor()">
+                            <i class="fa fa-chevron-left small"/>
+                        </button>
+                        <div class="o-tint-header-icon bg-primary-subtle text-primary flex-shrink-0">
+                            <i class="fa fa-paint-brush"/>
+                        </div>
+                        <div class="min-w-0 flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap min-w-0">
+                                <span class="fw-bold fs-6 text-dark text-truncate d-inline-block" style="max-width: 100%;">
+                                    <t t-esc="selectedColor and selectedColor.name"/>
+                                </span>
+                                <span t-if="selectedColor and selectedColor.code" class="text-secondary-emphasis font-monospace small flex-shrink-0">
+                                    (<t t-esc="selectedColor.code"/>)
+                                </span>
+                            </div>
+                            <small class="text-secondary-emphasis text-truncate d-block" style="font-size: 0.72rem;">
+                                Galería: <strong><t t-esc="selectedGallery and selectedGallery.name"/></strong>
+                            </small>
+                        </div>
+                    </div>
 
-                <div t-if="missingModels.length" class="alert alert-danger" role="alert">
+                    <!-- Right: Botón Limpiar filtros (solo cuando hay filtros activos) -->
+                    <div t-if="hasActiveFilters" class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                        <button class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 shadow-xs text-nowrap"
+                                title="Quitar filtros de presentación y tipo de base"
+                                t-on-click="() => this.clearFilters()">
+                            <i class="fa fa-times me-1"/> Limpiar filtros
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtros en cascada (Presentación / Base) -->
+                <div t-if="levels.length" class="o-tint-card-body p-2 px-3 border-top bg-light min-w-0">
+                    <div t-foreach="levels" t-as="level" t-key="level.key"
+                         class="o-tint-filter-row">
+                        <small class="text-dark fw-bold text-uppercase text-nowrap o-tint-filter-label" style="width: 7.5rem; font-size: 0.7rem; letter-spacing: 0.3px;"
+                               t-esc="level.label"/>
+                        <div class="d-flex flex-wrap gap-1 min-w-0">
+                            <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
+                                     class="btn btn-sm text-nowrap rounded-pill px-3 py-1 shadow-xs transition-all"
+                                    t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary bg-white'"
+                                    t-on-click="() => this.selectLevel(level.key, opt.record.id)">
+                                <t t-esc="opt.record.name"/>
+                                <span class="badge ms-1 rounded-pill"
+                                      t-att-class="level.selected === opt.record.id ? 'bg-white text-primary fw-bold' : 'bg-light text-dark border'"
+                                      t-esc="opt.count"/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-grow-1 d-flex flex-column min-h-0 min-w-0 overflow-hidden px-2 pb-2">
+
+                <div t-if="missingModels.length" class="alert alert-danger flex-shrink-0 mb-2" role="alert">
                     <strong>Modelos que no existen en el cliente:</strong>
                     <t t-esc="missingModels.map(m => m.label).join(', ')"/>.
                     <div class="mt-1">
@@ -53,7 +106,7 @@
                     </div>
                 </div>
 
-                <div t-if="formulasWithoutGallery" class="alert alert-warning" role="alert">
+                <div t-if="formulasWithoutGallery" class="alert alert-warning flex-shrink-0 mb-2" role="alert">
                     <strong>
                         <t t-esc="formulasWithoutGallery"/> de <t t-esc="formulaCount"/> fórmulas
                         no tienen galería.
@@ -68,17 +121,17 @@
 
                     <!-- Paso 1: Selección de galería -->
                     <t t-if="!ui.galleryId">
-                        <div class="px-1 pb-2 pt-1">
-                            <small class="text-muted fw-semibold d-block mb-2">
+                        <div class="flex-grow-1 overflow-y-auto px-1 pb-2 pt-1 o-tint-scroll-touch min-h-0">
+                            <small class="text-secondary-emphasis fw-semibold d-block mb-2">
                                 Elige una galería para empezar:
                             </small>
-                            <div class="d-flex flex-wrap gap-2">
+                            <div class="d-flex flex-wrap gap-2 o-tint-gallery-grid">
                                 <button t-foreach="galleryOptions" t-as="gallery" t-key="gallery.id"
-                                        class="btn btn-outline-primary text-nowrap"
+                                        class="btn btn-outline-primary text-nowrap rounded-3 shadow-xs py-2 px-3 o-tint-gallery-btn d-flex align-items-center gap-2"
                                         t-on-click="() => this.selectGallery(gallery.id)">
-                                    <i class="fa fa-folder-open-o me-1" role="img" aria-label="Galería"/>
-                                    <t t-if="gallery.code">[<t t-esc="gallery.code"/>] </t>
-                                    <t t-esc="gallery.name"/>
+                                    <i class="fa fa-folder-open-o flex-shrink-0" role="img" aria-label="Galería"/>
+                                    <t t-if="gallery.code"><span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1"><t t-esc="gallery.code"/></span> </t>
+                                    <strong class="text-truncate"><t t-esc="gallery.name"/></strong>
                                 </button>
                             </div>
                         </div>
@@ -87,7 +140,7 @@
                     <!-- Paso 2: Selección de color -->
                     <t t-elif="!ui.colorId">
                         <div t-if="ui.loadingColors and !colors.length"
-                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
                             <h5>Cargando colores…</h5>
                         </div>
@@ -97,33 +150,31 @@
                                 <tr t-foreach="colors" t-as="color" t-key="color.id"
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.selectColor(color.id)">
-                                    <td class="o-tint-td-swatch">
-                                        <span class="rounded-circle border d-inline-block align-middle"
-                                              t-attf-style="width: 1.5rem; height: 1.5rem; background-color: {{ color.html_color or '#E0E0E0' }};"/>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-secondary-emphasis font-monospace small" t-esc="color.code or '—'"/>
                                     </td>
-                                    <td class="text-nowrap">
-                                        <span t-if="color.code" class="badge bg-secondary" t-esc="color.code"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2">
+                                        <span class="fw-bold text-dark" t-esc="color.name"/>
                                     </td>
-                                    <td class="fw-semibold" t-esc="color.name"/>
-                                    <td class="text-nowrap text-muted small">
-                                        <t t-if="selectedGallery and selectedGallery.code">[<t t-esc="selectedGallery.code"/>] </t>
-                                        <t t-esc="selectedGallery and selectedGallery.name"/>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-secondary-emphasis small">
+                                            <t t-if="selectedGallery and selectedGallery.code">[<t t-esc="selectedGallery.code"/>] </t>
+                                            <t t-esc="selectedGallery and selectedGallery.name"/>
+                                        </span>
                                     </td>
-                                    <td class="text-muted small">
-                                        <t t-if="color.base_type_summary" t-esc="color.base_type_summary"/>
-                                        <span t-else="">—</span>
+                                    <td class="py-2">
+                                        <span class="text-secondary-emphasis small" t-esc="color.base_type_summary or '—'"/>
                                     </td>
                                 </tr>
                             </t>
                         </TintTable>
 
                         <div t-else=""
-                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-search fa-3x mb-3 text-secondary"/>
                             <h5 t-if="searchTerm">Ningún color coincide con «<t t-esc="searchTerm"/>»</h5>
                             <h5 t-else="">Esta galería no tiene colores</h5>
-                            <p class="mb-0">
+                            <p class="mb-0 small">
                                 <t t-if="searchTerm">Ajusta el término de búsqueda o </t>
                                 <t t-else="">Prueba otra galería o </t>
                                 revisa las fórmulas de esta galería.
@@ -134,7 +185,7 @@
                     <!-- Paso 3: Selección de base -->
                     <t t-else="">
 
-                        <div t-if="unsellableCount" class="alert alert-warning" role="alert">
+                        <div t-if="unsellableCount" class="alert alert-warning rounded-3 shadow-xs flex-shrink-0 mb-2" role="alert">
                             <strong>
                                 <t t-esc="unsellableCount"/>
                                 <t t-if="unsellableCount === 1"> fórmula sin producto base</t>
@@ -157,7 +208,7 @@
                                     <ul t-if="loadedBases.length" class="mb-0 small">
                                         <li t-foreach="loadedBases" t-as="base" t-key="base.id">
                                             <t t-esc="base.combo"/>
-                                            <span class="text-muted"> — <t t-esc="base.name"/></span>
+                                            <span class="text-secondary-emphasis"> — <t t-esc="base.name"/></span>
                                         </li>
                                     </ul>
                                     <div t-else="" class="small">
@@ -170,7 +221,7 @@
                         </div>
 
                         <div t-if="ui.loadingFormulas and !cards.length"
-                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
                             <h5>Cargando fórmulas…</h5>
                         </div>
@@ -180,48 +231,46 @@
                                 <tr t-foreach="cards" t-as="card" t-key="card.key"
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.addCard(card)">
-                                    <td class="text-nowrap">
-                                        <span t-if="card.baseProduct.default_code" class="badge bg-secondary" t-esc="card.baseProduct.default_code"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-secondary-emphasis font-monospace small" t-esc="card.baseProduct.default_code or '—'"/>
                                     </td>
-                                    <td class="fw-semibold" t-esc="card.baseProduct.display_name"/>
-                                    <td class="text-muted small text-nowrap">
-                                        <t t-if="card.baseType and card.baseType.name" t-esc="card.baseType.name"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2">
+                                        <span class="fw-bold text-dark" t-esc="card.baseProduct.display_name"/>
                                     </td>
-                                    <td class="text-muted small text-nowrap">
-                                        <t t-if="card.size and card.size.name" t-esc="card.size.name"/>
-                                        <span t-else="" class="text-muted">—</span>
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-dark small" t-esc="card.baseType and card.baseType.name or '—'"/>
                                     </td>
-                                    <td class="text-end text-nowrap">
-                                        <span class="text-muted" t-esc="formatPoints(card.totalPoints)"/>
-                                        <small t-if="card.totalPoints >= 48" class="text-muted ms-1">
-                                            (<t t-esc="card.totalPoints"/> Pts.)
+                                    <td class="py-2 text-nowrap">
+                                        <span class="text-dark small" t-esc="card.size and card.size.name or '—'"/>
+                                    </td>
+                                    <td class="py-2 text-end text-nowrap">
+                                        <span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1" t-esc="formatPoints(card.totalPoints)"/>
+                                        <small t-if="card.totalPoints >= 48" class="text-secondary-emphasis ms-1">
+                                            (<t t-esc="card.totalPoints"/> Pts)
                                         </small>
                                     </td>
-                                    <td class="text-end fw-bold text-nowrap"
+                                    <td class="py-2 text-end fw-bold text-nowrap text-success fs-6"
                                         t-esc="formatPrice(card.price)"/>
                                 </tr>
                             </t>
                         </TintTable>
 
                         <div t-else=""
-                             class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
                             <h5 t-if="searchTerm">Ninguna base coincide con «<t t-esc="searchTerm"/>»</h5>
                             <h5 t-else="">No hay bases para esta combinación</h5>
-                            <p class="mb-0">
+                            <p class="mb-0 small">
                                 <t t-if="searchTerm">Limpia el buscador de arriba, </t>
                                 <t t-else="">Quita algún filtro o </t>
                                 cambia de color.
                             </p>
                         </div>
-
                     </t>
 
                 </t>
 
-                <div t-else="" class="alert alert-warning" role="alert">
+                <div t-else="" class="alert alert-warning flex-shrink-0" role="alert">
                     <strong>No hay galerías cargadas en la caja.</strong>
                     <div class="mt-1">
                         Crea al menos una galería en <em>Entintados → Configuración</em> y

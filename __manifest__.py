@@ -47,6 +47,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/components/tint_table/tint_table.xml",
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.js",
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.xml",
+            "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.js",
+            "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.xml",
             # Modelos del POS
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades
@@ -121,6 +123,7 @@ Catálogo de entintado
         'report/report_picking_action.xml',
         'report/report_picking_crm.xml',
         'wizards/partner_risk_exceeded_view.xml',
+        'wizards/crm_field_visit_confirm_wizard_view.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

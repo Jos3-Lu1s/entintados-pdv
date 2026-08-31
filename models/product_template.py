@@ -44,11 +44,6 @@ class ProductTemplate(models.Model):
         string="Instrucción al operador",
         related='tint_base_type_id.operator_note', readonly=True)
 
-    # --- Solo para colorantes -------------------------------------------
-    price_per_point = fields.Float(
-        string="Precio por punto", digits='Product Price',
-        help="Precio de venta de cada punto dispensado de este colorante.")
-    
     # --- Esquemas y lineas de producto ----------------------------------
     lines_product_id = fields.Many2one(
         comodel_name='lines.product',
@@ -135,12 +130,9 @@ class ProductTemplate(models.Model):
                     product.uom_id = point
                 product.tint_base_type_id = False
                 product.tint_size_id = False
-            elif product.tint_role == 'base':
-                product.price_per_point = 0.0
-            else:
+            elif product.tint_role != 'base':
                 product.tint_base_type_id = False
                 product.tint_size_id = False
-                product.price_per_point = 0.0
 
     @api.onchange('tint_base_type_id')
     def _onchange_tint_base_type_id(self):
@@ -167,12 +159,11 @@ class ProductTemplate(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         # EXTENDS point_of_sale: agrega los campos de entintado que la caja
-        # necesita (rol, tipo y presentación de la base, capacidad y precio
-        # por punto del colorante).
+        # necesita (rol, tipo y presentación de la base, capacidad).
         field_names = super()._load_pos_data_fields(config)
         return field_names + [
             'tint_role', 'tint_base_type_id', 'tint_size_id',
-            'tint_capacity_points', 'price_per_point', 'standard_price',
+            'tint_capacity_points', 'standard_price',
         ]
 
     @api.model
@@ -193,40 +184,6 @@ class ProductTemplate(models.Model):
         if missing:
             read += self._load_pos_data_read(missing, config)
         return read
-
-    """ @api.model_create_multi
-    def create(self, vals_list):
-        products = super().create(vals_list)
-
-        for product in products:
-
-            # Si pertenece a un esquema de entintados,
-            # no hacemos esta validación.
-            if product.scheme_id:
-                continue
-
-            if not product.standard_price:
-                raise ValidationError(_(
-                    'El costo no puede ser 0 en el producto "%(name)s".',
-                    name=product.display_name,
-                ))
-
-            if not product.list_price:
-                raise ValidationError(_(
-                    'El precio de venta no puede ser 0 en el producto "%(name)s".',
-                    name=product.display_name,
-                ))
-
-            if product.standard_price >= product.list_price:
-                raise ValidationError(_(
-                    'El costo ("%(standard)s") no puede ser mayor ni igual '
-                    'al precio de venta ("%(list)s") en el producto "%(name)s".',
-                    standard=product.standard_price,
-                    list=product.list_price,
-                    name=product.display_name,
-                ))
-
-        return products """
 
     @api.onchange('lines_product_id')
     def _onchange_lines_product_id(self):

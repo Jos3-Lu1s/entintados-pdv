@@ -27,13 +27,13 @@ class TestTintColor(TransactionCase):
         point = cls.env.ref('entintados_pdv.uom_tint_point')
         cls.colorant_a = cls.env['product.product'].create({
             'name': 'Colorante prueba A', 'uom_id': point.id,
-            'tint_role': 'colorant', 'price_per_point': 2.0,
+            'tint_role': 'colorant', 'list_price': 2.0,
         })
         cls.colorant_b = cls.env['product.product'].create({
             'name': 'Colorante prueba B', 'uom_id': point.id,
-            'tint_role': 'colorant', 'price_per_point': 3.0,
+            'tint_role': 'colorant', 'list_price': 3.0,
         })
-        cls.color = cls.colors.create({'name': 'Color de prueba'})
+        cls.color = cls.colors.create({'name': 'Color de prueba', 'code': 'TEST-COL-01'})
 
     def _create_formula(self, base_type, size, doses, color=None):
         return self.formulas.create({
@@ -48,22 +48,14 @@ class TestTintColor(TransactionCase):
 
     # --- Color ----------------------------------------------------------
 
-    def test_color_code_generated_automatically(self):
-        color = self.colors.create({'name': 'Verde Olivo'})
-        self.assertTrue(color.code, "El código debe generarse desde la secuencia")
+    @mute_logger('odoo.sql_db')
+    def test_color_code_required(self):
+        with self.assertRaises(Exception):
+            self.colors.create({'name': 'Verde Olivo'})
 
-    def test_color_code_respected_when_given(self):
-        color = self.colors.create({'name': 'Gris Perla', 'code': 'MIO-001'})
+    def test_color_code_normalized(self):
+        color = self.colors.create({'name': 'Gris Perla', 'code': '  mio-001  '})
         self.assertEqual(color.code, 'MIO-001')
-
-    def test_invalid_hex_color_rejected(self):
-        with self.assertRaises(ValidationError):
-            self.colors.create({'name': 'Color raro', 'html_color': 'rojo'})
-
-    def test_valid_hex_color_accepted(self):
-        for value in ('#C8102E', '#fff'):
-            color = self.colors.create({'name': 'Color %s' % value, 'html_color': value})
-            self.assertEqual(color.html_color, value)
 
     @mute_logger('odoo.sql_db')
     def test_duplicate_color_code_rejected(self):
