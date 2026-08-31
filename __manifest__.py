@@ -64,6 +64,9 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/screens/product_screen/tint_panel.xml",
             "entintados_pdv/static/src/app/screens/product_screen/tint_products_widget.js",
             "entintados_pdv/static/src/app/screens/product_screen/tint_products_widget.xml",
+            # PoS ticket screen: vista de ticket para cliente
+            "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.js",
+            "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.xml",
             # Overrides (patch) a componentes/servicios del core POS
             "entintados_pdv/static/src/app/overrides/pos_store.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",

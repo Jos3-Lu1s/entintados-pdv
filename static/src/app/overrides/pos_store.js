@@ -9,7 +9,7 @@ patch(PosStore.prototype, {
         };
     },
 
-    handlePriceUnit(line, options = {}) {
+    /* handlePriceUnit(line, options = {}) {
         if (line?.price_type === "manual" || line?.manual_price) {
             return;
         }
@@ -20,25 +20,27 @@ patch(PosStore.prototype, {
             line?.pricelist ||
             order?.pricelist ||
             order?.pricelist_id;
-
-        if (!pricelist || typeof pricelist.getPrice !== "function") {
-            if (this.config?.pricelist_id && typeof this.config.pricelist_id.getPrice === "function") {
-                pricelist = this.config.pricelist_id;
-            } else if (this.default_pricelist && typeof this.default_pricelist.getPrice === "function") {
-                pricelist = this.default_pricelist;
-            } else if (this.pricelist && typeof this.pricelist.getPrice === "function") {
-                pricelist = this.pricelist;
-            } else if (this.models?.["product.pricelist"]) {
-                const allPricelists = this.models["product.pricelist"].getAll?.() || [];
-                pricelist = allPricelists.find((p) => typeof p?.getPrice === "function") || allPricelists[0];
+            if (!pricelist || typeof pricelist.getPrice !== "function") {
+                if (this.config?.pricelist_id && typeof this.config.pricelist_id.getPrice === "function") {
+                    pricelist = this.config.pricelist_id;
+                    console.log("[ENTINTADOS 1] config.pricelist_id:", pricelist);
+                } else if (this.default_pricelist && typeof this.default_pricelist.getPrice === "function") {
+                    pricelist = this.default_pricelist;
+                    console.log("[ENTINTADOS 2] config.pricelist_id:", pricelist);
+                } else if (this.pricelist && typeof this.pricelist.getPrice === "function") {
+                    pricelist = this.pricelist;
+                    console.log("[ENTINTADOS 3] config.pricelist_id:", pricelist);
+                } else if (this.models?.["product.pricelist"]) {
+                    const allPricelists = this.models["product.pricelist"].getAll?.() || [];
+                    pricelist = allPricelists.find((p) => typeof p?.getPrice === "function") || allPricelists[0];
+                    console.log("[ENTINTADOS 4] config.pricelist_id:", pricelist);
+                }
             }
-        }
-
         if (line && !line.order_id && order) {
             line.order_id = order;
         }
 
-        if (pricelist && typeof pricelist.getPrice === "function") {
+        //if (pricelist && typeof pricelist.getPrice === "function") {
             const updatedOptions = {
                 ...options,
                 pricelist,
@@ -53,11 +55,12 @@ patch(PosStore.prototype, {
                 }
                 return;
             }
-        }
+        //}
 
         if (line && (line.price_unit === undefined || line.price_unit === null)) {
             const product = line.product_id || line.product;
+             console.log("[ENTINTADOS] Producto sin pricelist, campos disponibles:", product);
             line.price_unit = product?.lst_price ?? product?.list_price ?? 0;
         }
-    },
+    }, */
 });

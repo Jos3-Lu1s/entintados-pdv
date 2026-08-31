@@ -190,4 +190,4 @@ class ProductTemplate(models.Model):
     def _onchange_lines_product_id(self):
         if self.lines_product_id:
             self.scheme_id = self.lines_product_id.scheme
-        
+    
