@@ -245,7 +245,9 @@ export async function addTintedBaseToOrder(
     );
 
     if (parent) {
-        if (typeof parent.set_unit_price === "function") {
+        if (typeof parent.setUnitPrice === "function") {
+            parent.setUnitPrice(finalUnitPrice);
+        } else if (typeof parent.set_unit_price === "function") {
             parent.set_unit_price(finalUnitPrice);
         } else {
             parent.price_unit = finalUnitPrice;
@@ -256,7 +258,9 @@ export async function addTintedBaseToOrder(
         const partner = order.get_partner?.() || order.partner_id;
         const partnerDiscount = partner?.discount || 0;
         if (partnerDiscount > 0) {
-            if (typeof parent.set_discount === "function") {
+            if (typeof parent.setDiscount === "function") {
+                parent.setDiscount(partnerDiscount);
+            } else if (typeof parent.set_discount === "function") {
                 parent.set_discount(partnerDiscount);
             } else {
                 parent.discount = partnerDiscount;

@@ -6,6 +6,7 @@ patch(PosStore.prototype, {
         return {
             ...super.editPartnerContext(partner),
             default_is_customer: true,
+            entintados_partner_scope: "customer",
         };
     },
 

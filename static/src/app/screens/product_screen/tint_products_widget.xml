@@ -76,6 +76,9 @@
                         <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
                             t-on-click="() => this.addProductToOrder(product)">
+                            <td class="py-2 text-nowrap">
+                                <span class="text-secondary-emphasis font-monospace small" t-esc="product.default_code or '—'"/>
+                            </td>
                             <td class="py-2">
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="fw-bold text-dark" t-esc="getProductName(product)"/>
@@ -86,9 +89,6 @@
                                     <span t-if="product.tint_role === 'base'" class="text-info small fw-semibold">Base</span>
                                     <span t-elif="product.tint_role === 'colorant'" class="text-warning-emphasis small fw-semibold">Colorante</span>
                                 </div>
-                            </td>
-                            <td class="py-2 text-nowrap">
-                                <span class="text-secondary-emphasis font-monospace small" t-esc="product.default_code or '—'"/>
                             </td>
                             <td class="py-2 text-nowrap">
                                 <span class="text-secondary-emphasis small" t-esc="product.uom_id and product.uom_id.name or '—'"/>

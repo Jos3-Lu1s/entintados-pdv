@@ -69,8 +69,13 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.xml",
             # Overrides (patch) a componentes/servicios del core POS
             "entintados_pdv/static/src/app/overrides/pos_store.js",
+            "entintados_pdv/static/src/app/overrides/pos_order_line.js",
+            "entintados_pdv/static/src/app/overrides/orderline.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.xml",
+            # Widgets de campos reutilizables en formularios del POS
+            "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
+            "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
         ],
         "web.assets_backend": [
             # Widget de campo del backend (usado en la vista de res.partner)

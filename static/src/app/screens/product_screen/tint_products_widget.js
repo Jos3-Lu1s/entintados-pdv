@@ -83,8 +83,8 @@ patch(ProductScreen.prototype, {
     /** Columnas para la tabla de productos en modo lista. */
     get productListColumns() {
         return [
-            { label: "Nombre" },
             { label: "Código", class: "text-nowrap", style: "width: 140px;" },
+            { label: "Nombre" },
             { label: "UdM", class: "text-nowrap", style: "width: 100px;" },
             { label: "Precio", class: "text-end text-nowrap", style: "width: 120px;" },
         ];

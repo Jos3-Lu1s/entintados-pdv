@@ -243,7 +243,15 @@ class ResPartner(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         fields = super()._load_pos_data_fields(config)
-        return fields + ['discount', 'is_told', 'is_credit']
+        return fields + [
+            'discount',
+            'is_told',
+            'is_credit',
+            'is_customer',
+            'is_distributor',
+            'is_supplier',
+            'is_creditor',
+        ]
 
     @api.model
     def _load_pos_data_domain(self, data, config):
