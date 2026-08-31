@@ -140,6 +140,18 @@ export class TintFormulaPopup extends Component {
         return list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     }
 
+    get presentationRange() {
+        if (!this.pos?.models?.["lines.product.presentation"] || !this.size) {
+            return null;
+        }
+        const all = this.pos.models["lines.product.presentation"].getAll?.() || [];
+        const match = all.find((p) => {
+            const pSizeId = p.presentation_id?.id ?? p.presentation_id;
+            return pSizeId === this.size.id;
+        });
+        return match || null;
+    }
+
     get selectedFormula() {
         if (!this.state.colorId) {
             return null;

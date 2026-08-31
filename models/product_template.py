@@ -164,6 +164,7 @@ class ProductTemplate(models.Model):
         return field_names + [
             'tint_role', 'tint_base_type_id', 'tint_size_id',
             'tint_capacity_points', 'standard_price',
+            'lines_product_id', 'scheme_id',
         ]
 
     @api.model

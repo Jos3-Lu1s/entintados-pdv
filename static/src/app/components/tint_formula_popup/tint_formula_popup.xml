@@ -210,6 +210,16 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div t-if="presentationRange and (presentationRange.price_min or presentationRange.price_max)" class="col-12">
+                                        <div class="p-2 rounded-3 border bg-light shadow-xs d-flex align-items-center justify-content-between">
+                                            <small class="text-secondary-emphasis fw-semibold">Rango de línea</small>
+                                            <span class="text-dark fw-bold small font-monospace">
+                                                <t t-if="presentationRange.price_min">Mín: <t t-esc="formatCurrency(presentationRange.price_min)"/></t>
+                                                <t t-if="presentationRange.price_min and presentationRange.price_max"> · </t>
+                                                <t t-if="presentationRange.price_max">Máx: <t t-esc="formatCurrency(presentationRange.price_max)"/></t>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Requisito Operativo de Extracción Previa -->

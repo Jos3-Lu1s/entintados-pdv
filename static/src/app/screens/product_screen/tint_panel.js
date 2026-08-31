@@ -6,6 +6,7 @@ import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
 import {
     computeTintedPrice,
+    computeTintedPriceDetails,
     formulaDoses,
 } from "@entintados_pdv/app/utils/tint_order";
 import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
@@ -402,6 +403,7 @@ export class TintPanel extends Component {
 
     buildCard(formula, baseProduct) {
         const doses = formulaDoses(this.pos, formula);
+        const priceDetails = computeTintedPriceDetails(this.pos, baseProduct, formula);
         return {
             key: `${formula.id}-${baseProduct.id}`,
             formula,
@@ -412,7 +414,10 @@ export class TintPanel extends Component {
             size: formula.size_id,
             doses,
             totalPoints: doses.reduce((acc, dose) => acc + dose.points, 0),
-            price: computeTintedPrice(this.pos, baseProduct, formula),
+            price: priceDetails.finalPrice,
+            theoreticalPrice: priceDetails.theoreticalPrice,
+            priceStatus: priceDetails.status,
+            range: priceDetails.range,
         };
     }
 

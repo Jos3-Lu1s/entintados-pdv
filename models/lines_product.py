@@ -5,6 +5,7 @@ from odoo.exceptions import ValidationError
 class LinesProduct(models.Model):
     _name = 'lines.product'
     _description = 'Línea de producto'
+    _inherit = ['pos.load.mixin']
 
     name = fields.Char(string='Nombre', required=True)
     presentation_line_ids = fields.One2many(
@@ -47,10 +48,22 @@ class LinesProduct(models.Model):
                     scheme=line.scheme.display_name,
                 ))
 
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return ['id', 'name', 'scheme']
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return []
+
+
 class LinesProductPresentation(models.Model):
     _name = 'lines.product.presentation'
     _description = 'Presentación de línea de producto'
     _order = 'line_id, presentation_id, id'
+    _inherit = ['pos.load.mixin']
 
     line_id = fields.Many2one(
         comodel_name='lines.product', string='Línea',
@@ -84,3 +97,20 @@ class LinesProductPresentation(models.Model):
                     min=presentation.price_min,
                     max=presentation.price_max,
                 ))
+
+    # --- Carga al POS ---------------------------------------------------
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return [
+            'id',
+            'line_id',
+            'presentation_id',
+            'price_osel',
+            'price_min',
+            'price_max',
+        ]
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        return []

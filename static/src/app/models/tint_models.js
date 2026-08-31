@@ -33,6 +33,14 @@ export class TintColorFormulaLine extends Base {
     static pythonModel = "tint.color.formula.line";
 }
 
+export class LinesProduct extends Base {
+    static pythonModel = "lines.product";
+}
+
+export class LinesProductPresentation extends Base {
+    static pythonModel = "lines.product.presentation";
+}
+
 const TINT_MODELS = [
     TintGallery,
     TintColor,
@@ -41,6 +49,8 @@ const TINT_MODELS = [
     TintBaseCapacity,
     TintColorFormula,
     TintColorFormulaLine,
+    LinesProduct,
+    LinesProductPresentation,
 ];
 
 for (const model of TINT_MODELS) {

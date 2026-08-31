@@ -249,8 +249,15 @@
                                             (<t t-esc="card.totalPoints"/> Pts)
                                         </small>
                                     </td>
-                                    <td class="py-2 text-end fw-bold text-nowrap text-success fs-6"
-                                        t-esc="formatPrice(card.price)"/>
+                                    <td class="py-2 text-end fw-bold text-nowrap fs-6">
+                                        <span class="text-success" t-esc="formatPrice(card.price)"/>
+                                        <t t-if="card.priceStatus === 'adjusted_min'">
+                                            <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border ms-1 text-xxs px-1" title="Ajustado al precio mínimo de la línea">Mín</span>
+                                        </t>
+                                        <t t-elif="card.priceStatus === 'adjusted_max'">
+                                            <span class="badge rounded-pill bg-info-subtle text-info-emphasis border ms-1 text-xxs px-1" title="Ajustado al precio máximo de la línea">Máx</span>
+                                        </t>
+                                    </td>
                                 </tr>
                             </t>
                         </TintTable>
