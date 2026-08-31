@@ -23,6 +23,9 @@
                         string="Agrega Productos"
                         class="btn-primary"/>
             </xpath>
+            <xpath expr="//field[@name='currency_id']" position="after">
+                <field name="show_in_pos"/>
+            </xpath>
         </field>
     </record>
      <record id="view_pricelist_product_wizard_form" model="ir.ui.view">
