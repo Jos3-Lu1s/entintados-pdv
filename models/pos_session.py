@@ -11,6 +11,9 @@ class PosSession(models.Model):
         models_to_load = super()._load_pos_data_models(config)
 
         tint_models = [
+            'tint.schema',
+            'lines.product',
+            'lines.product.presentation',
             'tint.size',
             'tint.base.type',
             'tint.base.capacity',

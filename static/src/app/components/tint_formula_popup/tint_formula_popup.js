@@ -4,7 +4,7 @@ import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
-import { formulaDoses } from "@entintados_pdv/app/utils/tint_order";
+import { formulaDoses, resolvePresentationRange } from "@entintados_pdv/app/utils/tint_order";
 import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
 
 /**
@@ -15,6 +15,7 @@ export class TintFormulaPopup extends Component {
     static components = { Dialog };
     static props = {
         title: { type: String, optional: true },
+        baseProduct: { optional: true },
         baseTypeId: { optional: true },
         sizeId: { optional: true },
         initialColorId: { optional: true },
@@ -23,6 +24,7 @@ export class TintFormulaPopup extends Component {
     };
     static defaultProps = {
         title: _t("Configurar entintado"),
+        baseProduct: false,
         baseTypeId: false,
         sizeId: false,
         initialColorId: false,
@@ -143,6 +145,16 @@ export class TintFormulaPopup extends Component {
     get presentationRange() {
         if (!this.pos?.models?.["lines.product.presentation"] || !this.size) {
             return null;
+        }
+        if (this.props.baseProduct) {
+            const range = resolvePresentationRange(this.pos, this.props.baseProduct);
+            return range.hasRange
+                ? {
+                      price_min: range.priceMin,
+                      price_max: range.priceMax,
+                      price_osel: range.priceOsel,
+                  }
+                : null;
         }
         const all = this.pos.models["lines.product.presentation"].getAll?.() || [];
         const match = all.find((p) => {

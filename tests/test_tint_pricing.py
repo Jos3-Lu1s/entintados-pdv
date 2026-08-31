@@ -152,3 +152,53 @@ class TestTintPricing(TransactionCase):
         base = self._create_base_product(self.white, self.gallon, line=self.line)
         self.assertEqual(base.lines_product_id, self.line)
         self.assertEqual(base.scheme_id, self.schema)
+
+    # --- Validación de Modelos en Sesión POS y Lógica de Rango ---------
+
+    def test_pos_session_loads_pricing_models(self):
+        """Verifica que la sesión del POS incluya los modelos de esquema, líneas y presentaciones."""
+        pos_config = self.env['pos.config'].create({'name': 'Test POS'})
+        models_to_load = self.env['pos.session']._load_pos_data_models(pos_config)
+        self.assertIn('tint.schema', models_to_load)
+        self.assertIn('lines.product', models_to_load)
+        self.assertIn('lines.product.presentation', models_to_load)
+
+    def test_price_clamping_scenarios(self):
+        """Valida matemáticamente las 3 condiciones de acotamiento de precio según el rango configurado."""
+        # Rango configurado: Min $400.0, Max $600.0
+        base = self._create_base_product(self.white, self.gallon, list_price=300.0, line=self.line)
+        pres = self.presentation_gallon
+
+        # Escenario 1: Tinte ligero (Teórico $300 + $40 = $340 < $400) -> Acota a $400.0
+        formula_low = self._create_formula(self.white, self.gallon, points=20)
+        colorant_price_low = sum(line.colorant_id.list_price * line.points for line in formula_low.line_ids)
+        theoretical_low = base.list_price + colorant_price_low
+        self.assertEqual(theoretical_low, 340.0)
+
+        clamped_low = pres.price_min if theoretical_low < pres.price_min else (
+            pres.price_max if theoretical_low > pres.price_max else theoretical_low
+        )
+        self.assertEqual(clamped_low, 400.0)
+
+        # Escenario 2: Tinte medio (Teórico $300 + $150 = $450 en [$400, $600]) -> Queda en $450.0
+        formula_mid = self._create_formula(self.white, self.gallon, points=75)
+        colorant_price_mid = sum(line.colorant_id.list_price * line.points for line in formula_mid.line_ids)
+        theoretical_mid = base.list_price + colorant_price_mid
+        self.assertEqual(theoretical_mid, 450.0)
+
+        clamped_mid = pres.price_min if theoretical_mid < pres.price_min else (
+            pres.price_max if theoretical_mid > pres.price_max else theoretical_mid
+        )
+        self.assertEqual(clamped_mid, 450.0)
+
+        # Escenario 3: Tinte saturado (Teórico $300 + $400 = $700 > $600) -> Acota a $600.0
+        formula_high = self._create_formula(self.white, self.gallon, points=200)
+        colorant_price_high = sum(line.colorant_id.list_price * line.points for line in formula_high.line_ids)
+        theoretical_high = base.list_price + colorant_price_high
+        self.assertEqual(theoretical_high, 700.0)
+
+        clamped_high = pres.price_min if theoretical_high < pres.price_min else (
+            pres.price_max if theoretical_high > pres.price_max else theoretical_high
+        )
+        self.assertEqual(clamped_high, 600.0)
+

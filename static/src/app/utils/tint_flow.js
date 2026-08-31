@@ -41,6 +41,7 @@ export async function runTintFlow(
     }
 
     const payload = await makeAwaitable(ctx.dialog, TintFormulaPopup, {
+        baseProduct,
         baseTypeId: tmpl.tint_base_type_id.id,
         sizeId: tmpl.tint_size_id.id,
         initialColorId,
