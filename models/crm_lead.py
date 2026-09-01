@@ -3,7 +3,7 @@ from odoo.exceptions import ValidationError, UserError
 
 DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 FIELD_VISIT_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_field_visit'
-
+APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
@@ -378,7 +378,7 @@ class CrmLead(models.Model):
         approval_request.action_confirm()
 
         self.approval_request_id = approval_request.id
-        self._schedule_demo_activity()
+        """ self._schedule_demo_activity() """
 
         return {
             'type': 'ir.actions.act_window',
