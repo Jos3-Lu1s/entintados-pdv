@@ -1,7 +1,8 @@
 from odoo import fields, models, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
+AUDIT_DEPARTMENT_XMLID = 'entintados_pdv.hr_department_auditoria'
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -13,19 +14,20 @@ class StockPicking(models.Model):
         copy=False,
         ondelete="set null",
     )
+
+    approval_request_id = fields.Many2one(
+        comodel_name="approval.request",
+        string="Solicitud de Aprobación",
+        index=True,
+        copy=False,
+        ondelete="set null",
+    )
     
     material_approval_state = fields.Selection([
-        ('to_approve', 'Pendiente de aprobación'),
+        ('to_audit', 'Pendiente de validación de Auditoría'),
         ('approved', 'Aprobado'),
         ('refused', 'Rechazado'),
-    ], string="Aprobación de salida", default='to_approve', copy=False, tracking=True)
-
-    material_approver_id = fields.Many2one(
-        'res.users',
-        string="Aprobador (jefe directo)",
-        compute="_compute_material_approver_id",
-        store=True,
-    )
+    ], string="Aprobación de salida", default='to_audit', copy=False, tracking=True)
 
     is_material_approver = fields.Boolean(
         compute="_compute_is_material_approver",
@@ -47,6 +49,17 @@ class StockPicking(models.Model):
         compute="_compute_is_material_output_type",
     )
     
+    material_auditor_id = fields.Many2one(
+        'res.users',
+        string="Validado por (Auditoría)",
+        copy=False,
+        readonly=True,
+    )
+    
+    is_material_auditor = fields.Boolean(
+        compute="_compute_is_material_auditor",
+    )
+    
     @api.depends('picking_type_id')
     def _compute_is_material_output_type(self):
         for picking in self:
@@ -56,96 +69,88 @@ class StockPicking(models.Model):
         self.ensure_one()
         material_type = self.env.ref(MATERIAL_OUTPUT_TYPE_XMLID, raise_if_not_found=False)
         return bool(material_type and self.picking_type_id == material_type)
-
-    @api.depends('crm_lead_id.user_id', 'user_id', 'create_uid')
-    def _compute_material_approver_id(self):
+            
+    def _is_current_user_auditor(self):
+        """True si el usuario actual pertenece al departamento de Auditoría."""
+        department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
+        if not department:
+            return False
+        employee = self.env['hr.employee'].search(
+            [('user_id', '=', self.env.user.id)], limit=1
+        )
+        return bool(employee and employee.department_id == department)
+    
+    def _compute_is_material_auditor(self):
         for picking in self:
-            approver = self.env['res.users']
-            salesperson = picking.crm_lead_id.user_id or picking.user_id or picking.create_uid
-            if salesperson:
-                employee = self.env['hr.employee'].search([('user_id', '=', salesperson.id)], limit=1)
-                if employee and employee.parent_id and employee.parent_id.user_id:
-                    approver = employee.parent_id.user_id
-            picking.material_approver_id = approver
-
+            picking.is_material_auditor = bool(
+                picking.is_material_output_type and picking._is_current_user_auditor()
+            )
+            
     def _compute_is_material_approver(self):
         for picking in self:
-            picking.is_material_approver = bool(
-                picking.material_approver_id
-                and self.env.user == picking.material_approver_id
-            )
+            picking.is_material_approver = picking.is_material_auditor    
 
-    def _get_approver_signature(self):
-        self.ensure_one()
-        if self.signature:
-            return self.signature
-        
-        approver = self.material_approver_id
-        if not approver and self.crm_lead_id:
-            approver = self.crm_lead_id._get_material_approver()
-            
-        if approver:
-            if getattr(approver, 'digital_signature', None):
-                return approver.digital_signature
-            if getattr(approver, 'sign_signature', None):
-                return approver.sign_signature
-            if approver.partner_id and getattr(approver.partner_id, 'signature', None):
-                return approver.partner_id.signature
-            employee = self.env['hr.employee'].search([('user_id', '=', approver.id)], limit=1)
-            if employee and getattr(employee, 'signature', None):
-                return employee.signature
+    def _get_auditor_signature(self, auditor):
+        if not auditor:
+            return False
+        if getattr(auditor, 'digital_signature', None):
+            return auditor.digital_signature
+        if getattr(auditor, 'sign_signature', None):
+            return auditor.sign_signature
+        if auditor.partner_id and getattr(auditor.partner_id, 'signature', None):
+            return auditor.partner_id.signature
+        employee = self.env['hr.employee'].search([('user_id', '=', auditor.id)], limit=1)
+        if employee and getattr(employee, 'signature', None):
+            return employee.signature
         return False
 
-    def action_approve_material(self):
+    def action_audit_approve_material(self):
         for picking in self:
-            if not picking._is_material_output_type():
+            if not picking.is_material_output_type:
+                raise UserError(_("Esta acción solo aplica a salidas de tipo 'Salida de material'."))
+            if picking.material_approval_state != 'to_audit':
+                raise UserError(_("Esta salida no está pendiente de validación de Auditoría."))
+            if not picking._is_current_user_auditor() and not self.env.user.has_group('base.group_system'):
                 raise UserError(_(
-                    "Esta acción solo aplica a salidas de tipo 'Salida de material'."
+                    "Solo personal del departamento de Auditoría puede validar esta salida."
                 ))
-            if picking.material_approver_id and self.env.user != picking.material_approver_id \
-               and not self.env.user.has_group('base.group_system'):
-                raise UserError(_(
-                    "Solo el gerente o jefe directo (%s) del usuario que realiza la salida "
-                    "puede aprobar y firmar este documento de salida."
-                ) % picking.material_approver_id.name)
-            
-            auto_sig = picking._get_approver_signature()
+
+            auto_sig = picking._get_auditor_signature(self.env.user)
             vals = {
                 'material_approval_state': 'approved',
+                'material_auditor_id': self.env.user.id,
             }
             if auto_sig and not picking.signature:
                 vals['signature'] = auto_sig
             if not picking.signature_date:
                 vals['signature_date'] = fields.Datetime.now()
             picking.write(vals)
-            
-            picking.activity_ids.filtered(
-                lambda a: a.summary == 'Aprobación de salida de material'
-            ).action_feedback(feedback=_('Salida aprobada y firmada.'))
 
-    def action_refuse_material(self):
-        for picking in self:
-            if not picking._is_material_output_type():
-                raise UserError(_(
-                    "Esta acción solo aplica a salidas de tipo 'Salida de material'."
-                ))
-            if picking.material_approver_id and self.env.user != picking.material_approver_id \
-               and not self.env.user.has_group('base.group_system'):
-                raise UserError(_(
-                    "Solo el gerente o jefe directo (%s) del usuario que realiza la salida "
-                    "puede rechazar este documento de salida."
-                ) % picking.material_approver_id.name)
-            picking.material_approval_state = 'refused'
             picking.activity_ids.filtered(
-                lambda a: a.summary == 'Aprobación de salida de material'
-            ).action_feedback(feedback=_('Salida rechazada.'))
+                lambda a: a.summary == 'Validación de Auditoría - Salida de material'
+            ).action_feedback(feedback=_('Validado por Auditoría.'))
+
+    def action_audit_refuse_material(self):
+        for picking in self:
+            if not picking.is_material_output_type:
+                raise UserError(_("Esta acción solo aplica a salidas de tipo 'Salida de material'."))
+            if not picking._is_current_user_auditor() and not self.env.user.has_group('base.group_system'):
+                raise UserError(_(
+                    "Solo personal del departamento de Auditoría puede rechazar esta salida."
+                ))
+            picking.write({
+                'material_approval_state': 'refused',
+                'material_auditor_id': self.env.user.id,
+            })
+            picking.activity_ids.filtered(
+                lambda a: a.summary == 'Validación de Auditoría - Salida de material'
+            ).action_feedback(feedback=_('Rechazado por Auditoría.'))
 
     def button_validate(self):
         for picking in self:
             if picking._is_material_output_type() and picking.material_approval_state != 'approved':
                 raise UserError(_(
-                    "Esta salida requiere la aprobación y firma del gerente encargado "
-                    "del usuario que realiza la salida antes de poder validarse."
+                    "Esta salida requiere la aprobación de auditoria antes de poder ser validada."
                 ))
         return super().button_validate()
 
@@ -163,6 +168,21 @@ class StockPicking(models.Model):
             "res_id": self.crm_lead_id.id,
             "target": "current",
         }
+
+    def action_view_approval_request(self):
+        self.ensure_one()
+
+        if not self.approval_request_id:
+            return False
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Solicitud de Aprobación",
+            "res_model": "approval.request",
+            "view_mode": "form",
+            "res_id": self.approval_request_id.id,
+            "target": "current",
+        }
         
     def _get_material_report_values(self):
         self.ensure_one()
@@ -173,12 +193,21 @@ class StockPicking(models.Model):
             'picking': self,
             'partner': self.partner_id or (lead.partner_id if lead else False),
             'salesperson': salesperson,
-            'approver': self.material_approver_id,
+            'approver': self.material_auditor_id,
             'lines': self.move_ids,
             'date': self.scheduled_date or fields.Date.context_today(self),
             'approval_state': self.material_approval_state,
-            'signature': self._get_approver_signature(),
+            'signature': self.signature,
             'signature_date': self.signature_date,
         }
 
+    @api.constrains('picking_type_id', 'crm_lead_id', 'approval_request_id')
+    def _check_material_output_requires_approval_flow(self):
+        for picking in self:
+            if picking._is_material_output_type() and not picking.approval_request_id:
+                raise ValidationError(_(
+                    "No se puede crear ni modificar una salida de tipo 'Salida de material' "
+                    "sin que provenga del flujo de Solicitud de Aprobación desde una "
+                    "oportunidad de CRM. Genera la salida desde la oportunidad correspondiente."
+                ))
     

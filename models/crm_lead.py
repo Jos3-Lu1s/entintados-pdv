@@ -24,6 +24,24 @@ class CrmLead(models.Model):
         "lead_id",
         string="Solicitudes de materiales",
     )
+    
+    approval_request_id = fields.Many2one(
+        'approval.request',
+        string="Solicitud de Aprobación",
+        copy=False,
+    )
+
+    approval_request_status = fields.Selection(
+        related='approval_request_id.request_status',
+        string="Estado de Aprobación",
+        store=True,
+    )
+    
+    approval_state = fields.Selection(
+        related="approval_request_id.request_status",
+        string="Estado de aprobación",
+        readonly=True,
+    )
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
         res = super()._prepare_customer_values(partner_name, is_company=is_company, parent_id=parent_id)
@@ -314,59 +332,62 @@ class CrmLead(models.Model):
     def _create_material_output(self):
         """Genera la salida de material (picking) con sus movimientos y abre el picking."""
         self.ensure_one()
-        self._ensure_material_request_allowed()
+        if not self.material_line_ids:
+            raise UserError(_("No hay líneas de material para solicitar salida."))
+        if self.picking_count > 0:
+            raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
+        if self.approval_request_id:
+            raise UserError(_("Ya existe una solicitud de aprobación en curso para esta oportunidad."))
 
-        warehouse = self.env['stock.warehouse'].search(
-            [('company_id', '=', self.company_id.id or self.env.company.id)], limit=1
-        )
-        if not warehouse:
-            raise UserError(_("No se encontró un almacén configurado."))
-
-        picking_type = self.env.ref(
-            'entintados_pdv.picking_type_material_output', raise_if_not_found=False
-        )
-        if not picking_type:
+        category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+        if not category:
             raise UserError(_(
-                "No se encontró el tipo de operación 'Salida de material'. "
-                "Verifica que el módulo esté correctamente instalado/actualizado."
+                "No se encontró la categoría de aprobación 'Solicitud de salida de material'."
             ))
 
-        picking = self.env['stock.picking'].create({
-            'picking_type_id': picking_type.id,
-            'location_id': picking_type.default_location_src_id.id,
-            'location_dest_id': picking_type.default_location_dest_id.id,
-            'origin': self.name,
+        approver = self._get_material_approver()
+        if not approver:
+            raise UserError(_(
+                "No se pudo determinar el jefe directo del vendedor. "
+                "Verifica el organigrama en Empleados."
+            ))
+
+        first_line = self.material_line_ids[:1]
+
+        approval_request = self.env['approval.request'].create({
+            'name': _('Salida de material - %s') % self.name,
+            'category_id': category.id,
+            'request_owner_id': self.user_id.id or self.env.uid,
             'partner_id': self.partner_id.id,
+            'date': fields.Date.context_today(self),
             'crm_lead_id': self.id,
+            'reason': '\n'.join(
+                '%s x %s %s' % (line.quantity, line.uom_id.name or '', line.product_id.display_name)
+                for line in self.material_line_ids
+            ),
+            'approver_ids': [(0, 0, {'user_id': approver.id})],
+            'product_line_ids': [
+                (0, 0, {
+                    'product_id': line.product_id.id,
+                    'quantity': line.quantity,
+                    'description': line.description,
+                })
+                for line in self.material_line_ids
+            ],
         })
-        
-        if picking.material_approver_id:
-            picking.activity_schedule(
-                activity_type_id=self.env.ref('mail.mail_activity_data_todo').id,
-                user_id=picking.material_approver_id.id,
-                summary='Aprobación de salida de material',
-                note=_('La salida %s requiere tu aprobación como jefe directo del vendedor.') % picking.name,
-            )
+        approval_request.action_confirm()
 
-        for line in self.material_line_ids:
-            self.env['stock.move'].create({
-                'description_picking': line.description,
-                'product_id': line.product_id.id,
-                'product_uom_qty': line.quantity,
-                'product_uom': line.uom_id.id,
-                'picking_id': picking.id,
-                'location_id': picking_type.default_location_src_id.id,
-                'location_dest_id': picking_type.default_location_dest_id.id,
-            })
-
-        picking.action_confirm()
+        self.approval_request_id = approval_request.id
+        self._schedule_demo_activity()
 
         return {
             'type': 'ir.actions.act_window',
-            'res_model': 'stock.picking',
+            'res_model': 'approval.request',
             'view_mode': 'form',
-            'res_id': picking.id,
+            'res_id': approval_request.id,
         }
+        
+    
         
     picking_ids = fields.One2many(
         comodel_name="stock.picking",
@@ -410,24 +431,6 @@ class CrmLead(models.Model):
             })
 
         return action
-    
-    def _get_material_report_values(self):
-        self.ensure_one()
-        picking = self.picking_ids[:1]
-        approver = picking.material_approver_id if picking else self._get_material_approver()
-        signature = picking._get_approver_signature() if picking else self._get_user_digital_signature(approver)
-        return {
-            'lead': self,
-            'picking': picking,
-            'partner': self.partner_id,
-            'salesperson': self.user_id or self.create_uid,
-            'approver': approver,
-            'lines': self.material_line_ids,
-            'date': fields.Date.context_today(self),
-            'approval_state': picking.material_approval_state if picking else 'to_approve',
-            'signature': signature,
-            'signature_date': picking.signature_date if picking else False,
-        }
 
     def _get_user_digital_signature(self, user):
         if not user:
@@ -451,6 +454,19 @@ class CrmLead(models.Model):
         if employee and employee.parent_id and employee.parent_id.user_id:
             return employee.parent_id.user_id
         return self.env['res.users']
+    
+    def action_view_approval_request(self):
+        self.ensure_one()
+        if not self.approval_request_id:
+            return False
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Solicitud de Aprobación'),
+            'res_model': 'approval.request',
+            'view_mode': 'form',
+            'res_id': self.approval_request_id.id,
+            'target': 'current',
+        }
 
 class CrmStage(models.Model):
     _inherit = 'crm.stage'

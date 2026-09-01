@@ -26,7 +26,7 @@
                     <button name="action_schedule_demo_meeting" string="Agendar demostración" type="object" invisible="picking_count > 0 or demo_meeting_scheduled"/>
                     <button name="action_request_material_output" string="Solicitud de salida" type="object" invisible="picking_count > 0 or not demo_meeting_scheduled"/>
                     <group>
-                        <field name="material_line_ids" nolabel="1" readonly="picking_count > 0">
+                        <field name="material_line_ids" nolabel="1" readonly="approval_request_id">
                             <list string="Solicitudes de materiales" editable="bottom">
                                 <field name="product_id"/>
                                 <field name="code_product"/>
@@ -120,8 +120,30 @@
                     />
 
                 </button>
+
+                <button name="action_view_approval_request"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-check-square-o"
+                        invisible="not approval_request_id">
+                    <div class="o_stat_info">
+                        <field name="approval_request_status" widget="badge" class="o_stat_text"/>
+                        <span class="o_stat_text">Aprobación</span>
+                    </div>
+                </button>
+            
             </xpath>
         </field>
     </record>
 
+    <record id="crm_lead_view_form_hide_quotation_button" model="ir.ui.view">
+        <field name="name">crm.lead.form.hide.quotation.button</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_sale_quotations_new']" position="attributes">
+                <attribute name="invisible">stage_type == 'demo' and approval_request_id and approval_state != 'approved'</attribute>
+            </xpath>
+        </field>
+    </record>
 </odoo>

@@ -7,19 +7,28 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
-                <button name="action_approve_material"
-                        string="Aprobar y Firmar Salida"
-                        type="object"
+                <button name="action_audit_approve_material" string="Validar (Auditoría)" type="object"
                         class="btn-primary"
-                        invisible="material_approval_state == 'approved' or not is_material_approver"/>
-                <button name="action_refuse_material"
-                        string="Rechazar Salida"
-                        type="object"
+                        invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
+                <button name="action_audit_refuse_material" string="Rechazar (Auditoría)" type="object"
                         class="btn-secondary"
-                        invisible="material_approval_state != 'to_approve' or not is_material_approver"/>
+                        invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
                 <!-- <field name="material_approval_state" widget="statusbar" statusbar_visible="to_approve,approved,refused"/> -->
             </xpath>
+
             <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="action_view_approval_request"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-thumbs-o-up"
+                    invisible="not approval_request_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">
+                            Aprobación
+                        </span>
+                    </div>
+                </button>
                 <button
                     name="action_view_crm_lead"
                     type="object"
@@ -33,17 +42,11 @@
                     </div>
                 </button>
             </xpath>
+
             <xpath expr="//page[@name='note']" position="after">
-                <page string="Aprobación y Firma del Gerente" name="material_approval_signature"  invisible="not is_material_output_type">
+                <page string="Evidencias" name="material_evidence" invisible="not is_material_output_type">
                     <group>
-                        <group string="Estado de Autorización">
-                            <field name="material_approval_state" readonly="1"/>
-                            <field name="material_approver_id" readonly="1"/>
-                            <field name="signature_date" readonly="1"/>
-                        </group>
-                        <group string="Firma Digital">
-                            <field name="signature" widget="signature" readonly="material_approval_state == 'approved' and not is_material_approver"/>
-                        </group>
+                        
                     </group>
                 </page>
             </xpath>
