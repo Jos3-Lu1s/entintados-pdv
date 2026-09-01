@@ -1,5 +1,10 @@
+/** @odoo-module */
 import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
+import { PosOrder } from "@point_of_sale/app/models/pos_order";
+import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
+
+let posStoreInstance = null;
 
 patch(PosStore.prototype, {
     editPartnerContext(partner) {
@@ -10,58 +15,112 @@ patch(PosStore.prototype, {
         };
     },
 
-    /* handlePriceUnit(line, options = {}) {
-        if (line?.price_type === "manual" || line?.manual_price) {
+    setup(...args) {
+        const result = super.setup(...args);
+        posStoreInstance = this;
+        return result;
+    },
+});
+
+patch(PosOrder.prototype, {
+    _updateRewardLines(...args) {
+        const beforeKeys = new Set(
+            (this.lines || []).filter((l) => l.is_reward_line).map((l) => l.reward_identifier_code)
+        );
+
+        const result = super._updateRewardLines(...args);
+
+        const afterLines = (this.lines || []).filter((l) => l.is_reward_line);
+        const partnerDiscount = Number(this.partner_id?.discount || 0) * 100;
+
+        for (const line of afterLines) {
+            if (beforeKeys.has(line.reward_identifier_code)) {
+                continue;
+            }
+            this._entintadosHandleNewReward(line, partnerDiscount);
+        }
+
+        this._entintadosReconcileDiscounts(partnerDiscount);
+
+        return result;
+    },
+
+    // Interceptamos la eliminación de líneas para detectar cuando
+    // el cajero borra manualmente una línea de recompensa.
+    removeOrderline(line) {
+        const wasReward = line?.is_reward_line;
+        const decisionKey = line?.reward_identifier_code;
+        const isInternalRemoval = this._entintadosInternalRemoval === true;
+
+        const result = super.removeOrderline(line);
+
+        if (wasReward && decisionKey && !isInternalRemoval) {
+            // Eliminación manual del cajero: olvidamos la decisión previa
+            // para que el descuento regrese y se vuelva a preguntar si
+            // el producto vuelve a calificar más adelante.
+            if (this.uiState?.promoDecisions) {
+                delete this.uiState.promoDecisions[decisionKey];
+            }
+        }
+
+        const partnerDiscount = Number(this.partner_id?.discount || 0) * 100;
+        this._entintadosReconcileDiscounts(partnerDiscount);
+
+        return result;
+    },
+
+    async _entintadosHandleNewReward(line, partnerDiscount) {
+        const program = line.reward_id?.program_id;
+        const isAutomaticPromotion =
+            program?.program_type === "promotion" && program?.trigger === "auto";
+
+        if (!isAutomaticPromotion || !posStoreInstance || partnerDiscount <= 0) {
             return;
         }
 
-        const order = line?.order_id || this.getOrder?.() || this.currentOrder;
-        let pricelist =
-            options?.pricelist ||
-            line?.pricelist ||
-            order?.pricelist ||
-            order?.pricelist_id;
-            if (!pricelist || typeof pricelist.getPrice !== "function") {
-                if (this.config?.pricelist_id && typeof this.config.pricelist_id.getPrice === "function") {
-                    pricelist = this.config.pricelist_id;
-                    console.log("[ENTINTADOS 1] config.pricelist_id:", pricelist);
-                } else if (this.default_pricelist && typeof this.default_pricelist.getPrice === "function") {
-                    pricelist = this.default_pricelist;
-                    console.log("[ENTINTADOS 2] config.pricelist_id:", pricelist);
-                } else if (this.pricelist && typeof this.pricelist.getPrice === "function") {
-                    pricelist = this.pricelist;
-                    console.log("[ENTINTADOS 3] config.pricelist_id:", pricelist);
-                } else if (this.models?.["product.pricelist"]) {
-                    const allPricelists = this.models["product.pricelist"].getAll?.() || [];
-                    pricelist = allPricelists.find((p) => typeof p?.getPrice === "function") || allPricelists[0];
-                    console.log("[ENTINTADOS 4] config.pricelist_id:", pricelist);
-                }
+        if (!this.uiState) this.uiState = {};
+        if (!this.uiState.promoDecisions) this.uiState.promoDecisions = {};
+
+        const decisionKey = line.reward_identifier_code;
+        if (this.uiState.promoDecisions[decisionKey]) {
+            if (this.uiState.promoDecisions[decisionKey] === "declined" && this.lines.includes(line)) {
+                this._entintadosInternalRemoval = true;
+                this.removeOrderline(line);
+                this._entintadosInternalRemoval = false;
             }
-        if (line && !line.order_id && order) {
-            line.order_id = order;
+            return;
         }
 
-        //if (pricelist && typeof pricelist.getPrice === "function") {
-            const updatedOptions = {
-                ...options,
-                pricelist,
-            };
-            try {
-                return super.handlePriceUnit(line, updatedOptions);
-            } catch (err) {
-                console.warn("[ENTINTADOS] Excepción manejada en handlePriceUnit:", err);
-                if (line && (line.price_unit === undefined || line.price_unit === null)) {
-                    const product = line.product_id || line.product;
-                    line.price_unit = product?.lst_price ?? product?.list_price ?? 0;
-                }
-                return;
-            }
-        //}
+        const choice = await new Promise((resolve) => {
+            posStoreInstance.dialog.add(ConfirmationDialog, {
+                title: "Promoción disponible",
+                body: `Este producto califica para la promoción "${program?.name}". El cliente tiene ${partnerDiscount}% de descuento asignado. Elegir la promoción quitará el descuento de TODA la orden. ¿Qué deseas aplicar?`,
+                confirmLabel: "Aplicar promoción",
+                cancelLabel: `Mantener descuento (${partnerDiscount}%)`,
+                confirm: () => resolve("promo"),
+                cancel: () => resolve("discount"),
+            });
+        });
 
-        if (line && (line.price_unit === undefined || line.price_unit === null)) {
-            const product = line.product_id || line.product;
-             console.log("[ENTINTADOS] Producto sin pricelist, campos disponibles:", product);
-            line.price_unit = product?.lst_price ?? product?.list_price ?? 0;
+        this.uiState.promoDecisions[decisionKey] = choice === "promo" ? "accepted" : "declined";
+
+        if (choice === "discount" && this.lines.includes(line)) {
+            this._entintadosInternalRemoval = true;
+            this.removeOrderline(line);
+            this._entintadosInternalRemoval = false;
         }
-    }, */
+
+        this._entintadosReconcileDiscounts(partnerDiscount);
+    },
+
+    _entintadosReconcileDiscounts(partnerDiscount) {
+        const hasAcceptedPromo = Object.values(this.uiState?.promoDecisions || {}).includes("accepted");
+
+        for (const line of this.lines || []) {
+            if (line.is_reward_line || line.price_type === "manual" || line.manual_price) {
+                continue;
+            }
+            line.discount = (partnerDiscount > 0 && !hasAcceptedPromo) ? partnerDiscount : 0;
+        }
+    },
 });

@@ -23,7 +23,7 @@ class SaleOrderLine(models.Model):
                 and not line.display_type
                 and line.order_id.partner_id
                 and line.product_template_id.type != 'service'
-                and line.product_template_id.list_price == 0
-                and line.product_template_id.standard_price == 0
+                and line.product_template_id.list_price != 0
+                and line.product_template_id.standard_price != 0
             ):
                 line.discount = line.order_id.partner_id.discount*100

@@ -36,7 +36,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty'],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty','pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
