@@ -225,6 +225,8 @@ export async function addTintedBaseToOrder(
             pricelist: pricelist,
             tax_ids: productTaxes(dose.colorant).map((tax) => ["link", tax]),
             customer_note: "",
+            unit_points: dose.points,
+            is_tint_colorant: true,
         },
     ]);
 
@@ -236,6 +238,7 @@ export async function addTintedBaseToOrder(
             qty,
             price_unit: finalUnitPrice,
             combo_line_ids: comboLines,
+            is_tinted_base: true,
         },
         {
             price_unit: finalUnitPrice,
@@ -245,6 +248,16 @@ export async function addTintedBaseToOrder(
     );
 
     if (parent) {
+        parent.is_tinted_base = true;
+        if (parent.combo_line_ids) {
+            const doses = formulaDoses(pos, formula);
+            parent.combo_line_ids.forEach((child, index) => {
+                child.is_tint_colorant = true;
+                if (child.unit_points === undefined || child.unit_points === null) {
+                    child.unit_points = doses[index]?.points ?? (qty ? child.qty / qty : 0);
+                }
+            });
+        }
         if (typeof parent.setUnitPrice === "function") {
             parent.setUnitPrice(finalUnitPrice);
         } else if (typeof parent.set_unit_price === "function") {
