@@ -32,21 +32,9 @@ patch(PosOrderline.prototype, {
             (this.combo_line_ids?.length && this.combo_line_ids.some((cl) => cl.is_tint_colorant));
 
         if (isTinted) {
-            if (quantity === "remove" || quantity === "") {
-                if (this.combo_line_ids?.length) {
-                    this._is_deleting = true;
-                    const children = [...this.combo_line_ids];
-                    for (const child of children) {
-                        child.delete?.() ?? this.order_id?.removeOrderline?.(child);
-                    }
-                    this._is_deleting = false;
-                }
-                return super.setQuantity(quantity, keep_price);
-            }
-
             const numQty =
                 typeof quantity === "string"
-                    ? quantity === ""
+                    ? quantity === "" || quantity === "remove"
                         ? 0
                         : parseFloat(quantity)
                     : Number(quantity);
@@ -68,28 +56,21 @@ patch(PosOrderline.prototype, {
                     }
                     return false;
                 }
-
-                if (numQty === 0) {
-                    if (this.combo_line_ids?.length) {
-                        this._is_deleting = true;
-                        const children = [...this.combo_line_ids];
-                        for (const child of children) {
-                            child.delete?.() ?? this.order_id?.removeOrderline?.(child);
-                        }
-                        this._is_deleting = false;
-                    }
-                }
             }
         }
 
         const res = super.setQuantity(quantity, keep_price);
 
-        if (isTinted && this.combo_line_ids?.length && this.qty !== 0) {
+        if (isTinted && this.combo_line_ids?.length) {
+            const parentQty = Number(this.qty) || 0;
             for (const child of this.combo_line_ids) {
                 if (child.is_tint_colorant || child.unit_points !== undefined) {
                     const unitPoints =
-                        child.unit_points ?? (this.qty ? child.qty / this.qty : 0);
-                    child.qty = unitPoints * this.qty;
+                        child.unit_points ?? (parentQty ? child.qty / parentQty : child.qty || 0);
+                    if (child.unit_points === undefined || child.unit_points === null) {
+                        child.unit_points = unitPoints;
+                    }
+                    child.qty = unitPoints * parentQty;
                 }
             }
         }
