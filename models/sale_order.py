@@ -115,4 +115,17 @@ class SaleOrder(models.Model):
         if not claimable_rewards:
             return True
         return self.env['ir.actions.actions']._for_xml_id('sale_loyalty.sale_loyalty_reward_wizard_action')
+        
+    def _reapply_partner_discount_if_no_reward(self):
+            for order in self:
+                if order.order_line.filtered('is_reward_line'):
+                    continue
+    
+                discount = order.partner_id.discount or 0.0
+                if not discount:
+                    continue
+    
+                order.order_line.filtered(
+                    lambda l: not l.is_reward_line
+                ).write({'discount': discount * 100})
     

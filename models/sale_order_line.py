@@ -27,3 +27,22 @@ class SaleOrderLine(models.Model):
                 and line.product_template_id.standard_price != 0
             ):
                 line.discount = line.order_id.partner_id.discount*100
+    def write(self, vals):
+        # Detecta cuándo el motor de loyalty invalida un reward
+        # (reset_loyalty(complete=True) hace write({'reward_id': False, ...}))
+        orders_to_check = self.env['sale.order']
+        if 'reward_id' in vals and not vals.get('reward_id'):
+            orders_to_check = self.filtered('reward_id').mapped('order_id')
+
+        res = super().write(vals)
+
+        for order in orders_to_check:
+            order._reapply_partner_discount_if_no_reward()
+        return res
+
+    def unlink(self):
+        orders_to_check = self.filtered('is_reward_line').mapped('order_id')
+        res = super().unlink()
+        for order in orders_to_check:
+            order._reapply_partner_discount_if_no_reward()
+        return res
