@@ -465,17 +465,64 @@ $tint-breakpoint-lg: 1199.98px;
 
 /* Modal de Selección y Registro de Fórmula de Entintado */
 .entintado-formula-modal {
-    max-height: calc(85dvh - 100px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
+
+    @media (min-width: 768px) {
+        height: 60vh;
+        min-height: 460px;
+        max-height: 560px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+
+        .o-tint-context-strip,
+        .row.g-2.mb-3 {
+            flex-shrink: 0;
+        }
+
+        .entintado-formula-master-detail {
+            flex: 1 1 0;
+            min-height: 0;
+            margin-bottom: 0;
+
+            > .col-md-5,
+            > .col-md-7 {
+                height: 100%;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .o-tint-card {
+                flex: 1 1 0;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+                overflow: hidden;
+            }
+
+            .o-tint-card-header {
+                flex-shrink: 0;
+            }
+
+            .entintado-color-list-card-body,
+            .o-tint-card-body {
+                flex: 1 1 0;
+                min-height: 0;
+                overflow-y: auto;
+            }
+        }
+    }
 
     @include tint-responsive-down-sm {
         max-height: calc(82dvh - 80px);
+        overflow-y: auto;
         padding: 0.15rem !important;
 
         .entintado-color-list-card-body {
-            max-height: 240px !important;
+            max-height: 260px !important;
+            overflow-y: auto;
         }
     }
 
