@@ -83,11 +83,11 @@
                         <div class="d-flex flex-wrap gap-1 min-w-0">
                             <button t-foreach="level.options" t-as="opt" t-key="opt.record.id"
                                      class="btn btn-sm text-nowrap rounded-pill px-3 py-1 shadow-xs transition-all"
-                                    t-att-class="level.selected === opt.record.id ? 'btn-primary' : 'btn-outline-secondary bg-white'"
+                                    t-att-class="this.isOptionSelected(level.key, opt.record.id) ? 'btn-primary' : 'btn-outline-secondary bg-white'"
                                     t-on-click="() => this.selectLevel(level.key, opt.record.id)">
                                 <t t-esc="opt.record.name"/>
                                 <span class="badge ms-1 rounded-pill"
-                                      t-att-class="level.selected === opt.record.id ? 'bg-white text-primary fw-bold' : 'bg-light text-dark border'"
+                                      t-att-class="this.isOptionSelected(level.key, opt.record.id) ? 'bg-white text-primary fw-bold' : 'bg-light text-dark border'"
                                       t-esc="opt.count"/>
                             </button>
                         </div>
@@ -224,6 +224,16 @@
                              class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">
                             <i class="fa fa-spinner fa-spin fa-3x mb-3 text-secondary"/>
                             <h5>Cargando fórmulas…</h5>
+                        </div>
+
+                        <!-- Estado guiado inicial sin filtros seleccionados -->
+                        <div t-elif="!hasActiveFilters"
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state text-center p-4">
+                            <i class="fa fa-sliders fa-3x mb-3 text-secondary"/>
+                            <h5>Selecciona una presentación o tipo de base</h5>
+                            <p class="mb-0 small text-secondary-emphasis" style="max-width: 380px;">
+                                Elige al menos un filtro superior para visualizar las bases disponibles para entintar.
+                            </p>
                         </div>
 
                         <TintTable t-elif="cards.length" columns="baseColumns">

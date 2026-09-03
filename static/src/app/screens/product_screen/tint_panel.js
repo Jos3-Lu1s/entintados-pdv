@@ -136,8 +136,8 @@ export class TintPanel extends Component {
     async selectGallery(id) {
         this.ui.galleryId = id;
         this.ui.colorId = null;
-        this.ui.sizeId = null;
-        this.ui.baseTypeId = null;
+        this.ui.sizeIds = [];
+        this.ui.baseTypeIds = [];
         this.ui.galleryColorIds = [];
         this.pos.searchProductWord = "";
         await this.loadGalleryColors(id);
@@ -200,8 +200,8 @@ export class TintPanel extends Component {
     async selectColor(id) {
         this.ui.colorId = id;
         // Conserva la galería y reinicia filtros de presentación y tipo de base.
-        this.ui.sizeId = null;
-        this.ui.baseTypeId = null;
+        this.ui.sizeIds = [];
+        this.ui.baseTypeIds = [];
         this.pos.searchProductWord = "";
         await this.loadColorFormulas(id);
     }
@@ -228,8 +228,8 @@ export class TintPanel extends Component {
     clearColor() {
         Object.assign(this.ui, {
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
         });
         this.pos.searchProductWord = "";
     }
@@ -239,8 +239,8 @@ export class TintPanel extends Component {
         Object.assign(this.ui, {
             galleryId: null,
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
             galleryColorIds: [],
         });
         this.pos.searchProductWord = "";
@@ -277,15 +277,17 @@ export class TintPanel extends Component {
 
     /** Fórmulas filtradas según el nivel de filtro aplicado. */
     formulasUpTo(level) {
-        const { galleryId, sizeId, baseTypeId } = this.ui;
+        const { galleryId, sizeIds, baseTypeIds } = this.ui;
+        const activeSizes = sizeIds || [];
+        const activeBaseTypes = baseTypeIds || [];
         return this.colorFormulas.filter((formula) => {
             if (level >= 1 && galleryId && formula.gallery_id?.id !== galleryId) {
                 return false;
             }
-            if (level >= 2 && sizeId && formula.size_id?.id !== sizeId) {
+            if (level >= 2 && activeSizes.length && !activeSizes.includes(formula.size_id?.id)) {
                 return false;
             }
-            if (level >= 3 && baseTypeId && formula.base_type_id?.id !== baseTypeId) {
+            if (level >= 3 && activeBaseTypes.length && !activeBaseTypes.includes(formula.base_type_id?.id)) {
                 return false;
             }
             return true;
@@ -294,6 +296,7 @@ export class TintPanel extends Component {
 
     optionsFor(level, field, model, sorter) {
         const counts = new Map();
+        const selectedIds = field === "size_id" ? (this.ui.sizeIds || []) : (this.ui.baseTypeIds || []);
         for (const formula of this.formulasUpTo(level - 1)) {
             const record = formula[field];
             if (!record) {
@@ -309,8 +312,8 @@ export class TintPanel extends Component {
             counts.set(record.id, (counts.get(record.id) || 0) + baseCount);
         }
         return (this.pos.models[model]?.getAll?.() ?? [])
-            .filter((record) => counts.has(record.id))
-            .map((record) => ({ record, count: counts.get(record.id) }))
+            .filter((record) => counts.has(record.id) || selectedIds.includes(record.id))
+            .map((record) => ({ record, count: counts.get(record.id) || 0 }))
             .sort(sorter);
     }
 
@@ -327,7 +330,7 @@ export class TintPanel extends Component {
     }
 
     get hasActiveFilters() {
-        return Boolean(this.ui.sizeId || this.ui.baseTypeId);
+        return Boolean(this.ui.sizeIds?.length || this.ui.baseTypeIds?.length);
     }
 
     get levels() {
@@ -337,16 +340,26 @@ export class TintPanel extends Component {
                 key: "size",
                 label: "Presentación",
                 options: this.sizes,
-                selected: this.ui.sizeId,
+                selectedIds: this.ui.sizeIds || [],
             },
             {
                 key: "baseType",
                 label: "Tipo de base",
                 options: this.baseTypes,
-                selected: this.ui.baseTypeId,
+                selectedIds: this.ui.baseTypeIds || [],
             },
         ];
-        return allLevels.filter((level) => level.options.length > 1);
+        return allLevels.filter((level) => level.options.length > 0);
+    }
+
+    isOptionSelected(levelKey, recordId) {
+        if (levelKey === "size") {
+            return (this.ui.sizeIds || []).includes(recordId);
+        }
+        if (levelKey === "baseType") {
+            return (this.ui.baseTypeIds || []).includes(recordId);
+        }
+        return false;
     }
 
     // Paso 3: bases concretas
@@ -375,7 +388,7 @@ export class TintPanel extends Component {
 
     /** Tarjetas de bases disponibles para las fórmulas y filtros activos. */
     get cards() {
-        if (!this.showCards) {
+        if (!this.showCards || !this.hasActiveFilters) {
             return [];
         }
         const cards = [];
@@ -431,6 +444,9 @@ export class TintPanel extends Component {
 
     /** Combinaciones requeridas por las fórmulas del color sin producto base disponible. */
     get missingCombos() {
+        if (!this.hasActiveFilters) {
+            return [];
+        }
         const seen = new Map();
         for (const formula of this.formulasUpTo(3)) {
             if (this.basesFor(formula.size_id?.id, formula.base_type_id?.id).length) {
@@ -445,7 +461,7 @@ export class TintPanel extends Component {
     }
 
     get unsellableCount() {
-        if (!this.showCards) {
+        if (!this.showCards || !this.hasActiveFilters) {
             return 0;
         }
         return this.formulasUpTo(3).filter(
@@ -472,17 +488,28 @@ export class TintPanel extends Component {
 
     selectLevel(key, id) {
         if (key === "size") {
-            this.ui.sizeId = this.ui.sizeId === id ? null : id;
-            this.ui.baseTypeId = null;
-        } else {
-            this.ui.baseTypeId = this.ui.baseTypeId === id ? null : id;
+            const current = new Set(this.ui.sizeIds || []);
+            if (current.has(id)) {
+                current.delete(id);
+            } else {
+                current.add(id);
+            }
+            this.ui.sizeIds = Array.from(current);
+        } else if (key === "baseType") {
+            const current = new Set(this.ui.baseTypeIds || []);
+            if (current.has(id)) {
+                current.delete(id);
+            } else {
+                current.add(id);
+            }
+            this.ui.baseTypeIds = Array.from(current);
         }
     }
 
     clearFilters() {
         // Reinicia los filtros de presentación y tipo de base.
-        this.ui.sizeId = null;
-        this.ui.baseTypeId = null;
+        this.ui.sizeIds = [];
+        this.ui.baseTypeIds = [];
     }
 
     async addCard(card) {
