@@ -172,8 +172,8 @@
         <field name="search_view_id" ref="mail_activity_view_search" />
         <!-- Acción restringida al administrador de actividades -->
         <field name="group_ids" eval="[Command.link(ref('entintados_pdv.group_activity_manager'))]" />
-        <!-- Incluye actividades realizadas con filtro inicial en Pendientes y creadas este mes -->
-        <field name="context">{'active_test': False, 'search_default_filter_pending': 1, 'search_default_filter_create_date': 1}</field>
+        <!-- Incluye actividades (pendientes y realizadas) con filtro inicial de creadas este mes -->
+        <field name="context">{'active_test': False, 'search_default_filter_create_date': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Todavía no hay actividades registradas</p>
             <p>
@@ -224,8 +224,8 @@
         <field name="search_view_id" ref="mail_activity_view_search" />
         <!-- Acción restringida al privilegio de actividades (usuario o administrador) -->
         <field name="group_ids" eval="[Command.link(ref('entintados_pdv.group_activity_user'))]" />
-        <!-- Incluye actividades realizadas con filtro inicial en Pendientes y creadas este mes -->
-        <field name="context">{'active_test': False, 'search_default_filter_pending': 1, 'search_default_filter_create_date': 1}</field>
+        <!-- Incluye actividades (pendientes y realizadas) con filtro inicial de creadas este mes -->
+        <field name="context">{'active_test': False, 'search_default_filter_create_date': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No tiene actividades pendientes</p>
             <p>
