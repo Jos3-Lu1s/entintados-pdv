@@ -119,6 +119,11 @@ class CrmLead(models.Model):
         help="Verdadero cuando la visita de campo ya tiene una reunión con horario "
              "(inicio y fin) en el calendario.",
     )
+    
+    wharehouse_id = fields.Many2one(
+        'stock.location',
+        string="Almacén",
+    )
 
     @api.depends(
         'crm_meeting_ids.crm_activity_type_id',
@@ -128,6 +133,7 @@ class CrmLead(models.Model):
         'crm_meeting_ids.allday',
     )
     def _compute_meeting_scheduled(self):
+        
         demo_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
         visit_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
         for lead in self:
@@ -329,6 +335,22 @@ class CrmLead(models.Model):
             ))
         if self.approval_request_id:
             raise UserError(_("Ya existe una solicitud de aprobación en curso para esta oportunidad."))
+        
+        if not self.partner_id:
+            wizard = self.env['crm.material.request.partner.wizzard'].create({
+                'lead_id': self.id,
+            })
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'crm.material.request.partner.wizzard',
+                'view_mode': 'form',
+                'res_id': wizard.id,
+                'target': 'new',
+            }
+            
+        if not self.wharehouse_id:
+            raise UserError(_("Debes seleccionar un almacén de origen para la salida de material."))
+
 
         category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
         if not category:
@@ -348,6 +370,7 @@ class CrmLead(models.Model):
             'category_id': category.id,
             'request_owner_id': self.user_id.id or self.env.uid,
             'partner_id': self.partner_id.id,
+            'warehouse_id': self.wharehouse_id.id,
             'date': fields.Date.context_today(self),
             'crm_lead_id': self.id,
             'reason': '\n'.join(

@@ -1,3 +1,4 @@
+import base64
 from odoo import fields, models, api, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -59,6 +60,60 @@ class StockPicking(models.Model):
     is_material_auditor = fields.Boolean(
         compute="_compute_is_material_auditor",
     )
+    
+    """ Campos de evidencia de salida de material y de uso del material """
+    document_file = fields.Binary(
+        string="Documento",
+        attachment=True,
+    )
+
+    document_filename = fields.Char(
+        string="Nombre del documento",
+    )
+    
+    evidence_attachment_ids = fields.Many2many(
+        "ir.attachment",
+        relation="stock_picking_evidence_attachment_rel",
+        column1="picking_id",
+        column2="attachment_id",
+        string="Evidencias",
+    )
+    
+    evidence_use_attachment_ids = fields.Many2many(
+        "ir.attachment",
+        relation="stock_picking_evidence_use_attachment_rel",
+        column1="picking_id",
+        column2="attachment_id",
+        string="Uso del material",
+    )
+
+    def _action_done(self):
+            res = super()._action_done()
+            for picking in self:
+                if picking._is_material_output_type() and not picking.document_file:
+                    picking._generate_material_document()
+            return res
+                    
+    def _generate_material_document(self):
+        """Renderiza el reporte de Solicitud de Salida de Material y lo
+        guarda en document_file/document_filename de este picking."""
+        self.ensure_one()
+
+        report = self.env.ref(
+            'entintados_pdv.action_report_material_stock_picking',
+            raise_if_not_found=False,
+        )
+        if not report:
+            return
+
+        pdf_content, _report_format = report._render_qweb_pdf(
+            report.report_name, [self.id]
+        )
+
+        self.write({
+            'document_file': base64.b64encode(pdf_content),
+            'document_filename': 'Solicitud_Material_%s.pdf' % (self.name or self.id),
+        })
     
     @api.depends('picking_type_id')
     def _compute_is_material_output_type(self):

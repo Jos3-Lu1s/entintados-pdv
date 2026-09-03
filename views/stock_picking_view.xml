@@ -49,9 +49,17 @@
             </xpath>
 
             <xpath expr="//page[@name='note']" position="after">
-                <page string="Evidencias" name="material_evidence" invisible="not is_material_output_type">
-                    <group>
-                        
+                <page string="Evidencias" name="material_evidence" invisible="not is_material_output_type or state != 'done'">
+                    <group string="Evidencia de entrega de material">
+                        <field name="document_file" widget="binary" filename="document_filename"/>
+
+                        <field name="evidence_attachment_ids"
+                           widget="many2many_binary"/>
+                    </group>
+
+                    <group string="Evidencia de uso de material" invisible="not is_material_output_type or state != 'done'">
+                        <field name="evidence_use_attachment_ids"
+                           widget="many2many_binary"/>
                     </group>
                 </page>
             </xpath>

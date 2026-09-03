@@ -25,6 +25,10 @@
                     <field name="demo_meeting_scheduled" invisible="1"/>
                     <button name="action_schedule_demo_meeting" string="Agendar demostración" type="object" invisible="picking_count > 0 or demo_meeting_scheduled"/>
                     <button name="action_request_material_output" string="Solicitud de salida" type="object" invisible="approval_request_id or not demo_meeting_scheduled"/>
+                    <div class="d-flex align-items-center">
+                        <label for="wharehouse_id" string="Almacén de origen: " class="me-3"/>
+                        <field name="wharehouse_id" readonly="approval_request_id"/>
+                    </div>
                     <group>
                         <field name="material_line_ids" nolabel="1" readonly="approval_request_id">
                             <list string="Solicitudes de materiales" editable="bottom">
@@ -143,6 +147,17 @@
         <field name="arch" type="xml">
             <xpath expr="//button[@name='action_sale_quotations_new']" position="attributes">
                 <attribute name="invisible">stage_type == 'demo' and approval_request_id and approval_state != 'approved'</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_crm_lead_hide_generate_button" model="ir.ui.view">
+        <field name="name">crm.lead.hide.generate.button</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_kanban_view_leads"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_generate_leads']" position="attributes">
+                <attribute name="invisible">1</attribute>
             </xpath>
         </field>
     </record>

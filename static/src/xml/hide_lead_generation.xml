@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<templates xml:space="preserve">
+
+    <t
+        t-name="entintados_pdv.HideLeadGeneration"
+        t-inherit="crm.lead_generation_dropdown"
+        t-inherit-mode="extension"
+    >
+
+        <xpath
+            expr="//button[contains(@class, 'o-dropdown-caret')]"
+            position="replace"
+        />
+
+    </t>
+
+</templates>
