@@ -42,11 +42,13 @@
                 <!-- Al hacer clic en una fila se abre el documento origen, no la actividad -->
                 <attribute name="action">action_open_document</attribute>
                 <attribute name="type">object</attribute>
+                <!-- Ordenar por fecha de creación descendente -->
+                <attribute name="default_order">create_date desc</attribute>
             </xpath>
             <xpath expr="//field[@name='res_name']" position="after">
                 <field name="res_model_id" string="Modelo" optional="show" />
                 <field name="create_uid" string="Creada por" optional="hide" />
-                <field name="create_date" string="Fecha de creación" optional="hide" />
+                <field name="create_date" string="Fecha de creación" optional="show" />
             </xpath>
             <!-- Estado como badge con color, columna fija (no agrupable, pero visible por fila) -->
             <xpath expr="//field[@name='date_deadline']" position="after">
@@ -147,6 +149,19 @@
         </field>
     </record>
 
+    <!-- Vista Kanban personalizada con orden por fecha de creación -->
+    <record id="mail_activity_view_kanban_custom" model="ir.ui.view">
+        <field name="name">mail.activity.view.kanban.custom</field>
+        <field name="model">mail.activity</field>
+        <field name="inherit_id" ref="mail.mail_activity_view_kanban_open_target" />
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban" position="attributes">
+                <attribute name="default_order">create_date desc</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <!-- Acción general de actividades (pendientes y realizadas) -->
     <record id="mail_activity_action_all" model="ir.actions.act_window">
         <field name="name">Actividades</field>
@@ -176,7 +191,7 @@
     <record id="mail_activity_action_all_view_kanban" model="ir.actions.act_window.view">
         <field name="sequence" eval="2" />
         <field name="view_mode">kanban</field>
-        <field name="view_id" ref="mail.mail_activity_view_kanban_open_target" />
+        <field name="view_id" ref="mail_activity_view_kanban_custom" />
         <field name="act_window_id" ref="mail_activity_action_all" />
     </record>
     <record id="mail_activity_action_all_view_pivot" model="ir.actions.act_window.view">
@@ -227,7 +242,7 @@
     <record id="mail_activity_action_my_view_kanban" model="ir.actions.act_window.view">
         <field name="sequence" eval="2" />
         <field name="view_mode">kanban</field>
-        <field name="view_id" ref="mail.mail_activity_view_kanban_open_target" />
+        <field name="view_id" ref="mail_activity_view_kanban_custom" />
         <field name="act_window_id" ref="mail_activity_action_my" />
     </record>
     <record id="mail_activity_action_my_view_calendar" model="ir.actions.act_window.view">
