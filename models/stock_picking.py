@@ -129,6 +129,8 @@ class StockPicking(models.Model):
             picking.activity_ids.filtered(
                 lambda a: a.summary == 'Validación de Auditoría - Salida de material'
             ).action_feedback(feedback=_('Validado por Auditoría.'))
+            
+        return self.button_validate()
 
     def action_audit_refuse_material(self):
         for picking in self:

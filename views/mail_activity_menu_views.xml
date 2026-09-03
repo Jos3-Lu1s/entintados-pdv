@@ -8,6 +8,7 @@
         name="Actividades"
         sequence="86"
         groups="entintados_pdv.group_activity_user"
+        web_icon="entintados_pdv,static/description/icon_actividades.png"
     />
 
     <menuitem

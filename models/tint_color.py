@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import re
-
-from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
-
-HEX_COLOR = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+from odoo import api, fields, models
 
 
 class TintColor(models.Model):
@@ -20,10 +15,6 @@ class TintColor(models.Model):
     code = fields.Char(
         copy=False, index='btree_not_null',
         help="Código del color. Debe capturarse y no puede repetirse.")
-    html_color = fields.Char(
-        string="Muestra (hex)",
-        help="Color aproximado para mostrar en pantalla, en formato #RRGGBB. "
-             "Es una referencia visual, no un valor colorimétrico.")
     notes = fields.Html(
         string="Notas", translate=True, sanitize=True,
         help="Observaciones internas sobre el color.")
@@ -93,17 +84,6 @@ class TintColor(models.Model):
                 "[%s] %s" % (color.code, color.name) if color.code else color.name
             )
 
-    @api.constrains('html_color')
-    def _check_html_color(self):
-        for color in self:
-            if color.html_color and not HEX_COLOR.match(color.html_color.strip()):
-                raise ValidationError(_(
-                    "La muestra del color «%(color)s» debe estar en formato "
-                    "hexadecimal, p. ej. #C8102E. Valor recibido: «%(value)s».",
-                    color=color.name,
-                    value=color.html_color,
-                ))
-
     def formula_for(self, base_type, size, gallery=None):
         """Fórmula de este color para esa base y presentación.
 
@@ -130,7 +110,7 @@ class TintColor(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         # 'base_type_ids' omitido: el resumen almacenado basta para la caja.
-        return ['id', 'name', 'display_name', 'code', 'html_color',
+        return ['id', 'name', 'display_name', 'code',
                 'has_formula', 'base_type_summary']
 
     @api.model

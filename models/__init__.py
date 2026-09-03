@@ -13,6 +13,7 @@ from . import tint_schema
 from . import pos_session
 from . import res_partner
 from . import crm_lead
+from . import calendar_event
 from . import sale_order
 from . import sale_order_line
 from . import account_invoice_risk

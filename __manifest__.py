@@ -36,7 +36,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock',],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -47,6 +47,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/components/tint_table/tint_table.xml",
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.js",
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.xml",
+            "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.js",
+            "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.xml",
             # Modelos del POS
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades
@@ -62,10 +64,18 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/screens/product_screen/tint_panel.xml",
             "entintados_pdv/static/src/app/screens/product_screen/tint_products_widget.js",
             "entintados_pdv/static/src/app/screens/product_screen/tint_products_widget.xml",
+            # PoS ticket screen: vista de ticket para cliente
+            "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.js",
+            "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.xml",
             # Overrides (patch) a componentes/servicios del core POS
             "entintados_pdv/static/src/app/overrides/pos_store.js",
+            "entintados_pdv/static/src/app/overrides/pos_order_line.js",
+            "entintados_pdv/static/src/app/overrides/orderline.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.xml",
+            # Widgets de campos reutilizables en formularios del POS
+            "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
+            "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
         ],
         "web.assets_backend": [
             # Widget de campo del backend (usado en la vista de res.partner)
@@ -95,11 +105,11 @@ Catálogo de entintado
         'views/tint_gallery_views.xml',
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
-        'views/tint_schema.xml',
-        # lines_producto_views.xml debe cargarse antes que tint_menu_views.xml:
+        'views/tint_schema_views.xml',
+        # lines_product_views.xml debe cargarse antes que tint_menu_views.xml:
         # este último tiene un <menuitem action="lines_product_action"/> y esa
         # acción se define ahí.
-        'views/lines_producto_views.xml',
+        'views/lines_product_views.xml',
         'views/tint_menu_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
@@ -124,6 +134,7 @@ Catálogo de entintado
         'report/report_picking_action.xml',
         'report/report_picking_crm.xml',
         'wizards/partner_risk_exceeded_view.xml',
+        'wizards/crm_field_visit_confirm_wizard_view.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

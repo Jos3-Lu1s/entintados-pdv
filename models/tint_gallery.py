@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 
 
 class TintGallery(models.Model):
@@ -81,11 +81,22 @@ class TintGallery(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': self.display_name,
+            'name': _("Fórmulas: %s", self.display_name),
             'res_model': 'tint.color.formula',
             'view_mode': 'list,form',
             'domain': [('gallery_id', '=', self.id)],
             'context': {'default_gallery_id': self.id},
+        }
+
+    def action_open_colors(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Colores: %s", self.display_name),
+            'res_model': 'tint.color',
+            'view_mode': 'list,form',
+            'domain': [('formula_ids.gallery_id', '=', self.id)],
+            'context': self.env.context,
         }
 
     # --- Carga al POS ---------------------------------------------------

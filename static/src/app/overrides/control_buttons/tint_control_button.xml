@@ -9,7 +9,7 @@
         <!-- Botón de entintado en la barra de control -->
         <xpath expr="//SelectPartnerButton" position="after">
             <button t-if="!props.showRemainingButtons"
-                    class="btn btn-light btn-lg lh-lg o-tint-button"
+                    class="btn btn-light btn-lg lh-lg o-tint-button d-flex align-items-center justify-content-center text-nowrap"
                     t-on-click="() => this.onClickTint()">
                 <i class="fa fa-paint-brush me-1" role="img" aria-label="Entintado"/>
                 <span>Entintado</span>
@@ -18,8 +18,9 @@
 
         <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
             <button t-att-class="buttonClass"
+                    class="o-tint-button-secondary d-flex align-items-center justify-content-center"
                     t-on-click="() => this.onClickTint()">
-                <i class="fa fa-paint-brush me-2" role="img" aria-label="Entintado"/>
+                <i class="fa fa-paint-brush me-2 text-warning" role="img" aria-label="Entintado"/>
                 <span>Entintado</span>
             </button>
         </xpath>

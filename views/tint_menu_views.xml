@@ -5,6 +5,7 @@
         name="Entintados"
         sequence="85"
         groups="entintados_pdv.group_tint_manager"
+        web_icon="entintados_pdv,static/description/icon_entintados.png"
     />
 
     <menuitem

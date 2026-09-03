@@ -16,14 +16,14 @@ class SaleOrderLine(models.Model):
         'order_id.partner_id.discount',
     )
     def _compute_discount(self):
-        # Primero dejamos que Odoo haga su cálculo normal
         super()._compute_discount()
-
-        # Después aplicamos el descuento del cliente
         for line in self:
             if (
                 line.product_id
                 and not line.display_type
                 and line.order_id.partner_id
+                and line.product_template_id.type != 'service'
+                and line.product_template_id.list_price != 0
+                and line.product_template_id.standard_price != 0
             ):
                 line.discount = line.order_id.partner_id.discount*100

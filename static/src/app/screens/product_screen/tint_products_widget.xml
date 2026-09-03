@@ -5,49 +5,51 @@
     <t t-name="entintados_pdv.ProductScreenTintTabs" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="before">
-            <div class="o-tint-tabs d-flex align-items-center gap-2 p-2 flex-shrink-0">
-                <button class="btn btn-sm text-nowrap"
-                        t-att-class="tintUi.tab === 'products' ? 'btn-primary' : 'btn-outline-secondary'"
-                        t-on-click="() => this.setTintTab('products')">
-                    <i class="fa fa-th-large me-1" role="img" aria-label="Productos"/>
-                    Productos
-                </button>
-                <button class="btn btn-sm text-nowrap"
-                        t-att-class="tintUi.tab === 'tint' ? 'btn-primary' : 'btn-outline-secondary'"
-                        t-on-click="() => this.setTintTab('tint')">
-                    <i class="fa fa-paint-brush me-1" role="img" aria-label="Entintados"/>
-                    Entintados
-                </button>
-
-                <!-- Indicador y botón para cambiar de galería -->
-                <div t-if="tintUi.tab === 'tint' and tintUi.galleryId"
-                     class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
-                    <span class="badge bg-info-subtle text-info-emphasis text-nowrap">Galería</span>
-                    <span class="fw-bold text-truncate" style="max-width: 18rem;">
-                        <t t-if="tintSelectedGallery and tintSelectedGallery.code">[<t t-esc="tintSelectedGallery.code"/>] </t>
-                        <t t-esc="tintSelectedGallery and tintSelectedGallery.name"/>
-                    </span>
-                    <button class="btn btn-sm btn-outline-secondary text-nowrap"
-                            t-on-click="() => this.changeTintGallery()">
-                        <i class="fa fa-exchange me-1" role="img" aria-label="Cambiar galería"/>
-                        Cambiar galería
+            <div class="o-tint-tabs d-flex align-items-center justify-content-between p-2 flex-shrink-0 border-bottom bg-view min-w-0 w-100">
+                <!-- Segmented Control Principal: Productos / Entintados -->
+                <div class="o-tint-segmented-control bg-light p-1 rounded-pill border d-inline-flex">
+                    <button class="btn btn-sm rounded-pill px-3 py-1 text-nowrap fw-semibold transition-all d-flex align-items-center gap-1"
+                            t-att-class="tintUi.tab === 'products' ? 'btn-white bg-white text-dark shadow-xs border-0' : 'text-secondary-emphasis border-0 bg-transparent'"
+                            t-on-click="() => this.setTintTab('products')">
+                        <i class="fa fa-th-large"/>
+                        <span>Productos</span>
+                    </button>
+                    <button class="btn btn-sm rounded-pill px-3 py-1 text-nowrap fw-semibold transition-all d-flex align-items-center gap-1"
+                            t-att-class="tintUi.tab === 'tint' ? 'btn-white bg-white text-primary shadow-xs border-0' : 'text-secondary-emphasis border-0 bg-transparent'"
+                            t-on-click="() => this.setTintTab('tint')">
+                        <i class="fa fa-paint-brush"/>
+                        <span>Entintados</span>
                     </button>
                 </div>
 
-                <!-- Alternador de vista cuadrícula / lista -->
-                <div t-if="tintUi.tab === 'products'" class="btn-group btn-group-sm ms-auto flex-shrink-0" role="group" aria-label="Vista de productos">
-                    <button class="btn"
-                            t-att-class="tintUi.viewMode === 'grid' ? 'btn-primary' : 'btn-outline-secondary'"
-                            t-on-click="() => this.setProductViewMode('grid')"
-                            title="Cuadrícula">
-                        <i class="fa fa-th-large" role="img" aria-label="Cuadrícula"/>
-                    </button>
-                    <button class="btn"
-                            t-att-class="tintUi.viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'"
-                            t-on-click="() => this.setProductViewMode('list')"
-                            title="Lista">
-                        <i class="fa fa-bars" role="img" aria-label="Lista"/>
-                    </button>
+                <!-- Acciones contextuales según pestaña activa -->
+                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                    <!-- Vista Productos: Alternador Cuadrícula / Lista -->
+                    <div t-if="tintUi.tab === 'products'" class="btn-group btn-group-sm rounded-pill border bg-light p-1" role="group" aria-label="Vista de productos">
+                        <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1"
+                                t-att-class="tintUi.viewMode === 'grid' ? 'bg-white text-dark shadow-xs fw-semibold' : 'text-secondary-emphasis bg-transparent'"
+                                t-on-click="() => this.setProductViewMode('grid')"
+                                title="Vista en cuadrícula">
+                            <i class="fa fa-th-large"/>
+                            <span class="d-none d-md-inline small">Cuadrícula</span>
+                        </button>
+                        <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1"
+                                t-att-class="tintUi.viewMode === 'list' ? 'bg-white text-dark shadow-xs fw-semibold' : 'text-secondary-emphasis bg-transparent'"
+                                t-on-click="() => this.setProductViewMode('list')"
+                                title="Vista en lista">
+                            <i class="fa fa-bars"/>
+                            <span class="d-none d-md-inline small">Lista</span>
+                        </button>
+                    </div>
+
+                    <!-- Vista Entintados: Botón Crear Color -->
+                    <div t-if="tintUi.tab === 'tint'" class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 shadow-xs d-flex align-items-center gap-1 text-nowrap"
+                                t-on-click="() => this.onClickCreateColorFromTab()">
+                            <i class="fa fa-plus-circle"/>
+                            <span>Crear Color</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </xpath>
@@ -68,32 +70,34 @@
         <!-- Tabla de productos en modo lista -->
         <xpath expr="//div[hasclass('search-more-button')]" position="before">
             <div t-if="tintUi.tab !== 'tint' and tintUi.viewMode === 'list'"
-                 class="o-tint-list flex-grow-1 overflow-y-auto px-2 pb-2">
+                 class="o-tint-list d-flex flex-column flex-grow-1 min-h-0 px-2 pb-2 overflow-hidden">
                 <TintTable t-if="pos.productsToDisplay.length" columns="productListColumns">
                     <t t-set-slot="rows">
                         <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
                             t-on-click="() => this.addProductToOrder(product)">
-                            <td class="o-tint-td-img">
-                                <img t-if="pos.config.show_product_images and getProductImage(product)"
-                                     class="o-tint-list-img"
-                                     t-att-src="getProductImage(product)"
-                                     t-att-alt="getProductName(product)"
-                                     draggable="false"/>
+                            <td class="py-2 text-nowrap">
+                                <span class="text-secondary-emphasis font-monospace small" t-esc="product.default_code or '—'"/>
                             </td>
-                            <td>
-                                <span class="fw-semibold" t-esc="getProductName(product)"/>
-                                <span t-if="state.quantityByProductTmplId[product.id]"
-                                      class="badge bg-primary ms-2"
-                                      t-esc="state.quantityByProductTmplId[product.id]"/>
+                            <td class="py-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-dark" t-esc="getProductName(product)"/>
+                                    <span t-if="state.quantityByProductTmplId[product.id]"
+                                          class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1"
+                                          style="font-size: 0.65rem;"
+                                          t-esc="state.quantityByProductTmplId[product.id]"/>
+                                    <span t-if="product.tint_role === 'base'" class="text-info small fw-semibold">Base</span>
+                                    <span t-elif="product.tint_role === 'colorant'" class="text-warning-emphasis small fw-semibold">Colorante</span>
+                                </div>
                             </td>
-                            <td class="text-muted text-nowrap" t-esc="product.default_code or '—'"/>
-                            <td class="text-muted text-nowrap" t-esc="product.uom_id and product.uom_id.name or ''"/>
-                            <td class="text-end fw-bold text-nowrap" t-esc="tintRowPriceFormatted(product)"/>
+                            <td class="py-2 text-nowrap">
+                                <span class="text-secondary-emphasis small" t-esc="product.uom_id and product.uom_id.name or '—'"/>
+                            </td>
+                            <td class="py-2 text-end fw-bold text-nowrap text-dark fs-6" t-esc="tintRowPriceFormatted(product)"/>
                         </tr>
                     </t>
                 </TintTable>
-                <div t-else="" class="h-100 d-flex flex-column align-items-center justify-content-center text-muted py-5">
+                <div t-else="" class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state py-5">
                     <i class="fa fa-search fa-3x mb-3 text-secondary"/>
                     <h5>No se encontraron productos</h5>
                 </div>
@@ -106,21 +110,26 @@
     <t t-name="entintados_pdv.ProductScreenActiveTintBanner" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
         <xpath expr="//ControlButtons" position="before">
             <t t-set="activeOrder" t-value="pos.getOrder()"/>
-            <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor" class="o-active-tint-banner">
-                <div class="d-flex align-items-center">
-                    <span class="tint-sample" t-att-style="'background-color:' + (activeOrder.uiState.selectedTintColor.html_color || '#9E9E9E')"/>
-                    <div>
-                        <strong>Color seleccionado: </strong>
-                        <span class="fw-bold me-1">
-                            <t t-esc="activeOrder.uiState.selectedTintColor.code ? '[' + activeOrder.uiState.selectedTintColor.code + '] ' : ''"/>
-                            <t t-esc="activeOrder.uiState.selectedTintColor.name"/>
-                        </span>
-                        <small class="text-warning d-block d-sm-inline ms-sm-2">
+            <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor"
+                 class="o-active-tint-banner d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
+                    <i class="fa fa-paint-brush text-white fs-5 flex-shrink-0" role="img"/>
+                    <div class="min-w-0">
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <strong class="text-white text-nowrap">Color seleccionado:</strong>
+                            <span class="fw-bold text-white text-truncate">
+                                <t t-esc="activeOrder.uiState.selectedTintColor.code ? '[' + activeOrder.uiState.selectedTintColor.code + '] ' : ''"/>
+                                <t t-esc="activeOrder.uiState.selectedTintColor.name"/>
+                            </span>
+                        </div>
+                        <small class="text-warning d-block">
                             (Selecciona ahora un producto base de pintura)
                         </small>
                     </div>
                 </div>
-                <button class="btn btn-sm btn-outline-light ms-3" t-on-click="() => this.clearSelectedTintColor()" title="Cancelar selección de color">
+                <button class="btn btn-sm btn-outline-light flex-shrink-0 ms-auto"
+                        t-on-click="() => this.clearSelectedTintColor()"
+                        title="Cancelar selección de color">
                     <i class="fa fa-times me-1"/> Cancelar
                 </button>
             </div>

@@ -6,10 +6,15 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//header" position="inside">
+            <xpath expr="//button[@name='button_validate']" position="attributes">
+                <attribute name="invisible">is_material_output_type and material_approval_state != 'approved'</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_validate']" position="after">
                 <button name="action_audit_approve_material" string="Validar (Auditoría)" type="object"
                         class="btn-primary"
                         invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
+            </xpath>
+            <xpath expr="//header" position="inside">
                 <button name="action_audit_refuse_material" string="Rechazar (Auditoría)" type="object"
                         class="btn-secondary"
                         invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
