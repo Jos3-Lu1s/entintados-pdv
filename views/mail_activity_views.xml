@@ -77,38 +77,44 @@
                 <field name="user_id" string="Asignado a" />
                 <field name="activity_involved_user_ids" string="Involucrados" />
                 <field name="res_model_id" string="Modelo del documento" />
-                
+                <field name="create_uid" string="Creada por" />
+
+                <!-- Filtros por asignación / pertenencia -->
+                <filter name="filter_my_activities" string="Mis actividades" domain="[('user_id', '=', uid)]" />
+                <filter name="filter_my_involved" string="En las que participo" domain="[('activity_involved_user_ids', 'in', [uid])]" />
+                <separator />
+
+                <!-- Filtros por urgencia operativa -->
+                <filter name="filter_overdue" string="Vencidas" domain="[('date_deadline', '&lt;', context_today().strftime('%Y-%m-%d')), ('active', '=', True)]" />
+                <filter name="filter_today" string="Para hoy" domain="[('date_deadline', '=', context_today().strftime('%Y-%m-%d')), ('active', '=', True)]" />
+                <filter name="filter_future" string="Futuras" domain="[('date_deadline', '&gt;', context_today().strftime('%Y-%m-%d')), ('active', '=', True)]" />
+                <separator />
+
+                <!-- Filtros por estado de ejecución -->
                 <filter name="filter_pending" string="Pendientes" domain="[('active', '=', True)]" />
                 <filter name="filter_done" string="Realizadas" domain="[('active', '=', False)]" />
                 <separator />
 
-                <!-- Filtro por origen -->
-                <filter name="filter_manual" string="Manuales" domain="[('automated', '=', False)]" />
-                <filter name="filter_automated" string="Automatizadas" domain="[('automated', '=', True)]" />
-                <separator />
-
-                <!-- Filtros por tipo y participación -->
+                <!-- Filtros por tipo -->
                 <filter name="filter_meetings" string="Reuniones" domain="[('activity_type_id.category', '=', 'meeting')]" />
-                <filter name="filter_my_involved" string="En las que participo" domain="[('activity_involved_user_ids', 'in', [uid])]" />
                 <separator />
 
+                <!-- Filtros por fechas -->
+                <filter name="filter_create_date" string="Fecha de creación" date="create_date" />
                 <filter name="filter_date_deadline" string="Fecha límite" date="date_deadline" />
                 <filter name="filter_date_done" string="Fecha de realización" date="date_done" />
-                <filter name="filter_date_start" string="Inicio en calendario" date="activity_date_start" />
-                <filter name="filter_create_date" string="Fecha de creación" date="create_date" />
                 <separator />
 
                 <!-- Agrupaciones -->
                 <group>
+                    <filter name="group_by_user_id" string="Asignado a" context="{'group_by': 'user_id'}" />
+                    <filter name="group_by_activity_type_id" string="Tipo de actividad" context="{'group_by': 'activity_type_id'}" />
+                    <filter name="group_by_res_model_id" string="Modelo del documento" context="{'group_by': 'res_model_id'}" />
+                    <filter name="group_by_create_date" string="Fecha de creación" context="{'group_by': 'create_date'}" />
                     <filter name="group_by_date_deadline" string="Fecha límite" context="{'group_by': 'date_deadline'}" />
                     <filter name="group_by_date_done" string="Fecha de realización" context="{'group_by': 'date_done'}" />
-                    <filter name="group_by_create_date" string="Fecha de creación" context="{'group_by': 'create_date'}" />
-                    <filter name="group_by_res_model_id" string="Modelo del documento" context="{'group_by': 'res_model_id'}" />
-                    <filter name="group_by_user_id" string="Asignado a" context="{'group_by': 'user_id'}" />
-                    <!-- Agrupación por usuarios involucrados -->
                     <filter name="group_by_involved" string="Involucrados" context="{'group_by': 'activity_involved_user_ids'}" />
                     <filter name="group_by_create_uid" string="Creada por" context="{'group_by': 'create_uid'}" />
-                    <filter name="group_by_activity_type_id" string="Tipo de actividad" context="{'group_by': 'activity_type_id'}" />
                 </group>
             </search>
         </field>
