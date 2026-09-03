@@ -36,7 +36,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty'],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -96,6 +96,8 @@ Catálogo de entintado
         'data/tint_gallery_data.xml',
         'data/mail_activity_type_data.xml',
         'data/type_operations_data.xml',
+        'data/hr_departament_data.xml',
+        'data/approval_request_data.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',
@@ -121,6 +123,7 @@ Catálogo de entintado
         'views/crm_menu_views.xml',
         'views/crm_stages_view.xml',
         'views/stock_picking_view.xml',
+        'views/approval_request_views.xml',
         'views/res_users_views.xml',
         'views/account_financial_risk_view.xml',
         'views/portal_templates.xml',
