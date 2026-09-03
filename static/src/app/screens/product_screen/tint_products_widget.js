@@ -23,8 +23,8 @@ patch(ProductScreen.prototype, {
             viewMode: "grid",
             galleryId: null,
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
             galleryColorIds: [],
             loadingColors: false,
             formulasVersion: 0,
@@ -52,8 +52,8 @@ patch(ProductScreen.prototype, {
         Object.assign(this.tintUi, {
             galleryId: null,
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
             galleryColorIds: [],
         });
         this.pos.searchProductWord = "";
