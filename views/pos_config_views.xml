@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Vista de Ajustes Generales de TPV (res.config.settings) -->
+    <record id="res_config_settings_view_form_inherit_tint" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.tint</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='pos_interface_section']" position="after">
+                <block title="Sistema de Entintados" id="tint_section">
+                    <setting id="tint_default_gallery_setting"
+                             string="Galería de Entintado por Defecto"
+                             help="Galería predeterminada asignada automáticamente a los nuevos colores y fórmulas creados desde este Punto de Venta.">
+                        <field name="pos_tint_default_gallery_id" options="{'no_create': True}"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Formulario de Configuración de TPV (pos.config) -->
+    <record id="pos_config_view_form_inherit_tint" model="ir.ui.view">
+        <field name="name">pos.config.form.view.inherit.tint</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('o_settings_container')]" position="inside">
+                <setting id="tint_default_gallery_pos_setting"
+                         string="Galería de Entintado por Defecto"
+                         help="Galería predeterminada asignada automáticamente a los nuevos colores y fórmulas creados desde este Punto de Venta.">
+                    <field name="tint_default_gallery_id" options="{'no_create': True}"/>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

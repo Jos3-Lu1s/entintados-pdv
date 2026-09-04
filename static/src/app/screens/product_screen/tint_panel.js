@@ -248,18 +248,16 @@ export class TintPanel extends Component {
 
     /** Abre el modal para crear nuevo color desde el panel. */
     async onClickCreateColor() {
-        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup, {
-            galleryId: this.ui.galleryId || false,
-        });
+        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
-            if (payload.galleryId && this.ui.galleryId !== payload.galleryId) {
+            if (payload.galleryId) {
                 this.ui.galleryId = payload.galleryId;
+                await this.loadGalleryColors(payload.galleryId);
+                if (!this.ui.galleryColorIds.includes(payload.colorId)) {
+                    this.ui.galleryColorIds.push(payload.colorId);
+                }
             }
-            if (this.ui.galleryId) {
-                await this.loadGalleryColors(this.ui.galleryId);
-            }
-            this.ui.colorId = payload.colorId;
-            await this.loadColorFormulas(payload.colorId);
+            await this.selectColor(payload.colorId);
         }
     }
 

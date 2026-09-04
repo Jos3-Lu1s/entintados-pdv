@@ -111,6 +111,7 @@ Catálogo de entintado
         # acción se define ahí.
         'views/lines_product_views.xml',
         'views/tint_menu_views.xml',
+        'views/pos_config_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',

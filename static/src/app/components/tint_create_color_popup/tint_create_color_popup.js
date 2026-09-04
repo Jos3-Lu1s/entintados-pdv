@@ -30,14 +30,33 @@ export class TintCreateColorPopup extends Component {
         this.pos = useService("pos");
         this.notification = useService("notification");
 
-        const galleries = this.pos.models["tint.gallery"]?.getAll() || [];
-        const defaultGallery = [...galleries].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))[0];
+        const galleryModel = this.pos.models["tint.gallery"];
+        const allGalleries = galleryModel?.getAll() || [];
 
-        const initialGalleryId = this.props.galleryId
-            ? String(this.props.galleryId)
-            : defaultGallery
-            ? String(defaultGallery.id)
-            : "";
+        // 1. Extraer ID configurado en pos.config
+        let configGalleryId = null;
+        const rawConfig = this.pos.config?.tint_default_gallery_id;
+        if (rawConfig) {
+            if (typeof rawConfig === "object") {
+                configGalleryId = rawConfig.id || (Array.isArray(rawConfig) ? rawConfig[0] : null);
+            } else if (typeof rawConfig === "number" || typeof rawConfig === "string") {
+                configGalleryId = parseInt(rawConfig);
+            }
+        }
+
+        // 2. Resolver galería: Prioridad 1: Configuración -> Prioridad 2: 'ODM' (Odoo Manual) -> Prioridad 3: Primera activa por secuencia
+        let resolvedGallery = null;
+        if (configGalleryId && galleryModel) {
+            resolvedGallery = galleryModel.get(configGalleryId);
+        }
+        if (!resolvedGallery && allGalleries.length) {
+            resolvedGallery = allGalleries.find((g) => (g.code || "").toUpperCase() === "ODM");
+        }
+        if (!resolvedGallery && allGalleries.length) {
+            resolvedGallery = [...allGalleries].sort((a, b) => (a.sequence || 0) - (b.sequence || 0))[0];
+        }
+
+        const initialGalleryId = resolvedGallery ? String(resolvedGallery.id) : "";
 
         this.state = useState({
             // Datos del color
@@ -45,7 +64,7 @@ export class TintCreateColorPopup extends Component {
             newColorCode: "",
             newColorNotes: "",
 
-            // Galería, base y presentación para la fórmula
+            // Galería por defecto, base y presentación para la fórmula
             newGalleryId: initialGalleryId,
             newBaseTypeId: this.props.baseTypeId ? String(this.props.baseTypeId) : "",
             newSizeId: this.props.sizeId ? String(this.props.sizeId) : "",
@@ -59,6 +78,14 @@ export class TintCreateColorPopup extends Component {
             createColorError: "",
             createColorSuccess: "",
         });
+    }
+
+    get defaultGallery() {
+        const galleryId = parseInt(this.state.newGalleryId);
+        if (galleryId && this.pos.models["tint.gallery"]) {
+            return this.pos.models["tint.gallery"].get(galleryId) || null;
+        }
+        return null;
     }
 
     get galleries() {
@@ -215,7 +242,7 @@ export class TintCreateColorPopup extends Component {
 
         const galleryId = parseInt(this.state.newGalleryId);
         if (!galleryId) {
-            this.state.createColorError = _t("Debes seleccionar una Galería.");
+            this.state.createColorError = _t("No se encontró una galería por defecto válida para el TPV.");
             return;
         }
 

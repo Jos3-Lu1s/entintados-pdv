@@ -61,20 +61,19 @@ patch(ProductScreen.prototype, {
 
     /** Abre el diálogo para crear color desde la pestaña de Entintados */
     async onClickCreateColorFromTab() {
-        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup, {
-            galleryId: this.tintUi.galleryId || false,
-        });
+        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
-            if (payload.galleryId && this.tintUi.galleryId !== payload.galleryId) {
+            if (payload.galleryId) {
                 this.tintUi.galleryId = payload.galleryId;
-            }
-            if (this.tintUi.galleryId) {
                 const ids = await this.pos.data.call(
                     "tint.color.formula",
                     "get_color_ids_for_gallery",
                     [this.tintUi.galleryId]
                 );
                 this.tintUi.galleryColorIds = ids || [];
+                if (!this.tintUi.galleryColorIds.includes(payload.colorId)) {
+                    this.tintUi.galleryColorIds.push(payload.colorId);
+                }
             }
             this.tintUi.colorId = payload.colorId;
         }

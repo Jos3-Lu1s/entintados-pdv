@@ -92,13 +92,22 @@
                         <!-- Selección de Galería, Base y Presentación -->
                         <div class="row g-2 p-2 bg-light rounded-3 border mb-3">
                             <div class="col-md-4">
-                                <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">Galería <span class="text-danger">*</span></label>
-                                <select class="form-select form-select-sm" t-model="state.newGalleryId">
-                                    <option value="">— Seleccionar Galería —</option>
-                                    <option t-foreach="galleries" t-as="g" t-key="g.id" t-att-value="g.id">
-                                        <t t-esc="g.name"/> <t t-if="g.code">(<t t-esc="g.code"/>)</t>
-                                    </option>
-                                </select>
+                                <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">
+                                    Galería Asignada <i class="fa fa-lock text-muted ms-1" title="Asignada automáticamente por la configuración del TPV"/>
+                                </label>
+                                <div class="form-control form-control-sm bg-light-subtle d-flex align-items-center justify-content-between border" style="cursor: not-allowed;">
+                                    <span t-if="defaultGallery" class="fw-semibold text-truncate text-dark">
+                                        <i class="fa fa-folder-open text-primary me-1"/>
+                                        <t t-esc="defaultGallery.name"/>
+                                        <small t-if="defaultGallery.code" class="text-muted ms-1">(<t t-esc="defaultGallery.code"/>)</small>
+                                    </span>
+                                    <span t-else="" class="text-danger small fw-semibold">
+                                        <i class="fa fa-exclamation-triangle me-1"/> Sin galería asignada
+                                    </span>
+                                    <span t-if="defaultGallery" class="badge rounded-pill bg-primary-subtle text-primary border text-xxs px-2 ms-1">
+                                        Predeterminada
+                                    </span>
+                                </div>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label text-xs fw-bold text-dark text-uppercase mb-1">Tipo de Base <span class="text-danger">*</span></label>
