@@ -169,7 +169,8 @@ class TintColorFormula(models.Model):
 
     def action_generate_other_sizes(self):
         """Genera fórmulas para las demás presentaciones escalando las dosis proporcionalmente."""
-        creadas = self.env['tint.color.formula']
+        procesadas = self.env['tint.color.formula']
+        omitidas_por_capacidad = []
         for formula in self:
             if not formula.line_ids:
                 raise UserError(_(
@@ -185,10 +186,16 @@ class TintColorFormula(models.Model):
                 ))
             otras = self.env['tint.size'].search([('id', '!=', formula.size_id.id)])
             for size in otras:
-                if formula.color_id.formula_for(
-                        formula.base_type_id, size, gallery=formula.gallery_id):
-                    continue  # Ya existe fórmula para esta galería
-                if not formula.base_type_id.capacity_for(size, raise_if_missing=False):
+                existing_formula = self.with_context(active_test=False).search([
+                    ('gallery_id', '=', formula.gallery_id.id),
+                    ('color_id', '=', formula.color_id.id),
+                    ('base_type_id', '=', formula.base_type_id.id),
+                    ('size_id', '=', size.id),
+                ], limit=1)
+                if existing_formula and existing_formula.active:
+                    continue  # Ya existe fórmula activa para esta galería
+                capacity = formula.base_type_id.capacity_for(size, raise_if_missing=False)
+                if not capacity:
                     continue  # Presentación fuera de la matriz de capacidad
                 factor = size.volume_liters / origen
                 lineas = [
@@ -199,24 +206,62 @@ class TintColorFormula(models.Model):
                     })
                     for line in formula.line_ids
                 ]
-                creadas |= self.create({
-                    'gallery_id': formula.gallery_id.id,
-                    'color_id': formula.color_id.id,
-                    'base_type_id': formula.base_type_id.id,
-                    'size_id': size.id,
-                    'line_ids': lineas,
-                })
-        if not creadas:
+                total_points_escalados = sum(line_data[2]['points'] for line_data in lineas)
+                if total_points_escalados > capacity:
+                    if size.display_name not in omitidas_por_capacidad:
+                        omitidas_por_capacidad.append(size.display_name)
+                    continue
+                if existing_formula:
+                    existing_formula.write({
+                        'active': True,
+                        'line_scheme_id': formula.line_scheme_id.id,
+                        'line_ids': [(5, 0, 0)] + lineas,
+                    })
+                    procesadas |= existing_formula
+                else:
+                    procesadas |= self.create({
+                        'gallery_id': formula.gallery_id.id,
+                        'color_id': formula.color_id.id,
+                        'base_type_id': formula.base_type_id.id,
+                        'size_id': size.id,
+                        'line_scheme_id': formula.line_scheme_id.id,
+                        'line_ids': lineas,
+                    })
+        if not procesadas:
+            if omitidas_por_capacidad:
+                raise UserError(_(
+                    "No se pudo generar ninguna presentación. Las siguientes "
+                    "presentaciones exceden la capacidad máxima del envase: %s.",
+                    ", ".join(omitidas_por_capacidad),
+                ))
             raise UserError(_(
                 "No había presentaciones pendientes por generar para esta fórmula."
             ))
-        return {
+        action = {
             'type': 'ir.actions.act_window',
             'name': _("Fórmulas generadas"),
             'res_model': 'tint.color.formula',
             'view_mode': 'list,form',
-            'domain': [('id', 'in', creadas.ids)],
+            'views': [(False, 'list'), (False, 'form')],
+            'domain': [('id', 'in', procesadas.ids)],
         }
+        if omitidas_por_capacidad:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _("Presentaciones omitidas"),
+                    'message': _(
+                        "Se generaron fórmulas, pero las siguientes presentaciones se "
+                        "omitieron porque exceden la capacidad máxima del envase: %s.",
+                        ", ".join(omitidas_por_capacidad),
+                    ),
+                    'type': 'warning',
+                    'sticky': False,
+                    'next': action,
+                },
+            }
+        return action
 
     # --- Carga al POS ---------------------------------------------------
 

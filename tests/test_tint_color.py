@@ -238,3 +238,143 @@ class TestTintColor(TransactionCase):
         gallon_f1 = color_uno.formula_for(self.white, self.gallon, gallery=self.gallery)
         self.assertIsNotNone(gallon_f1)
         self.assertEqual(gallon_f1.total_points, 72.0)
+
+    # --- Generación de otras presentaciones: robustez y consistencia ----
+
+    def test_generate_other_sizes_propagates_line_scheme(self):
+        """Comprobar que las fórmulas derivadas conservan line_scheme_id y su scheme_id."""
+        schema = self.env['tint.schema'].create({'name': 'Esquema Propagación'})
+        line = self.env['lines.product'].create({'name': 'Línea Propagación', 'scheme': schema.id})
+        color_prop = self.colors.create({'name': 'Color Propagación', 'code': 'TEST-COL-PROP'})
+
+        formula = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_prop.id,
+            'base_type_id': self.deep.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 10.0}),
+            ],
+        })
+        formula.action_generate_other_sizes()
+        gallon = color_prop.formula_for(self.deep, self.gallon, gallery=self.gallery)
+        bucket = color_prop.formula_for(self.deep, self.bucket, gallery=self.gallery)
+        self.assertTrue(gallon)
+        self.assertTrue(bucket)
+        self.assertEqual(gallon.line_scheme_id, line)
+        self.assertEqual(gallon.scheme_id, schema)
+        self.assertEqual(bucket.line_scheme_id, line)
+        self.assertEqual(bucket.scheme_id, schema)
+
+    def test_generate_other_sizes_reactivates_archived_formula(self):
+        """Comprobar que una fórmula archivada previa se reactiva y actualiza sin colisión única."""
+        schema = self.env['tint.schema'].create({'name': 'Esquema Reactivación'})
+        line = self.env['lines.product'].create({'name': 'Línea Reactivación', 'scheme': schema.id})
+        color_test = self.colors.create({'name': 'Color Reactivación', 'code': 'TEST-REACT-01'})
+
+        archived_gallon = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': self.deep.id,
+            'size_id': self.gallon.id,
+            'active': False,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_b.id, 'points': 5.0}),
+            ],
+        })
+        self.assertFalse(archived_gallon.active)
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': self.deep.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 10.0}),
+            ],
+        })
+
+        origin.action_generate_other_sizes()
+
+        self.assertTrue(archived_gallon.active)
+        self.assertEqual(archived_gallon.line_scheme_id, line)
+        self.assertEqual(archived_gallon.scheme_id, schema)
+        self.assertEqual(archived_gallon.total_points, 40.0)
+        self.assertEqual(len(archived_gallon.line_ids), 1)
+        self.assertEqual(archived_gallon.line_ids.colorant_id, self.colorant_a)
+
+    def test_generate_other_sizes_omits_capacity_exceeded_partially(self):
+        """Comprobar que presentaciones que exceden la capacidad son omitidas sin abortar las que caben."""
+        color_test = self.colors.create({'name': 'Color Capacidad Parcial', 'code': 'TEST-CAP-01'})
+        base_test = self.base_types.create({
+            'name': 'Base Capacidad Test',
+            'code': 'BCT',
+            'points_per_liter': 50,
+        })
+        self.env['tint.base.capacity'].create([
+            {'base_type_id': base_test.id, 'size_id': self.liter.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.gallon.id, 'max_points': 100},
+            {'base_type_id': base_test.id, 'size_id': self.bucket.id, 'max_points': 100},
+        ])
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': base_test.id,
+            'size_id': self.liter.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 20.0}),
+            ],
+        })
+
+        res = origin.action_generate_other_sizes()
+
+        gallon = color_test.formula_for(base_test, self.gallon, gallery=self.gallery)
+        self.assertTrue(gallon)
+        self.assertEqual(gallon.total_points, 80.0)
+
+        bucket = color_test.formula_for(base_test, self.bucket, gallery=self.gallery)
+        self.assertFalse(bucket)
+
+        self.assertEqual(res.get('type'), 'ir.actions.client')
+        self.assertEqual(res.get('tag'), 'display_notification')
+        self.assertEqual(res['params']['type'], 'warning')
+        self.assertIn(self.bucket.display_name, res['params']['message'])
+        self.assertIn('next', res['params'])
+        self.assertEqual(res['params']['next']['res_model'], 'tint.color.formula')
+        self.assertEqual(res['params']['next']['domain'], [('id', 'in', gallon.ids)])
+        self.assertEqual(res['params']['next']['views'], [(False, 'list'), (False, 'form')])
+
+    def test_generate_other_sizes_all_capacity_exceeded_raises_user_error(self):
+        """Comprobar la respuesta cuando todas las presentaciones pendientes exceden la capacidad."""
+        color_test = self.colors.create({'name': 'Color Exceso Total', 'code': 'TEST-CAP-02'})
+        base_test = self.base_types.create({
+            'name': 'Base Capacidad Total',
+            'code': 'BTT',
+            'points_per_liter': 50,
+        })
+        self.env['tint.base.capacity'].create([
+            {'base_type_id': base_test.id, 'size_id': self.liter.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.gallon.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.bucket.id, 'max_points': 50},
+        ])
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': base_test.id,
+            'size_id': self.liter.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 20.0}),
+            ],
+        })
+
+        with self.assertRaises(UserError) as cm:
+            origin.action_generate_other_sizes()
+
+        msg = str(cm.exception)
+        self.assertIn(self.gallon.display_name, msg)
+        self.assertIn(self.bucket.display_name, msg)
+
