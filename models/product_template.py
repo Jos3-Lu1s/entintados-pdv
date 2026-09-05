@@ -116,6 +116,16 @@ class ProductTemplate(models.Model):
                     uom=product.uom_id.display_name or "",
                 ))
 
+    @api.constrains('tint_role', 'lines_product_id')
+    def _check_colorant_no_line(self):
+        for product in self.filtered(lambda p: p.tint_role == 'colorant'):
+            if product.lines_product_id:
+                raise ValidationError(_(
+                    "El colorante «%s» es un insumo universal y no puede estar "
+                    "asignado a una línea de producto comercial específica.",
+                    product.display_name,
+                ))
+
     # --- Asistencia en el formulario ------------------------------------
 
     @api.onchange('tint_role')
@@ -130,9 +140,11 @@ class ProductTemplate(models.Model):
                     product.uom_id = point
                 product.tint_base_type_id = False
                 product.tint_size_id = False
+                product.lines_product_id = False
             elif product.tint_role != 'base':
                 product.tint_base_type_id = False
                 product.tint_size_id = False
+                product.lines_product_id = False
 
     @api.onchange('tint_base_type_id')
     def _onchange_tint_base_type_id(self):

@@ -16,7 +16,9 @@ class TestTintColor(TransactionCase):
         cls.formulas = cls.env['tint.color.formula']
         cls.base_types = cls.env['tint.base.type']
         cls.sizes = cls.env['tint.size']
+        cls.galleries = cls.env['tint.gallery']
 
+        cls.gallery = cls.galleries.create({'name': 'Galería de prueba', 'code': 'TST-GAL'})
         cls.white = cls.base_types.search([('code', '=', 'W')], limit=1)
         cls.deep = cls.base_types.search([('code', '=', 'D')], limit=1)
         cls.yellow = cls.base_types.search([('code', '=', 'Y')], limit=1)
@@ -35,8 +37,9 @@ class TestTintColor(TransactionCase):
         })
         cls.color = cls.colors.create({'name': 'Color de prueba', 'code': 'TEST-COL-01'})
 
-    def _create_formula(self, base_type, size, doses, color=None):
+    def _create_formula(self, base_type, size, doses, color=None, gallery=None):
         return self.formulas.create({
+            'gallery_id': (gallery or self.gallery).id,
             'color_id': (color or self.color).id,
             'base_type_id': base_type.id,
             'size_id': size.id,
@@ -167,6 +170,7 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_without_lines_fails(self):
         formula = self.formulas.create({
+            'gallery_id': self.gallery.id,
             'color_id': self.color.id,
             'base_type_id': self.deep.id,
             'size_id': self.liter.id,
@@ -186,3 +190,51 @@ class TestTintColor(TransactionCase):
         formula = self._create_formula(self.yellow, self.gallon, [(self.colorant_a, 30)])
         self.assertTrue(formula.requires_extraction)
         self.assertTrue(formula.operator_note)
+
+    # --- Colorantes universales e independencia de línea ---------------
+
+    def test_universal_colorants_shared_across_lines(self):
+        """Los colorantes universales (sin línea) pueden usarse en fórmulas
+        con diferentes líneas comerciales o sin línea."""
+        schema1 = self.env['tint.schema'].create({'name': 'Esquema Vinílico'})
+        schema2 = self.env['tint.schema'].create({'name': 'Esquema Esmalte'})
+        line1 = self.env['lines.product'].create({'name': 'Línea Premium', 'scheme': schema1.id})
+        line2 = self.env['lines.product'].create({'name': 'Línea Estándar', 'scheme': schema2.id})
+
+        self.assertFalse(self.colorant_a.product_tmpl_id.lines_product_id)
+        self.assertFalse(self.colorant_b.product_tmpl_id.lines_product_id)
+
+        color_uno = self.colors.create({'name': 'Color Uno', 'code': 'TEST-COL-01-UNI'})
+        color_dos = self.colors.create({'name': 'Color Dos', 'code': 'TEST-COL-02-UNI'})
+
+        f1 = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_uno.id,
+            'base_type_id': self.white.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line1.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 12.0}),
+                (0, 0, {'colorant_id': self.colorant_b.id, 'points': 6.0}),
+            ],
+        })
+        self.assertEqual(f1.total_points, 18.0)
+        self.assertEqual(f1.line_ids[0].colorant_id, self.colorant_a)
+
+        f2 = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_dos.id,
+            'base_type_id': self.white.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line2.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 8.0}),
+            ],
+        })
+        self.assertEqual(f2.total_points, 8.0)
+        self.assertEqual(f2.line_ids[0].colorant_id, self.colorant_a)
+
+        f1.action_generate_other_sizes()
+        gallon_f1 = color_uno.formula_for(self.white, self.gallon, gallery=self.gallery)
+        self.assertIsNotNone(gallon_f1)
+        self.assertEqual(gallon_f1.total_points, 72.0)
