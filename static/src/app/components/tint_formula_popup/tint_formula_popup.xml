@@ -121,9 +121,20 @@
                                         <span>Presentación: <strong><t t-esc="size ? size.name : '—'"/></strong></span>
                                     </div>
                                 </div>
-                                <span t-if="selectedColor.code" class="badge rounded-pill bg-light text-dark border px-2 py-1 font-monospace">
-                                    <t t-esc="selectedColor.code"/>
-                                </span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <button class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1 shadow-xs"
+                                            type="button"
+                                            title="Generar fórmulas para las demás presentaciones compatibles"
+                                            t-att-disabled="state.isGeneratingSizes"
+                                            t-on-click="generateOtherSizes">
+                                        <i t-if="state.isGeneratingSizes" class="fa fa-spinner fa-spin" role="img"/>
+                                        <i t-else="" class="fa fa-cubes" role="img"/>
+                                        <span>Generar otras presentaciones</span>
+                                    </button>
+                                    <span t-if="selectedColor.code" class="badge rounded-pill bg-light text-dark border px-2 py-1 font-monospace">
+                                        <t t-esc="selectedColor.code"/>
+                                    </span>
+                                </div>
                             </div>
 
                             <div class="o-tint-card-body p-3 flex-grow-1 overflow-y-auto">

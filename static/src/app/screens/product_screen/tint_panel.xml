@@ -64,9 +64,18 @@
                         </div>
                     </div>
 
-                    <!-- Right: Botón Limpiar filtros (solo cuando hay filtros activos) -->
-                    <div t-if="hasActiveFilters" class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
-                        <button class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 shadow-xs text-nowrap"
+                    <!-- Right: Acciones del color y filtros -->
+                    <div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                        <button t-if="canGenerateOtherSizesForColor"
+                                class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 shadow-xs text-nowrap"
+                                title="Generar fórmulas para las demás presentaciones compatibles de este color"
+                                t-att-disabled="isGeneratingSizes"
+                                t-on-click="() => this.generateOtherSizesForColor()">
+                            <i t-if="isGeneratingSizes" class="fa fa-spinner fa-spin me-1" role="img"/>
+                            <i t-else="" class="fa fa-cubes me-1" role="img"/>
+                            <span>Generar otras presentaciones</span>
+                        </button>
+                        <button t-if="hasActiveFilters" class="btn btn-xs btn-outline-secondary rounded-pill px-2 py-1 shadow-xs text-nowrap"
                                 title="Quitar filtros de presentación y tipo de base"
                                 t-on-click="() => this.clearFilters()">
                             <i class="fa fa-times me-1"/> Limpiar filtros
@@ -185,37 +194,47 @@
                     <!-- Paso 3: Selección de base -->
                     <t t-else="">
 
-                        <div t-if="unsellableCount" class="alert alert-warning rounded-3 shadow-xs flex-shrink-0 mb-2" role="alert">
-                            <strong>
-                                <t t-esc="unsellableCount"/>
-                                <t t-if="unsellableCount === 1"> fórmula sin producto base</t>
-                                <t t-else=""> fórmulas sin producto base</t>
-                                para este color.
-                            </strong>
-                            <div class="row mt-2">
-                                <div class="col-md-6">
-                                    <div class="fw-bold small">La fórmula pide</div>
-                                    <ul class="mb-0 small">
-                                        <li t-foreach="missingCombos" t-as="combo" t-key="combo"
-                                            t-esc="combo"/>
-                                    </ul>
+                        <!-- Alerta superior compacta cuando hay tarjetas disponibles pero faltan bases para alguna fórmula -->
+                        <div t-if="cards.length and unsellableCount"
+                             class="alert alert-warning py-2 px-3 rounded-3 shadow-xs flex-shrink-0 mb-2"
+                             role="alert">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="d-flex align-items-center flex-wrap gap-2">
+                                    <i class="fa fa-exclamation-triangle text-warning"/>
+                                    <span class="small fw-bold">
+                                        <t t-esc="unsellableCount"/>
+                                        <t t-if="unsellableCount === 1"> fórmula sin producto base en esta caja:</t>
+                                        <t t-else=""> fórmulas sin producto base en esta caja:</t>
+                                    </span>
+                                    <span class="d-flex flex-wrap gap-1">
+                                        <span t-foreach="missingCombos" t-as="combo" t-key="combo"
+                                              class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle small fw-normal">
+                                            <t t-esc="combo"/>
+                                        </span>
+                                    </span>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="fw-bold small">
-                                        Bases que conoce la caja
-                                        (<t t-esc="loadedBases.length"/>)
-                                    </div>
-                                    <ul t-if="loadedBases.length" class="mb-0 small">
-                                        <li t-foreach="loadedBases" t-as="base" t-key="base.id">
-                                            <t t-esc="base.combo"/>
-                                            <span class="text-secondary-emphasis"> — <t t-esc="base.name"/></span>
-                                        </li>
-                                    </ul>
-                                    <div t-else="" class="small">
-                                        Ninguna. Los productos base no están llegando al POS:
-                                        revisa <em>Disponible en PdV</em> y <em>Puede venderse</em>
-                                        en su ficha.
-                                    </div>
+                                <button type="button"
+                                        class="btn btn-link btn-sm p-0 text-decoration-none text-muted small"
+                                        t-on-click="toggleTechnicalDetails">
+                                    <i t-attf-class="fa fa-chevron-#{panelState.showTechnicalDetails ? 'up' : 'down'} me-1"/>
+                                    <t t-if="panelState.showTechnicalDetails">Ocultar detalles</t>
+                                    <t t-else="">Detalles técnicos</t>
+                                </button>
+                            </div>
+                            <!-- Diagnóstico técnico colapsable en alerta compacta -->
+                            <div t-if="panelState.showTechnicalDetails"
+                                 class="o-tint-diagnostic-box p-2 mt-2 rounded border small">
+                                <div class="fw-bold mb-1 text-secondary">
+                                    Bases registradas en la caja (<t t-esc="loadedBases.length"/>):
+                                </div>
+                                <ul t-if="loadedBases.length" class="mb-0 ps-3">
+                                    <li t-foreach="loadedBases" t-as="base" t-key="base.id">
+                                        <span class="fw-semibold"><t t-esc="base.combo"/></span>
+                                        <span class="text-secondary"> — <t t-esc="base.name"/></span>
+                                    </li>
+                                </ul>
+                                <div t-else="" class="text-secondary fst-italic">
+                                    Ninguna. Los productos base no están llegando al POS: revisa «Disponible en PdV» y «Puede ser vendido» en su ficha.
                                 </div>
                             </div>
                         </div>
@@ -242,7 +261,7 @@
                                     class="o-tint-row-tr"
                                     t-on-click="() => this.addCard(card)">
                                     <td class="py-2 text-nowrap">
-                                        <span class="text-secondary-emphasis font-monospace small" t-esc="card.baseProduct.default_code or '—'"/>
+                                        <span class="text-secondary-emphasis font-monospace small" t-esc="card.defaultCode or card.baseProduct.default_code or card.baseProduct.product_tmpl_id?.default_code or '—'"/>
                                     </td>
                                     <td class="py-2">
                                         <span class="fw-bold text-dark" t-esc="card.baseProduct.display_name"/>
@@ -271,6 +290,51 @@
                                 </tr>
                             </t>
                         </TintTable>
+
+                        <!-- Estado vacío amigable cuando las fórmulas no tienen producto base cargado -->
+                        <div t-elif="unsellableCount"
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state text-center p-4">
+                            <i class="fa fa-cubes fa-3x mb-3 text-warning"/>
+                            <h5>Fórmula sin producto base para este color</h5>
+                            <p class="mb-2 small text-secondary-emphasis" style="max-width: 440px;">
+                                La fórmula requiere una base que no está disponible para venta en esta caja:
+                            </p>
+                            <div class="d-flex flex-wrap justify-content-center gap-1 mb-3" style="max-width: 440px;">
+                                <span t-foreach="missingCombos" t-as="combo" t-key="combo"
+                                      class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                    <t t-esc="combo"/>
+                                </span>
+                            </div>
+                            <p class="mb-3 small text-muted" style="max-width: 420px;">
+                                Verifica con tu encargado que el producto base esté activo y disponible en este PdV, o selecciona otra presentación.
+                            </p>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 mb-2"
+                                    t-on-click="toggleTechnicalDetails">
+                                <i t-attf-class="fa fa-chevron-#{panelState.showTechnicalDetails ? 'up' : 'down'}"/>
+                                <t t-if="panelState.showTechnicalDetails">Ocultar detalles técnicos</t>
+                                <t t-else="">Ver detalles técnicos</t>
+                            </button>
+
+                            <!-- Diagnóstico técnico colapsable en Empty State -->
+                            <div t-if="panelState.showTechnicalDetails"
+                                 class="o-tint-diagnostic-box text-start p-2 mt-2 rounded border small w-100"
+                                 style="max-width: 480px;">
+                                <div class="fw-bold mb-1 text-secondary">
+                                    Bases registradas en la caja (<t t-esc="loadedBases.length"/>):
+                                </div>
+                                <ul t-if="loadedBases.length" class="mb-0 ps-3">
+                                    <li t-foreach="loadedBases" t-as="base" t-key="base.id">
+                                        <span class="fw-semibold"><t t-esc="base.combo"/></span>
+                                        <span class="text-secondary"> — <t t-esc="base.name"/></span>
+                                    </li>
+                                </ul>
+                                <div t-else="" class="text-secondary fst-italic">
+                                    Ninguna. Los productos base no están llegando al POS: revisa «Disponible en PdV» y «Puede ser vendido» en su ficha.
+                                </div>
+                            </div>
+                        </div>
 
                         <div t-else=""
                              class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state">

@@ -1,5 +1,6 @@
 
-import { Component } from "@odoo/owl";
+import { Component, useState } from "@odoo/owl";
+import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
@@ -28,6 +29,10 @@ export class TintPanel extends Component {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this._loadedColorIds = new Set();
+        this.panelState = useState({
+            isGeneratingSizes: false,
+            showTechnicalDetails: false,
+        });
         // Modo debug para diagnósticos del catálogo.
         this.isDebug = Boolean(odoo.debug);
     }
@@ -199,6 +204,7 @@ export class TintPanel extends Component {
 
     async selectColor(id) {
         this.ui.colorId = id;
+        this.panelState.showTechnicalDetails = false;
         // Conserva la galería y reinicia filtros de presentación y tipo de base.
         this.ui.sizeIds = [];
         this.ui.baseTypeIds = [];
@@ -226,6 +232,7 @@ export class TintPanel extends Component {
 
     /** Limpia la selección de color y sus filtros conservando la galería. */
     clearColor() {
+        this.panelState.showTechnicalDetails = false;
         Object.assign(this.ui, {
             colorId: null,
             sizeIds: [],
@@ -236,6 +243,7 @@ export class TintPanel extends Component {
 
     /** Limpia la selección de galería y regresa al paso 1. */
     changeGallery() {
+        this.panelState.showTechnicalDetails = false;
         Object.assign(this.ui, {
             galleryId: null,
             colorId: null,
@@ -250,6 +258,13 @@ export class TintPanel extends Component {
     async onClickCreateColor() {
         const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
+            if (payload.color?.base_type_summary) {
+                const localColor = this.pos.models["tint.color"]?.get(payload.colorId);
+                if (localColor) {
+                    localColor.base_type_summary = payload.color.base_type_summary;
+                    localColor.has_formula = true;
+                }
+            }
             if (payload.galleryId) {
                 this.ui.galleryId = payload.galleryId;
                 await this.loadGalleryColors(payload.galleryId);
@@ -258,6 +273,94 @@ export class TintPanel extends Component {
                 }
             }
             await this.selectColor(payload.colorId);
+        }
+    }
+
+    get isGeneratingSizes() {
+        return this.panelState.isGeneratingSizes;
+    }
+
+    get canGenerateOtherSizesForColor() {
+        return Boolean(this.ui.colorId && this.colorFormulas.length > 0);
+    }
+
+    /** Genera fórmulas para las demás presentaciones compatibles del color seleccionado. */
+    async generateOtherSizesForColor() {
+        if (!this.canGenerateOtherSizesForColor || this.isGeneratingSizes) {
+            return;
+        }
+        const formulaIds = this.colorFormulas.map((f) => f.id);
+        this.panelState.isGeneratingSizes = true;
+        try {
+            let genRes = null;
+            if (this.pos.orm && typeof this.pos.orm.call === "function") {
+                genRes = await this.pos.orm.call(
+                    "tint.color.formula",
+                    "generate_other_sizes_pos",
+                    [formulaIds, this.pos.config.id]
+                );
+            } else if (this.pos.data && typeof this.pos.data.call === "function") {
+                genRes = await this.pos.data.call(
+                    "tint.color.formula",
+                    "generate_other_sizes_pos",
+                    [formulaIds, this.pos.config.id]
+                );
+            }
+
+            if (genRes?.data && this.pos.data?.models?.connectNewData) {
+                this.pos.data.models.connectNewData(genRes.data);
+            } else {
+                if (genRes?.["tint.color.formula"]?.length && this.pos.models["tint.color.formula"]?.load) {
+                    this.pos.models["tint.color.formula"].load(genRes["tint.color.formula"]);
+                }
+                if (genRes?.["tint.color.formula.line"]?.length && this.pos.models["tint.color.formula.line"]?.load) {
+                    this.pos.models["tint.color.formula.line"].load(genRes["tint.color.formula.line"]);
+                }
+            }
+
+            this.ui.formulasVersion++;
+
+            const createdCount = genRes?.created_count || 0;
+            const createdNames = (genRes?.created_sizes || []).join(", ");
+            const omittedSizes = genRes?.omitted_sizes || [];
+
+            if (createdCount > 0 && omittedSizes.length > 0) {
+                this.notification.add(
+                    _t(
+                        "Se generaron las presentaciones (%s), pero se omitieron por exceder la capacidad del envase: %s.",
+                        createdNames || createdCount,
+                        omittedSizes.join(", ")
+                    ),
+                    { type: "warning" }
+                );
+            } else if (createdCount > 0) {
+                const msg = createdNames
+                    ? _t("¡Se generaron las presentaciones exitosamente: %s!", createdNames)
+                    : _t("¡Se generaron %s presentaciones adicionales exitosamente!", createdCount);
+                this.notification.add(msg, { type: "success" });
+            } else if (omittedSizes.length > 0) {
+                this.notification.add(
+                    _t(
+                        "No se pudo generar ninguna presentación porque exceden la capacidad máxima del envase: %s.",
+                        omittedSizes.join(", ")
+                    ),
+                    { type: "warning" }
+                );
+            } else {
+                this.notification.add(
+                    _t("No había presentaciones pendientes por generar para este color."),
+                    { type: "info" }
+                );
+            }
+        } catch (error) {
+            console.error("Error al generar otras presentaciones en catálogo:", error);
+            const errorMsg = error?.data?.message || error?.message;
+            this.notification.add(
+                errorMsg || _t("No se pudieron generar las demás presentaciones."),
+                { type: "danger" }
+            );
+        } finally {
+            this.panelState.isGeneratingSizes = false;
         }
     }
 
@@ -400,6 +503,7 @@ export class TintPanel extends Component {
             ? cards.filter(
                   (card) =>
                       (card.baseProduct.display_name || "").toLowerCase().includes(term) ||
+                      (card.defaultCode || "").toLowerCase().includes(term) ||
                       (card.baseType?.name || "").toLowerCase().includes(term) ||
                       (card.gallery?.name || "").toLowerCase().includes(term) ||
                       (card.size?.name || "").toLowerCase().includes(term)
@@ -415,10 +519,12 @@ export class TintPanel extends Component {
     buildCard(formula, baseProduct) {
         const doses = formulaDoses(this.pos, formula);
         const priceDetails = computeTintedPriceDetails(this.pos, baseProduct, formula);
+        const defaultCode = baseProduct.default_code || baseProduct.product_tmpl_id?.default_code || "";
         return {
             key: `${formula.id}-${baseProduct.id}`,
             formula,
             baseProduct,
+            defaultCode,
             color: formula.color_id,
             gallery: formula.gallery_id,
             baseType: formula.base_type_id,
@@ -480,6 +586,11 @@ export class TintPanel extends Component {
                     combo: this.comboLabel(tmpl.tint_size_id, tmpl.tint_base_type_id),
                 };
             });
+    }
+
+    /** Alterna la visibilidad del bloque de diagnóstico técnico de bases. */
+    toggleTechnicalDetails() {
+        this.panelState.showTechnicalDetails = !this.panelState.showTechnicalDetails;
     }
 
     // Interacción

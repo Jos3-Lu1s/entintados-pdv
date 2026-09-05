@@ -70,11 +70,12 @@ class TintColor(models.Model):
     def _search_base_type_ids(self, operator, value):
         return [('formula_ids.base_type_id', operator, value)]
 
-    @api.depends('formula_ids.base_type_id')
+    @api.depends('formula_ids.base_type_id', 'formula_ids.active')
     def _compute_base_type_summary(self):
         for color in self:
             # base_type_ids ya viene ordenado por secuencia del tipo de base.
-            names = color.formula_ids.base_type_id.mapped('name')
+            active_formulas = color.formula_ids.filtered('active')
+            names = active_formulas.base_type_id.mapped('name')
             color.base_type_summary = " · ".join(dict.fromkeys(names))
 
     @api.depends('name', 'code')

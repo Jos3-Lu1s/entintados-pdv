@@ -74,6 +74,8 @@ export class TintCreateColorPopup extends Component {
             newColorantPoints: 1,
             newFormulaLines: [],
 
+            generateOtherSizes: true,
+
             isCreatingColor: false,
             createColorError: "",
             createColorSuccess: "",
@@ -340,10 +342,133 @@ export class TintCreateColorPopup extends Component {
                 await this.pos.orm.create("tint.color.formula.line", lineValsList);
             }
 
-            this.notification.add(
-                _t("¡Color y fórmula registrados exitosamente!"),
-                { type: "success" }
-            );
+            if (this.state.generateOtherSizes) {
+                try {
+                    let genRes = null;
+                    if (this.pos.orm && typeof this.pos.orm.call === "function") {
+                        genRes = await this.pos.orm.call(
+                            "tint.color.formula",
+                            "generate_other_sizes_pos",
+                            [[formulaId], this.pos.config.id]
+                        );
+                    } else if (this.pos.data && typeof this.pos.data.call === "function") {
+                        genRes = await this.pos.data.call(
+                            "tint.color.formula",
+                            "generate_other_sizes_pos",
+                            [[formulaId], this.pos.config.id]
+                        );
+                    }
+
+                    if (genRes?.data && this.pos.data?.models?.connectNewData) {
+                        this.pos.data.models.connectNewData(genRes.data);
+                    } else {
+                        if (genRes?.["tint.color.formula"]?.length && this.pos.models["tint.color.formula"]?.load) {
+                            this.pos.models["tint.color.formula"].load(genRes["tint.color.formula"]);
+                        }
+                        if (genRes?.["tint.color.formula.line"]?.length && this.pos.models["tint.color.formula.line"]?.load) {
+                            this.pos.models["tint.color.formula.line"].load(genRes["tint.color.formula.line"]);
+                        }
+                    }
+
+                    const createdCount = genRes?.created_count || 0;
+                    const createdNames = (genRes?.created_sizes || []).join(", ");
+                    const omittedSizes = genRes?.omitted_sizes || [];
+
+                    if (createdCount > 0 && omittedSizes.length > 0) {
+                        this.notification.add(
+                            _t(
+                                "Color registrado. Se generaron las presentaciones (%s), pero se omitieron por exceder la capacidad del envase: %s.",
+                                createdNames || createdCount,
+                                omittedSizes.join(", ")
+                            ),
+                            { type: "warning" }
+                        );
+                    } else if (createdCount > 0) {
+                        const msg = createdNames
+                            ? _t("¡Color registrado y presentaciones generadas: %s!", createdNames)
+                            : _t("¡Color y %s presentaciones adicionales generados exitosamente!", createdCount);
+                        this.notification.add(msg, { type: "success" });
+                    } else if (omittedSizes.length > 0) {
+                        this.notification.add(
+                            _t(
+                                "Color registrado, pero las demás presentaciones no se generaron porque exceden la capacidad máxima del envase: %s.",
+                                omittedSizes.join(", ")
+                            ),
+                            { type: "warning" }
+                        );
+                    } else {
+                        this.notification.add(
+                            _t("¡Color y fórmula registrados exitosamente!"),
+                            { type: "success" }
+                        );
+                    }
+                } catch (genError) {
+                    console.warn("Error al generar presentaciones automáticas:", genError);
+                    const errorMsg = genError?.data?.message || genError?.message;
+                    this.notification.add(
+                        errorMsg || _t("Fórmula inicial guardada. Puedes generar las demás presentaciones desde el panel de entintado."),
+                        { type: "warning" }
+                    );
+                }
+            } else {
+                this.notification.add(
+                    _t("¡Color y fórmula registrados exitosamente!"),
+                    { type: "success" }
+                );
+            }
+
+            // Sincronizar el registro del color con el backend para actualizar base_type_summary y demás campos
+            try {
+                const colorFields = [
+                    "id",
+                    "name",
+                    "display_name",
+                    "code",
+                    "has_formula",
+                    "base_type_summary",
+                ];
+                let colorRead = null;
+                if (this.pos.data && typeof this.pos.data.read === "function") {
+                    const res = await this.pos.data.read("tint.color", [colorId], colorFields);
+                    colorRead = Array.isArray(res) ? res[0] : res;
+                } else if (this.pos.orm && typeof this.pos.orm.read === "function") {
+                    const res = await this.pos.orm.read("tint.color", [colorId], colorFields);
+                    colorRead = Array.isArray(res) ? res[0] : res;
+                }
+
+                if (colorRead) {
+                    if (this.pos.data?.models?.connectNewData) {
+                        this.pos.data.models.connectNewData({ "tint.color": [colorRead] });
+                    }
+                    const localColor = this.pos.models["tint.color"]?.get(colorId);
+                    if (localColor) {
+                        if (typeof localColor.update === "function") {
+                            localColor.update(colorRead, { omitUnknownField: true });
+                        }
+                        Object.assign(localColor, colorRead);
+                    }
+                    colorRecord = localColor || colorRead;
+                } else {
+                    const baseType = this.pos.models["tint.base.type"]?.get(baseTypeId);
+                    if (baseType?.name) {
+                        const localColor = this.pos.models["tint.color"]?.get(colorId);
+                        if (localColor) {
+                            localColor.base_type_summary = baseType.name;
+                            localColor.has_formula = true;
+                        }
+                    }
+                }
+            } catch (readErr) {
+                console.warn("No se pudo refrescar tint.color tras crear la fórmula:", readErr);
+                const baseType = this.pos.models["tint.base.type"]?.get(baseTypeId);
+                if (baseType?.name) {
+                    const localColor = this.pos.models["tint.color"]?.get(colorId);
+                    if (localColor) {
+                        localColor.base_type_summary = baseType.name;
+                        localColor.has_formula = true;
+                    }
+                }
+            }
 
             this.props.getPayload?.({
                 colorId,

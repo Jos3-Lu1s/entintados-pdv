@@ -26,6 +26,8 @@ class PosConfig(models.Model):
     def _load_pos_data_read(self, records, config):
         read_records = super()._load_pos_data_read(records, config)
         if config and config.module_pos_restaurant:
+            for r in read_records:
+                r.pop('tint_default_gallery_id', None)
             return read_records
         if read_records and 'tint_default_gallery_id' not in read_records[0]:
             record = records.browse(read_records[0]['id'])

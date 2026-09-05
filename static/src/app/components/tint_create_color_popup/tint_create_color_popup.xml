@@ -127,6 +127,17 @@
                                     </option>
                                 </select>
                             </div>
+                            <div class="col-12 mt-2 pt-2 border-top">
+                                <div class="form-check form-switch d-flex align-items-center gap-2 mb-0">
+                                    <input class="form-check-input mt-0" type="checkbox" id="generateOtherSizesSwitch"
+                                           t-model="state.generateOtherSizes"/>
+                                    <label class="form-check-label small fw-semibold text-dark user-select-none" for="generateOtherSizesSwitch">
+                                        Generar automáticamente las demás presentaciones compatibles
+                                    </label>
+                                    <i class="fa fa-info-circle text-muted"
+                                       title="Escalará proporcionalmente las dosis a las presentaciones de envase configuradas para este tipo de base respetando la capacidad máxima."/>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Barra de Agregar Colorante y Dosis -->
