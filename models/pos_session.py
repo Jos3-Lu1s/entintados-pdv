@@ -10,6 +10,9 @@ class PosSession(models.Model):
     def _load_pos_data_models(self, config):
         models_to_load = super()._load_pos_data_models(config)
 
+        if config and config.module_pos_restaurant:
+            return models_to_load
+
         tint_models = [
             'tint.schema',
             'lines.product',

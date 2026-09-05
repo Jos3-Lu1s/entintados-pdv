@@ -4,8 +4,16 @@ import { ControlButtons } from "@point_of_sale/app/screens/product_screen/contro
 import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 
 patch(ControlButtons.prototype, {
+    get isTintEnabled() {
+        return !this.pos.config.module_pos_restaurant;
+    },
+
     /** Entinta la línea base seleccionada en la orden. */
     async onClickTint() {
+        if (!this.isTintEnabled) {
+            return;
+        }
+
         const order = this.pos.getOrder();
         const line = order?.getSelectedOrderline();
 

@@ -32,6 +32,10 @@ patch(ProductScreen.prototype, {
         });
     },
 
+    get isTintEnabled() {
+        return !this.pos.config.module_pos_restaurant;
+    },
+
     setTintTab(tab) {
         this.tintUi.tab = tab;
     },
@@ -42,13 +46,16 @@ patch(ProductScreen.prototype, {
 
     /** Galería seleccionada actualmente. */
     get tintSelectedGallery() {
-        return this.tintUi.galleryId
+        return this.isTintEnabled && this.tintUi.galleryId
             ? this.pos.models["tint.gallery"]?.get?.(this.tintUi.galleryId)
             : null;
     },
 
     /** Reinicia la selección de galería y filtros de entintado. */
     changeTintGallery() {
+        if (!this.isTintEnabled) {
+            return;
+        }
         Object.assign(this.tintUi, {
             galleryId: null,
             colorId: null,
@@ -103,6 +110,10 @@ patch(ProductScreen.prototype, {
     },
 
     async addProductToOrder(productTmpl) {
+        if (!this.isTintEnabled) {
+            return super.addProductToOrder(productTmpl);
+        }
+
         const order = this.pos.getOrder();
         const selectedColor = order?.uiState?.selectedTintColor;
         const baseProduct = productTmpl?.product_variant_ids?.[0];

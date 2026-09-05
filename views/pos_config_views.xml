@@ -8,10 +8,11 @@
         <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//block[@id='pos_interface_section']" position="after">
-                <block title="Sistema de Entintados" id="tint_section">
+                <block title="Sistema de Entintados" id="tint_section" invisible="pos_module_pos_restaurant">
                     <setting id="tint_default_gallery_setting"
                              string="Galería de Entintado por Defecto"
-                             help="Galería predeterminada asignada automáticamente a los nuevos colores y fórmulas creados desde este Punto de Venta.">
+                             help="Galería predeterminada asignada automáticamente a los nuevos colores y fórmulas creados desde este Punto de Venta."
+                             invisible="pos_module_pos_restaurant">
                         <field name="pos_tint_default_gallery_id" options="{'no_create': True}"/>
                     </setting>
                 </block>
@@ -28,7 +29,8 @@
             <xpath expr="//div[hasclass('o_settings_container')]" position="inside">
                 <setting id="tint_default_gallery_pos_setting"
                          string="Galería de Entintado por Defecto"
-                         help="Galería predeterminada asignada automáticamente a los nuevos colores y fórmulas creados desde este Punto de Venta.">
+                         help="Galería predeterminada asignada automáticamente a los nuevos colores y fórmulas creados desde este Punto de Venta."
+                         invisible="module_pos_restaurant">
                     <field name="tint_default_gallery_id" options="{'no_create': True}"/>
                 </setting>
             </xpath>

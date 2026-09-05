@@ -90,3 +90,37 @@ class TestTintPosConfig(TransactionCase):
         read_data = pos_empty._load_pos_data_read(pos_empty, pos_empty)
         self.assertIn('tint_default_gallery_id', read_data[0])
         self.assertFalse(read_data[0]['tint_default_gallery_id'])
+
+    def test_load_pos_data_models_standard_pos(self):
+        """Verifica que una sesión de TPV estándar incluya los modelos de entintado."""
+        models = self.env['pos.session']._load_pos_data_models(self.pos_config)
+        self.assertIn('tint.gallery', models)
+        self.assertIn('tint.color', models)
+        self.assertIn('tint.color.formula', models)
+        self.assertIn('tint.base.type', models)
+
+    def test_load_pos_data_models_restaurant_pos(self):
+        """Verifica que una sesión de TPV Bar/Restaurante NO incluya modelos de entintado."""
+        pos_restaurant = self.pos_configs.create({
+            'name': 'Bar Restaurante Test',
+            'module_pos_restaurant': True,
+        })
+        models = self.env['pos.session']._load_pos_data_models(pos_restaurant)
+        self.assertNotIn('tint.gallery', models)
+        self.assertNotIn('tint.color', models)
+        self.assertNotIn('tint.color.formula', models)
+        self.assertNotIn('tint.schema', models)
+
+    def test_load_pos_data_fields_restaurant_pos(self):
+        """Verifica que un TPV Bar/Restaurante no incluya tint_default_gallery_id en fields ni read."""
+        pos_restaurant = self.pos_configs.create({
+            'name': 'Bar Restaurante Fields Test',
+            'module_pos_restaurant': True,
+        })
+        fields_list = pos_restaurant._load_pos_data_fields(pos_restaurant)
+        if fields_list:
+            self.assertNotIn('tint_default_gallery_id', fields_list)
+
+        read_data = pos_restaurant._load_pos_data_read(pos_restaurant, pos_restaurant)
+        if read_data:
+            self.assertNotIn('tint_default_gallery_id', read_data[0])
