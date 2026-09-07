@@ -146,7 +146,7 @@
         <field name="inherit_id" ref="crm.crm_lead_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//button[@name='action_sale_quotations_new']" position="attributes">
-                <attribute name="invisible">stage_type == 'demo' and approval_request_id and approval_state != 'approved'</attribute>
+                <attribute name="invisible">approval_request_id and not demo_end</attribute>
             </xpath>
         </field>
     </record>

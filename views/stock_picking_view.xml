@@ -51,16 +51,20 @@
             <xpath expr="//page[@name='note']" position="after">
                 <page string="Evidencias" name="material_evidence" invisible="not is_material_output_type or state != 'done'">
                     <group string="Evidencia de entrega de material">
-                        <field name="document_file" widget="binary" filename="document_filename"/>
+                        <field name="document_file" widget="binary" filename="document_filename" readonly="1"/>
 
                         <field name="evidence_attachment_ids"
-                           widget="many2many_binary"/>
+                           widget="many2many_binary" readonly="validate_delivery == True" />
                     </group>
+                    <button string="Validar entrega" type="object" name="action_validate_delivery" class="btn-primary" confirm="¿Está seguro de que desea validar la entrega? Esta acción no se puede deshacer."
+                            invisible="state != 'done' or validate_delivery == True"/>
 
-                    <group string="Evidencia de uso de material" invisible="not is_material_output_type or state != 'done'">
+                    <group string="Evidencia de uso de material" invisible="not is_material_output_type or state != 'done' or validate_delivery != True">
                         <field name="evidence_use_attachment_ids"
-                           widget="many2many_binary"/>
+                           widget="many2many_binary" readonly="validate_material_use == True"/>
                     </group>
+                    <button string="Validar uso de material" type="object" name="action_validate_material_use" class="btn-primary" confirm="¿Está seguro de que desea validar el uso de material? Esta acción no se puede deshacer."
+                            invisible="state != 'done' or validate_material_use == True or validate_delivery != True"/>
                 </page>
             </xpath>
         </field>

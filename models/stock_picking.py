@@ -63,7 +63,7 @@ class StockPicking(models.Model):
     
     """ Campos de evidencia de salida de material y de uso del material """
     document_file = fields.Binary(
-        string="Documento",
+        string="Documento de entrega de material",
         attachment=True,
     )
 
@@ -85,6 +85,14 @@ class StockPicking(models.Model):
         column1="picking_id",
         column2="attachment_id",
         string="Uso del material",
+    )
+    
+    validate_delivery = fields.Boolean(
+        string="Entrega validada",
+    )
+    
+    validate_material_use = fields.Boolean(
+        string="Uso de material validado",
     )
 
     def _action_done(self):
@@ -267,4 +275,31 @@ class StockPicking(models.Model):
                     "sin que provenga del flujo de Solicitud de Aprobación desde una "
                     "oportunidad de CRM. Genera la salida desde la oportunidad correspondiente."
                 ))
+                
+    def action_validate_delivery(self):
+        for picking in self:
+            if picking.state != 'done':
+                raise UserError(_("Solo se puede validar la entrega de salidas que estén en estado 'Hecho'."))
+            if not picking.evidence_attachment_ids:
+                raise UserError(_("Debe adjuntar al menos una evidencia de entrega antes de validar la entrega."))
+            picking.write({
+                'validate_delivery': True,
+            })
     
+    def action_validate_material_use(self):
+        for picking in self:
+            if picking.state != 'done':
+                raise UserError(_("Solo se puede validar el uso de material de salidas que estén en estado 'Hecho'."))
+            if not picking.validate_delivery:
+                raise UserError(_("Debe validar la entrega antes de validar el uso de material."))
+            if not picking.evidence_use_attachment_ids:
+                raise UserError(_("Debe adjuntar al menos una evidencia de uso de material antes de validar el uso."))
+            picking.write({
+                'validate_material_use': True,
+            })
+    
+            if picking.crm_lead_id:
+                picking.crm_lead_id.write({
+                    'demo_end': True,
+                })
+            

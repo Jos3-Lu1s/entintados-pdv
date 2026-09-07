@@ -43,6 +43,18 @@ class CrmLead(models.Model):
         string="Estado de aprobación",
         readonly=True,
     )
+    
+    def _check_demo_before_leaving(self, old_stage, new_stage):
+        """Valida que no se avance de la etapa de demo mientras haya una
+        solicitud de materiales en curso sin que la demostración esté finalizada."""
+        if old_stage.stage_type != 'demo':
+            return
+        if self.approval_request_id and not self.demo_end:
+            raise ValidationError(_(
+                'No puedes avanzar desde la etapa "%s" mientras la solicitud de '
+                'salida de material esté en curso. Debes marcar "Demostración '
+                'finalizada" antes de continuar.'
+            ) % old_stage.name)
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
         res = super()._prepare_customer_values(partner_name, is_company=is_company, parent_id=parent_id)
@@ -58,6 +70,7 @@ class CrmLead(models.Model):
                     continue
 
                 record._check_field_visit_before_leaving(old_stage, new_stage)
+                record._check_demo_before_leaving(old_stage, new_stage)
 
                 if new_stage.stage_type in ('quotation', 'closed'):
                     raise ValidationError(_(
@@ -123,6 +136,10 @@ class CrmLead(models.Model):
     wharehouse_id = fields.Many2one(
         'stock.location',
         string="Almacén",
+    )
+    
+    demo_end = fields.Boolean(
+        string="Demostración finalizada",
     )
 
     @api.depends(
