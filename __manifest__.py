@@ -40,6 +40,8 @@ Catálogo de entintado
 
     "assets": {
         "point_of_sale._assets_pos": [
+            # Corrección de incompatibilidad Odoo 19 (community vs enterprise pos_settle_due)
+            ("after", "web/static/src/core/registry.js", "entintados_pdv/static/src/app/overrides/patch_registry.js"),
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
             # Componentes reutilizables (js + xml co-localizados)
