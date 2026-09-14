@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="approval_request_view_form_inherit_stock" model="ir.ui.view">
+        <field name="name">approval.request.view.form.inherit.stock</field>
+        <field name="model">approval.request</field>
+        <field name="inherit_id" ref="approvals.approval_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_picking"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-truck"
+                        invisible="picking_count == 0">
+                    <field name="picking_count" widget="statinfo" string="Salida de Almacén"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+    
+    <record id="approval_request_view_form_inherit_material" model="ir.ui.view">
+        <field name="name">approval.request.form.material.crm</field>
+        <field name="model">approval.request</field>
+        <field name="inherit_id" ref="approvals.approval_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_crm_lead"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-bullhorn"
+                        invisible="not crm_lead_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Oportunidad</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -76,10 +76,10 @@ class TestTintPricing(TransactionCase):
         })
         return tmpl.product_variant_id
 
-    def _create_formula(self, base_type, size, points=10):
+    def _create_formula(self, base_type, size, points=10, color=None):
         formula = self.formulas.create({
             'gallery_id': self.gallery.id,
-            'color_id': self.color.id,
+            'color_id': (color or self.color).id,
             'base_type_id': base_type.id,
             'size_id': size.id,
         })
@@ -170,7 +170,8 @@ class TestTintPricing(TransactionCase):
         pres = self.presentation_gallon
 
         # Escenario 1: Tinte ligero (Teórico $300 + $40 = $340 < $400) -> Acota a $400.0
-        formula_low = self._create_formula(self.white, self.gallon, points=20)
+        color_low = self.colors.create({'name': 'Color Low', 'code': 'C-LOW'})
+        formula_low = self._create_formula(self.white, self.gallon, points=20, color=color_low)
         colorant_price_low = sum(line.colorant_id.list_price * line.points for line in formula_low.line_ids)
         theoretical_low = base.list_price + colorant_price_low
         self.assertEqual(theoretical_low, 340.0)
@@ -181,7 +182,8 @@ class TestTintPricing(TransactionCase):
         self.assertEqual(clamped_low, 400.0)
 
         # Escenario 2: Tinte medio (Teórico $300 + $150 = $450 en [$400, $600]) -> Queda en $450.0
-        formula_mid = self._create_formula(self.white, self.gallon, points=75)
+        color_mid = self.colors.create({'name': 'Color Mid', 'code': 'C-MID'})
+        formula_mid = self._create_formula(self.white, self.gallon, points=75, color=color_mid)
         colorant_price_mid = sum(line.colorant_id.list_price * line.points for line in formula_mid.line_ids)
         theoretical_mid = base.list_price + colorant_price_mid
         self.assertEqual(theoretical_mid, 450.0)
@@ -192,7 +194,8 @@ class TestTintPricing(TransactionCase):
         self.assertEqual(clamped_mid, 450.0)
 
         # Escenario 3: Tinte saturado (Teórico $300 + $400 = $700 > $600) -> Acota a $600.0
-        formula_high = self._create_formula(self.white, self.gallon, points=200)
+        color_high = self.colors.create({'name': 'Color High', 'code': 'C-HIGH'})
+        formula_high = self._create_formula(self.white, self.gallon, points=200, color=color_high)
         colorant_price_high = sum(line.colorant_id.list_price * line.points for line in formula_high.line_ids)
         theoretical_high = base.list_price + colorant_price_high
         self.assertEqual(theoretical_high, 700.0)

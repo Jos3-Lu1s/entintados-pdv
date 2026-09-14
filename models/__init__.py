@@ -11,6 +11,7 @@ from . import tint_color_formula
 from . import tint_color_formula_line
 from . import tint_schema
 from . import pos_session
+from . import pos_config
 from . import res_partner
 from . import crm_lead
 from . import calendar_event
@@ -29,4 +30,5 @@ from . import stock_picking
 from . import product_pricelist_wizard
 from . import res_users
 from . import sale_loyalty_reward_wizard
-
+from . import approvals
+from . import approvals_product_line

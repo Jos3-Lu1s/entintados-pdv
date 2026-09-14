@@ -16,7 +16,9 @@ class TestTintColor(TransactionCase):
         cls.formulas = cls.env['tint.color.formula']
         cls.base_types = cls.env['tint.base.type']
         cls.sizes = cls.env['tint.size']
+        cls.galleries = cls.env['tint.gallery']
 
+        cls.gallery = cls.galleries.create({'name': 'Galería de prueba', 'code': 'TST-GAL'})
         cls.white = cls.base_types.search([('code', '=', 'W')], limit=1)
         cls.deep = cls.base_types.search([('code', '=', 'D')], limit=1)
         cls.yellow = cls.base_types.search([('code', '=', 'Y')], limit=1)
@@ -34,9 +36,11 @@ class TestTintColor(TransactionCase):
             'tint_role': 'colorant', 'list_price': 3.0,
         })
         cls.color = cls.colors.create({'name': 'Color de prueba', 'code': 'TEST-COL-01'})
+        cls.pos_config = cls.env['pos.config'].search([], limit=1)
 
-    def _create_formula(self, base_type, size, doses, color=None):
+    def _create_formula(self, base_type, size, doses, color=None, gallery=None):
         return self.formulas.create({
+            'gallery_id': (gallery or self.gallery).id,
             'color_id': (color or self.color).id,
             'base_type_id': base_type.id,
             'size_id': size.id,
@@ -167,6 +171,7 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_without_lines_fails(self):
         formula = self.formulas.create({
+            'gallery_id': self.gallery.id,
             'color_id': self.color.id,
             'base_type_id': self.deep.id,
             'size_id': self.liter.id,
@@ -186,3 +191,289 @@ class TestTintColor(TransactionCase):
         formula = self._create_formula(self.yellow, self.gallon, [(self.colorant_a, 30)])
         self.assertTrue(formula.requires_extraction)
         self.assertTrue(formula.operator_note)
+
+    # --- Colorantes universales e independencia de línea ---------------
+
+    def test_universal_colorants_shared_across_lines(self):
+        """Los colorantes universales (sin línea) pueden usarse en fórmulas
+        con diferentes líneas comerciales o sin línea."""
+        schema1 = self.env['tint.schema'].create({'name': 'Esquema Vinílico'})
+        schema2 = self.env['tint.schema'].create({'name': 'Esquema Esmalte'})
+        line1 = self.env['lines.product'].create({'name': 'Línea Premium', 'scheme': schema1.id})
+        line2 = self.env['lines.product'].create({'name': 'Línea Estándar', 'scheme': schema2.id})
+
+        self.assertFalse(self.colorant_a.product_tmpl_id.lines_product_id)
+        self.assertFalse(self.colorant_b.product_tmpl_id.lines_product_id)
+
+        color_uno = self.colors.create({'name': 'Color Uno', 'code': 'TEST-COL-01-UNI'})
+        color_dos = self.colors.create({'name': 'Color Dos', 'code': 'TEST-COL-02-UNI'})
+
+        f1 = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_uno.id,
+            'base_type_id': self.white.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line1.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 12.0}),
+                (0, 0, {'colorant_id': self.colorant_b.id, 'points': 6.0}),
+            ],
+        })
+        self.assertEqual(f1.total_points, 18.0)
+        self.assertEqual(f1.line_ids[0].colorant_id, self.colorant_a)
+
+        f2 = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_dos.id,
+            'base_type_id': self.white.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line2.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 8.0}),
+            ],
+        })
+        self.assertEqual(f2.total_points, 8.0)
+        self.assertEqual(f2.line_ids[0].colorant_id, self.colorant_a)
+
+        f1.action_generate_other_sizes()
+        gallon_f1 = color_uno.formula_for(self.white, self.gallon, gallery=self.gallery)
+        self.assertIsNotNone(gallon_f1)
+        self.assertEqual(gallon_f1.total_points, 72.0)
+
+    # --- Generación de otras presentaciones: robustez y consistencia ----
+
+    def test_generate_other_sizes_propagates_line_scheme(self):
+        """Comprobar que las fórmulas derivadas conservan line_scheme_id y su scheme_id."""
+        schema = self.env['tint.schema'].create({'name': 'Esquema Propagación'})
+        line = self.env['lines.product'].create({'name': 'Línea Propagación', 'scheme': schema.id})
+        color_prop = self.colors.create({'name': 'Color Propagación', 'code': 'TEST-COL-PROP'})
+
+        formula = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_prop.id,
+            'base_type_id': self.deep.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 10.0}),
+            ],
+        })
+        formula.action_generate_other_sizes()
+        gallon = color_prop.formula_for(self.deep, self.gallon, gallery=self.gallery)
+        bucket = color_prop.formula_for(self.deep, self.bucket, gallery=self.gallery)
+        self.assertTrue(gallon)
+        self.assertTrue(bucket)
+        self.assertEqual(gallon.line_scheme_id, line)
+        self.assertEqual(gallon.scheme_id, schema)
+        self.assertEqual(bucket.line_scheme_id, line)
+        self.assertEqual(bucket.scheme_id, schema)
+
+    def test_generate_other_sizes_reactivates_archived_formula(self):
+        """Comprobar que una fórmula archivada previa se reactiva y actualiza sin colisión única."""
+        schema = self.env['tint.schema'].create({'name': 'Esquema Reactivación'})
+        line = self.env['lines.product'].create({'name': 'Línea Reactivación', 'scheme': schema.id})
+        color_test = self.colors.create({'name': 'Color Reactivación', 'code': 'TEST-REACT-01'})
+
+        archived_gallon = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': self.deep.id,
+            'size_id': self.gallon.id,
+            'active': False,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_b.id, 'points': 5.0}),
+            ],
+        })
+        self.assertFalse(archived_gallon.active)
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': self.deep.id,
+            'size_id': self.liter.id,
+            'line_scheme_id': line.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 10.0}),
+            ],
+        })
+
+        origin.action_generate_other_sizes()
+
+        self.assertTrue(archived_gallon.active)
+        self.assertEqual(archived_gallon.line_scheme_id, line)
+        self.assertEqual(archived_gallon.scheme_id, schema)
+        self.assertEqual(archived_gallon.total_points, 40.0)
+        self.assertEqual(len(archived_gallon.line_ids), 1)
+        self.assertEqual(archived_gallon.line_ids.colorant_id, self.colorant_a)
+
+    def test_generate_other_sizes_omits_capacity_exceeded_partially(self):
+        """Comprobar que presentaciones que exceden la capacidad son omitidas sin abortar las que caben."""
+        color_test = self.colors.create({'name': 'Color Capacidad Parcial', 'code': 'TEST-CAP-01'})
+        base_test = self.base_types.create({
+            'name': 'Base Capacidad Test',
+            'code': 'BCT',
+            'points_per_liter': 50,
+        })
+        self.env['tint.base.capacity'].create([
+            {'base_type_id': base_test.id, 'size_id': self.liter.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.gallon.id, 'max_points': 100},
+            {'base_type_id': base_test.id, 'size_id': self.bucket.id, 'max_points': 100},
+        ])
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': base_test.id,
+            'size_id': self.liter.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 20.0}),
+            ],
+        })
+
+        res = origin.action_generate_other_sizes()
+
+        gallon = color_test.formula_for(base_test, self.gallon, gallery=self.gallery)
+        self.assertTrue(gallon)
+        self.assertEqual(gallon.total_points, 80.0)
+
+        bucket = color_test.formula_for(base_test, self.bucket, gallery=self.gallery)
+        self.assertFalse(bucket)
+
+        self.assertEqual(res.get('type'), 'ir.actions.client')
+        self.assertEqual(res.get('tag'), 'display_notification')
+        self.assertEqual(res['params']['type'], 'warning')
+        self.assertIn(self.bucket.display_name, res['params']['message'])
+        self.assertIn('next', res['params'])
+        self.assertEqual(res['params']['next']['res_model'], 'tint.color.formula')
+        self.assertEqual(res['params']['next']['domain'], [('id', 'in', gallon.ids)])
+        self.assertEqual(res['params']['next']['views'], [(False, 'list'), (False, 'form')])
+
+    def test_generate_other_sizes_all_capacity_exceeded_raises_user_error(self):
+        """Comprobar la respuesta cuando todas las presentaciones pendientes exceden la capacidad."""
+        color_test = self.colors.create({'name': 'Color Exceso Total', 'code': 'TEST-CAP-02'})
+        base_test = self.base_types.create({
+            'name': 'Base Capacidad Total',
+            'code': 'BTT',
+            'points_per_liter': 50,
+        })
+        self.env['tint.base.capacity'].create([
+            {'base_type_id': base_test.id, 'size_id': self.liter.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.gallon.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.bucket.id, 'max_points': 50},
+        ])
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': base_test.id,
+            'size_id': self.liter.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 20.0}),
+            ],
+        })
+
+        with self.assertRaises(UserError) as cm:
+            origin.action_generate_other_sizes()
+
+        msg = str(cm.exception)
+        self.assertIn(self.gallon.display_name, msg)
+        self.assertIn(self.bucket.display_name, msg)
+
+    def test_generate_other_sizes_pos_success(self):
+        """Comprobar que generate_other_sizes_pos genera fórmulas y retorna estructura para POS."""
+        color_test = self.colors.create({'name': 'Color POS Test', 'code': 'TEST-POS-01'})
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': self.white.id,
+            'size_id': self.liter.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 5.0}),
+            ],
+        })
+
+        config_id = self.pos_config.id if self.pos_config else None
+        res = self.formulas.generate_other_sizes_pos([origin.id], config_id=config_id)
+
+        self.assertTrue(res.get('success'))
+        self.assertGreater(res.get('created_count'), 0)
+        self.assertIn('tint.color.formula', res)
+        self.assertIn('tint.color.formula.line', res)
+        self.assertIn('data', res)
+        self.assertEqual(len(res['tint.color.formula']), res['created_count'])
+
+        # Verificar que el galón (4L) tiene dosis escalada a 20 pts
+        gallon_formula = color_test.formula_for(self.white, self.gallon, gallery=self.gallery)
+        self.assertTrue(gallon_formula)
+        self.assertEqual(gallon_formula.total_points, 20.0)
+
+    def test_generate_other_sizes_pos_omits_capacity(self):
+        """Comprobar que generate_other_sizes_pos omite presentaciones que exceden capacidad."""
+        color_test = self.colors.create({'name': 'Color POS Capacidad', 'code': 'TEST-POS-02'})
+        base_test = self.base_types.create({
+            'name': 'Base POS Capacidad Test',
+            'code': 'BPCT',
+            'points_per_liter': 50,
+        })
+        self.env['tint.base.capacity'].create([
+            {'base_type_id': base_test.id, 'size_id': self.liter.id, 'max_points': 50},
+            {'base_type_id': base_test.id, 'size_id': self.gallon.id, 'max_points': 100},
+            {'base_type_id': base_test.id, 'size_id': self.bucket.id, 'max_points': 100},
+        ])
+
+        origin = self.formulas.create({
+            'gallery_id': self.gallery.id,
+            'color_id': color_test.id,
+            'base_type_id': base_test.id,
+            'size_id': self.liter.id,
+            'line_ids': [
+                (0, 0, {'colorant_id': self.colorant_a.id, 'points': 20.0}),
+            ],
+        })
+
+        config_id = self.pos_config.id if self.pos_config else None
+        res = origin.generate_other_sizes_pos(config_id=config_id)
+
+        self.assertTrue(res.get('success'))
+        self.assertIn(self.bucket.display_name, res.get('omitted_sizes', []))
+        self.assertNotIn(self.gallon.display_name, res.get('omitted_sizes', []))
+        self.assertTrue(color_test.formula_for(base_test, self.gallon, gallery=self.gallery))
+        self.assertFalse(color_test.formula_for(base_test, self.bucket, gallery=self.gallery))
+
+    def test_generate_other_sizes_pos_empty_arguments(self):
+        """Comprobar que generate_other_sizes_pos responde adecuadamente sin argumentos."""
+        res = self.formulas.generate_other_sizes_pos([])
+        self.assertFalse(res.get('success'))
+        self.assertEqual(res.get('created_count'), 0)
+        self.assertIn('error', res)
+
+    def test_base_type_summary_and_pos_sync(self):
+        """Verifica que base_type_summary se actualice y viaje en la respuesta POS."""
+        color = self.colors.create({'name': 'Azul Cobalto', 'code': 'AZ-COB'})
+        self.assertFalse(color.base_type_summary)
+        self.assertFalse(color.has_formula)
+
+        formula = self._create_formula(self.white, self.liter, [(self.colorant_a, 10)], color=color)
+        color.invalidate_recordset()
+        self.assertEqual(color.base_type_summary, self.white.name)
+        self.assertTrue(color.has_formula)
+
+        config_id = self.pos_config.id if self.pos_config else None
+        res = formula.generate_other_sizes_pos(config_id=config_id)
+        self.assertTrue(res.get('success'))
+        self.assertIn('tint.color', res)
+        self.assertIn('tint.color', res.get('data', {}))
+
+        color_read = [c for c in res['tint.color'] if c['id'] == color.id]
+        self.assertTrue(color_read)
+        self.assertEqual(color_read[0]['base_type_summary'], self.white.name)
+        self.assertTrue(color_read[0]['has_formula'])
+
+        # Agregar fórmula con otra base
+        self._create_formula(self.deep, self.gallon, [(self.colorant_a, 10)], color=color)
+        color.invalidate_recordset()
+        self.assertIn(self.white.name, color.base_type_summary)
+        self.assertIn(self.deep.name, color.base_type_summary)
+
+
+

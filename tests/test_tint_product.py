@@ -154,13 +154,23 @@ class TestTintProduct(TransactionCase):
         self.assertEqual(product.uom_id, self.point)
 
     def test_onchange_role_clears_opposite_fields(self):
+        schema = self.env['tint.schema'].create({'name': 'Esquema Test'})
+        line = self.env['lines.product'].create({'name': 'Línea Test', 'scheme': schema.id})
         product = self.templates.new({
             'name': 'Producto cambiante',
             'tint_role': 'base',
             'tint_base_type_id': self.white.id,
             'tint_size_id': self.liter.id,
+            'lines_product_id': line.id,
         })
         product.tint_role = 'colorant'
         product._onchange_tint_role()
         self.assertFalse(product.tint_base_type_id)
         self.assertFalse(product.tint_size_id)
+        self.assertFalse(product.lines_product_id)
+
+    def test_colorant_cannot_have_lines_product_id(self):
+        schema = self.env['tint.schema'].create({'name': 'Esquema Test'})
+        line = self.env['lines.product'].create({'name': 'Línea Test', 'scheme': schema.id})
+        with self.assertRaises(ValidationError):
+            self._create_colorant(name='Colorante Con Línea', lines_product_id=line.id)

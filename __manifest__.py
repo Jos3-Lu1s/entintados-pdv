@@ -36,10 +36,12 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty','pos_loyalty'],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
+            # Corrección de incompatibilidad Odoo 19 (community vs enterprise pos_settle_due)
+            ("after", "web/static/src/core/registry.js", "entintados_pdv/static/src/app/overrides/patch_registry.js"),
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
             # Componentes reutilizables (js + xml co-localizados)
@@ -96,6 +98,8 @@ Catálogo de entintado
         'data/tint_gallery_data.xml',
         'data/mail_activity_type_data.xml',
         'data/type_operations_data.xml',
+        'data/hr_departament_data.xml',
+        'data/approval_request_data.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',
@@ -109,6 +113,7 @@ Catálogo de entintado
         # acción se define ahí.
         'views/lines_product_views.xml',
         'views/tint_menu_views.xml',
+        'views/pos_config_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
@@ -121,6 +126,7 @@ Catálogo de entintado
         'views/crm_menu_views.xml',
         'views/crm_stages_view.xml',
         'views/stock_picking_view.xml',
+        'views/approval_request_views.xml',
         'views/res_users_views.xml',
         'views/account_financial_risk_view.xml',
         'views/portal_templates.xml',
@@ -132,6 +138,7 @@ Catálogo de entintado
         'report/report_picking_crm.xml',
         'wizards/partner_risk_exceeded_view.xml',
         'wizards/crm_field_visit_confirm_wizard_view.xml',
+        'wizards/crm_material_request_partner_wizzard_views.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

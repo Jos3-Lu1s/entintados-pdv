@@ -1,5 +1,6 @@
 
-import { Component } from "@odoo/owl";
+import { Component, useState } from "@odoo/owl";
+import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
@@ -28,6 +29,10 @@ export class TintPanel extends Component {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this._loadedColorIds = new Set();
+        this.panelState = useState({
+            isGeneratingSizes: false,
+            showTechnicalDetails: false,
+        });
         // Modo debug para diagnósticos del catálogo.
         this.isDebug = Boolean(odoo.debug);
     }
@@ -136,8 +141,8 @@ export class TintPanel extends Component {
     async selectGallery(id) {
         this.ui.galleryId = id;
         this.ui.colorId = null;
-        this.ui.sizeId = null;
-        this.ui.baseTypeId = null;
+        this.ui.sizeIds = [];
+        this.ui.baseTypeIds = [];
         this.ui.galleryColorIds = [];
         this.pos.searchProductWord = "";
         await this.loadGalleryColors(id);
@@ -199,9 +204,10 @@ export class TintPanel extends Component {
 
     async selectColor(id) {
         this.ui.colorId = id;
+        this.panelState.showTechnicalDetails = false;
         // Conserva la galería y reinicia filtros de presentación y tipo de base.
-        this.ui.sizeId = null;
-        this.ui.baseTypeId = null;
+        this.ui.sizeIds = [];
+        this.ui.baseTypeIds = [];
         this.pos.searchProductWord = "";
         await this.loadColorFormulas(id);
     }
@@ -226,21 +232,23 @@ export class TintPanel extends Component {
 
     /** Limpia la selección de color y sus filtros conservando la galería. */
     clearColor() {
+        this.panelState.showTechnicalDetails = false;
         Object.assign(this.ui, {
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
         });
         this.pos.searchProductWord = "";
     }
 
     /** Limpia la selección de galería y regresa al paso 1. */
     changeGallery() {
+        this.panelState.showTechnicalDetails = false;
         Object.assign(this.ui, {
             galleryId: null,
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
             galleryColorIds: [],
         });
         this.pos.searchProductWord = "";
@@ -248,18 +256,111 @@ export class TintPanel extends Component {
 
     /** Abre el modal para crear nuevo color desde el panel. */
     async onClickCreateColor() {
-        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup, {
-            galleryId: this.ui.galleryId || false,
-        });
+        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
-            if (payload.galleryId && this.ui.galleryId !== payload.galleryId) {
+            if (payload.color?.base_type_summary) {
+                const localColor = this.pos.models["tint.color"]?.get(payload.colorId);
+                if (localColor) {
+                    localColor.base_type_summary = payload.color.base_type_summary;
+                    localColor.has_formula = true;
+                }
+            }
+            if (payload.galleryId) {
                 this.ui.galleryId = payload.galleryId;
+                await this.loadGalleryColors(payload.galleryId);
+                if (!this.ui.galleryColorIds.includes(payload.colorId)) {
+                    this.ui.galleryColorIds.push(payload.colorId);
+                }
             }
-            if (this.ui.galleryId) {
-                await this.loadGalleryColors(this.ui.galleryId);
+            await this.selectColor(payload.colorId);
+        }
+    }
+
+    get isGeneratingSizes() {
+        return this.panelState.isGeneratingSizes;
+    }
+
+    get canGenerateOtherSizesForColor() {
+        return Boolean(this.ui.colorId && this.colorFormulas.length > 0);
+    }
+
+    /** Genera fórmulas para las demás presentaciones compatibles del color seleccionado. */
+    async generateOtherSizesForColor() {
+        if (!this.canGenerateOtherSizesForColor || this.isGeneratingSizes) {
+            return;
+        }
+        const formulaIds = this.colorFormulas.map((f) => f.id);
+        this.panelState.isGeneratingSizes = true;
+        try {
+            let genRes = null;
+            if (this.pos.orm && typeof this.pos.orm.call === "function") {
+                genRes = await this.pos.orm.call(
+                    "tint.color.formula",
+                    "generate_other_sizes_pos",
+                    [formulaIds, this.pos.config.id]
+                );
+            } else if (this.pos.data && typeof this.pos.data.call === "function") {
+                genRes = await this.pos.data.call(
+                    "tint.color.formula",
+                    "generate_other_sizes_pos",
+                    [formulaIds, this.pos.config.id]
+                );
             }
-            this.ui.colorId = payload.colorId;
-            await this.loadColorFormulas(payload.colorId);
+
+            if (genRes?.data && this.pos.data?.models?.connectNewData) {
+                this.pos.data.models.connectNewData(genRes.data);
+            } else {
+                if (genRes?.["tint.color.formula"]?.length && this.pos.models["tint.color.formula"]?.load) {
+                    this.pos.models["tint.color.formula"].load(genRes["tint.color.formula"]);
+                }
+                if (genRes?.["tint.color.formula.line"]?.length && this.pos.models["tint.color.formula.line"]?.load) {
+                    this.pos.models["tint.color.formula.line"].load(genRes["tint.color.formula.line"]);
+                }
+            }
+
+            this.ui.formulasVersion++;
+
+            const createdCount = genRes?.created_count || 0;
+            const createdNames = (genRes?.created_sizes || []).join(", ");
+            const omittedSizes = genRes?.omitted_sizes || [];
+
+            if (createdCount > 0 && omittedSizes.length > 0) {
+                this.notification.add(
+                    _t(
+                        "Se generaron las presentaciones (%s), pero se omitieron por exceder la capacidad del envase: %s.",
+                        createdNames || createdCount,
+                        omittedSizes.join(", ")
+                    ),
+                    { type: "warning" }
+                );
+            } else if (createdCount > 0) {
+                const msg = createdNames
+                    ? _t("¡Se generaron las presentaciones exitosamente: %s!", createdNames)
+                    : _t("¡Se generaron %s presentaciones adicionales exitosamente!", createdCount);
+                this.notification.add(msg, { type: "success" });
+            } else if (omittedSizes.length > 0) {
+                this.notification.add(
+                    _t(
+                        "No se pudo generar ninguna presentación porque exceden la capacidad máxima del envase: %s.",
+                        omittedSizes.join(", ")
+                    ),
+                    { type: "warning" }
+                );
+            } else {
+                this.notification.add(
+                    _t("No había presentaciones pendientes por generar para este color."),
+                    { type: "info" }
+                );
+            }
+        } catch (error) {
+            console.error("Error al generar otras presentaciones en catálogo:", error);
+            const errorMsg = error?.data?.message || error?.message;
+            this.notification.add(
+                errorMsg || _t("No se pudieron generar las demás presentaciones."),
+                { type: "danger" }
+            );
+        } finally {
+            this.panelState.isGeneratingSizes = false;
         }
     }
 
@@ -277,15 +378,17 @@ export class TintPanel extends Component {
 
     /** Fórmulas filtradas según el nivel de filtro aplicado. */
     formulasUpTo(level) {
-        const { galleryId, sizeId, baseTypeId } = this.ui;
+        const { galleryId, sizeIds, baseTypeIds } = this.ui;
+        const activeSizes = sizeIds || [];
+        const activeBaseTypes = baseTypeIds || [];
         return this.colorFormulas.filter((formula) => {
             if (level >= 1 && galleryId && formula.gallery_id?.id !== galleryId) {
                 return false;
             }
-            if (level >= 2 && sizeId && formula.size_id?.id !== sizeId) {
+            if (level >= 2 && activeSizes.length && !activeSizes.includes(formula.size_id?.id)) {
                 return false;
             }
-            if (level >= 3 && baseTypeId && formula.base_type_id?.id !== baseTypeId) {
+            if (level >= 3 && activeBaseTypes.length && !activeBaseTypes.includes(formula.base_type_id?.id)) {
                 return false;
             }
             return true;
@@ -294,6 +397,7 @@ export class TintPanel extends Component {
 
     optionsFor(level, field, model, sorter) {
         const counts = new Map();
+        const selectedIds = field === "size_id" ? (this.ui.sizeIds || []) : (this.ui.baseTypeIds || []);
         for (const formula of this.formulasUpTo(level - 1)) {
             const record = formula[field];
             if (!record) {
@@ -309,8 +413,8 @@ export class TintPanel extends Component {
             counts.set(record.id, (counts.get(record.id) || 0) + baseCount);
         }
         return (this.pos.models[model]?.getAll?.() ?? [])
-            .filter((record) => counts.has(record.id))
-            .map((record) => ({ record, count: counts.get(record.id) }))
+            .filter((record) => counts.has(record.id) || selectedIds.includes(record.id))
+            .map((record) => ({ record, count: counts.get(record.id) || 0 }))
             .sort(sorter);
     }
 
@@ -327,7 +431,7 @@ export class TintPanel extends Component {
     }
 
     get hasActiveFilters() {
-        return Boolean(this.ui.sizeId || this.ui.baseTypeId);
+        return Boolean(this.ui.sizeIds?.length || this.ui.baseTypeIds?.length);
     }
 
     get levels() {
@@ -337,16 +441,26 @@ export class TintPanel extends Component {
                 key: "size",
                 label: "Presentación",
                 options: this.sizes,
-                selected: this.ui.sizeId,
+                selectedIds: this.ui.sizeIds || [],
             },
             {
                 key: "baseType",
                 label: "Tipo de base",
                 options: this.baseTypes,
-                selected: this.ui.baseTypeId,
+                selectedIds: this.ui.baseTypeIds || [],
             },
         ];
-        return allLevels.filter((level) => level.options.length > 1);
+        return allLevels.filter((level) => level.options.length > 0);
+    }
+
+    isOptionSelected(levelKey, recordId) {
+        if (levelKey === "size") {
+            return (this.ui.sizeIds || []).includes(recordId);
+        }
+        if (levelKey === "baseType") {
+            return (this.ui.baseTypeIds || []).includes(recordId);
+        }
+        return false;
     }
 
     // Paso 3: bases concretas
@@ -375,7 +489,7 @@ export class TintPanel extends Component {
 
     /** Tarjetas de bases disponibles para las fórmulas y filtros activos. */
     get cards() {
-        if (!this.showCards) {
+        if (!this.showCards || !this.hasActiveFilters) {
             return [];
         }
         const cards = [];
@@ -389,6 +503,7 @@ export class TintPanel extends Component {
             ? cards.filter(
                   (card) =>
                       (card.baseProduct.display_name || "").toLowerCase().includes(term) ||
+                      (card.defaultCode || "").toLowerCase().includes(term) ||
                       (card.baseType?.name || "").toLowerCase().includes(term) ||
                       (card.gallery?.name || "").toLowerCase().includes(term) ||
                       (card.size?.name || "").toLowerCase().includes(term)
@@ -404,10 +519,12 @@ export class TintPanel extends Component {
     buildCard(formula, baseProduct) {
         const doses = formulaDoses(this.pos, formula);
         const priceDetails = computeTintedPriceDetails(this.pos, baseProduct, formula);
+        const defaultCode = baseProduct.default_code || baseProduct.product_tmpl_id?.default_code || "";
         return {
             key: `${formula.id}-${baseProduct.id}`,
             formula,
             baseProduct,
+            defaultCode,
             color: formula.color_id,
             gallery: formula.gallery_id,
             baseType: formula.base_type_id,
@@ -431,6 +548,9 @@ export class TintPanel extends Component {
 
     /** Combinaciones requeridas por las fórmulas del color sin producto base disponible. */
     get missingCombos() {
+        if (!this.hasActiveFilters) {
+            return [];
+        }
         const seen = new Map();
         for (const formula of this.formulasUpTo(3)) {
             if (this.basesFor(formula.size_id?.id, formula.base_type_id?.id).length) {
@@ -445,7 +565,7 @@ export class TintPanel extends Component {
     }
 
     get unsellableCount() {
-        if (!this.showCards) {
+        if (!this.showCards || !this.hasActiveFilters) {
             return 0;
         }
         return this.formulasUpTo(3).filter(
@@ -468,21 +588,37 @@ export class TintPanel extends Component {
             });
     }
 
+    /** Alterna la visibilidad del bloque de diagnóstico técnico de bases. */
+    toggleTechnicalDetails() {
+        this.panelState.showTechnicalDetails = !this.panelState.showTechnicalDetails;
+    }
+
     // Interacción
 
     selectLevel(key, id) {
         if (key === "size") {
-            this.ui.sizeId = this.ui.sizeId === id ? null : id;
-            this.ui.baseTypeId = null;
-        } else {
-            this.ui.baseTypeId = this.ui.baseTypeId === id ? null : id;
+            const current = new Set(this.ui.sizeIds || []);
+            if (current.has(id)) {
+                current.delete(id);
+            } else {
+                current.add(id);
+            }
+            this.ui.sizeIds = Array.from(current);
+        } else if (key === "baseType") {
+            const current = new Set(this.ui.baseTypeIds || []);
+            if (current.has(id)) {
+                current.delete(id);
+            } else {
+                current.add(id);
+            }
+            this.ui.baseTypeIds = Array.from(current);
         }
     }
 
     clearFilters() {
         // Reinicia los filtros de presentación y tipo de base.
-        this.ui.sizeId = null;
-        this.ui.baseTypeId = null;
+        this.ui.sizeIds = [];
+        this.ui.baseTypeIds = [];
     }
 
     async addCard(card) {
