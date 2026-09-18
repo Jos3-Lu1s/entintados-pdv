@@ -69,6 +69,39 @@
                 <xpath expr="//field[@name='property_product_pricelist']" position="after">
                     <field name="discount" widget="percentage"/>
                 </xpath>
+
+                <xpath expr="//notebook" position="inside">
+                    <page string="Acuerdos comerciales" name="commercial_agreements" invisible="not is_sales_contact">
+                        <field name="is_sales_contact" invisible="1"/>
+                        <field name="discount_rule_ids">
+                            <list editable="bottom">
+                                <field name="applied_on"/>
+                                <field name="rule_type"/>
+                                <field name="product_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on != '0_product'"
+                                       required="applied_on == '0_product'"/>
+                                <field name="line_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on != '1_line'"
+                                       required="applied_on == '1_line'"/>
+                                <field name="scheme_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on != '2_scheme'"
+                                       required="applied_on == '2_scheme'"/>
+                                <field name="discount"
+                                       widget="percentage"
+                                       invisible="rule_type != 'discount'"
+                                       required="rule_type == 'discount'"/>
+                                <field name="fixed_price"
+                                       widget="monetary"
+                                       invisible="rule_type != 'fixed_price'"
+                                       required="rule_type == 'fixed_price'"/>
+                                <field name="company_id" column_invisible="True"/>
+                            </list>
+                        </field>
+                    </page>
+                </xpath>
             </field>
         </record>
 

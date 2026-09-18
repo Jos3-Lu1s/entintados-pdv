@@ -3,6 +3,7 @@ import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
+import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
 
 let posStoreInstance = null;
 
@@ -20,9 +21,30 @@ patch(PosStore.prototype, {
         posStoreInstance = this;
         return result;
     },
+
+    async addLineToCurrentOrder(...args) {
+        const line = await super.addLineToCurrentOrder(...args);
+        const order = this.currentOrder || this.get_order?.();
+        if (order && typeof order._entintadosReconcileDiscounts === "function") {
+            order._entintadosReconcileDiscounts();
+        }
+        return line;
+    },
 });
 
 patch(PosOrder.prototype, {
+    set_partner(partner) {
+        const res = super.set_partner ? super.set_partner(partner) : null;
+        this._entintadosReconcileDiscounts();
+        return res;
+    },
+
+    setPartner(partner) {
+        const res = super.setPartner ? super.setPartner(partner) : null;
+        this._entintadosReconcileDiscounts();
+        return res;
+    },
+
     _updateRewardLines(...args) {
         const beforeKeys = new Set(
             (this.lines || []).filter((l) => l.is_reward_line).map((l) => l.reward_identifier_code)
@@ -31,16 +53,15 @@ patch(PosOrder.prototype, {
         const result = super._updateRewardLines(...args);
 
         const afterLines = (this.lines || []).filter((l) => l.is_reward_line);
-        const partnerDiscount = Number(this.partner_id?.discount || 0) * 100;
 
         for (const line of afterLines) {
             if (beforeKeys.has(line.reward_identifier_code)) {
                 continue;
             }
-            this._entintadosHandleNewReward(line, partnerDiscount);
+            this._entintadosHandleNewReward(line);
         }
 
-        this._entintadosReconcileDiscounts(partnerDiscount);
+        this._entintadosReconcileDiscounts();
 
         return result;
     },
@@ -55,26 +76,34 @@ patch(PosOrder.prototype, {
         const result = super.removeOrderline(line);
 
         if (wasReward && decisionKey && !isInternalRemoval) {
-            // Eliminación manual del cajero: olvidamos la decisión previa
-            // para que el descuento regrese y se vuelva a preguntar si
-            // el producto vuelve a calificar más adelante.
             if (this.uiState?.promoDecisions) {
                 delete this.uiState.promoDecisions[decisionKey];
             }
         }
 
-        const partnerDiscount = Number(this.partner_id?.discount || 0) * 100;
-        this._entintadosReconcileDiscounts(partnerDiscount);
+        this._entintadosReconcileDiscounts();
 
         return result;
     },
 
-    async _entintadosHandleNewReward(line, partnerDiscount) {
+    async _entintadosHandleNewReward(line) {
         const program = line.reward_id?.program_id;
         const isAutomaticPromotion =
             program?.program_type === "promotion" && program?.trigger === "auto";
 
-        if (!isAutomaticPromotion || !posStoreInstance || partnerDiscount <= 0) {
+        if (!isAutomaticPromotion || !posStoreInstance) {
+            return;
+        }
+
+        const partner = this.get_partner?.() || this.partner_id;
+        const hasDiscountToLose = (this.lines || []).some((l) => {
+            if (l.is_reward_line || l.fixed_price_locked) return false;
+            const r = getPartnerPricingRule(posStoreInstance, partner, l.product_id);
+            return r.type === "discount" && r.discount > 0;
+        });
+
+        if (!hasDiscountToLose) {
+            // Sin descuentos porcentuales que colisionen; el precio fijo es intocable
             return;
         }
 
@@ -94,9 +123,9 @@ patch(PosOrder.prototype, {
         const choice = await new Promise((resolve) => {
             posStoreInstance.dialog.add(ConfirmationDialog, {
                 title: "Promoción disponible",
-                body: `Este producto califica para la promoción "${program?.name}". El cliente tiene ${partnerDiscount}% de descuento asignado. Elegir la promoción quitará el descuento de TODA la orden. ¿Qué deseas aplicar?`,
+                body: `Este pedido califica para la promoción "${program?.name}". El cliente cuenta con acuerdos comerciales de descuento. Aplicar la promoción anulará los porcentajes de descuento de la orden. Los precios fijos acordados se respetan siempre. ¿Qué deseas aplicar?`,
                 confirmLabel: "Aplicar promoción",
-                cancelLabel: `Mantener descuento (${partnerDiscount}%)`,
+                cancelLabel: "Mantener acuerdos de descuento",
                 confirm: () => resolve("promo"),
                 cancel: () => resolve("discount"),
             });
@@ -110,17 +139,73 @@ patch(PosOrder.prototype, {
             this._entintadosInternalRemoval = false;
         }
 
-        this._entintadosReconcileDiscounts(partnerDiscount);
+        this._entintadosReconcileDiscounts();
     },
 
-    _entintadosReconcileDiscounts(partnerDiscount) {
+    _entintadosReconcileDiscounts() {
+        const partner = this.get_partner?.() || this.partner_id;
         const hasAcceptedPromo = Object.values(this.uiState?.promoDecisions || {}).includes("accepted");
 
         for (const line of this.lines || []) {
-            if (line.is_reward_line || line.price_type === "manual" || line.manual_price) {
+            if (line.is_reward_line || line.is_tint_colorant) {
                 continue;
             }
-            line.discount = (partnerDiscount > 0 && !hasAcceptedPromo) ? partnerDiscount : 0;
+
+            const product = line.product_id;
+            const rule = getPartnerPricingRule(posStoreInstance, partner, product);
+
+            if (rule.type === "fixed_price") {
+                // Prioridad 1: Precio Fijo en Producto (inviolable frente a promociones y descuentos)
+                if (typeof line.setUnitPrice === "function") {
+                    line.setUnitPrice(rule.price);
+                } else if (typeof line.set_unit_price === "function") {
+                    line.set_unit_price(rule.price);
+                } else {
+                    line.price_unit = rule.price;
+                }
+                line.price_type = "manual";
+                line.manual_price = true;
+                line.fixed_price_locked = true;
+
+                if (typeof line.setDiscount === "function") {
+                    line.setDiscount(0);
+                } else if (typeof line.set_discount === "function") {
+                    line.set_discount(0);
+                } else {
+                    line.discount = 0;
+                }
+                continue;
+            }
+
+            // Si la línea tenía precio fijo bloqueado y ya no aplica regla de precio fijo:
+            if (line.fixed_price_locked && rule.type !== "fixed_price") {
+                line.fixed_price_locked = false;
+                if (!line.is_tinted_base) {
+                    line.price_type = "original";
+                    line.manual_price = false;
+                    const originalPrice = line.product_id?.lst_price ?? line.price_unit;
+                    if (typeof line.setUnitPrice === "function") {
+                        line.setUnitPrice(originalPrice);
+                    } else {
+                        line.price_unit = originalPrice;
+                    }
+                }
+            }
+
+            // Si el cajero colocó un precio manual en un producto común (y no es base entintada), no pisar
+            if (line.price_type === "manual" && !line.is_tinted_base) {
+                continue;
+            }
+
+            // Aplicar descuento según jerarquía (Niveles 2, 3, 4 y 5)
+            const targetDiscount = (!hasAcceptedPromo && rule.type === "discount") ? rule.discount : 0;
+            if (typeof line.setDiscount === "function") {
+                line.setDiscount(targetDiscount);
+            } else if (typeof line.set_discount === "function") {
+                line.set_discount(targetDiscount);
+            } else {
+                line.discount = targetDiscount;
+            }
         }
     },
 });

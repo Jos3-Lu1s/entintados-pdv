@@ -26,6 +26,7 @@ class PosSession(models.Model):
             'tint.color',
             'tint.color.formula',
             'tint.color.formula.line',
+            'res.partner.discount.rule',
         ]
 
         for model_name in tint_models:

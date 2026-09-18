@@ -72,11 +72,119 @@ class ResPartner(models.Model):
         help="Marca este contacto como cliente de crédito.",
     )
 
-    discount=fields.Float(
+    discount = fields.Float(
         string="Descuento",
         digits=(16, 2),
         help="El porcentaje colocado se aplicara sobre la lista de precios correspondiente",
     )
+    discount_rule_ids = fields.One2many(
+        comodel_name='res.partner.discount.rule',
+        inverse_name='partner_id',
+        string="Acuerdos comerciales",
+        help="Reglas específicas de precios fijos y descuentos por producto, línea o esquema.",
+    )
+
+    def _get_partner_pricing_rule(self, product):
+        """
+        Resuelve la regla de precio fijo o descuento aplicable para un producto
+        específico conforme a la jerarquía estricta acordada:
+          1. Precio fijo por producto (inviolable frente a descuentos y promociones)
+          2. Descuento por producto
+          3. Descuento por línea de producto
+          4. Descuento por esquema de producto
+          5. Descuento global del cliente (fallback res.partner.discount)
+          Fallback: sin descuento (0.0).
+
+        :param product: recordset de product.product o product.template
+        :return: dict con {'type': 'fixed_price'|'discount'|'none', 'price': float|False, 'discount': float, 'rule': recordset|False}
+        """
+        self.ensure_one()
+        if not product:
+            return {'type': 'none', 'price': False, 'discount': 0.0, 'rule': False}
+
+        product_product = product if product._name == 'product.product' else False
+        product_template = product if product._name == 'product.template' else product.product_tmpl_id
+
+        if not product_product and product_template and len(product_template.product_variant_ids) == 1:
+            product_product = product_template.product_variant_ids[0]
+
+        # 1. Precio fijo por Producto
+        if product_product:
+            fixed_rule = self.discount_rule_ids.filtered(
+                lambda r: r.rule_type == 'fixed_price'
+                and r.applied_on == '0_product'
+                and r.product_id == product_product
+            )
+            if fixed_rule:
+                return {
+                    'type': 'fixed_price',
+                    'price': fixed_rule[0].fixed_price,
+                    'discount': 0.0,
+                    'rule': fixed_rule[0],
+                }
+
+        # 2. Descuento por Producto
+        if product_product:
+            prod_discount_rule = self.discount_rule_ids.filtered(
+                lambda r: r.rule_type == 'discount'
+                and r.applied_on == '0_product'
+                and r.product_id == product_product
+            )
+            if prod_discount_rule:
+                return {
+                    'type': 'discount',
+                    'price': False,
+                    'discount': prod_discount_rule[0].discount,
+                    'rule': prod_discount_rule[0],
+                }
+
+        # 3. Descuento por Línea de producto
+        line = product_template.lines_product_id or getattr(product, 'lines_product_id', False)
+        if line:
+            line_rule = self.discount_rule_ids.filtered(
+                lambda r: r.rule_type == 'discount'
+                and r.applied_on == '1_line'
+                and r.line_id == line
+            )
+            if line_rule:
+                return {
+                    'type': 'discount',
+                    'price': False,
+                    'discount': line_rule[0].discount,
+                    'rule': line_rule[0],
+                }
+
+        # 4. Descuento por Esquema
+        scheme = product_template.scheme_id or (line and line.scheme) or getattr(product, 'scheme_id', False)
+        if scheme:
+            scheme_rule = self.discount_rule_ids.filtered(
+                lambda r: r.rule_type == 'discount'
+                and r.applied_on == '2_scheme'
+                and r.scheme_id == scheme
+            )
+            if scheme_rule:
+                return {
+                    'type': 'discount',
+                    'price': False,
+                    'discount': scheme_rule[0].discount,
+                    'rule': scheme_rule[0],
+                }
+
+        # 5. Descuento Global del Cliente (res.partner.discount)
+        if self.discount:
+            return {
+                'type': 'discount',
+                'price': False,
+                'discount': self.discount * 100.0,
+                'rule': False,
+            }
+
+        return {
+            'type': 'none',
+            'price': False,
+            'discount': 0.0,
+            'rule': False,
+        }
 
     @api.depends('is_customer', 'is_distributor')
     def _compute_is_sales_contact(self):
@@ -245,6 +353,7 @@ class ResPartner(models.Model):
         fields = super()._load_pos_data_fields(config)
         return fields + [
             'discount',
+            'discount_rule_ids',
             'is_told',
             'is_credit',
             'is_customer',
@@ -271,13 +380,11 @@ class ResPartner(models.Model):
             # If search domain is not empty, we need to search inside all partners
             new_partners = self.search(domain + sales_domain, offset=offset, limit=100)
         fiscal_positions = new_partners.fiscal_position_id
+        discount_rules = self.env['res.partner.discount.rule'].search([
+            ('partner_id', 'in', new_partners.ids)
+        ])
         return {
             'res.partner': self._load_pos_data_read(new_partners, config),
             'account.fiscal.position': self.env['account.fiscal.position']._load_pos_data_read(fiscal_positions, config),
+            'res.partner.discount.rule': self.env['res.partner.discount.rule']._load_pos_data_read(discount_rules, config),
         }
-
-    def _load_pos_data_fields(self, config_id):
-        fields_list = super()._load_pos_data_fields(config_id)
-        if "discount" not in fields_list:
-            fields_list.append("discount")
-        return fields_list

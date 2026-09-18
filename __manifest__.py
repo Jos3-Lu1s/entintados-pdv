@@ -53,6 +53,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades
             "entintados_pdv/static/src/app/utils/tint_points.js",
+            "entintados_pdv/static/src/app/utils/pricing_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             # Pantalla de seleccion de color

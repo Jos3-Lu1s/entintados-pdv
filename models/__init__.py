@@ -32,3 +32,4 @@ from . import res_users
 from . import sale_loyalty_reward_wizard
 from . import approvals
 from . import approvals_product_line
+from . import res_partner_discount_rule
