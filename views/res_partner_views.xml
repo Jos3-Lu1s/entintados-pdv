@@ -90,7 +90,7 @@
                                        invisible="applied_on != '2_scheme'"
                                        required="applied_on == '2_scheme'"/>
                                 <field name="discount"
-                                       widget="percentage"
+                                       string="Descuento (%)"
                                        invisible="rule_type != 'discount'"
                                        required="rule_type == 'discount'"/>
                                 <field name="fixed_price"

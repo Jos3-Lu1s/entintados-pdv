@@ -26,6 +26,21 @@ class SaleOrderLine(models.Model):
                 rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
                 if rule.get('type') == 'fixed_price':
                     line.price_unit = rule['price']
+                    line.technical_price_unit = rule['price']
+
+    def _reset_price_unit(self):
+        super()._reset_price_unit()
+        for line in self:
+            if (
+                line.product_id
+                and not line.display_type
+                and line.order_id.partner_id
+                and not getattr(line, 'is_reward_line', False)
+            ):
+                rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
+                if rule.get('type') == 'fixed_price':
+                    line.price_unit = rule['price']
+                    line.technical_price_unit = rule['price']
 
     @api.depends(
         'product_id',
@@ -50,3 +65,5 @@ class SaleOrderLine(models.Model):
                     line.discount = 0.0
                 elif rule.get('type') == 'discount':
                     line.discount = rule['discount']
+                else:
+                    line.discount = 0.0

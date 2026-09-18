@@ -24,7 +24,16 @@ patch(PosStore.prototype, {
 
     async addLineToCurrentOrder(...args) {
         const line = await super.addLineToCurrentOrder(...args);
-        const order = this.currentOrder || this.get_order?.();
+        const order = this.getOrder?.() || this.currentOrder;
+        if (order && typeof order._entintadosReconcileDiscounts === "function") {
+            order._entintadosReconcileDiscounts();
+        }
+        return line;
+    },
+
+    async addLineToOrder(...args) {
+        const line = await super.addLineToOrder(...args);
+        const order = this.getOrder?.() || this.currentOrder;
         if (order && typeof order._entintadosReconcileDiscounts === "function") {
             order._entintadosReconcileDiscounts();
         }
@@ -95,10 +104,11 @@ patch(PosOrder.prototype, {
             return;
         }
 
-        const partner = this.get_partner?.() || this.partner_id;
+        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+        const models = this.models || posStoreInstance?.models;
         const hasDiscountToLose = (this.lines || []).some((l) => {
             if (l.is_reward_line || l.fixed_price_locked) return false;
-            const r = getPartnerPricingRule(posStoreInstance, partner, l.product_id);
+            const r = getPartnerPricingRule(models, partner, l.product_id);
             return r.type === "discount" && r.discount > 0;
         });
 
@@ -143,7 +153,8 @@ patch(PosOrder.prototype, {
     },
 
     _entintadosReconcileDiscounts() {
-        const partner = this.get_partner?.() || this.partner_id;
+        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+        const models = this.models || posStoreInstance?.models;
         const hasAcceptedPromo = Object.values(this.uiState?.promoDecisions || {}).includes("accepted");
 
         for (const line of this.lines || []) {
@@ -152,19 +163,21 @@ patch(PosOrder.prototype, {
             }
 
             const product = line.product_id;
-            const rule = getPartnerPricingRule(posStoreInstance, partner, product);
+            const rule = getPartnerPricingRule(models, partner, product);
 
             if (rule.type === "fixed_price") {
                 // Prioridad 1: Precio Fijo en Producto (inviolable frente a promociones y descuentos)
-                if (typeof line.setUnitPrice === "function") {
-                    line.setUnitPrice(rule.price);
-                } else if (typeof line.set_unit_price === "function") {
-                    line.set_unit_price(rule.price);
-                } else {
-                    line.price_unit = rule.price;
+                if (!line.is_tinted_base) {
+                    if (typeof line.setUnitPrice === "function") {
+                        line.setUnitPrice(rule.price);
+                    } else if (typeof line.set_unit_price === "function") {
+                        line.set_unit_price(rule.price);
+                    } else {
+                        line.price_unit = rule.price;
+                    }
+                    line.price_type = "manual";
+                    line.manual_price = true;
                 }
-                line.price_type = "manual";
-                line.manual_price = true;
                 line.fixed_price_locked = true;
 
                 if (typeof line.setDiscount === "function") {

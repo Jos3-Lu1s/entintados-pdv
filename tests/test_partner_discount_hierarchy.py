@@ -263,3 +263,30 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertIn('product_id', loaded_fields)
         self.assertIn('line_id', loaded_fields)
         self.assertIn('scheme_id', loaded_fields)
+
+    def test_loyalty_wizard_fixed_price_protection(self):
+        """Verificar que el wizard de lealtad no altere el precio fijo pactado."""
+        self.partner.discount_rule_ids.unlink()
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 300.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line1 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        self.assertEqual(line1.price_unit, 300.0)
+
+        wizard = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).create({
+            'loyalty_action_type': 'discount',
+        })
+        wizard.action_apply_custom()
+        self.assertEqual(line1.price_unit, 300.0)
+        self.assertEqual(line1.discount, 0.0)

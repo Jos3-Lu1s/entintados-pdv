@@ -10,6 +10,9 @@ class PosSession(models.Model):
     def _load_pos_data_models(self, config):
         models_to_load = super()._load_pos_data_models(config)
 
+        if 'res.partner.discount.rule' not in models_to_load:
+            models_to_load.append('res.partner.discount.rule')
+
         if config and config.module_pos_restaurant:
             return models_to_load
 
@@ -26,7 +29,6 @@ class PosSession(models.Model):
             'tint.color',
             'tint.color.formula',
             'tint.color.formula.line',
-            'res.partner.discount.rule',
         ]
 
         for model_name in tint_models:

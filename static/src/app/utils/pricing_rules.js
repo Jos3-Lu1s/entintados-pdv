@@ -19,8 +19,10 @@ export function getPartnerPricingRule(pos, partner, product) {
     if (!partner || !product) {
         return { type: "none", price: null, discount: 0, rule: null };
     }
-    const partnerId = partner.id;
-    const productId = product.id;
+    const partnerId = partner?.id ?? partner;
+    const productId = product?.id ?? product;
+
+    const models = pos?.models || pos?.data?.models || pos;
 
     // Obtener plantilla y IDs de línea y esquema
     const tmpl = product.raw?.product_tmpl_id || product.product_tmpl_id || product;
@@ -30,8 +32,8 @@ export function getPartnerPricingRule(pos, partner, product) {
         product.lines_product_id?.id ??
         product.lines_product_id;
     const lineRecord =
-        lineId && pos?.models?.["lines.product"]
-            ? pos.models["lines.product"].get(lineId)
+        lineId && models?.["lines.product"]
+            ? models["lines.product"].get(lineId)
             : null;
     const schemeId =
         lineRecord?.scheme?.id ??
@@ -41,7 +43,7 @@ export function getPartnerPricingRule(pos, partner, product) {
         product.scheme_id?.id ??
         product.scheme_id;
 
-    const allRules = pos?.models?.["res.partner.discount.rule"]?.getAll?.() || [];
+    const allRules = models?.["res.partner.discount.rule"]?.getAll?.() || [];
     const partnerRules = allRules.filter((r) => {
         const pId = r.partner_id?.id ?? r.partner_id;
         return pId === partnerId;

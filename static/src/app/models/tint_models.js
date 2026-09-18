@@ -45,6 +45,10 @@ export class LinesProductPresentation extends Base {
     static pythonModel = "lines.product.presentation";
 }
 
+export class ResPartnerDiscountRule extends Base {
+    static pythonModel = "res.partner.discount.rule";
+}
+
 const TINT_MODELS = [
     TintSchema,
     TintGallery,
@@ -56,6 +60,7 @@ const TINT_MODELS = [
     TintColorFormulaLine,
     LinesProduct,
     LinesProductPresentation,
+    ResPartnerDiscountRule,
 ];
 
 for (const model of TINT_MODELS) {
