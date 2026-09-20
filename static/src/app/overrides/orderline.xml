@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="entintados_pdv.Orderline" t-inherit="point_of_sale.Orderline" t-inherit-mode="extension" owl="1">
+        <xpath expr="//*[hasclass('info-list')]" position="inside">
+            <li t-if="lineScreenValues.pricingRuleOrigin" class="pricing-rule-origin my-1">
+                <span class="badge rounded-pill text-wrap text-start" t-att-class="{
+                    'text-bg-success': lineScreenValues.pricingRuleType === 'fixed_price',
+                    'text-bg-info': lineScreenValues.pricingRuleType !== 'fixed_price' and lineScreenValues.pricingRuleType !== 'promo',
+                    'text-bg-warning': lineScreenValues.pricingRuleType === 'promo'
+                }">
+                    <i class="fa fa-tag me-1"/>
+                    <t t-esc="lineScreenValues.pricingRuleOrigin"/>
+                </span>
+            </li>
+        </xpath>
+    </t>
+</templates>

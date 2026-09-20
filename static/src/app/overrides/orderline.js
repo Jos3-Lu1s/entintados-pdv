@@ -19,6 +19,11 @@ patch(Orderline.prototype, {
             values.displayPriceUnit = false;
         }
 
+        if (!this.props.basic_receipt && this.props.mode === "display") {
+            values.pricingRuleOrigin = line.pricing_rule_origin || null;
+            values.pricingRuleType = line.pricing_rule_type || null;
+        }
+
         return values;
     },
 });

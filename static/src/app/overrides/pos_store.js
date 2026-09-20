@@ -158,7 +158,16 @@ patch(PosOrder.prototype, {
         const hasAcceptedPromo = Object.values(this.uiState?.promoDecisions || {}).includes("accepted");
 
         for (const line of this.lines || []) {
-            if (line.is_reward_line || line.is_tint_colorant) {
+            if (line.is_reward_line) {
+                line.pricing_rule_type = "promo";
+                line.pricing_rule_origin = "Promoción";
+                line.pricing_rule_id = false;
+                continue;
+            }
+            if (line.is_tint_colorant) {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
                 continue;
             }
 
@@ -187,6 +196,10 @@ patch(PosOrder.prototype, {
                 } else {
                     line.discount = 0;
                 }
+
+                line.pricing_rule_type = rule.originType || "fixed_price";
+                line.pricing_rule_origin = rule.originLabel || "Precio Fijo";
+                line.pricing_rule_id = rule.rule?.id || false;
                 continue;
             }
 
@@ -207,6 +220,9 @@ patch(PosOrder.prototype, {
 
             // Si el cajero colocó un precio manual en un producto común (y no es base entintada), no pisar
             if (line.price_type === "manual" && !line.is_tinted_base) {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
                 continue;
             }
 
@@ -218,6 +234,20 @@ patch(PosOrder.prototype, {
                 line.set_discount(targetDiscount);
             } else {
                 line.discount = targetDiscount;
+            }
+
+            if (hasAcceptedPromo) {
+                line.pricing_rule_type = "promo";
+                line.pricing_rule_origin = "Promoción";
+                line.pricing_rule_id = false;
+            } else if (rule.type === "discount") {
+                line.pricing_rule_type = rule.originType || "product";
+                line.pricing_rule_origin = rule.originLabel || "";
+                line.pricing_rule_id = rule.rule?.id || false;
+            } else {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
             }
         }
     },

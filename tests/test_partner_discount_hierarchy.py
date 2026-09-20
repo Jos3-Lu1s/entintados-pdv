@@ -464,3 +464,173 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             "Las cotizaciones o líneas creadas después del cambio deben tomar el nuevo acuerdo de $420.",
         )
         self.assertEqual(line_nueva.discount, 0.0)
+
+    def test_pricing_rule_origin_metadata_and_labels(self):
+        """Validar que _get_partner_pricing_rule genere origin_type y origin_label correctos para cada nivel."""
+        self.partner.discount_rule_ids.unlink()
+
+        # Fallback sin reglas pero con descuento global 5%
+        res_global = self.partner._get_partner_pricing_rule(self.prod_3)
+        self.assertEqual(res_global['origin_type'], 'global')
+        self.assertEqual(res_global['origin_label'], 'Desc. Global Cliente (5.0%)')
+        self.assertEqual(res_global['discount'], 5.0)
+
+        # Nivel 4: Esquema (10%)
+        rule_scheme = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '2_scheme',
+            'rule_type': 'discount',
+            'scheme_id': self.schema_a.id,
+            'discount': 10.0,
+        })
+        res_scheme = self.partner._get_partner_pricing_rule(self.prod_2)
+        self.assertEqual(res_scheme['origin_type'], 'scheme')
+        self.assertEqual(res_scheme['origin_label'], f"Desc. Esquema: {self.schema_a.name} (10.0%)")
+        self.assertEqual(res_scheme['rule'].id, rule_scheme.id)
+
+        # Nivel 3: Línea (18%)
+        rule_line = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '1_line',
+            'rule_type': 'discount',
+            'line_id': self.line_1.id,
+            'discount': 18.0,
+        })
+        res_line = self.partner._get_partner_pricing_rule(self.prod_1)
+        self.assertEqual(res_line['origin_type'], 'line')
+        self.assertEqual(res_line['origin_label'], f"Desc. Línea: {self.line_1.name} (18.0%)")
+        self.assertEqual(res_line['rule'].id, rule_line.id)
+
+        # Nivel 2: Producto (25%)
+        rule_prod = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.prod_1.id,
+            'discount': 25.0,
+        })
+        res_prod = self.partner._get_partner_pricing_rule(self.prod_1)
+        self.assertEqual(res_prod['origin_type'], 'product')
+        self.assertEqual(res_prod['origin_label'], "Desc. Producto (25.0%)")
+        self.assertEqual(res_prod['rule'].id, rule_prod.id)
+
+        # Nivel 1: Precio Fijo ($320.0)
+        rule_prod.unlink()
+        rule_fixed = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 320.0,
+        })
+        res_fixed = self.partner._get_partner_pricing_rule(self.prod_1)
+        self.assertEqual(res_fixed['origin_type'], 'fixed_price')
+        self.assertEqual(res_fixed['origin_label'], "Precio Fijo")
+        self.assertEqual(res_fixed['price'], 320.0)
+        self.assertEqual(res_fixed['rule'].id, rule_fixed.id)
+
+        # Cliente sin descuento y producto genérico: None
+        cliente_neutro = self.partners.create({
+            'name': 'Cliente Neutro',
+            'is_customer': True,
+            'discount': 0.0,
+        })
+        res_none = cliente_neutro._get_partner_pricing_rule(self.prod_3)
+        self.assertEqual(res_none['origin_type'], 'none')
+        self.assertEqual(res_none['origin_label'], '')
+        self.assertEqual(res_none['discount'], 0.0)
+
+    def test_sale_order_line_origin_persistence_and_reactivity(self):
+        """Validar persistencia y reactividad de pricing_rule_* en sale.order.line."""
+        self.partner.discount_rule_ids.unlink()
+
+        # Configurar regla de precio fijo para prod 1 y regla de línea para línea 2 (prod 2)
+        fixed_rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 350.0,
+        })
+        line_rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '1_line',
+            'rule_type': 'discount',
+            'line_id': self.line_2.id,
+            'discount': 12.0,
+        })
+
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        l1 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        l2 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_2.id,
+            'product_uom_qty': 1.0,
+        })
+        l3 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_3.id,
+            'product_uom_qty': 1.0,
+        })
+
+        # Comprobar línea 1 (Precio fijo)
+        self.assertEqual(l1.pricing_rule_type, 'fixed_price')
+        self.assertEqual(l1.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(l1.pricing_rule_id.id, fixed_rule.id)
+        self.assertEqual(l1.price_unit, 350.0)
+        self.assertEqual(l1.discount, 0.0)
+
+        # Comprobar línea 2 (Línea de producto)
+        self.assertEqual(l2.pricing_rule_type, 'line')
+        self.assertEqual(l2.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (12.0%)")
+        self.assertEqual(l2.pricing_rule_id.id, line_rule.id)
+        self.assertEqual(l2.discount, 12.0)
+
+        # Comprobar línea 3 (Descuento Global fallback 5%)
+        self.assertEqual(l3.pricing_rule_type, 'global')
+        self.assertEqual(l3.pricing_rule_origin, 'Desc. Global Cliente (5.0%)')
+        self.assertFalse(l3.pricing_rule_id)
+        self.assertEqual(l3.discount, 5.0)
+
+        # Reactividad ante cambio de producto en línea 1 (cambia de prod_1 a prod_2)
+        l1.product_id = self.prod_2
+        l1._onchange_product_id()
+        self.assertEqual(l1.pricing_rule_type, 'line')
+        self.assertEqual(l1.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (12.0%)")
+        self.assertEqual(l1.pricing_rule_id.id, line_rule.id)
+
+        # Reactividad ante cambio de contacto (cambia a Cliente C con descuento global 8%)
+        cliente_c = self.partners.create({
+            'name': 'Cliente C',
+            'is_customer': True,
+            'discount': 0.08,
+        })
+        order.partner_id = cliente_c
+        order._onchange_partner_id_entintados_rules()
+        self.assertEqual(l2.pricing_rule_type, 'global')
+        self.assertEqual(l2.pricing_rule_origin, 'Desc. Global Cliente (8.0%)')
+        self.assertEqual(l3.pricing_rule_type, 'global')
+        self.assertEqual(l3.pricing_rule_origin, 'Desc. Global Cliente (8.0%)')
+
+    def test_pos_order_line_fields_persistence(self):
+        """Validar persistencia de pricing_rule_* en pos.order.line y exposición en _load_pos_data_fields."""
+        fixed_rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 310.0,
+        })
+
+        # Verificar que pos.order.line carga los campos para el POS
+        loaded_fields = self.env['pos.order.line']._load_pos_data_fields(False)
+        self.assertIn('pricing_rule_type', loaded_fields)
+        self.assertIn('pricing_rule_origin', loaded_fields)
+        self.assertIn('pricing_rule_id', loaded_fields)
+

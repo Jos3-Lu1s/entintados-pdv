@@ -100,7 +100,14 @@ class ResPartner(models.Model):
         """
         self.ensure_one()
         if not product:
-            return {'type': 'none', 'price': False, 'discount': 0.0, 'rule': False}
+            return {
+                'type': 'none',
+                'origin_type': 'none',
+                'origin_label': '',
+                'price': False,
+                'discount': 0.0,
+                'rule': False,
+            }
 
         product_product = product if product._name == 'product.product' else False
         product_template = product if product._name == 'product.template' else product.product_tmpl_id
@@ -118,6 +125,8 @@ class ResPartner(models.Model):
             if fixed_rule:
                 return {
                     'type': 'fixed_price',
+                    'origin_type': 'fixed_price',
+                    'origin_label': 'Precio Fijo',
                     'price': fixed_rule[0].fixed_price,
                     'discount': 0.0,
                     'rule': fixed_rule[0],
@@ -131,11 +140,14 @@ class ResPartner(models.Model):
                 and r.product_id == product_product
             )
             if prod_discount_rule:
+                rule_rec = prod_discount_rule[0]
                 return {
                     'type': 'discount',
+                    'origin_type': 'product',
+                    'origin_label': f"Desc. Producto ({rule_rec.discount:.1f}%)",
                     'price': False,
-                    'discount': prod_discount_rule[0].discount,
-                    'rule': prod_discount_rule[0],
+                    'discount': rule_rec.discount,
+                    'rule': rule_rec,
                 }
 
         # 3. Descuento por Línea de producto
@@ -147,11 +159,15 @@ class ResPartner(models.Model):
                 and r.line_id == line
             )
             if line_rule:
+                rule_rec = line_rule[0]
+                line_name = line.name or ''
                 return {
                     'type': 'discount',
+                    'origin_type': 'line',
+                    'origin_label': f"Desc. Línea: {line_name} ({rule_rec.discount:.1f}%)",
                     'price': False,
-                    'discount': line_rule[0].discount,
-                    'rule': line_rule[0],
+                    'discount': rule_rec.discount,
+                    'rule': rule_rec,
                 }
 
         # 4. Descuento por Esquema
@@ -163,24 +179,33 @@ class ResPartner(models.Model):
                 and r.scheme_id == scheme
             )
             if scheme_rule:
+                rule_rec = scheme_rule[0]
+                scheme_name = scheme.name or ''
                 return {
                     'type': 'discount',
+                    'origin_type': 'scheme',
+                    'origin_label': f"Desc. Esquema: {scheme_name} ({rule_rec.discount:.1f}%)",
                     'price': False,
-                    'discount': scheme_rule[0].discount,
-                    'rule': scheme_rule[0],
+                    'discount': rule_rec.discount,
+                    'rule': rule_rec,
                 }
 
         # 5. Descuento Global del Cliente (res.partner.discount)
         if self.discount:
+            global_disc = self.discount * 100.0
             return {
                 'type': 'discount',
+                'origin_type': 'global',
+                'origin_label': f"Desc. Global Cliente ({global_disc:.1f}%)",
                 'price': False,
-                'discount': self.discount * 100.0,
+                'discount': global_disc,
                 'rule': False,
             }
 
         return {
             'type': 'none',
+            'origin_type': 'none',
+            'origin_label': '',
             'price': False,
             'discount': 0.0,
             'rule': False,

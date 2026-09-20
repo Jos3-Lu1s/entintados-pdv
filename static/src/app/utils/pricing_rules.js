@@ -17,7 +17,7 @@
  */
 export function getPartnerPricingRule(pos, partner, product) {
     if (!partner || !product) {
-        return { type: "none", price: null, discount: 0, rule: null };
+        return { type: "none", originType: "none", originLabel: "", price: null, discount: 0, rule: null };
     }
     const partnerId = partner?.id ?? partner;
     const productId = product?.id ?? product;
@@ -35,6 +35,8 @@ export function getPartnerPricingRule(pos, partner, product) {
         lineId && models?.["lines.product"]
             ? models["lines.product"].get(lineId)
             : null;
+    const lineName = lineRecord?.name || tmpl?.lines_product_id?.name || product.lines_product_id?.name || "";
+
     const schemeId =
         lineRecord?.scheme?.id ??
         lineRecord?.scheme ??
@@ -42,6 +44,11 @@ export function getPartnerPricingRule(pos, partner, product) {
         tmpl?.scheme_id ??
         product.scheme_id?.id ??
         product.scheme_id;
+    const schemeRecord =
+        schemeId && models?.["tint.schema"]
+            ? models["tint.schema"].get(schemeId)
+            : null;
+    const schemeName = schemeRecord?.name || tmpl?.scheme_id?.name || product.scheme_id?.name || "";
 
     const allRules = models?.["res.partner.discount.rule"]?.getAll?.() || [];
     const partnerRules = allRules.filter((r) => {
@@ -59,6 +66,8 @@ export function getPartnerPricingRule(pos, partner, product) {
     if (fixedRule) {
         return {
             type: "fixed_price",
+            originType: "fixed_price",
+            originLabel: "Precio Fijo",
             price: Number(fixedRule.fixed_price || 0),
             discount: 0,
             rule: fixedRule,
@@ -73,10 +82,13 @@ export function getPartnerPricingRule(pos, partner, product) {
             (r.product_id?.id ?? r.product_id) === productId
     );
     if (prodDiscountRule) {
+        const disc = Number(prodDiscountRule.discount || 0);
         return {
             type: "discount",
+            originType: "product",
+            originLabel: `Desc. Producto (${disc.toFixed(1)}%)`,
             price: null,
-            discount: Number(prodDiscountRule.discount || 0),
+            discount: disc,
             rule: prodDiscountRule,
         };
     }
@@ -90,10 +102,14 @@ export function getPartnerPricingRule(pos, partner, product) {
                 (r.line_id?.id ?? r.line_id) === lineId
         );
         if (lineRule) {
+            const disc = Number(lineRule.discount || 0);
+            const resolvedLineName = lineName || lineRule.line_id?.name || "";
             return {
                 type: "discount",
+                originType: "line",
+                originLabel: `Desc. Línea: ${resolvedLineName} (${disc.toFixed(1)}%)`.trim(),
                 price: null,
-                discount: Number(lineRule.discount || 0),
+                discount: disc,
                 rule: lineRule,
             };
         }
@@ -108,10 +124,14 @@ export function getPartnerPricingRule(pos, partner, product) {
                 (r.scheme_id?.id ?? r.scheme_id) === schemeId
         );
         if (schemeRule) {
+            const disc = Number(schemeRule.discount || 0);
+            const resolvedSchemeName = schemeName || schemeRule.scheme_id?.name || "";
             return {
                 type: "discount",
+                originType: "scheme",
+                originLabel: `Desc. Esquema: ${resolvedSchemeName} (${disc.toFixed(1)}%)`.trim(),
                 price: null,
-                discount: Number(schemeRule.discount || 0),
+                discount: disc,
                 rule: schemeRule,
             };
         }
@@ -122,11 +142,13 @@ export function getPartnerPricingRule(pos, partner, product) {
     if (globalDiscount > 0) {
         return {
             type: "discount",
+            originType: "global",
+            originLabel: `Desc. Global Cliente (${globalDiscount.toFixed(1)}%)`,
             price: null,
             discount: globalDiscount,
             rule: null,
         };
     }
 
-    return { type: "none", price: null, discount: 0, rule: null };
+    return { type: "none", originType: "none", originLabel: "", price: null, discount: 0, rule: null };
 }
