@@ -25,7 +25,7 @@ class SaleOrderLine(models.Model):
         super()._compute_price_unit()
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line.order_id.state in ('sale', 'done', 'cancel'):
+            if line.order_id.state not in ('draft', 'sent'):
                 continue
             if line._origin.id and not force_recompute:
                 continue
@@ -43,7 +43,7 @@ class SaleOrderLine(models.Model):
     def _reset_price_unit(self):
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line.order_id.state in ('sale', 'done', 'cancel'):
+            if line.order_id.state not in ('draft', 'sent'):
                 continue
             if line._origin.id and not force_recompute:
                 continue
@@ -69,7 +69,7 @@ class SaleOrderLine(models.Model):
         super()._compute_discount()
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line.order_id.state in ('sale', 'done', 'cancel'):
+            if line.order_id.state not in ('draft', 'sent'):
                 continue
             if line._origin.id and not force_recompute:
                 line.discount = line._origin.discount

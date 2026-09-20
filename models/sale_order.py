@@ -92,7 +92,7 @@ class SaleOrder(models.Model):
             siblings = self.env['sale.order'].search([
                 ('opportunity_id', '=', order.opportunity_id.id),
                 ('id', '!=', order.id),
-                ('state', 'not in', ['sale', 'done', 'cancel']),
+                ('state', 'not in', ['sale', 'cancel']),
             ])
             if siblings:
                 siblings.action_cancel()

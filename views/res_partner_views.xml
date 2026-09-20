@@ -6,6 +6,9 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="base.view_partner_form"/>
             <field name="arch" type="xml">
+                <xpath expr="//field[@name='phone'][1]" position="attributes">
+                    <attribute name="required">1</attribute>
+                </xpath>
                 <xpath expr="//div[@name='partner_address_country']/../../.." position="after">
                     <div class="row g-3">
                         <div class="col-12">

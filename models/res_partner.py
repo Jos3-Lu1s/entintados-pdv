@@ -27,7 +27,7 @@ GENERIC_RFCS = {
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    phone = fields.Char(required=True)
+    phone = fields.Char()
 
     is_customer = fields.Boolean(
         string="Cliente",

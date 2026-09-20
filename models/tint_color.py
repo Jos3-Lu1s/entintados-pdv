@@ -27,7 +27,7 @@ class TintColor(models.Model):
         string="Fórmulas",
         help="Fórmulas de entintado registradas para este color.")
     formula_count = fields.Integer(
-        string="Fórmulas", compute='_compute_formula_count',
+        string="Número de fórmulas", compute='_compute_formula_count',
         help="Número de fórmulas registradas para este color.")
     has_formula = fields.Boolean(
         string="Tiene fórmula", compute='_compute_has_formula', store=True,
