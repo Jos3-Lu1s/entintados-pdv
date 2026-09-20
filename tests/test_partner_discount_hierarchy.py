@@ -290,3 +290,177 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         wizard.action_apply_custom()
         self.assertEqual(line1.price_unit, 300.0)
         self.assertEqual(line1.discount, 0.0)
+
+    def test_sale_order_line_change_product_reactivity(self):
+        """Verificar que al cambiar product_id en una línea existente, el precio y descuento se actualicen de inmediato."""
+        self.partner.discount_rule_ids.unlink()
+
+        # Prod 1: Precio fijo pactado de $320.00
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 320.0,
+        })
+        # Línea 2: Descuento 15.0% (aplica a Prod 2, list_price=800.0)
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '1_line',
+            'rule_type': 'discount',
+            'line_id': self.line_2.id,
+            'discount': 15.0,
+        })
+
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        self.assertEqual(line.price_unit, 320.0)
+        self.assertEqual(line.discount, 0.0)
+
+        # 1. Cambiar producto a Prod 2 (sin precio fijo, pero con descuento por línea del 15%)
+        line.product_id = self.prod_2
+        line._onchange_product_id()
+        self.assertEqual(line.price_unit, 800.0, "Debe restablecer el precio de lista de Prod 2.")
+        self.assertEqual(line.discount, 15.0, "Debe calcular el 15% de descuento correspondiente a la Línea 2.")
+
+        # 2. Agregar regla de precio fijo para Prod 3 ($75.00) y cambiar a Prod 3
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_3.id,
+            'fixed_price': 75.0,
+        })
+        line.product_id = self.prod_3
+        line._onchange_product_id()
+        self.assertEqual(line.price_unit, 75.0, "Debe aplicar el precio fijo pactado de Prod 3.")
+        self.assertEqual(line.discount, 0.0, "El descuento debe ser 0.0% para líneas con precio fijo.")
+
+    def test_sale_order_change_partner_reactivity(self):
+        """Verificar que al cambiar de contacto en la cabecera, todas las líneas recalculen precio y descuento."""
+        self.partner.discount_rule_ids.unlink()
+
+        # Configurar Cliente A (self.partner): Prod 1 precio fijo $320, descuento global 5%
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 320.0,
+        })
+
+        # Crear Cliente B: Prod 1 precio fijo $450, descuento global 10%
+        partner_b = self.partners.create({
+            'name': 'Cliente B Mayorista',
+            'is_customer': True,
+            'discount': 0.10,  # 10%
+            'phone': '9876543210',
+        })
+        self.rules.create({
+            'partner_id': partner_b.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 450.0,
+        })
+
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line1 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        line2 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_3.id,
+            'product_uom_qty': 1.0,
+        })
+
+        # Verificar valores iniciales con Cliente A
+        self.assertEqual(line1.price_unit, 320.0)
+        self.assertEqual(line1.discount, 0.0)
+        self.assertEqual(line2.price_unit, 100.0)  # list_price de prod_3
+        self.assertEqual(line2.discount, 5.0)     # fallback de Cliente A
+
+        # Cambiar a Cliente B
+        order.partner_id = partner_b
+        order._onchange_partner_id_entintados_rules()
+
+        # Verificar que ambas líneas se actualizaron a las condiciones de Cliente B
+        self.assertEqual(line1.price_unit, 450.0, "La línea 1 debe actualizarse al precio fijo acordado con Cliente B.")
+        self.assertEqual(line1.discount, 0.0)
+        self.assertEqual(line2.price_unit, 100.0)
+        self.assertEqual(line2.discount, 10.0, "La línea 2 debe actualizarse al fallback global del 10% de Cliente B.")
+
+    def test_commercial_agreement_change_does_not_mutate_existing_records(self):
+        """Verificar que cambiar el precio o descuento en los acuerdos comerciales del cliente
+        NO modifique las cotizaciones u órdenes ya existentes, ni al modificar cantidades en líneas guardadas,
+        pero sí aplique a las cotizaciones y líneas que se creen después."""
+        self.partner.discount_rule_ids.unlink()
+
+        # Configurar acuerdo inicial para Prod 1: Precio fijo $300.00
+        rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 300.0,
+        })
+
+        # 1. Crear cotización previa
+        order_previa = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line_previa = self.env['sale.order.line'].create({
+            'order_id': order_previa.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        self.assertEqual(line_previa.price_unit, 300.0, "La cotización previa debe tomar el precio pactado inicial de $300.")
+        self.assertEqual(line_previa.discount, 0.0)
+
+        # 2. Modificar el acuerdo comercial en la ficha del cliente a $420.00
+        rule.write({'fixed_price': 420.0})
+        self.env.flush_all()
+        self.env.invalidate_all()
+
+        # 3. Validar que la cotización previa conserva estrictamente su precio pactado inicial ($300.00)
+        line_previa_reloaded = self.env['sale.order.line'].browse(line_previa.id)
+        self.assertEqual(
+            line_previa_reloaded.price_unit,
+            300.0,
+            "Al modificar el acuerdo del cliente, las cotizaciones existentes NO deben mutar su precio unitario.",
+        )
+
+        # 4. Modificar la cantidad en la cotización previa (de 1.0 a 5.0) y verificar que permanece congelada en $300.00
+        line_previa_reloaded.product_uom_qty = 5.0
+        line_previa_reloaded._compute_price_unit()
+        self.assertEqual(
+            line_previa_reloaded.price_unit,
+            300.0,
+            "Al modificar la cantidad en una línea existente de cotización en borrador, se debe conservar el precio histórico.",
+        )
+
+        # 5. Crear una NUEVA cotización posterior y verificar que sí toma el nuevo precio pactado ($420.00)
+        order_nueva = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line_nueva = self.env['sale.order.line'].create({
+            'order_id': order_nueva.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        self.assertEqual(
+            line_nueva.price_unit,
+            420.0,
+            "Las cotizaciones o líneas creadas después del cambio deben tomar el nuevo acuerdo de $420.",
+        )
+        self.assertEqual(line_nueva.discount, 0.0)
