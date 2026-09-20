@@ -42,6 +42,31 @@ class SaleOrderLine(models.Model):
         ondelete='set null',
     )
 
+    def write(self, vals):
+        if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
+            for line in self:
+                product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else line.product_id
+                if product and product.type != 'service' and line.order_id.partner_id:
+                    rule = line.order_id.partner_id._get_partner_pricing_rule(product)
+                    if rule.get('type') == 'fixed_price':
+                        vals.setdefault('price_unit', rule['price'])
+                        vals['technical_price_unit'] = rule['price']
+                        vals['discount'] = 0.0
+                        vals['pricing_rule_type'] = 'fixed_price'
+                        vals['pricing_rule_origin'] = rule.get('origin_label') or 'Precio Fijo'
+                        vals['pricing_rule_id'] = rule.get('rule') and rule['rule'].id or False
+                    elif rule.get('type') == 'discount':
+                        vals['discount'] = rule['discount']
+                        vals['pricing_rule_type'] = rule.get('origin_type') or 'product'
+                        vals['pricing_rule_origin'] = rule.get('origin_label') or ''
+                        vals['pricing_rule_id'] = rule.get('rule') and rule['rule'].id or False
+                    else:
+                        vals['discount'] = 0.0
+                        vals['pricing_rule_type'] = 'none'
+                        vals['pricing_rule_origin'] = ''
+                        vals['pricing_rule_id'] = False
+        return super().write(vals)
+
     @api.onchange('product_id')
     def _onchange_product_id(self):
         super()._onchange_product_id()
@@ -63,7 +88,7 @@ class SaleOrderLine(models.Model):
         for line in self:
             if line.order_id.state not in ('draft', 'sent'):
                 continue
-            if line._origin.id and not force_recompute:
+            if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
                 continue
             if (
                 line.product_id
@@ -84,7 +109,7 @@ class SaleOrderLine(models.Model):
         for line in self:
             if line.order_id.state not in ('draft', 'sent'):
                 continue
-            if line._origin.id and not force_recompute:
+            if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
                 continue
             super(SaleOrderLine, line)._reset_price_unit()
             if (
@@ -113,7 +138,7 @@ class SaleOrderLine(models.Model):
         for line in self:
             if line.order_id.state not in ('draft', 'sent'):
                 continue
-            if line._origin.id and not force_recompute:
+            if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
                 line.discount = line._origin.discount
                 line.pricing_rule_type = line._origin.pricing_rule_type or 'none'
                 line.pricing_rule_origin = line._origin.pricing_rule_origin or ''

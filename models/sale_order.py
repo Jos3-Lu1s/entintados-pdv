@@ -18,11 +18,13 @@ class SaleOrder(models.Model):
         return orders
 
     def write(self, vals):
+        if 'partner_id' in vals:
+            self = self.with_context(force_price_recomputation=True)
         res = super().write(vals)
         for order in self:
             if 'opportunity_id' in vals:
                 order._sync_opportunity_stage()
-            if 'partner_id' in vals and order.state == 'draft':
+            if 'partner_id' in vals and order.state in ('draft', 'sent'):
                 order._recompute_pricing_rules()
             if vals.get('state') == 'sale' and order.state == 'sale':
                 order._cancel_sibling_quotations()

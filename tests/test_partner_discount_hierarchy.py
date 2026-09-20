@@ -634,3 +634,147 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertIn('pricing_rule_origin', loaded_fields)
         self.assertIn('pricing_rule_id', loaded_fields)
 
+    def test_sent_quotation_change_partner_updates_pricing_rule_origin(self):
+        """Reproducir bug: en cotización 'sent', cambiar partner_id debe actualizar precio, descuento y pricing_rule_origin."""
+        self.partner.discount_rule_ids.unlink()
+        fixed_rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 350.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        self.assertEqual(line.price_unit, 350.0)
+        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+
+        # Pasar la cotización a estado 'sent'
+        order.state = 'sent'
+
+        # Crear partner B con descuento global del 10%
+        partner_b = self.partners.create({
+            'name': 'Cliente B Sent',
+            'is_customer': True,
+            'discount': 0.10,
+        })
+
+        # Cambiar el cliente en la cotización en estado 'sent' (como lo hace el guardado en UI)
+        order.write({'partner_id': partner_b.id})
+
+        # Forzar recarga desde la base de datos para asegurar que se persistió en PostgreSQL
+        line.invalidate_recordset()
+
+        # Verificar que el precio se restablece al de lista (500), el descuento es 10% y el badge refleja 'Desc. Global Cliente (10.0%)'
+        self.assertEqual(line.price_unit, 500.0, "El precio unitario debe restablecerse al precio de lista.")
+        self.assertEqual(line.discount, 10.0, "El descuento debe actualizarse al 10% de partner_b.")
+        self.assertEqual(line.pricing_rule_origin, 'Desc. Global Cliente (10.0%)', "El badge de Origen Acuerdo no debe desaparecer ni revertirse al valor anterior.")
+
+    def test_sent_quotation_change_partner_with_onchange_and_save(self):
+        """Simular el ciclo completo del cliente web en estado 'sent': onchange + save con líneas."""
+        self.partner.discount_rule_ids.unlink()
+        fixed_rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 340.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        self.assertEqual(line.price_unit, 340.0)
+        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+
+        order.state = 'sent'
+
+        # Partner C con precio fijo diferente para prod_1 ($410.0)
+        partner_c = self.partners.create({
+            'name': 'Cliente C Sent',
+            'is_customer': True,
+        })
+        self.rules.create({
+            'partner_id': partner_c.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 410.0,
+        })
+
+        # 1. Simulación Onchange en UI
+        order.partner_id = partner_c
+        order._onchange_partner_id_entintados_rules()
+        self.assertEqual(line.price_unit, 410.0)
+        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+
+        # 2. Simulación de Guardar (Save) desde el cliente web
+        order.write({
+            'partner_id': partner_c.id,
+            'order_line': [(1, line.id, {'price_unit': line.price_unit})],
+        })
+
+        line.invalidate_recordset()
+        self.assertEqual(line.price_unit, 410.0, "El precio acordado con partner_c ($410) debe persistir.")
+        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo', "El badge 'Precio Fijo' debe persistir.")
+        self.assertEqual(line.pricing_rule_type, 'fixed_price')
+
+    def test_sent_quotation_change_product_on_existing_line(self):
+        """Validar cambio de producto en línea existente en cotización 'sent' con persistencia."""
+        self.partner.discount_rule_ids.unlink()
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 330.0,
+        })
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '1_line',
+            'rule_type': 'discount',
+            'line_id': self.line_2.id,
+            'discount': 15.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+        })
+        line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_1.id,
+            'product_uom_qty': 1.0,
+        })
+        order.state = 'sent'
+        self.assertEqual(line.price_unit, 330.0)
+        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+
+        # Cambiar de prod_1 a prod_2 en la UI (onchange)
+        line.product_id = self.prod_2
+        line._onchange_product_id()
+        self.assertEqual(line.price_unit, 800.0)
+        self.assertEqual(line.discount, 15.0)
+        self.assertEqual(line.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (15.0%)")
+
+        # Guardar en base de datos
+        order.write({
+            'order_line': [(1, line.id, {'product_id': self.prod_2.id, 'price_unit': 800.0})],
+        })
+        line.invalidate_recordset()
+        self.assertEqual(line.price_unit, 800.0)
+        self.assertEqual(line.discount, 15.0)
+        self.assertEqual(line.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (15.0%)")
+
+
+
+
+
