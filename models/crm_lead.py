@@ -422,7 +422,7 @@ class CrmLead(models.Model):
     )
 
     picking_count = fields.Integer(
-        string="Salidas",
+        string="Número de salidas",
         compute="_compute_picking_count",
     )
 

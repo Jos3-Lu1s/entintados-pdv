@@ -202,21 +202,34 @@
                                 <thead class="table-light border-bottom">
                                     <tr>
                                         <th class="ps-3 py-2 text-dark text-uppercase text-xs fw-bold">Colorante</th>
-                                        <th class="text-end py-2 text-dark text-uppercase text-xs fw-bold" style="width: 140px;">Dosis</th>
+                                        <th class="text-end py-2 pe-3 text-dark text-uppercase text-xs fw-bold" style="width: 210px;">Dosis</th>
                                         <th class="text-center py-2 text-dark text-uppercase text-xs fw-bold" style="width: 50px;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr t-foreach="state.newFormulaLines" t-as="line" t-key="line_index" class="o-tint-dose-row">
+                                    <tr t-foreach="state.newFormulaLines" t-as="line" t-key="line_index"
+                                        class="o-tint-dose-row"
+                                        t-att-class="{ 'o-tint-row-highlighted': line.highlighted }">
                                         <td class="ps-3 fw-semibold text-dark">
                                             <i class="fa fa-tint text-primary me-2"/>
                                             <t t-esc="line.colorantName"/>
                                         </td>
-                                        <td class="text-end">
-                                            <span class="badge rounded-pill bg-primary-subtle text-primary fw-bold px-2 py-1 me-1">
-                                                <t t-esc="formatPoints(line.points)"/>
-                                            </span>
-                                            <small class="text-secondary-emphasis">(<t t-esc="line.points"/> Pts)</small>
+                                        <td class="text-end pe-3">
+                                            <div class="d-flex align-items-center justify-content-end gap-2">
+                                                <span class="badge rounded-pill bg-primary-subtle text-primary fw-semibold px-2 py-1 text-xxs text-nowrap"
+                                                      title="Equivalencia en onzas/puntos">
+                                                    <t t-esc="formatPoints(line.points)"/>
+                                                </span>
+                                                <div class="input-group input-group-sm o-tint-inline-points-group" style="width: 105px;">
+                                                    <input type="number"
+                                                           class="form-control form-control-sm text-end fw-bold o-tint-dose-input"
+                                                           min="0.0001"
+                                                           step="any"
+                                                           t-att-value="line.points"
+                                                           t-on-input="(ev) => this.onUpdateColorantPoints(line, ev)"/>
+                                                    <span class="input-group-text px-1 text-xxs fw-semibold bg-light text-secondary-emphasis">Pts</span>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td class="text-center">
                                             <button type="button" class="btn btn-sm btn-icon text-danger p-1 rounded-circle hover-bg-danger-subtle border-0"
@@ -230,9 +243,11 @@
                                 <tfoot class="table-light border-top">
                                     <tr class="fw-bold">
                                         <td class="ps-3 text-dark">Total Colorantes</td>
-                                        <td class="text-end">
-                                            <span class="text-primary fs-6 me-1"><t t-esc="formatPoints(newFormulaTotalPoints)"/></span>
-                                            <small class="text-secondary-emphasis">(<t t-esc="newFormulaTotalPoints"/> Pts)</small>
+                                        <td class="text-end pe-3">
+                                            <div class="d-flex align-items-center justify-content-end gap-2">
+                                                <span class="text-primary fs-6 me-1"><t t-esc="formatPoints(newFormulaTotalPoints)"/></span>
+                                                <small class="text-secondary-emphasis">(<t t-esc="newFormulaTotalPoints"/> Pts)</small>
+                                            </div>
                                         </td>
                                         <td></td>
                                     </tr>

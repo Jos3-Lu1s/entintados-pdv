@@ -28,3 +28,4 @@ access_sale_loyalty_reward_wizard_user,sale.loyalty_wizard (lectura usuario inte
 access_sale_loyalty_reward_wizard_manager,sale.loyalty_wizard (administrador de catalogo),model_sale_loyalty_reward_wizard,entintados_pdv.group_tint_manager,1,1,1,1
 access_crm_field_visit_confirm_wizard_user,crm.field.visit.confirm.wizard (usuario interno),model_crm_field_visit_confirm_wizard,base.group_user,1,1,1,1
 access_crm_material_request_partner_wizzard_user,crm.material.request.partner.wizzard (usuario interno),model_crm_material_request_partner_wizzard,base.group_user,1,1,1,1
+access_res_partner_discount_rule_user,res.partner.discount.rule (usuario interno),model_res_partner_discount_rule,base.group_user,1,1,1,1

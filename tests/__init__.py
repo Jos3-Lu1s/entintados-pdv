@@ -13,3 +13,4 @@ from . import test_crm_stage_validation
 from . import test_tint_pricing
 from . import test_tint_schema_lines_views
 from . import test_tint_pos_config
+from . import test_partner_discount_hierarchy

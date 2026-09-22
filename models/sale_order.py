@@ -9,6 +9,14 @@ CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_qu
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
+
+    quotation_ref = fields.Char(
+        string="Referencia",
+        tracking=True,
+        copy=True,
+        index=True,
+        help="Referencia interna del concepto, proyecto u obra cotizada",
+    )
     
     @api.model_create_multi
     def create(self, vals_list):
@@ -18,16 +26,42 @@ class SaleOrder(models.Model):
         return orders
 
     def write(self, vals):
+        if 'partner_id' in vals:
+            self = self.with_context(force_price_recomputation=True)
         res = super().write(vals)
         for order in self:
             if 'opportunity_id' in vals:
                 order._sync_opportunity_stage()
+            if 'partner_id' in vals and order.state in ('draft', 'sent'):
+                order._recompute_pricing_rules()
             if vals.get('state') == 'sale' and order.state == 'sale':
                 order._cancel_sibling_quotations()
                 order._advance_opportunity_to_closed()
                 if order.opportunity_id:
                     order._schedule_confirm_quotation_activity()
         return res
+
+    @api.onchange('partner_id')
+    def _onchange_partner_id_entintados_rules(self):
+        for order in self:
+            if not order.partner_id or order.state not in ('draft', 'sent'):
+                continue
+            if order.partner_id.property_product_pricelist:
+                order.pricelist_id = order.partner_id.property_product_pricelist
+            order._recompute_pricing_rules()
+            order.show_update_pricelist = False
+
+    def _recompute_pricing_rules(self):
+        for order in self:
+            lines_to_update = order.order_line.filtered(
+                lambda l: l.product_id
+                and not l.display_type
+                and not getattr(l, 'is_reward_line', False)
+            )
+            if lines_to_update:
+                lines_to_update.with_context(force_price_recomputation=True)._reset_price_unit()
+                lines_to_update.with_context(force_price_recomputation=True)._compute_price_unit()
+                lines_to_update.with_context(force_price_recomputation=True)._compute_discount()
 
     def _sync_opportunity_stage(self):
         """Al crear/vincular una cotización, mueve la oportunidad a la etapa de Cotización."""
@@ -68,7 +102,7 @@ class SaleOrder(models.Model):
             siblings = self.env['sale.order'].search([
                 ('opportunity_id', '=', order.opportunity_id.id),
                 ('id', '!=', order.id),
-                ('state', 'not in', ['sale', 'done', 'cancel']),
+                ('state', 'not in', ['sale', 'cancel']),
             ])
             if siblings:
                 siblings.action_cancel()

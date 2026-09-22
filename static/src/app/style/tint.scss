@@ -692,3 +692,54 @@ $tint-breakpoint-lg: 1199.98px;
     }
 }
 
+/* ==========================================================================
+   Edición inline de puntos de colorante (TintCreateColorPopup)
+   ========================================================================== */
+.o-tint-inline-points-group {
+    .o-tint-dose-input {
+        padding: 0.25rem 0.5rem;
+        font-family: var(--font-monospace, monospace);
+        font-size: 0.875rem;
+        border-color: #cbd5e1;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+        &:focus {
+            border-color: var(--primary, #714B67);
+            box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.2);
+            outline: none;
+        }
+
+        &::-webkit-inner-spin-button,
+        &::-webkit-outer-spin-button {
+            opacity: 0.5;
+        }
+    }
+
+    .input-group-text {
+        font-size: 0.7rem;
+        border-color: #cbd5e1;
+        background-color: #f1f5f9;
+    }
+}
+
+/* Animación de resaltado al actualizar o sobrescribir una dosis */
+@keyframes tint-row-pulse {
+    0% {
+        background-color: rgba(113, 75, 103, 0.25);
+    }
+    50% {
+        background-color: rgba(113, 75, 103, 0.12);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+.o-tint-dose-row {
+    transition: background-color 0.3s ease;
+
+    &.o-tint-row-highlighted {
+        animation: tint-row-pulse 1s ease-in-out;
+    }
+}
+

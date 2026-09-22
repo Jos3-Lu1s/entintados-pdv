@@ -31,7 +31,7 @@ class TintSchema(models.Model):
         compute='_compute_counts',
     )
     product_count = fields.Integer(
-        string='Productos',
+        string='Número de productos',
         compute='_compute_counts',
     )
     notes = fields.Html(
