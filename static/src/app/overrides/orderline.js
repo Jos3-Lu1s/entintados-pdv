@@ -22,6 +22,7 @@ patch(Orderline.prototype, {
         if (!this.props.basic_receipt && this.props.mode === "display") {
             values.pricingRuleOrigin = line.pricing_rule_origin || null;
             values.pricingRuleType = line.pricing_rule_type || null;
+            values.hasPricingRule = Boolean(line.pricing_rule_origin);
         }
 
         return values;

@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
     <t t-name="entintados_pdv.Orderline" t-inherit="point_of_sale.Orderline" t-inherit-mode="extension" owl="1">
-        <xpath expr="//*[hasclass('info-list')]" position="inside">
-            <li t-if="lineScreenValues.pricingRuleOrigin" class="pricing-rule-origin my-1">
-                <span class="badge rounded-pill text-wrap text-start" t-att-class="{
-                    'text-bg-success': lineScreenValues.pricingRuleType === 'fixed_price',
-                    'text-bg-info': lineScreenValues.pricingRuleType !== 'fixed_price' and lineScreenValues.pricingRuleType !== 'promo',
-                    'text-bg-warning': lineScreenValues.pricingRuleType === 'promo'
-                }">
-                    <i class="fa fa-tag me-1"/>
-                    <t t-esc="lineScreenValues.pricingRuleOrigin"/>
-                </span>
+        <xpath expr="//li[@t-if='vals.discount']" position="replace">
+            <li t-if="vals.pricingRuleOrigin and vals.pricingRuleType === 'fixed_price'" class="price-per-unit pricing-rule-indicator">
+                <i class="fa fa-tag pe-1"/>
+                <t t-esc="vals.pricingRuleOrigin"/>
+            </li>
+            <li t-elif="vals.pricingRuleOrigin and vals.discount" class="price-per-unit pricing-rule-indicator">
+                <i class="fa fa-tag pe-1"/>
+                <t t-esc="vals.pricingRuleOrigin"/> <span>sobre</span> <t t-esc="vals.noDiscountPrice"/>
+            </li>
+            <li t-elif="vals.discount" class="price-per-unit">
+                <i class="fa fa-tag pe-1"/><em><t t-esc="vals.discount"/>% </em> discount off on <t t-esc="vals.noDiscountPrice"/>
             </li>
         </xpath>
     </t>
