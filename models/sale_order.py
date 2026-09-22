@@ -9,6 +9,14 @@ CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_qu
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
+
+    quotation_ref = fields.Char(
+        string="Referencia",
+        tracking=True,
+        copy=True,
+        index=True,
+        help="Referencia interna del concepto, proyecto u obra cotizada",
+    )
     
     @api.model_create_multi
     def create(self, vals_list):
