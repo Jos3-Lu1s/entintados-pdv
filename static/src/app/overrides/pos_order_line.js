@@ -75,6 +75,16 @@ patch(PosOrderline.prototype, {
             }
         }
 
+        const order = this.order_id || this.order;
+        if (order) {
+            if (typeof order._entintadosCheckActivePromoQualification === "function") {
+                order._entintadosCheckActivePromoQualification();
+            }
+            if (typeof order._entintadosReconcileDiscounts === "function") {
+                order._entintadosReconcileDiscounts();
+            }
+        }
+
         return res;
     },
 
@@ -184,6 +194,23 @@ patch(PosOrderline.prototype, {
         }, 0);
 
         return selfPrice + comboSum;
+    },
+
+    export_as_JSON() {
+        const json = super.export_as_JSON ? super.export_as_JSON() : {};
+        json.pricing_rule_type = this.pricing_rule_type || "none";
+        json.pricing_rule_origin = this.pricing_rule_origin || "";
+        json.pricing_rule_id = this.pricing_rule_id || false;
+        return json;
+    },
+
+    init_from_JSON(json) {
+        if (super.init_from_JSON) {
+            super.init_from_JSON(json);
+        }
+        this.pricing_rule_type = json.pricing_rule_type || "none";
+        this.pricing_rule_origin = json.pricing_rule_origin || "";
+        this.pricing_rule_id = json.pricing_rule_id || false;
     },
 });
 

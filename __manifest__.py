@@ -55,6 +55,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades
             "entintados_pdv/static/src/app/utils/tint_points.js",
+            "entintados_pdv/static/src/app/utils/pricing_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             # Pantalla de seleccion de color
@@ -73,6 +74,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_store.js",
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
             "entintados_pdv/static/src/app/overrides/orderline.js",
+            "entintados_pdv/static/src/app/overrides/orderline.xml",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.xml",
             # Widgets de campos reutilizables en formularios del POS

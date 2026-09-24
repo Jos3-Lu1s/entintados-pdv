@@ -5,8 +5,8 @@ from odoo.tests.common import TransactionCase, tagged
 
 @tagged('post_install', '-at_install')
 class TestTintSizeCode(TransactionCase):
-    """ Normalización del código de presentación: solo trim (sin cambiar
-    mayúsculas/minúsculas).
+    """ Normalización del código de presentación: trim y mayúsculas vía
+    TintCodeMixin.
 
     Se usan códigos fuera del juego precargado (L, G, Q) para que la
     restricción de unicidad de `code` no interfiera con lo que aquí se mide.
@@ -18,7 +18,7 @@ class TestTintSizeCode(TransactionCase):
             'code': '  z  ',
             'volume_liters': 0.5,
         })
-        self.assertEqual(size.code, 'z')
+        self.assertEqual(size.code, 'Z')
 
     def test_size_code_trimmed_on_write(self):
         size = self.env['tint.size'].create({
@@ -27,9 +27,9 @@ class TestTintSizeCode(TransactionCase):
             'volume_liters': 0.5,
         })
         size.write({'code': '  y  '})
-        self.assertEqual(size.code, 'y')
+        self.assertEqual(size.code, 'Y')
 
     def test_size_code_trimmed_onchange(self):
         size = self.env['tint.size'].new({'code': '  z  '})
-        size._onchange_code_trim()
-        self.assertEqual(size.code, 'z')
+        size._onchange_code_normalize()
+        self.assertEqual(size.code, 'Z')

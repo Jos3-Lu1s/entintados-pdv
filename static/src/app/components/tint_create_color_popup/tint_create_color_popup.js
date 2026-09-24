@@ -197,19 +197,41 @@ export class TintCreateColorPopup extends Component {
 
         const existing = this.state.newFormulaLines.find((l) => l.colorantId === colorantId);
         if (existing) {
-            existing.points = Number((existing.points + points).toFixed(4));
+            existing.points = Number(points.toFixed(4));
+            existing.highlighted = true;
+            if (existing._highlightTimeout) {
+                clearTimeout(existing._highlightTimeout);
+            }
+            existing._highlightTimeout = setTimeout(() => {
+                existing.highlighted = false;
+            }, 1000);
         } else {
             this.state.newFormulaLines.push({
                 colorantId,
                 colorantName: colorant.display_name || colorant.name,
-                points,
+                points: Number(points.toFixed(4)),
+                highlighted: false,
             });
         }
         this.state.selectedColorantId = "";
         this.state.newColorantPoints = 1;
     }
 
+    onUpdateColorantPoints(line, event) {
+        const rawValue = event.target.value;
+        if (rawValue === "" || rawValue === null || rawValue === undefined) {
+            line.points = 0;
+            return;
+        }
+        const val = parseFloat(rawValue);
+        line.points = !isNaN(val) && val >= 0 ? val : 0;
+    }
+
     removeColorantLine(index) {
+        const line = this.state.newFormulaLines[index];
+        if (line?._highlightTimeout) {
+            clearTimeout(line._highlightTimeout);
+        }
         this.state.newFormulaLines.splice(index, 1);
     }
 
@@ -224,6 +246,9 @@ export class TintCreateColorPopup extends Component {
             return false;
         }
         if (!this.state.newFormulaLines.length || this.newFormulaTotalPoints <= 0) {
+            return false;
+        }
+        if (this.state.newFormulaLines.some((l) => !l.points || l.points <= 0 || isNaN(l.points))) {
             return false;
         }
         if (this.isOverCapacity) {
@@ -262,6 +287,17 @@ export class TintCreateColorPopup extends Component {
 
         if (!this.state.newFormulaLines.length) {
             this.state.createColorError = _t("Debes agregar al menos un colorante a la fórmula.");
+            return;
+        }
+
+        const invalidLine = this.state.newFormulaLines.find(
+            (l) => !l.points || l.points <= 0 || isNaN(l.points)
+        );
+        if (invalidLine) {
+            this.state.createColorError = _t(
+                "Todos los colorantes deben tener una dosis válida mayor a cero (colorante «%s»).",
+                invalidLine.colorantName || invalidLine.colorantId
+            );
             return;
         }
 
@@ -333,7 +369,7 @@ export class TintCreateColorPopup extends Component {
             const lineValsList = this.state.newFormulaLines.map((l, idx) => ({
                 formula_id: formulaId,
                 colorant_id: l.colorantId,
-                points: l.points,
+                points: Number(parseFloat(l.points).toFixed(4)),
                 sequence: (idx + 1) * 10,
             }));
             if (this.pos.data && typeof this.pos.data.create === "function") {
