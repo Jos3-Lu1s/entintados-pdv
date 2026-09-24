@@ -145,10 +145,31 @@ class SaleOrder(models.Model):
     def action_open_reward_wizard(self):
         self.ensure_one()
         self._update_programs_and_rewards()
-        claimable_rewards = self._get_claimable_rewards()
-        if not claimable_rewards:
+        claimable_rewards = self.with_context(include_applied_rewards=True)._get_claimable_rewards()
+        has_active_promo = any(
+            l.pricing_rule_type == 'promo' or getattr(l, 'is_reward_line', False)
+            for l in self.order_line
+        )
+        if not claimable_rewards and not has_active_promo:
             return True
-        return self.env['ir.actions.actions']._for_xml_id('sale_loyalty.sale_loyalty_reward_wizard_action')
+        action = self.env['ir.actions.actions']._for_xml_id('sale_loyalty.sale_loyalty_reward_wizard_action')
+        action_context = {}
+        if isinstance(action.get('context'), dict):
+            action_context = action['context']
+        elif isinstance(action.get('context'), str):
+            try:
+                from ast import literal_eval
+                action_context = literal_eval(action['context'])
+            except Exception:
+                action_context = {}
+        ctx = {**self.env.context, **action_context}
+        ctx.update({
+            'default_order_id': self.id,
+            'default_loyalty_action_type': 'discount' if has_active_promo else 'reward',
+            'include_applied_rewards': True,
+        })
+        action['context'] = ctx
+        return action
 
     def _get_reward_values_discount(self, reward, coupon, **kwargs):
         self.ensure_one()
@@ -226,6 +247,8 @@ class SaleOrder(models.Model):
                     'pricing_rule_type': 'promo',
                     'pricing_rule_origin': promo_origin,
                     'pricing_rule_id': False,
+                    'coupon_id': coupon.id if coupon else False,
+                    'reward_identifier_code': 'gift_product',
                     'tax_ids': [Command.set(taxes.ids)],
                 }]
 
@@ -240,6 +263,8 @@ class SaleOrder(models.Model):
             'pricing_rule_type': 'promo',
             'pricing_rule_origin': promo_origin,
             'pricing_rule_id': False,
+            'coupon_id': coupon.id if coupon else False,
+            'reward_identifier_code': 'gift_product',
             'tax_ids': [Command.set(taxes.ids)],
         }]
 
@@ -248,6 +273,8 @@ class SaleOrder(models.Model):
 
     def _get_claimable_rewards(self, forced_coupons=None):
         result = super()._get_claimable_rewards(forced_coupons=forced_coupons)
+        if self.env.context.get('include_applied_rewards'):
+            return result
         for coupon, rewards in list(result.items()):
             for reward in list(rewards):
                 if reward.reward_type == 'discount' and not reward.program_id.is_payment_program:

@@ -3,7 +3,7 @@
 from odoo.tests.common import TransactionCase, tagged
 
 
-@tagged('post_install', '-at_install')
+@tagged('post_install', '-at_install', 'loyalty_promotion')
 class TestLoyaltyPromotionInline(TransactionCase):
     """Pruebas automatizadas para promociones aplicadas directamente en línea y exclusividad con acuerdos comerciales."""
 
@@ -302,3 +302,186 @@ class TestLoyaltyPromotionInline(TransactionCase):
         self.assertEqual(line.discount, 15.0, "Debe restaurarse el 15.0% de acuerdo comercial.")
         self.assertEqual(line.pricing_rule_type, 'line')
         self.assertIn("Desc. Línea", line.pricing_rule_origin)
+
+    def test_06_action_open_reward_wizard_with_active_promo(self):
+        """Caso 6: Verificar que al presionar el botón 'Recompensa' con una promoción activa
+        en la orden, se abre el wizard (retorna action dict) con default 'discount'."""
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+            'order_line': [(0, 0, {
+                'product_id': self.prod_decor.id,
+                'product_uom_qty': 2.0,
+            })],
+        })
+        # Inicialmente sin promoción: abre wizard con default 'reward'
+        action_initial = order.action_open_reward_wizard()
+        self.assertIsInstance(action_initial, dict, "Debe retornar el diccionario de la acción.")
+        self.assertEqual(action_initial.get('context', {}).get('default_loyalty_action_type'), 'reward')
+
+        # Aplicar promoción
+        wizard = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).create({
+            'loyalty_action_type': 'reward',
+            'selected_reward_id': self.reward_20pc.id,
+        })
+        wizard.action_apply_custom()
+        self.assertEqual(order.order_line[0].pricing_rule_type, 'promo')
+
+        # Con promoción activa: debe abrir el wizard con default 'discount' e include_applied_rewards
+        action_promo = order.action_open_reward_wizard()
+        self.assertIsInstance(action_promo, dict, "Debe abrir el asistente aun con promoción activa.")
+        self.assertEqual(
+            action_promo.get('context', {}).get('default_loyalty_action_type'),
+            'discount',
+            "Con promoción activa, el wizard debe preseleccionar 'discount'."
+        )
+        self.assertTrue(
+            action_promo.get('context', {}).get('include_applied_rewards'),
+            "El contexto debe indicar include_applied_rewards=True."
+        )
+
+    def test_07_wizard_default_get_preselection(self):
+        """Caso 7: Validar que default_get del wizard inicialice correctamente según haya o no promo."""
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+            'order_line': [(0, 0, {
+                'product_id': self.prod_decor.id,
+                'product_uom_qty': 2.0,
+            })],
+        })
+        # Sin promo -> 'reward'
+        res_sin_promo = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).default_get(['loyalty_action_type'])
+        self.assertEqual(res_sin_promo.get('loyalty_action_type'), 'reward')
+
+        # Con promo -> 'discount'
+        order.order_line[0].write({
+            'discount': 20.0,
+            'pricing_rule_type': 'promo',
+            'pricing_rule_origin': 'Promoción: Promo Test',
+        })
+        res_con_promo = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).default_get(['loyalty_action_type'])
+        self.assertEqual(res_con_promo.get('loyalty_action_type'), 'discount')
+
+    def test_08_full_alternation_cycle_promo_and_commercial_agreements(self):
+        """Caso 8: Ciclo completo de alternancia: Acuerdos -> Promoción -> Reversión -> Re-aplicación -> Reversión.
+        Garantiza protección continua de Precios Fijos y Colorantes en cada ciclo."""
+        order = self.sale_orders.create({
+            'partner_id': self.partner.id,
+            'order_line': [
+                (0, 0, {'product_id': self.prod_decor.id, 'product_uom_qty': 2.0}),
+                (0, 0, {'product_id': self.prod_fixed.id, 'product_uom_qty': 1.0}),
+                (0, 0, {'product_id': self.prod_colorant.id, 'product_uom_qty': 1.0}),
+            ],
+        })
+        line_decor = order.order_line.filtered(lambda l: l.product_id == self.prod_decor)
+        line_fixed = order.order_line.filtered(lambda l: l.product_id == self.prod_fixed)
+        line_color = order.order_line.filtered(lambda l: l.product_id == self.prod_colorant)
+
+        # Estado inicial (Acuerdos comerciales)
+        self.assertEqual(line_decor.discount, 15.0)
+        self.assertEqual(line_decor.pricing_rule_type, 'line')
+        self.assertEqual(line_fixed.price_unit, 50.0)
+        self.assertEqual(line_fixed.discount, 0.0)
+        self.assertEqual(line_fixed.pricing_rule_type, 'fixed_price')
+        self.assertEqual(line_color.price_unit, 15.0)
+        self.assertEqual(line_color.discount, 0.0)
+
+        # Ciclo 1: Aplicar promoción del 20%
+        order._update_programs_and_rewards()
+        wizard_promo_1 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id, include_applied_rewards=True).create({
+            'loyalty_action_type': 'reward',
+            'selected_reward_id': self.reward_20pc.id,
+        })
+        wizard_promo_1.action_apply_custom()
+        self.assertEqual(line_decor.discount, 20.0, "Ciclo 1: Debe aplicar el 20% de promo.")
+        self.assertEqual(line_decor.pricing_rule_type, 'promo')
+        self.assertEqual(line_fixed.price_unit, 50.0, "Precio fijo intacto en Ciclo 1.")
+        self.assertEqual(line_fixed.discount, 0.0)
+        self.assertEqual(line_color.discount, 0.0, "Colorante intacto en Ciclo 1.")
+
+        # Ciclo 2: Revertir a Acuerdos Comerciales
+        wizard_rev_1 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).create({
+            'loyalty_action_type': 'discount',
+        })
+        wizard_rev_1.action_apply_custom()
+        self.assertEqual(line_decor.discount, 15.0, "Ciclo 2: Debe restaurar el 15% comercial.")
+        self.assertEqual(line_decor.pricing_rule_type, 'line')
+        self.assertEqual(line_fixed.price_unit, 50.0, "Precio fijo intacto en Ciclo 2.")
+        self.assertEqual(line_color.discount, 0.0, "Colorante intacto en Ciclo 2.")
+
+        # Ciclo 3: Re-aplicar la promoción (Poder alternar)
+        action_reapply = order.action_open_reward_wizard()
+        self.assertIsInstance(action_reapply, dict, "El botón Recompensa debe abrir el wizard tras la reversión.")
+        wizard_promo_2 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id, include_applied_rewards=True).create({
+            'loyalty_action_type': 'reward',
+            'selected_reward_id': self.reward_20pc.id,
+        })
+        wizard_promo_2.action_apply_custom()
+        self.assertEqual(line_decor.discount, 20.0, "Ciclo 3: Debe volver a aplicar el 20% de promo.")
+        self.assertEqual(line_decor.pricing_rule_type, 'promo')
+        self.assertEqual(line_fixed.price_unit, 50.0, "Precio fijo intacto en Ciclo 3.")
+        self.assertEqual(line_color.discount, 0.0, "Colorante intacto en Ciclo 3.")
+
+        # Ciclo 4: Revertir nuevamente a Acuerdos Comerciales
+        wizard_rev_2 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).create({
+            'loyalty_action_type': 'discount',
+        })
+        wizard_rev_2.action_apply_custom()
+        self.assertEqual(line_decor.discount, 15.0, "Ciclo 4: Debe restaurar nuevamente el 15% comercial.")
+        self.assertEqual(line_decor.pricing_rule_type, 'line')
+        self.assertEqual(line_fixed.price_unit, 50.0, "Precio fijo intacto en Ciclo 4.")
+        self.assertEqual(line_color.discount, 0.0, "Colorante intacto en Ciclo 4.")
+
+    def test_09_free_product_reversion_to_commercial_agreements(self):
+        """Caso 9: Reversión de productos de regalo.
+        - Línea existente bonificada al 100%: no se elimina, se restaura su precio/descuento comercial.
+        - Línea de regalo agregada nueva: se elimina de la orden al revertir."""
+        # Subcaso 1: Producto existente bonificado
+        order_1 = self.sale_orders.create({
+            'partner_id': self.partner.id,
+            'order_line': [(0, 0, {
+                'product_id': self.prod_gift.id,
+                'product_uom_qty': 1.0,
+            })],
+        })
+        order_1._update_programs_and_rewards()
+        wizard_gift_1 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order_1.id, include_applied_rewards=True).create({
+            'loyalty_action_type': 'reward',
+            'selected_reward_id': self.reward_free_product.id,
+        })
+        wizard_gift_1.action_apply_custom()
+        self.assertEqual(order_1.order_line[0].discount, 100.0)
+        self.assertEqual(order_1.order_line[0].pricing_rule_type, 'promo')
+
+        # Revertir a acuerdos comerciales
+        wizard_rev_1 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order_1.id).create({
+            'loyalty_action_type': 'discount',
+        })
+        wizard_rev_1.action_apply_custom()
+        self.assertEqual(len(order_1.order_line), 1, "La línea existente no debe ser eliminada.")
+        self.assertEqual(order_1.order_line[0].discount, 0.0, "El descuento de 100% debe ser retirado.")
+        self.assertNotEqual(order_1.order_line[0].pricing_rule_type, 'promo', "El tipo ya no debe ser promo.")
+
+        # Subcaso 2: Línea de regalo agregada nueva a la orden
+        order_2 = self.sale_orders.create({
+            'partner_id': self.partner.id,
+            'order_line': [(0, 0, {
+                'product_id': self.prod_decor.id,
+                'product_uom_qty': 1.0,
+            })],
+        })
+        order_2._update_programs_and_rewards()
+        wizard_gift_2 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order_2.id, include_applied_rewards=True).create({
+            'loyalty_action_type': 'reward',
+            'selected_reward_id': self.reward_free_product.id,
+        })
+        wizard_gift_2.action_apply_custom()
+        self.assertEqual(len(order_2.order_line), 2, "Debe haberse añadido la línea de regalo.")
+
+        # Revertir a acuerdos comerciales
+        wizard_rev_2 = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order_2.id).create({
+            'loyalty_action_type': 'discount',
+        })
+        wizard_rev_2.action_apply_custom()
+        self.assertEqual(len(order_2.order_line), 1, "La línea de regalo agregada debe ser eliminada al revertir.")
+        self.assertEqual(order_2.order_line[0].product_id, self.prod_decor)
+        self.assertEqual(order_2.order_line[0].discount, 15.0, "La línea original debe conservar su acuerdo comercial.")
