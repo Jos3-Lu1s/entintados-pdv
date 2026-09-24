@@ -1,5 +1,5 @@
-from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo import models, fields, api, _, Command
+from odoo.exceptions import ValidationError, UserError
 from collections import defaultdict
 import logging
 _logger = logging.getLogger(__name__)
@@ -149,4 +149,112 @@ class SaleOrder(models.Model):
         if not claimable_rewards:
             return True
         return self.env['ir.actions.actions']._for_xml_id('sale_loyalty.sale_loyalty_reward_wizard_action')
+
+    def _get_reward_values_discount(self, reward, coupon, **kwargs):
+        self.ensure_one()
+        if reward.reward_type != 'discount' or reward.discount_mode != 'percent':
+            return super()._get_reward_values_discount(reward, coupon, **kwargs)
+
+        if reward.discount_applicability == 'order':
+            lines = self.order_line.filtered(
+                lambda l: not l.display_type
+                and not getattr(l, 'is_reward_line', False)
+                and l.product_id
+            )
+        elif reward.discount_applicability == 'specific':
+            lines = self._get_specific_discountable_lines(reward)
+        elif reward.discount_applicability == 'cheapest':
+            cheapest = self._cheapest_line(reward)
+            lines = cheapest if cheapest else self.env['sale.order.line']
+        else:
+            lines = self.env['sale.order.line']
+
+        lines_to_discount = lines.filtered(
+            lambda l: l.product_id
+            and (not getattr(l, 'is_tint_colorant', False) and getattr(l.product_id, 'tint_role', False) != 'colorant')
+            and l.pricing_rule_type != 'fixed_price'
+        )
+
+        if not lines_to_discount:
+            raise UserError(_("No hay productos aplicables para aplicar el descuento de la promoción."))
+
+        discount = min(reward.discount, 100.0)
+        origin_label = f"Promoción: {reward.program_id.name}"
+
+        for line in lines_to_discount:
+            line.discount = discount
+            line.pricing_rule_type = 'promo'
+            line.pricing_rule_origin = origin_label
+            line.pricing_rule_id = False
+
+        return []
+
+    def _get_reward_values_product(self, reward, coupon, product=None, **kwargs):
+        self.ensure_one()
+        assert reward.reward_type == 'product'
+
+        reward_products = reward.reward_product_ids
+        product = product or reward_products[:1]
+        if not product or product not in reward_products:
+            raise UserError(_("Producto no válido para reclamar."))
+
+        promo_origin = f"Promoción: {reward.program_id.name}"
+
+        # Buscar si el producto ya existe en la orden (excluyendo colorantes y precios fijos)
+        existing_line = self.order_line.filtered(
+            lambda l: l.product_id == product
+            and not l.display_type
+            and (not getattr(l, 'is_tint_colorant', False) and getattr(l.product_id, 'tint_role', False) != 'colorant')
+            and l.pricing_rule_type != 'fixed_price'
+        )[:1]
+
+        if existing_line:
+            if existing_line.product_uom_qty <= 1.0:
+                existing_line.discount = 100.0
+                existing_line.pricing_rule_type = 'promo'
+                existing_line.pricing_rule_origin = promo_origin
+                existing_line.pricing_rule_id = False
+                return []
+            else:
+                existing_line.product_uom_qty -= 1.0
+                taxes = existing_line.tax_ids or existing_line.tax_id
+                return [{
+                    'product_id': product.id,
+                    'product_uom_qty': 1.0,
+                    'price_unit': existing_line.price_unit,
+                    'discount': 100.0,
+                    'pricing_rule_type': 'promo',
+                    'pricing_rule_origin': promo_origin,
+                    'pricing_rule_id': False,
+                    'tax_ids': [Command.set(taxes.ids)],
+                }]
+
+        price_unit = product.with_company(self.company_id).lst_price
+        taxes = self.fiscal_position_id.map_tax(product.taxes_id._filter_taxes_by_company(self.company_id))
+        qty = reward.reward_product_qty or 1.0
+        return [{
+            'product_id': product.id,
+            'product_uom_qty': qty,
+            'price_unit': price_unit,
+            'discount': 100.0,
+            'pricing_rule_type': 'promo',
+            'pricing_rule_origin': promo_origin,
+            'pricing_rule_id': False,
+            'tax_ids': [Command.set(taxes.ids)],
+        }]
+
+    def _get_reward_values_free_product(self, reward, coupon, **kwargs):
+        return self._get_reward_values_product(reward, coupon, **kwargs)
+
+    def _get_claimable_rewards(self, forced_coupons=None):
+        result = super()._get_claimable_rewards(forced_coupons=forced_coupons)
+        for coupon, rewards in list(result.items()):
+            for reward in list(rewards):
+                if reward.reward_type == 'discount' and not reward.program_id.is_payment_program:
+                    promo_origin = f"Promoción: {reward.program_id.name}"
+                    if any(l.pricing_rule_type == 'promo' and l.pricing_rule_origin == promo_origin for l in self.order_line):
+                        result[coupon] -= reward
+            if not result[coupon]:
+                result.pop(coupon, None)
+        return result
     
