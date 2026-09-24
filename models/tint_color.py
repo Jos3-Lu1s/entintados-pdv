@@ -117,3 +117,10 @@ class TintColor(models.Model):
     @api.model
     def _load_pos_data_domain(self, data, config):
         return [('active', '=', True)]
+    
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if not vals.get('code'):
+                vals['code'] = self.env['ir.sequence'].next_by_code('tint.color') or _('New')
+        return super().create(vals_list)

@@ -6,20 +6,32 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//button[@name='button_validate']" position="attributes">
-                <attribute name="invisible">is_material_output_type and material_approval_state != 'approved'</attribute>
+            <!-- <xpath expr="//button[@name='button_validate']" position="attributes">
+                <attribute name="invisible">is_material_output_type</attribute>
+            </xpath> -->
+            <xpath expr="//button[@name='button_validate'][hasclass('oe_highlight')]" position="attributes">
+                <attribute name="invisible">state in ('draft', 'confirmed', 'done', 'cancel') or is_material_output_type</attribute>
+            </xpath>
+            
+            <!-- Botón con class="o_btn_validate" -->
+            <xpath expr="//button[@name='button_validate'][hasclass('o_btn_validate')]" position="attributes">
+                <attribute name="invisible">state in ('waiting', 'assigned', 'done', 'cancel') or is_material_output_type</attribute>
             </xpath>
             <xpath expr="//button[@name='button_validate']" position="after">
-                <button name="action_audit_approve_material" string="Validar (Auditoría)" type="object"
+                <button name="action_audit_approve_material" string="Validautoria" type="object"
                         class="btn-primary"
                         invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
             </xpath>
             <xpath expr="//header" position="inside">
-                <button name="action_audit_refuse_material" string="Rechazar (Auditoría)" type="object"
+                <button name="action_audit_refuse_material" string="Rechazar solicitud" type="object"
                         class="btn-secondary"
                         invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
                 <!-- <field name="material_approval_state" widget="statusbar" statusbar_visible="to_approve,approved,refused"/> -->
             </xpath>
+
+            <!-- <xpath expr="//button[@name='button_validate']" position="attributes">
+                <attribute name="invisible">(is_material_output_type and material_approval_state != 'to_approve') or (is_material_output_type and state == 'waiting') </attribute>
+            </xpath> -->
 
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button

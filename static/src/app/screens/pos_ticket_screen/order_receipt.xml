@@ -5,9 +5,9 @@
        t-inherit-mode="extension"
        owl="1">
 
-        <!-- Oculta líneas de colorante individuales en el ticket -->
+        <!-- Oculta líneas de colorante individuales y líneas de recompensa en el ticket -->
         <xpath expr="//Orderline" position="attributes">
-            <attribute name="t-if">!line.product_id or line.product_id.tint_role !== 'colorant'</attribute>
+            <attribute name="t-if">!line.is_reward_line and (!line.product_id or line.product_id.tint_role !== 'colorant')</attribute>
         </xpath>
 
     </t>

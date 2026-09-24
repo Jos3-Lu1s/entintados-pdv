@@ -20,15 +20,15 @@ class SaleOrderLine(models.Model):
         compute='_compute_discount',
         store=True,
         precompute=True,
-        readonly=True,
         copy=False,
+        readonly=False,
     )
     pricing_rule_origin = fields.Char(
         string='Origen Acuerdo',
         compute='_compute_discount',
         store=True,
         precompute=True,
-        readonly=True,
+        readonly=False,
         copy=False,
     )
     pricing_rule_id = fields.Many2one(
@@ -37,10 +37,22 @@ class SaleOrderLine(models.Model):
         compute='_compute_discount',
         store=True,
         precompute=True,
-        readonly=True,
+        readonly=False,
         copy=False,
         ondelete='set null',
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        for vals, line in zip(vals_list, lines):
+            if vals.get('pricing_rule_type') == 'promo':
+                line.pricing_rule_type = 'promo'
+                if vals.get('pricing_rule_origin'):
+                    line.pricing_rule_origin = vals['pricing_rule_origin']
+                if vals.get('discount') is not None:
+                    line.discount = vals['discount']
+        return lines
 
     def write(self, vals):
         if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
@@ -148,6 +160,8 @@ class SaleOrderLine(models.Model):
                 line.pricing_rule_type = 'promo'
                 line.pricing_rule_origin = 'Promoción'
                 line.pricing_rule_id = False
+                continue
+            if line.pricing_rule_type == 'promo' and not force_recompute:
                 continue
             if (
                 line.product_id

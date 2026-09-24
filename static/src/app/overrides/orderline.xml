@@ -2,7 +2,18 @@
 <templates id="template" xml:space="preserve">
     <t t-name="entintados_pdv.Orderline" t-inherit="point_of_sale.Orderline" t-inherit-mode="extension" owl="1">
         <xpath expr="//li[@t-if='vals.discount']" position="replace">
-            <li t-if="vals.pricingRuleOrigin and vals.pricingRuleType === 'fixed_price'" class="price-per-unit pricing-rule-indicator">
+            <li t-if="vals.pricingRuleType === 'promo'" class="price-per-unit pricing-rule-indicator promo-indicator" t-att-class="{'text-success': vals.isDisplay}">
+                <i class="fa fa-tag pe-1"/>
+                <t t-if="vals.isReceipt">
+                    <t t-esc="vals.pricingRuleOrigin"/><span t-if="vals.discount"> -<t t-esc="vals.discount"/>%</span>
+                </t>
+                <t t-else="">
+                    <t t-esc="vals.pricingRuleOrigin"/>
+                    <span t-if="vals.discount"> (-<t t-esc="vals.discount"/>%)</span>
+                    <span> sobre </span><t t-esc="vals.noDiscountPrice"/>
+                </t>
+            </li>
+            <li t-elif="vals.pricingRuleOrigin and vals.pricingRuleType === 'fixed_price'" class="price-per-unit pricing-rule-indicator">
                 <i class="fa fa-tag pe-1"/>
                 <t t-esc="vals.pricingRuleOrigin"/>
             </li>
