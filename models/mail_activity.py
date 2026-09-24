@@ -2,8 +2,12 @@
 
 from datetime import datetime, time, timedelta
 
-from odoo import api, fields, models
+from odoo import api, fields, models, _
 
+from odoo.exceptions import UserError
+
+
+DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 
 class MailActivity(models.Model):
     """Soporte de calendario (reuniones con hora y eventos de día completo) y acceso de lectura ampliado."""
@@ -152,3 +156,20 @@ class MailActivity(models.Model):
         if operation == 'read' and self._is_activity_analyst():
             return None
         return super()._check_access(operation)
+    
+    def action_feedback(self, feedback=False, attachment_ids=None):
+        demo_activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        for activity in self:
+            if (
+                demo_activity_type
+                and activity.activity_type_id == demo_activity_type
+                and activity.res_model == 'crm.lead'
+            ):
+                lead = self.env['crm.lead'].browse(activity.res_id)
+                if not lead.demo_end:
+                    raise UserError(_(
+                        "No puedes marcar esta actividad como hecha manualmente. "
+                        "Se completa automáticamente al validar el uso de material "
+                        "(adjuntando evidencia y validando la entrega)."
+                    ))
+        return super().action_feedback(feedback=feedback, attachment_ids=attachment_ids)

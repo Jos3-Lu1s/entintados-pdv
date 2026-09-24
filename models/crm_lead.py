@@ -70,6 +70,7 @@ class CrmLead(models.Model):
                     continue
 
                 record._check_field_visit_before_leaving(old_stage, new_stage)
+                record._check_demo_meeting_before_leaving(old_stage, new_stage)
                 record._check_demo_before_leaving(old_stage, new_stage)
 
                 if new_stage.stage_type in ('quotation', 'closed'):
@@ -259,7 +260,6 @@ class CrmLead(models.Model):
     def action_schedule_demo_meeting(self):
         """Agenda la demostración en el calendario (requiere líneas de material)."""
         self.ensure_one()
-        self._ensure_material_request_allowed()
         return self._action_schedule_meeting(DEMO_ACTIVITY_XMLID)
 
     def _create_field_visit_meeting(self):
@@ -319,6 +319,38 @@ class CrmLead(models.Model):
                 'Antes de avanzar desde la etapa "%s" debes marcar como realizada '
                 '(hecha) la actividad de Visita de campo.'
             ) % old_stage.name)
+            
+    def _check_demo_meeting_before_leaving(self, old_stage, new_stage):
+        """Valida avance y retroceso en etapa de demo (reunión de demostración)."""
+        if old_stage.stage_type != 'demo':
+            return
+        ordered_ids = self.env['crm.stage'].search([], order='sequence, id').ids
+        if old_stage.id not in ordered_ids or new_stage.id not in ordered_ids:
+            return
+
+        old_index = ordered_ids.index(old_stage.id)
+        new_index = ordered_ids.index(new_stage.id)
+        demo_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        has_pending_activity = bool(demo_type and self._get_meeting_activities(demo_type))
+
+        if new_index < old_index:
+            if self.demo_meeting_scheduled or has_pending_activity:
+                raise ValidationError(_(
+                    'No puedes regresar a "%s" si la oportunidad ya tiene una '
+                    'demostración registrada.'
+                ) % new_stage.name)
+            return
+
+        if not self.demo_meeting_scheduled:
+            raise ValidationError(_(
+                'Antes de avanzar desde la etapa "%s" debes agendar la demostración '
+                'en el calendario con horario de inicio y fin.'
+            ) % old_stage.name)
+        if has_pending_activity:
+            raise ValidationError(_(
+                'Antes de avanzar desde la etapa "%s" debes marcar como realizada '
+                '(hecha) la actividad de Demostración.'
+            ) % old_stage.name)
 
     @api.constrains('stage_id', 'expected_revenue')
     def _check_expected_revenue_in_quotation(self):
@@ -354,15 +386,12 @@ class CrmLead(models.Model):
             raise UserError(_("Ya existe una solicitud de aprobación en curso para esta oportunidad."))
         
         if not self.partner_id:
-            wizard = self.env['crm.material.request.partner.wizzard'].create({
-                'lead_id': self.id,
-            })
             return {
                 'type': 'ir.actions.act_window',
                 'res_model': 'crm.material.request.partner.wizzard',
                 'view_mode': 'form',
-                'res_id': wizard.id,
                 'target': 'new',
+                'context': {'default_lead_id': self.id},
             }
             
         if not self.wharehouse_id:
@@ -383,7 +412,7 @@ class CrmLead(models.Model):
             ))
 
         approval_request = self.env['approval.request'].create({
-            'name': _('Salida de material - %s') % self.name,
+            'name': _('SM - %s') % self.name,
             'category_id': category.id,
             'request_owner_id': self.user_id.id or self.env.uid,
             'partner_id': self.partner_id.id,

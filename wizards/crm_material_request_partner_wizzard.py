@@ -21,8 +21,8 @@ class CrmMaterialRequestPartnerWizzard(models.TransientModel):
             self.partner_name = (
                 self.lead_id.partner_name
                 or self.lead_id.contact_name
-                or self.lead_id.name
             )
+            self.partner_phone = self.lead_id.phone
 
     def action_confirm(self):
         self.ensure_one()

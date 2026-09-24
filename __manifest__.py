@@ -100,6 +100,7 @@ Catálogo de entintado
         'data/type_operations_data.xml',
         'data/hr_departament_data.xml',
         'data/approval_request_data.xml',
+        'data/code_tint.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',

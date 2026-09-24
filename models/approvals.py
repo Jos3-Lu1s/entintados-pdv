@@ -4,6 +4,7 @@ from odoo.exceptions import ValidationError, UserError
 MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
 APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 DEPARTMENT_AUDITORIA_XMLID = 'entintados_pdv.hr_department_auditoria'
+APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
 
 class Approval(models.Model):
     _inherit = 'approval.category'
@@ -195,25 +196,22 @@ class ApprovalRequest(models.Model):
         if not users:
             return
 
-        activity_type = self.env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
-        model_id = self.env['ir.model']._get_id('stock.picking')
+        activity_type = self.env.ref(APPROVE_MATERIAL_ACTIVITY_XMLID, raise_if_not_found=False)
 
         for user in users:
-            self.env['mail.activity'].create({
-                'activity_type_id': activity_type.id if activity_type else False,
-                'res_model_id': model_id,
-                'res_id': picking.id,
-                'user_id': user.id,
-                'summary': _('Aprobar salida de material'),
-                'note': _(
+            picking.activity_schedule(
+                activity_type_id=activity_type.id if activity_type else False,
+                user_id=user.id,
+                summary=activity_type.summary if activity_type else _('Aprobar salida de material'),
+                note=_(
                     'Se generó la salida de material %(picking)s relacionada a la '
                     'oportunidad %(lead)s. Favor de revisar y aprobar.'
                 ) % {
                     'picking': picking.name or picking.id,
                     'lead': self.crm_lead_id.name if self.crm_lead_id else '',
                 },
-                'date_deadline': fields.Date.context_today(self),
-            })
+                date_deadline=fields.Date.context_today(self),
+            )
     
     def action_view_crm_lead(self):
         self.ensure_one()

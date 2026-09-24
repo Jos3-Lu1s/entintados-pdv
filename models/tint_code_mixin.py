@@ -13,7 +13,7 @@ class TintCodeMixin(models.AbstractModel):
     _name = 'tint.code.mixin'
     _description = "Código corto normalizado"
 
-    code = fields.Char(string="Código", required=True)
+    code = fields.Char(string="Código")
 
     @staticmethod
     def _normalize_code(code):

@@ -18,16 +18,16 @@
                 <attribute name="context">{'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
             </xpath>
             <xpath expr="//header" position="inside">
-                <button name="action_schedule_field_visit" string="Agendar visita de campo" type="object" invisible="stage_type != 'visit'"/>
+                <button name="action_schedule_field_visit" string="Agendar visita de campo" type="object" invisible="stage_type != 'visit'" class="btn btn-primary"/>
+                <button name="action_schedule_demo_meeting" string="Agendar demostración" type="object" invisible="picking_count > 0 or demo_meeting_scheduled or stage_type != 'demo'" class="btn btn-primary"/>
             </xpath>
             <xpath expr="//page[@name='lead']" position="after">
                 <page name="material" string="Solicitudes de materiales" invisible="stage_type != 'demo' and not material_line_ids">
                     <field name="demo_meeting_scheduled" invisible="1"/>
-                    <button name="action_schedule_demo_meeting" string="Agendar demostración" type="object" invisible="picking_count > 0 or demo_meeting_scheduled"/>
-                    <button name="action_request_material_output" string="Solicitud de salida" type="object" invisible="approval_request_id or not demo_meeting_scheduled"/>
+                    <button name="action_request_material_output" string="Solicitud de salida" type="object" invisible="approval_request_id or not demo_meeting_scheduled" class="btn btn-primary"/>
                     <div class="d-flex align-items-center">
                         <label for="wharehouse_id" string="Almacén de origen: " class="me-3"/>
-                        <field name="wharehouse_id" readonly="approval_request_id"/>
+                        <field name="wharehouse_id" domain="[('usage', '=', 'internal')]"   readonly="approval_request_id"/>
                     </div>
                     <group>
                         <field name="material_line_ids" nolabel="1" readonly="approval_request_id">
@@ -131,7 +131,9 @@
                         icon="fa-check-square-o"
                         invisible="not approval_request_id">
                     <div class="o_stat_info">
-                        <field name="approval_request_status" widget="badge" class="o_stat_text"/>
+                        <field name="approval_request_status" widget="badge" class="o_stat_text" decoration-success="approval_request_status == 'approved'"
+                           decoration-danger="approval_request_status == 'refused'"
+                           decoration-warning="approval_request_status in ('pending', 'submitted')"/>
                         <span class="o_stat_text">Aprobación</span>
                     </div>
                 </button>

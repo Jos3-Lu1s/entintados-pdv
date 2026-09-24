@@ -4,6 +4,8 @@ from odoo.exceptions import UserError, ValidationError
 
 MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
 AUDIT_DEPARTMENT_XMLID = 'entintados_pdv.hr_department_auditoria'
+APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
+DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -102,9 +104,7 @@ class StockPicking(models.Model):
                     picking._generate_material_document()
             return res
                     
-    def _generate_material_document(self):
-        """Renderiza el reporte de Solicitud de Salida de Material y lo
-        guarda en document_file/document_filename de este picking."""
+    """ def _generate_material_document(self):
         self.ensure_one()
 
         report = self.env.ref(
@@ -121,7 +121,7 @@ class StockPicking(models.Model):
         self.write({
             'document_file': base64.b64encode(pdf_content),
             'document_filename': 'Solicitud_Material_%s.pdf' % (self.name or self.id),
-        })
+        }) """
     
     @api.depends('picking_type_id')
     def _compute_is_material_output_type(self):
@@ -168,6 +168,8 @@ class StockPicking(models.Model):
         return False
 
     def action_audit_approve_material(self):
+        activity_type = self.env.ref(APPROVE_MATERIAL_ACTIVITY_XMLID, raise_if_not_found=False)
+
         for picking in self:
             if not picking.is_material_output_type:
                 raise UserError(_("Esta acción solo aplica a salidas de tipo 'Salida de material'."))
@@ -189,10 +191,11 @@ class StockPicking(models.Model):
                 vals['signature_date'] = fields.Datetime.now()
             picking.write(vals)
 
-            picking.activity_ids.filtered(
-                lambda a: a.summary == 'Validación de Auditoría - Salida de material'
-            ).action_feedback(feedback=_('Validado por Auditoría.'))
-            
+            if activity_type:
+                picking.activity_ids.filtered(
+                    lambda a: a.activity_type_id == activity_type
+                ).action_feedback(feedback=_('Validado por Auditoría.'))
+
         return self.button_validate()
 
     def action_audit_refuse_material(self):
@@ -287,6 +290,9 @@ class StockPicking(models.Model):
             })
     
     def action_validate_material_use(self):
+        demo_activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+
+        
         for picking in self:
             if picking.state != 'done':
                 raise UserError(_("Solo se puede validar el uso de material de salidas que estén en estado 'Hecho'."))
@@ -302,4 +308,8 @@ class StockPicking(models.Model):
                 picking.crm_lead_id.write({
                     'demo_end': True,
                 })
+                if demo_activity_type:
+                    picking.crm_lead_id.activity_ids.filtered(
+                        lambda a: a.activity_type_id == demo_activity_type
+                    ).action_feedback(feedback=_('Demostración finalizada, uso de material validado.'))
             
