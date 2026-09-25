@@ -77,6 +77,10 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/orderline.xml",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.xml",
+            "entintados_pdv/static/src/app/overrides/control_buttons/promo_toggle_popup.js",
+            "entintados_pdv/static/src/app/overrides/control_buttons/promo_toggle_popup.xml",
+            "entintados_pdv/static/src/app/overrides/control_buttons/promo_toggle_button.js",
+            "entintados_pdv/static/src/app/overrides/control_buttons/promo_toggle_button.xml",
             # Widgets de campos reutilizables en formularios del POS
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",

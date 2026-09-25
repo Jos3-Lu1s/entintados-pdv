@@ -743,3 +743,28 @@ $tint-breakpoint-lg: 1199.98px;
     }
 }
 
+/* ==========================================================================
+   Botón y Modal de Alternancia de Promociones y Acuerdos Comerciales
+   ========================================================================== */
+.o-promo-toggle-button {
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+
+    &:hover {
+        opacity: 0.95;
+    }
+}
+
+.promo-toggle-popup {
+    .card {
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        border-radius: 0.5rem;
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+        }
+    }
+}
+
+

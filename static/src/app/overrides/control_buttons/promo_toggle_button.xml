@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Botón de alternancia de promociones y acuerdos comerciales -->
+    <t t-name="entintados_pdv.ControlButtonsPromoToggle"
+       t-inherit="point_of_sale.ControlButtons"
+       t-inherit-mode="extension">
+
+        <!-- Botón en la barra de control principal -->
+        <xpath expr="//SelectPartnerButton" position="after">
+            <button t-if="isPromoToggleVisible and !props.showRemainingButtons"
+                    class="btn btn-light btn-lg lh-lg o-promo-toggle-button d-flex align-items-center justify-content-center text-nowrap"
+                    t-att-class="{'border-warning': isPromoActive, 'border-info': isCommercialAgreementsActive}"
+                    t-on-click="() => this.onClickPromoToggle()">
+                <i class="fa fa-tags me-1" role="img" aria-label="Promociones / Acuerdos"/>
+                <span>Promociones / Acuerdos</span>
+            </button>
+        </xpath>
+
+        <!-- Botón en menú desplegable de botones secundarios -->
+        <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
+            <button t-if="isPromoToggleVisible"
+                    t-att-class="buttonClass"
+                    class="o-promo-toggle-button-secondary d-flex align-items-center justify-content-center"
+                    t-on-click="() => this.onClickPromoToggle()">
+                <i class="fa fa-tags me-2 text-info" role="img" aria-label="Promociones / Acuerdos"/>
+                <span>Promociones / Acuerdos</span>
+            </button>
+        </xpath>
+
+    </t>
+
+</templates>

@@ -53,17 +53,107 @@ patch(PosStore.prototype, {
 
 patch(PosOrder.prototype, {
     set_partner(partner) {
-        const res = super.set_partner ? super.set_partner(partner) : null;
-        this._entintadosCheckActivePromoQualification?.();
-        this._entintadosReconcileDiscounts();
-        return res;
+        if (this._entintadosSettingPartner) {
+            return super.set_partner ? super.set_partner(partner) : null;
+        }
+        this._entintadosSettingPartner = true;
+        try {
+            const res = super.set_partner ? super.set_partner(partner) : null;
+            this._entintadosHandlePartnerAssignment(partner);
+            return res;
+        } finally {
+            this._entintadosSettingPartner = false;
+        }
     },
 
     setPartner(partner) {
-        const res = super.setPartner ? super.setPartner(partner) : null;
-        this._entintadosCheckActivePromoQualification?.();
-        this._entintadosReconcileDiscounts();
-        return res;
+        if (this._entintadosSettingPartner) {
+            return super.setPartner ? super.setPartner(partner) : null;
+        }
+        this._entintadosSettingPartner = true;
+        try {
+            const res = super.setPartner ? super.setPartner(partner) : null;
+            this._entintadosHandlePartnerAssignment(partner);
+            return res;
+        } finally {
+            this._entintadosSettingPartner = false;
+        }
+    },
+
+    _entintadosHandlePartnerAssignment(partner) {
+        if (!this.uiState) this.uiState = {};
+        if (!this.uiState.promoDecisions) this.uiState.promoDecisions = {};
+        if (!this.uiState.disabledRewards) this.uiState.disabledRewards = new Set();
+
+        const currentPartner = partner || this.getPartner?.() || this.get_partner?.() || this.partner_id;
+        const activeReward = this.uiState.activePromoReward;
+        if (activeReward) {
+            this.uiState.lastPromoReward = activeReward;
+        }
+
+        if (!activeReward || !currentPartner) {
+            this._entintadosCheckActivePromoQualification?.();
+            this._entintadosReconcileDiscounts();
+            return;
+        }
+
+        const models = this.models || posStoreInstance?.models;
+        const hasCollidingDiscount = (this.lines || []).some((l) => {
+            if (l.is_reward_line || l.is_tint_colorant || l.product_id?.tint_role === "colorant" || l.fixed_price_locked) return false;
+            const r = getPartnerPricingRule(models, currentPartner, l.product_id);
+            return r.type === "discount" && r.discount > 0;
+        });
+
+        if (!hasCollidingDiscount) {
+            this._entintadosCheckActivePromoQualification?.();
+            this._entintadosReconcileDiscounts();
+            return;
+        }
+
+        const decisionKey = `${activeReward.id}_${currentPartner.id}`;
+        const existingDecision = this.uiState.promoDecisions[decisionKey];
+
+        if (existingDecision === "declined") {
+            this.uiState.pricingModePreference = "commercial_agreements";
+            this.uiState.disabledRewards.add(activeReward.id);
+            this.uiState.activePromoReward = null;
+            this._entintadosReconcileDiscounts();
+            return;
+        }
+
+        if (existingDecision === "accepted") {
+            this.uiState.pricingModePreference = "promo";
+            this.uiState.disabledRewards.delete(activeReward.id);
+            this.uiState.activePromoReward = activeReward;
+            this._entintadosApplyInlinePromoDiscount(activeReward);
+            return;
+        }
+
+        const program = activeReward.program_id;
+        const promoName = program?.name || activeReward.description || "";
+
+        if (posStoreInstance?.dialog) {
+            posStoreInstance.dialog.add(ConfirmationDialog, {
+                title: "Promoción disponible vs Acuerdos Comerciales",
+                body: `El cliente seleccionado cuenta con acuerdos comerciales de descuento y el pedido califica para la promoción "${promoName}". ¿Qué deseas aplicar?`,
+                confirmLabel: "Aplicar promoción",
+                cancelLabel: "Mantener acuerdos del cliente",
+                confirm: () => {
+                    this.uiState.promoDecisions[decisionKey] = "accepted";
+                    this.uiState.pricingModePreference = "promo";
+                    this.uiState.disabledRewards?.delete(activeReward.id);
+                    this.uiState.activePromoReward = activeReward;
+                    this._entintadosApplyInlinePromoDiscount(activeReward);
+                },
+                cancel: () => {
+                    this.uiState.promoDecisions[decisionKey] = "declined";
+                    this.uiState.pricingModePreference = "commercial_agreements";
+                    this.uiState.disabledRewards?.add(activeReward.id);
+                    this.uiState.activePromoReward = null;
+                    this._entintadosReconcileDiscounts();
+                },
+            });
+        }
     },
 
     async _applyReward(reward, coupon_id, args) {
@@ -72,15 +162,26 @@ patch(PosOrder.prototype, {
         }
 
         const program = reward.program_id;
-        const decisionKey = String(reward.id);
+        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+        const decisionKey = partner?.id ? `${reward.id}_${partner.id}` : String(reward.id);
         if (!this.uiState) this.uiState = {};
         if (!this.uiState.promoDecisions) this.uiState.promoDecisions = {};
         if (!this.uiState.disabledRewards) this.uiState.disabledRewards = new Set();
 
-        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
         const models = this.models || posStoreInstance?.models;
 
-        // 1. Si ya se declinó esta recompensa para esta orden:
+        // Si el cajero ya prefirió acuerdos comerciales para este cliente:
+        if (this.uiState.pricingModePreference === "commercial_agreements") {
+            this.uiState.promoDecisions[decisionKey] = "declined";
+            this.uiState.disabledRewards.add(reward.id);
+            if (this.uiState.activePromoReward?.id === reward.id) {
+                this.uiState.activePromoReward = null;
+            }
+            this._entintadosReconcileDiscounts();
+            return false;
+        }
+
+        // 1. Si ya se declinó esta recompensa para esta orden/cliente:
         if (this.uiState.promoDecisions[decisionKey] === "declined") {
             this.uiState.disabledRewards.add(reward.id);
             this._entintadosReconcileDiscounts();
@@ -99,10 +200,10 @@ patch(PosOrder.prototype, {
             if (hasCollidingDiscount && posStoreInstance?.dialog) {
                 const choice = await new Promise((resolve) => {
                     posStoreInstance.dialog.add(ConfirmationDialog, {
-                        title: "Promoción disponible",
-                        body: `Este pedido califica para la promoción "${program?.name || reward.description}". El cliente cuenta con acuerdos comerciales de descuento. Aplicar la promoción anulará los porcentajes de descuento de la orden. Los precios fijos acordados se respetan siempre. ¿Qué deseas aplicar?`,
+                        title: "Promoción disponible vs Acuerdos Comerciales",
+                        body: `El cliente seleccionado cuenta con acuerdos comerciales de descuento y el pedido califica para la promoción "${program?.name || reward.description}". ¿Qué deseas aplicar?`,
                         confirmLabel: "Aplicar promoción",
-                        cancelLabel: "Mantener acuerdos de descuento",
+                        cancelLabel: "Mantener acuerdos del cliente",
                         confirm: () => resolve("promo"),
                         cancel: () => resolve("discount"),
                     });
@@ -110,6 +211,7 @@ patch(PosOrder.prototype, {
 
                 if (choice === "discount") {
                     this.uiState.promoDecisions[decisionKey] = "declined";
+                    this.uiState.pricingModePreference = "commercial_agreements";
                     this.uiState.disabledRewards.add(reward.id);
                     if (this.uiState.activePromoReward?.id === reward.id) {
                         this.uiState.activePromoReward = null;
@@ -119,6 +221,7 @@ patch(PosOrder.prototype, {
                 }
 
                 this.uiState.promoDecisions[decisionKey] = "accepted";
+                this.uiState.pricingModePreference = "promo";
             } else {
                 this.uiState.promoDecisions[decisionKey] = "accepted";
             }
@@ -126,6 +229,7 @@ patch(PosOrder.prototype, {
 
         // 4. Si la promoción es aceptada (o el cliente no tenía acuerdos de descuento):
         this.uiState.activePromoReward = reward;
+        this.uiState.lastPromoReward = reward;
         this._entintadosApplyInlinePromoDiscount(reward);
 
         // Eliminar o evitar cualquier línea independiente de recompensa (is_reward_line)
@@ -146,6 +250,14 @@ patch(PosOrder.prototype, {
     },
 
     _updateRewardLines(...args) {
+        if (this.uiState?.pricingModePreference === "commercial_agreements") {
+            if (this.uiState.activePromoReward) {
+                if (this.uiState.disabledRewards) {
+                    this.uiState.disabledRewards.add(this.uiState.activePromoReward.id);
+                }
+                this.uiState.activePromoReward = null;
+            }
+        }
         const result = super._updateRewardLines ? super._updateRewardLines(...args) : false;
 
         const promoRewardLines = (this.lines || []).filter(
@@ -208,15 +320,79 @@ patch(PosOrder.prototype, {
         }
 
         if (!qualifies) {
-            const decisionKey = String(reward.id);
+            const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+            const decisionKey = partner?.id ? `${reward.id}_${partner.id}` : String(reward.id);
             if (this.uiState.promoDecisions) {
                 delete this.uiState.promoDecisions[decisionKey];
+                delete this.uiState.promoDecisions[String(reward.id)];
             }
             this.uiState.activePromoReward = null;
+            this.uiState.lastPromoReward = null;
+            this.uiState.pricingModePreference = null;
             if (this.uiState.disabledRewards) {
                 this.uiState.disabledRewards.delete(reward.id);
             }
+            this._entintadosReconcileDiscounts();
         }
+    },
+
+    _entintadosGetEligiblePromoReward() {
+        if (this.uiState?.activePromoReward) {
+            return this.uiState.activePromoReward;
+        }
+
+        const nonRewardLines = (this.lines || []).filter((l) => !l.is_reward_line);
+        if (!nonRewardLines.length) {
+            return null;
+        }
+
+        if (this.uiState?.lastPromoReward) {
+            const program = this.uiState.lastPromoReward.program_id;
+            let qualifies = true;
+            if (typeof this._programIsApplicable === "function" && !this._programIsApplicable(program)) {
+                qualifies = false;
+            }
+            if (qualifies && typeof this._canGenerateRewards === "function") {
+                if (!this._canGenerateRewards(program, this.priceIncl, this.priceExcl)) {
+                    qualifies = false;
+                }
+            }
+            if (qualifies) {
+                return this.uiState.lastPromoReward;
+            }
+        }
+
+        if (typeof this.getClaimableRewards === "function") {
+            const claimable = this.getClaimableRewards() || [];
+            const promo = claimable.find(
+                (r) => r.reward_type === "discount" && r.discount_mode === "percent"
+            );
+            if (promo) return promo;
+        }
+
+        const models = this.models || posStoreInstance?.models;
+        const rewards = models?.["loyalty.reward"]?.getAll?.() || [];
+        for (const reward of rewards) {
+            if (reward.reward_type !== "discount" || reward.discount_mode !== "percent") {
+                continue;
+            }
+            const program = reward.program_id;
+            if (!program) continue;
+
+            let qualifies = true;
+            if (typeof this._programIsApplicable === "function" && !this._programIsApplicable(program)) {
+                qualifies = false;
+            }
+            if (qualifies && typeof this._canGenerateRewards === "function") {
+                if (!this._canGenerateRewards(program, this.priceIncl, this.priceExcl)) {
+                    qualifies = false;
+                }
+            }
+            if (qualifies) {
+                return reward;
+            }
+        }
+        return null;
     },
 
     async _entintadosHandleNewReward(line) {
@@ -318,7 +494,11 @@ patch(PosOrder.prototype, {
     },
 
     _entintadosReconcileDiscounts() {
-        if (this.uiState?.activePromoReward) {
+        if (this.uiState?.pricingModePreference === "commercial_agreements") {
+            this.uiState.activePromoReward = null;
+        }
+
+        if (this.uiState?.activePromoReward && this.uiState?.pricingModePreference !== "commercial_agreements") {
             this._entintadosApplyInlinePromoDiscount(this.uiState.activePromoReward);
             return;
         }
