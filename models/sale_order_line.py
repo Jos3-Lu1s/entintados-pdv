@@ -42,18 +42,6 @@ class SaleOrderLine(models.Model):
         ondelete='set null',
     )
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        lines = super().create(vals_list)
-        for vals, line in zip(vals_list, lines):
-            if vals.get('pricing_rule_type') == 'promo':
-                line.pricing_rule_type = 'promo'
-                if vals.get('pricing_rule_origin'):
-                    line.pricing_rule_origin = vals['pricing_rule_origin']
-                if vals.get('discount') is not None:
-                    line.discount = vals['discount']
-        return lines
-
     def write(self, vals):
         if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
             for line in self:
@@ -157,11 +145,9 @@ class SaleOrderLine(models.Model):
                 line.pricing_rule_id = line._origin.pricing_rule_id or False
                 continue
             if getattr(line, 'is_reward_line', False):
-                line.pricing_rule_type = 'promo'
-                line.pricing_rule_origin = 'Promoción'
+                line.pricing_rule_type = 'none'
+                line.pricing_rule_origin = ''
                 line.pricing_rule_id = False
-                continue
-            if line.pricing_rule_type == 'promo' and not force_recompute:
                 continue
             if (
                 line.product_id

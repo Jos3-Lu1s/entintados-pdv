@@ -264,8 +264,8 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertIn('line_id', loaded_fields)
         self.assertIn('scheme_id', loaded_fields)
 
-    def test_loyalty_wizard_fixed_price_protection(self):
-        """Verificar que el wizard de lealtad no altere el precio fijo pactado."""
+    def test_loyalty_promotion_fixed_price_protection(self):
+        """Verificar que las promociones de lealtad no alteren precios fijos pactados ni los descuenten."""
         self.partner.discount_rule_ids.unlink()
         self.rules.create({
             'partner_id': self.partner.id,
@@ -282,12 +282,44 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             'product_id': self.prod_1.id,
             'product_uom_qty': 1.0,
         })
-        self.assertEqual(line1.price_unit, 300.0)
-
-        wizard = self.env['sale.loyalty.reward.wizard'].with_context(active_id=order.id).create({
-            'loyalty_action_type': 'discount',
+        line2 = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.prod_3.id,
+            'product_uom_qty': 1.0,
         })
-        wizard.action_apply_custom()
+        self.assertEqual(line1.price_unit, 300.0)
+        self.assertEqual(line1.discount, 0.0)
+        self.assertEqual(line1.pricing_rule_type, 'fixed_price')
+        self.assertEqual(line2.price_unit, 100.0)
+
+        program = self.env['loyalty.program'].create({
+            'name': 'Promo 10% Descuento',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [(0, 0, {
+                'reward_point_mode': 'order',
+                'minimum_amount': 0.0,
+            })],
+            'reward_ids': [(0, 0, {
+                'reward_type': 'discount',
+                'discount': 10.0,
+                'discount_mode': 'percent',
+                'discount_applicability': 'order',
+            })],
+        })
+        reward = program.reward_ids[0]
+        coupon = self.env['loyalty.card'].create({
+            'program_id': program.id,
+            'points': 0,
+        })
+
+        reward_vals = order._get_reward_values_discount(reward, coupon)
+        self.assertTrue(reward_vals)
+        # line2 recibe 5% de descuento comercial base del cliente ($100 * 0.95 = $95 netos)
+        self.assertEqual(line2.discount, 5.0)
+        # El 10% promocional aplica únicamente sobre la base descontable neta ($95 * 10% = -$9.50)
+        self.assertAlmostEqual(reward_vals[0]['price_unit'], -9.5)
         self.assertEqual(line1.price_unit, 300.0)
         self.assertEqual(line1.discount, 0.0)
 
