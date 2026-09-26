@@ -908,3 +908,74 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(old_line.product_uom_qty, 5.0)
         self.assertEqual(old_line.price_unit, 300.0)
         self.assertEqual(old_line.pricing_rule_type, 'fixed_price')
+
+    def _create_volume_pricelist(self):
+        return self.env['product.pricelist'].create({
+            'name': 'Tarifa Volumen',
+            'item_ids': [(0, 0, {
+                'applied_on': '0_product_variant',
+                'product_id': self.prod_3.id,
+                'compute_price': 'fixed',
+                'fixed_price': 80.0,
+                'min_quantity': 10.0,
+            })],
+        })
+
+    def _create_saved_quotation(self, partner, pricelist, product, qty=1.0):
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'pricelist_id': pricelist.id,
+            'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': qty})],
+        })
+        return order, order.order_line
+
+    def test_saved_line_qty_change_recomputes_pricelist(self):
+        """Cambiar la cantidad de una línea guardada recalcula el precio por volumen de la tarifa."""
+        partner = self.partners.create({'name': 'Cliente Volumen', 'is_customer': True})
+        pricelist = self._create_volume_pricelist()
+
+        order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+        self.assertEqual(line.price_unit, 100.0)
+        line.write({'product_uom_qty': 12.0})
+        self.assertEqual(line.price_unit, 80.0)
+        self.assertEqual(line.price_subtotal, 960.0)
+
+        order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+        with Form(order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.product_uom_qty = 15.0
+        self.assertEqual(line.price_unit, 80.0)
+        self.assertEqual(line.price_subtotal, 1200.0)
+
+    def test_saved_line_uom_change_recomputes_price(self):
+        """Cambiar la UdM de una línea guardada convierte el precio de la tarifa."""
+        partner = self.partners.create({'name': 'Cliente UdM', 'is_customer': True})
+        pricelist = self.env['product.pricelist'].create({'name': 'Tarifa Lista'})
+        order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+
+        line.write({'product_uom_id': self.env.ref('uom.product_uom_dozen').id})
+        self.assertEqual(line.price_unit, 1200.0)
+
+    def test_saved_line_qty_change_keeps_frozen_agreement_and_manual_price(self):
+        """Al cambiar la cantidad, el precio fijo del acuerdo y el precio manual se conservan."""
+        pricelist = self._create_volume_pricelist()
+        self.partner.discount_rule_ids.unlink()
+        rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_3.id,
+            'fixed_price': 70.0,
+        })
+        order, line = self._create_saved_quotation(self.partner, pricelist, self.prod_3)
+        self.assertEqual(line.price_unit, 70.0)
+        rule.write({'fixed_price': 65.0})
+        line.write({'product_uom_qty': 12.0})
+        self.assertEqual(line.price_unit, 70.0)
+        self.assertEqual(line.pricing_rule_type, 'fixed_price')
+
+        partner = self.partners.create({'name': 'Cliente Manual', 'is_customer': True})
+        order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+        line.write({'price_unit': 55.0})
+        line.write({'product_uom_qty': 12.0})
+        self.assertEqual(line.price_unit, 55.0)

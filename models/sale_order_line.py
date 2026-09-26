@@ -106,6 +106,14 @@ class SaleOrderLine(models.Model):
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
             if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
+                # Línea guardada: la tarifa se recalcula (cantidad/UdM), pero un precio fijo
+                # de acuerdo ya aplicado se conserva congelado.
+                frozen_type = line._origin.pricing_rule_type
+                frozen_price = line._origin.price_unit
+                super(SaleOrderLine, line)._reset_price_unit()
+                if frozen_type == 'fixed_price':
+                    line.price_unit = frozen_price
+                    line.technical_price_unit = frozen_price
                 continue
             super(SaleOrderLine, line)._reset_price_unit()
             if (
