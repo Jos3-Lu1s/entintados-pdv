@@ -43,12 +43,18 @@ patch(ControlButtons.prototype, {
         if (!order) return _t("Promociones / Acuerdos");
 
         if (order.uiState?.pricingModePreference === "promo" || order.uiState?.activePromoReward) {
-            const reward =
+            const rawReward =
                 order.uiState.activePromoReward ||
                 (typeof order._entintadosGetEligiblePromoReward === "function"
                     ? order._entintadosGetEligiblePromoReward()
                     : null);
-            const promoName = reward?.program_id?.name || reward?.description;
+            const reward = rawReward?.reward || rawReward;
+            const models = this.pos.models;
+            const program =
+                reward?.program_id && typeof reward.program_id === "object"
+                    ? reward.program_id
+                    : (models?.["loyalty.program"]?.get?.(reward?.program_id) || null);
+            const promoName = program?.name || reward?.description;
             return promoName ? _t("Promoción: %s", promoName) : _t("Promoción");
         }
 
@@ -95,11 +101,22 @@ patch(ControlButtons.prototype, {
 
         const partner = order.getPartner?.() || order.get_partner?.() || order.partner_id;
         const models = this.pos.models;
-        const eligiblePromo =
+        const rawPromo =
             order.uiState?.activePromoReward ||
             (typeof order._entintadosGetEligiblePromoReward === "function"
                 ? order._entintadosGetEligiblePromoReward()
                 : null);
+        const eligiblePromo = rawPromo?.reward || rawPromo;
+
+        const getPromoName = (r) => {
+            if (!r) return "";
+            const actual = r.reward || r;
+            const program =
+                actual.program_id && typeof actual.program_id === "object"
+                    ? actual.program_id
+                    : (models?.["loyalty.program"]?.get?.(actual.program_id) || null);
+            return program?.name || actual.description || "";
+        };
 
         const hasCollidingDiscount =
             Boolean(partner) &&
@@ -122,10 +139,11 @@ patch(ControlButtons.prototype, {
 
         // 2. Si solo aplica promoción (sin acuerdos de cliente colisionantes)
         if (eligiblePromo && !hasCollidingDiscount) {
+            const promoName = getPromoName(eligiblePromo);
             if (order.uiState?.activePromoReward) {
                 this.notification.add(
                     _t("La promoción «%s» ya está activa en la orden y el cliente no cuenta con acuerdos de descuento.",
-                        eligiblePromo.program_id?.name || eligiblePromo.description
+                        promoName
                     ),
                     { type: "info" }
                 );
@@ -140,9 +158,7 @@ patch(ControlButtons.prototype, {
                 }
                 order._entintadosApplyInlinePromoDiscount(eligiblePromo);
                 this.notification.add(
-                    _t("Se aplicó la promoción «%s» a la orden.",
-                        eligiblePromo.program_id?.name || eligiblePromo.description
-                    ),
+                    _t("Se aplicó la promoción «%s» a la orden.", promoName),
                     { type: "success" }
                 );
             }
@@ -165,6 +181,8 @@ patch(ControlButtons.prototype, {
         const currentMode = order.uiState?.activePromoReward
             ? "promo"
             : (order.uiState?.pricingModePreference || "commercial_agreements");
+
+        const promoName = getPromoName(eligiblePromo);
 
         this.dialog.add(PromoTogglePopup, {
             promoReward: eligiblePromo,
@@ -195,9 +213,7 @@ patch(ControlButtons.prototype, {
                     }
                     order._entintadosApplyInlinePromoDiscount(eligiblePromo);
                     this.notification.add(
-                        _t("Se aplicó la promoción «%s».",
-                            eligiblePromo.program_id?.name || eligiblePromo.description
-                        ),
+                        _t("Se aplicó la promoción «%s».", promoName),
                         { type: "success" }
                     );
                 }

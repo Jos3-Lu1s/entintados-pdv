@@ -86,7 +86,7 @@ patch(PosOrder.prototype, {
         if (!this.uiState.disabledRewards) this.uiState.disabledRewards = new Set();
 
         const currentPartner = partner || this.getPartner?.() || this.get_partner?.() || this.partner_id;
-        const activeReward = this.uiState.activePromoReward;
+        const activeReward = this.uiState.activePromoReward?.reward || this.uiState.activePromoReward;
         if (activeReward) {
             this.uiState.lastPromoReward = activeReward;
         }
@@ -129,7 +129,7 @@ patch(PosOrder.prototype, {
             return;
         }
 
-        const program = activeReward.program_id;
+        const program = this._entintadosGetProgram(activeReward);
         const promoName = program?.name || activeReward.description || "";
 
         if (posStoreInstance?.dialog) {
@@ -157,13 +157,14 @@ patch(PosOrder.prototype, {
     },
 
     async _applyReward(reward, coupon_id, args) {
-        if (!reward || reward.reward_type !== "discount" || reward.discount_mode !== "percent") {
+        const actualReward = reward?.reward || reward;
+        if (!actualReward || actualReward.reward_type !== "discount" || actualReward.discount_mode !== "percent") {
             return super._applyReward ? super._applyReward(reward, coupon_id, args) : true;
         }
 
-        const program = reward.program_id;
+        const program = this._entintadosGetProgram(actualReward);
         const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
-        const decisionKey = partner?.id ? `${reward.id}_${partner.id}` : String(reward.id);
+        const decisionKey = partner?.id ? `${actualReward.id}_${partner.id}` : String(actualReward.id);
         if (!this.uiState) this.uiState = {};
         if (!this.uiState.promoDecisions) this.uiState.promoDecisions = {};
         if (!this.uiState.disabledRewards) this.uiState.disabledRewards = new Set();
@@ -173,8 +174,8 @@ patch(PosOrder.prototype, {
         // Si el cajero ya prefirió acuerdos comerciales para este cliente:
         if (this.uiState.pricingModePreference === "commercial_agreements") {
             this.uiState.promoDecisions[decisionKey] = "declined";
-            this.uiState.disabledRewards.add(reward.id);
-            if (this.uiState.activePromoReward?.id === reward.id) {
+            this.uiState.disabledRewards.add(actualReward.id);
+            if (this.uiState.activePromoReward?.id === actualReward.id) {
                 this.uiState.activePromoReward = null;
             }
             this._entintadosReconcileDiscounts();
@@ -183,7 +184,7 @@ patch(PosOrder.prototype, {
 
         // 1. Si ya se declinó esta recompensa para esta orden/cliente:
         if (this.uiState.promoDecisions[decisionKey] === "declined") {
-            this.uiState.disabledRewards.add(reward.id);
+            this.uiState.disabledRewards.add(actualReward.id);
             this._entintadosReconcileDiscounts();
             return false;
         }
@@ -201,7 +202,7 @@ patch(PosOrder.prototype, {
                 const choice = await new Promise((resolve) => {
                     posStoreInstance.dialog.add(ConfirmationDialog, {
                         title: "Promoción disponible vs Acuerdos Comerciales",
-                        body: `El cliente seleccionado cuenta con acuerdos comerciales de descuento y el pedido califica para la promoción "${program?.name || reward.description}". ¿Qué deseas aplicar?`,
+                        body: `El cliente seleccionado cuenta con acuerdos comerciales de descuento y el pedido califica para la promoción "${program?.name || actualReward.description}". ¿Qué deseas aplicar?`,
                         confirmLabel: "Aplicar promoción",
                         cancelLabel: "Mantener acuerdos del cliente",
                         confirm: () => resolve("promo"),
@@ -212,8 +213,8 @@ patch(PosOrder.prototype, {
                 if (choice === "discount") {
                     this.uiState.promoDecisions[decisionKey] = "declined";
                     this.uiState.pricingModePreference = "commercial_agreements";
-                    this.uiState.disabledRewards.add(reward.id);
-                    if (this.uiState.activePromoReward?.id === reward.id) {
+                    this.uiState.disabledRewards.add(actualReward.id);
+                    if (this.uiState.activePromoReward?.id === actualReward.id) {
                         this.uiState.activePromoReward = null;
                     }
                     this._entintadosReconcileDiscounts();
@@ -228,13 +229,13 @@ patch(PosOrder.prototype, {
         }
 
         // 4. Si la promoción es aceptada (o el cliente no tenía acuerdos de descuento):
-        this.uiState.activePromoReward = reward;
-        this.uiState.lastPromoReward = reward;
-        this._entintadosApplyInlinePromoDiscount(reward);
+        this.uiState.activePromoReward = actualReward;
+        this.uiState.lastPromoReward = actualReward;
+        this._entintadosApplyInlinePromoDiscount(actualReward);
 
         // Eliminar o evitar cualquier línea independiente de recompensa (is_reward_line)
         const rewardLines = (this.lines || []).filter(
-            (l) => l.is_reward_line && (l.reward_id?.id === reward.id || l.reward_identifier_code)
+            (l) => l.is_reward_line && (l.reward_id?.id === actualReward.id || l.reward_identifier_code)
         );
         for (const rl of rewardLines) {
             this._entintadosInternalRemoval = true;
@@ -298,14 +299,32 @@ patch(PosOrder.prototype, {
         return result;
     },
 
+    _entintadosGetProgram(reward) {
+        if (!reward) return null;
+        const actualReward = reward.reward || reward;
+        const programOrId = actualReward.program_id;
+        if (!programOrId) return null;
+        if (typeof programOrId === "object" && programOrId.trigger) {
+            return programOrId;
+        }
+        const models = this.models || posStoreInstance?.models;
+        const programId = typeof programOrId === "object" ? programOrId.id : programOrId;
+        if (programId && models?.["loyalty.program"]?.get) {
+            const resolved = models["loyalty.program"].get(programId);
+            if (resolved && typeof resolved === "object" && resolved.trigger) {
+                return resolved;
+            }
+        }
+        return null;
+    },
+
     _entintadosCheckActivePromoQualification() {
         if (!this.uiState?.activePromoReward) return;
-        const reward = this.uiState.activePromoReward;
-        const program = reward.program_id;
-        if (!program) return;
+        const reward = this.uiState.activePromoReward.reward || this.uiState.activePromoReward;
+        const program = this._entintadosGetProgram(reward);
 
-        let qualifies = true;
-        if (typeof this._programIsApplicable === "function" && !this._programIsApplicable(program)) {
+        let qualifies = Boolean(program);
+        if (qualifies && typeof this._programIsApplicable === "function" && !this._programIsApplicable(program)) {
             qualifies = false;
         }
         if (qualifies && typeof this._canGenerateRewards === "function") {
@@ -338,7 +357,11 @@ patch(PosOrder.prototype, {
 
     _entintadosGetEligiblePromoReward() {
         if (this.uiState?.activePromoReward) {
-            return this.uiState.activePromoReward;
+            const activeReward = this.uiState.activePromoReward.reward || this.uiState.activePromoReward;
+            if (this._entintadosGetProgram(activeReward)) {
+                return activeReward;
+            }
+            this.uiState.activePromoReward = null;
         }
 
         const nonRewardLines = (this.lines || []).filter((l) => !l.is_reward_line);
@@ -347,9 +370,10 @@ patch(PosOrder.prototype, {
         }
 
         if (this.uiState?.lastPromoReward) {
-            const program = this.uiState.lastPromoReward.program_id;
-            let qualifies = true;
-            if (typeof this._programIsApplicable === "function" && !this._programIsApplicable(program)) {
+            const lastReward = this.uiState.lastPromoReward.reward || this.uiState.lastPromoReward;
+            const program = this._entintadosGetProgram(lastReward);
+            let qualifies = Boolean(program);
+            if (qualifies && typeof this._programIsApplicable === "function" && !this._programIsApplicable(program)) {
                 qualifies = false;
             }
             if (qualifies && typeof this._canGenerateRewards === "function") {
@@ -358,16 +382,21 @@ patch(PosOrder.prototype, {
                 }
             }
             if (qualifies) {
-                return this.uiState.lastPromoReward;
+                return lastReward;
             }
         }
 
         if (typeof this.getClaimableRewards === "function") {
             const claimable = this.getClaimableRewards() || [];
-            const promo = claimable.find(
-                (r) => r.reward_type === "discount" && r.discount_mode === "percent"
-            );
-            if (promo) return promo;
+            for (const item of claimable) {
+                const reward = item.reward || item;
+                if (reward?.reward_type === "discount" && reward?.discount_mode === "percent") {
+                    const program = this._entintadosGetProgram(reward);
+                    if (program) {
+                        return reward;
+                    }
+                }
+            }
         }
 
         const models = this.models || posStoreInstance?.models;
@@ -376,7 +405,7 @@ patch(PosOrder.prototype, {
             if (reward.reward_type !== "discount" || reward.discount_mode !== "percent") {
                 continue;
             }
-            const program = reward.program_id;
+            const program = this._entintadosGetProgram(reward);
             if (!program) continue;
 
             let qualifies = true;
@@ -402,21 +431,22 @@ patch(PosOrder.prototype, {
 
     _entintadosApplyInlinePromoDiscount(reward) {
         if (!reward) return;
-        const program = reward.program_id;
-        const promoDiscount = Math.min(reward.discount, 100);
-        const originLabel = `Promoción: ${program?.name || reward.description || ""}`;
+        const rewardObj = reward.reward || reward;
+        const program = this._entintadosGetProgram(rewardObj);
+        const promoDiscount = Math.min(rewardObj.discount || 0, 100);
+        const originLabel = `Promoción: ${program?.name || rewardObj.description || ""}`;
 
         let eligibleLines = [];
-        if (reward.discount_applicability === "order") {
+        if (rewardObj.discount_applicability === "order") {
             eligibleLines = (this.lines || []).filter(
                 (l) => !l.is_reward_line && !l.is_tint_colorant && l.product_id?.tint_role !== "colorant"
             );
-        } else if (reward.discount_applicability === "specific") {
-            eligibleLines = (this._getSpecificDiscountableLines?.(reward) || []).filter(
+        } else if (rewardObj.discount_applicability === "specific") {
+            eligibleLines = (this._getSpecificDiscountableLines?.(rewardObj) || []).filter(
                 (l) => !l.is_reward_line && !l.is_tint_colorant && l.product_id?.tint_role !== "colorant"
             );
-        } else if (reward.discount_applicability === "cheapest") {
-            const cheapest = this._getCheapestLine?.(reward);
+        } else if (rewardObj.discount_applicability === "cheapest") {
+            const cheapest = this._getCheapestLine?.(rewardObj);
             if (cheapest && !cheapest.is_tint_colorant && cheapest.product_id?.tint_role !== "colorant") {
                 eligibleLines = [cheapest];
             }

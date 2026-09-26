@@ -22,12 +22,17 @@ export class PromoTogglePopup extends Component {
     };
 
     get promoName() {
-        const reward = this.props.promoReward;
-        return reward?.program_id?.name || reward?.description || _t("Promoción Vigente");
+        const reward = this.props.promoReward?.reward || this.props.promoReward;
+        const models = this.env?.services?.pos?.models;
+        const program =
+            reward?.program_id && typeof reward.program_id === "object"
+                ? reward.program_id
+                : (models?.["loyalty.program"]?.get?.(reward?.program_id) || null);
+        return program?.name || reward?.description || _t("Promoción Vigente");
     }
 
     get promoDiscount() {
-        const reward = this.props.promoReward;
+        const reward = this.props.promoReward?.reward || this.props.promoReward;
         return reward?.discount ? Math.min(reward.discount, 100) : 0;
     }
 
