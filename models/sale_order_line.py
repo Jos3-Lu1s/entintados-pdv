@@ -86,8 +86,6 @@ class SaleOrderLine(models.Model):
         super()._compute_price_unit()
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line.order_id.state not in ('draft', 'sent'):
-                continue
             if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
                 continue
             if (
@@ -107,8 +105,6 @@ class SaleOrderLine(models.Model):
     def _reset_price_unit(self):
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line.order_id.state not in ('draft', 'sent'):
-                continue
             if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
                 continue
             super(SaleOrderLine, line)._reset_price_unit()
@@ -136,8 +132,6 @@ class SaleOrderLine(models.Model):
         super()._compute_discount()
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line.order_id.state not in ('draft', 'sent'):
-                continue
             if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
                 line.discount = line._origin.discount
                 line.pricing_rule_type = line._origin.pricing_rule_type or 'none'

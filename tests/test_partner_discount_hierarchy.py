@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo.exceptions import ValidationError
+from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -806,7 +807,104 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(line.discount, 15.0)
         self.assertEqual(line.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (15.0%)")
 
+    def _create_confirmed_order(self, partner, product, qty=1.0):
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': qty})],
+        })
+        order.action_confirm()
+        self.assertEqual(order.state, 'sale')
+        return order
 
+    def _add_line_with_form(self, order, product, qty=1.0):
+        previous_lines = order.order_line
+        with Form(order) as order_form:
+            with order_form.order_line.new() as line_form:
+                line_form.product_id = product
+                line_form.product_uom_qty = qty
+        return order.order_line - previous_lines
 
+    def test_confirmed_order_new_line_without_agreement(self):
+        """Una línea nueva en un pedido confirmado toma el precio de tarifa (no 0)."""
+        partner = self.partners.create({'name': 'Cliente Sin Acuerdos', 'is_customer': True})
+        order = self._create_confirmed_order(partner, self.prod_1)
 
+        new_line = self._add_line_with_form(order, self.prod_3)
 
+        self.assertEqual(new_line.price_unit, 100.0)
+        self.assertEqual(new_line.discount, 0.0)
+        self.assertEqual(new_line.pricing_rule_type, 'none')
+        self.assertEqual(order.amount_untaxed, 600.0)
+        self.assertEqual(new_line._prepare_invoice_line()['price_unit'], 100.0)
+
+    def test_confirmed_order_new_line_fixed_price(self):
+        """Una línea nueva en un pedido confirmado aplica el precio fijo vigente del cliente."""
+        self.partner.discount_rule_ids.unlink()
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_3.id,
+            'fixed_price': 70.0,
+        })
+        order = self._create_confirmed_order(self.partner, self.prod_1)
+
+        new_line = self._add_line_with_form(order, self.prod_3)
+
+        self.assertEqual(new_line.price_unit, 70.0)
+        self.assertEqual(new_line.discount, 0.0)
+        self.assertEqual(new_line.pricing_rule_type, 'fixed_price')
+        self.assertEqual(new_line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(new_line._prepare_invoice_line()['price_unit'], 70.0)
+
+    def test_confirmed_order_new_line_discount_rules(self):
+        """Una línea nueva en un pedido confirmado aplica el descuento vigente de cada nivel."""
+        cases = [
+            ('product', {'applied_on': '0_product', 'product_id': self.prod_3.id, 'discount': 10.0},
+             self.prod_3, 100.0, 10.0),
+            ('line', {'applied_on': '1_line', 'line_id': self.line_1.id, 'discount': 12.0},
+             self.prod_1, 500.0, 12.0),
+            ('scheme', {'applied_on': '2_scheme', 'scheme_id': self.schema_a.id, 'discount': 8.0},
+             self.prod_2, 800.0, 8.0),
+            ('global', None, self.prod_3, 100.0, 5.0),
+        ]
+        for origin_type, rule_vals, product, price, discount in cases:
+            with self.subTest(origin_type=origin_type):
+                self.partner.discount_rule_ids.unlink()
+                if rule_vals:
+                    self.rules.create(dict(rule_vals, partner_id=self.partner.id, rule_type='discount'))
+                order = self._create_confirmed_order(self.partner, self.prod_1)
+
+                new_line = self._add_line_with_form(order, product)
+
+                self.assertEqual(new_line.price_unit, price)
+                self.assertAlmostEqual(new_line.discount, discount)
+                self.assertEqual(new_line.pricing_rule_type, origin_type)
+
+    def test_confirmed_order_existing_lines_frozen(self):
+        """Al agregar una línea a un pedido confirmado, las líneas previas conservan su acuerdo
+        aunque el acuerdo del cliente haya cambiado; la nueva toma el acuerdo vigente."""
+        self.partner.discount_rule_ids.unlink()
+        rule = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 300.0,
+        })
+        order = self._create_confirmed_order(self.partner, self.prod_1)
+        old_line = order.order_line
+        self.assertEqual(old_line.price_unit, 300.0)
+
+        rule.write({'fixed_price': 420.0})
+        new_line = self._add_line_with_form(order, self.prod_1)
+
+        self.assertEqual(old_line.price_unit, 300.0)
+        self.assertEqual(new_line.price_unit, 420.0)
+
+        with Form(order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.product_uom_qty = 5.0
+        self.assertEqual(old_line.product_uom_qty, 5.0)
+        self.assertEqual(old_line.price_unit, 300.0)
+        self.assertEqual(old_line.pricing_rule_type, 'fixed_price')
