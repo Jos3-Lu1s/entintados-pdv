@@ -91,13 +91,16 @@ def format_points_long(points):
     '9 Onzas 24 Pts. (456 Pts.)'
     >>> format_points_long(24.5)
     '24.5 Pts.'
+    >>> format_points_long(-456)
+    '-9 Onzas 24 Pts. (-456 Pts.)'
     """
     total = float(points or 0)
+    sign = "-" if total < 0 else ""
     ounces, rest = split_points(abs(total))
     fmt_total = _fmt_num(total)
     if not ounces:
-        return "%s Pts." % _fmt_num(total)
-    parts = ["%d %s" % (ounces, "Onza" if ounces == 1 else "Onzas")]
+        return "%s Pts." % fmt_total
+    parts = ["%s%d %s" % (sign, ounces, "Onza" if ounces == 1 else "Onzas")]
     if rest:
         parts.append("%s Pts." % _fmt_num(rest))
     return "%s (%s Pts.)" % (" ".join(parts), fmt_total)
