@@ -106,7 +106,7 @@ def format_points_long(points):
     return "%s (%s Pts.)" % (" ".join(parts), fmt_total)
 
 
-def to_points(ounces=0, points=0):
+def to_points(ounces: float = 0, points: float = 0):
     """Convierte una cantidad en notación mixta a puntos totales.
 
     >>> to_points(9, 24)
@@ -144,4 +144,7 @@ def parse_points(value):
     ounces, points = match.group("ounces"), match.group("points")
     if ounces is None and points is None:
         return None
-    return to_points(ounces or 0, points or 0)
+    ounces_val = float(ounces) if ounces else 0
+    points_val = float(points) if points else 0
+    return to_points(ounces_val, points_val)
+
