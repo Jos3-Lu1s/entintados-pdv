@@ -979,3 +979,41 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         line.write({'price_unit': 55.0})
         line.write({'product_uom_qty': 12.0})
         self.assertEqual(line.price_unit, 55.0)
+
+    def test_saved_line_qty_change_after_partner_change_uses_new_partner(self):
+        """Cambiar el cliente sin guardar y luego la cantidad no devuelve la línea al acuerdo
+        del cliente anterior, ni en pantalla ni al guardar."""
+        self.partner.discount_rule_ids.unlink()
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_1.id,
+            'fixed_price': 350.0,
+        })
+        partner_b = self.partners.create({
+            'name': 'Cliente B Global',
+            'is_customer': True,
+            'discount': 0.10,
+        })
+        self.env.user.group_ids |= self.env.ref('sale.group_discount_per_so_line')
+        cases = [
+            (self.partner, partner_b, (500.0, 10.0, 'Desc. Global Cliente (10.0%)')),
+            (partner_b, self.partner, (350.0, 0.0, 'Precio Fijo')),
+        ]
+        for partner_from, partner_to, expected in cases:
+            with self.subTest(partner_from=partner_from.name, partner_to=partner_to.name):
+                order = self.sale_orders.create({
+                    'partner_id': partner_from.id,
+                    'order_line': [(0, 0, {'product_id': self.prod_1.id, 'product_uom_qty': 1.0})],
+                })
+                line = order.order_line
+                with Form(order) as order_form:
+                    order_form.partner_id = partner_to
+                    with order_form.order_line.edit(0) as line_form:
+                        line_form.product_uom_qty = 2.0
+                        self.assertEqual(
+                            (line_form.price_unit, line_form.discount, line_form.pricing_rule_origin),
+                            expected,
+                        )
+                self.assertEqual((line.price_unit, line.discount, line.pricing_rule_origin), expected)

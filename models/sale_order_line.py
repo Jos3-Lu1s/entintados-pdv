@@ -67,6 +67,19 @@ class SaleOrderLine(models.Model):
                         vals['pricing_rule_id'] = False
         return super().write(vals)
 
+    def _keeps_saved_pricing(self):
+        """Línea guardada cuyo producto y cliente no cambiaron: conserva el acuerdo de `_origin`.
+
+        En un onchange con el cliente cambiado y sin guardar, `_origin` aún trae los valores
+        del cliente anterior, así que no puede usarse como acuerdo vigente.
+        """
+        self.ensure_one()
+        return bool(
+            self._origin.id
+            and self.product_id == self._origin.product_id
+            and self.order_id.partner_id == self._origin.order_id.partner_id
+        )
+
     @api.onchange('product_id')
     def _onchange_product_id(self):
         super()._onchange_product_id()
@@ -86,7 +99,7 @@ class SaleOrderLine(models.Model):
         super()._compute_price_unit()
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
+            if not force_recompute and line._keeps_saved_pricing():
                 continue
             if (
                 line.product_id
@@ -105,7 +118,7 @@ class SaleOrderLine(models.Model):
     def _reset_price_unit(self):
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
+            if not force_recompute and line._keeps_saved_pricing():
                 # Línea guardada: la tarifa se recalcula (cantidad/UdM), pero un precio fijo
                 # de acuerdo ya aplicado se conserva congelado.
                 frozen_type = line._origin.pricing_rule_type
@@ -140,7 +153,7 @@ class SaleOrderLine(models.Model):
         super()._compute_discount()
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self:
-            if line._origin.id and not force_recompute and line.product_id == line._origin.product_id:
+            if not force_recompute and line._keeps_saved_pricing():
                 line.discount = line._origin.discount
                 line.pricing_rule_type = line._origin.pricing_rule_type or 'none'
                 line.pricing_rule_origin = line._origin.pricing_rule_origin or ''
