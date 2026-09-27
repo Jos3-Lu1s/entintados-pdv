@@ -1083,3 +1083,226 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             order.write({'partner_id': partner_b.id})
             order.invalidate_recordset()
             self.assertEqual(order.pricelist_id, pricelist_a)
+
+    # --- Convivencia tarifa × acuerdo comercial (SPEC 02) ---
+
+    def _enable_line_discounts(self):
+        self.env.user.group_ids |= self.env.ref('product.group_product_pricelist')
+        self.env.user.group_ids |= self.env.ref('sale.group_discount_per_so_line')
+
+    def _create_percentage_pricelist(self, name='Tarifa -20%', items=None):
+        """Tarifa con reglas `percentage`; por defecto −20 % global."""
+        items = items or [{'applied_on': '3_global', 'percent_price': 20.0}]
+        return self.env['product.pricelist'].create({
+            'name': name,
+            'item_ids': [(0, 0, dict(item, compute_price='percentage')) for item in items],
+        })
+
+    def _create_pricelist_partner(self, name, pricelist):
+        partner = self.partners.create({'name': name, 'is_customer': True, 'discount': 0.0})
+        partner.property_product_pricelist = pricelist
+        return partner
+
+    def _line_values(self, line):
+        """(price_unit, % tarifa, % acuerdo, discount combinado)."""
+        return (line.price_unit, line.pricelist_discount, line.agreement_discount, line.discount)
+
+    def _line_badge(self, line):
+        return (line.pricing_rule_type, line.pricing_rule_origin)
+
+    def test_update_prices_keeps_agreement_discount(self):
+        """AUD-0021: "Actualizar precios" no borra el descuento del acuerdo y reaplica el vigente."""
+        self._enable_line_discounts()
+        partner_a = self._create_pricelist_partner(
+            'Cliente Tarifa Lista', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
+        partner_b = self._create_pricelist_partner('Cliente Tarifa -20', self._create_percentage_pricelist())
+        rule = self.rules.create({
+            'partner_id': partner_b.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.prod_3.id,
+            'discount': 10.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': partner_a.id,
+            'order_line': [(0, 0, {'product_id': self.prod_3.id, 'product_uom_qty': 1.0})],
+        })
+        line = order.order_line
+        with Form(order) as order_form:
+            order_form.partner_id = partner_b
+
+        order.action_update_prices()
+        self.assertEqual(self._line_values(line), (100.0, 20.0, 10.0, 28.0))
+        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertAlmostEqual(line.price_subtotal, 72.0)
+
+        rule.write({'discount': 15.0})
+        order.action_update_prices()
+        self.assertEqual(self._line_values(line), (100.0, 20.0, 15.0, 32.0))
+        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (15.0%)'))
+
+    def test_pricelist_discount_combined_with_agreement_discount(self):
+        """Tarifa −20 % y acuerdo 10 %: el discount combina ambos en cascada con desglose visible."""
+        self._enable_line_discounts()
+        partner = self._create_pricelist_partner('Cliente Tarifa y Acuerdo', self._create_percentage_pricelist())
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.prod_3.id,
+            'discount': 10.0,
+        })
+        Item = self.env.registry['product.pricelist.item']
+        cases = [
+            (True, (100.0, 20.0, 10.0, 28.0)),
+            (False, (80.0, 0.0, 10.0, 10.0)),
+        ]
+        for discount_feature, expected in cases:
+            with self.subTest(group_discount_per_so_line=discount_feature), \
+                    patch.object(Item, '_is_discount_feature_enabled', lambda self, v=discount_feature: v):
+                order = self.sale_orders.create({
+                    'partner_id': partner.id,
+                    'order_line': [(0, 0, {'product_id': self.prod_3.id, 'product_uom_qty': 1.0})],
+                })
+                line = order.order_line
+                self.assertEqual(self._line_values(line), expected)
+                self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+                self.assertAlmostEqual(line.price_subtotal, 72.0)
+
+    def test_pricelist_discount_kept_without_agreement(self):
+        """Sin acuerdo aplicable (o producto servicio) la línea lleva solo el % de la tarifa."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+        partner = self._create_pricelist_partner('Cliente Solo Tarifa', pricelist)
+        service = self.templates.create({
+            'name': 'Servicio de Igualación',
+            'type': 'service',
+            'list_price': 100.0,
+        }).product_variant_ids[0]
+        self.partner.property_product_pricelist = pricelist
+        cases = [
+            ('producto sin acuerdo', partner, self.prod_3),
+            ('servicio con acuerdo global', self.partner, service),
+        ]
+        for label, customer, product in cases:
+            with self.subTest(label):
+                order = self.sale_orders.create({
+                    'partner_id': customer.id,
+                    'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': 1.0})],
+                })
+                line = order.order_line
+                self.assertEqual(self._line_values(line), (100.0, 20.0, 0.0, 20.0))
+                self.assertEqual(self._line_badge(line), ('none', ''))
+                self.assertAlmostEqual(line.price_subtotal, 80.0)
+
+        with self.subTest('write de product_id sin acuerdo'):
+            order = self.sale_orders.create({
+                'partner_id': partner.id,
+                'order_line': [(0, 0, {'product_id': self.prod_1.id, 'product_uom_qty': 1.0})],
+            })
+            line = order.order_line
+            line.write({'product_id': self.prod_3.id})
+            self.assertEqual(self._line_values(line), (100.0, 20.0, 0.0, 20.0))
+            self.assertEqual(self._line_badge(line), ('none', ''))
+
+    def test_fixed_price_agreement_overrides_pricelist(self):
+        """El precio fijo del acuerdo gana sobre la tarifa y deja ambos descuentos en 0."""
+        self._enable_line_discounts()
+        partner = self._create_pricelist_partner('Cliente Precio Fijo', self._create_percentage_pricelist())
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_3.id,
+            'fixed_price': 70.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'order_line': [(0, 0, {'product_id': self.prod_3.id, 'product_uom_qty': 1.0})],
+        })
+        line = order.order_line
+        self.assertEqual(self._line_values(line), (70.0, 0.0, 0.0, 0.0))
+        self.assertEqual(self._line_badge(line), ('fixed_price', 'Precio Fijo'))
+
+    def test_saved_line_qty_change_keeps_agreement_and_follows_pricelist(self):
+        """Línea guardada con acuerdo 10 %: al subir de escalón el % de la tarifa se recalcula y
+        el del acuerdo se conserva."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist(items=[{
+            'applied_on': '0_product_variant',
+            'product_id': self.prod_3.id,
+            'percent_price': 20.0,
+            'min_quantity': 10.0,
+        }])
+        partner = self._create_pricelist_partner('Cliente Acuerdo Volumen', pricelist)
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.prod_3.id,
+            'discount': 10.0,
+        })
+        badge = ('product', 'Desc. Producto (10.0%)')
+
+        with self.subTest('write ORM'):
+            order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+            self.assertEqual(self._line_values(line), (100.0, 0.0, 10.0, 10.0))
+            line.write({'product_uom_qty': 12.0})
+            self.assertEqual(self._line_values(line), (100.0, 20.0, 10.0, 28.0))
+            self.assertEqual(self._line_badge(line), badge)
+
+        with self.subTest('Form'):
+            order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+            with Form(order) as order_form:
+                with order_form.order_line.edit(0) as line_form:
+                    line_form.product_uom_qty = 12.0
+            self.assertEqual(self._line_values(line), (100.0, 20.0, 10.0, 28.0))
+            self.assertEqual(self._line_badge(line), badge)
+
+    def test_saved_line_qty_change_without_agreement_follows_pricelist(self):
+        """Línea guardada sin acuerdo: al subir de escalón, el descuento sigue a la tarifa."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist(items=[
+            {'applied_on': '0_product_variant', 'product_id': self.prod_3.id,
+             'percent_price': 20.0, 'min_quantity': 10.0},
+            {'applied_on': '0_product_variant', 'product_id': self.prod_3.id,
+             'percent_price': 10.0, 'min_quantity': 1.0},
+        ])
+        partner = self._create_pricelist_partner('Cliente Escalones', pricelist)
+
+        with self.subTest('write ORM'):
+            order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+            self.assertEqual(self._line_values(line), (100.0, 10.0, 0.0, 10.0))
+            line.write({'product_uom_qty': 12.0})
+            self.assertEqual(self._line_values(line), (100.0, 20.0, 0.0, 20.0))
+            self.assertEqual(self._line_badge(line), ('none', ''))
+
+        with self.subTest('Form'):
+            order, line = self._create_saved_quotation(partner, pricelist, self.prod_3)
+            with Form(order) as order_form:
+                with order_form.order_line.edit(0) as line_form:
+                    line_form.product_uom_qty = 12.0
+            self.assertEqual(self._line_values(line), (100.0, 20.0, 0.0, 20.0))
+            self.assertEqual(self._line_badge(line), ('none', ''))
+
+    def test_manual_discount_clears_breakdown(self):
+        """Un discount escrito por código manda: limpia el desglose y el badge del acuerdo."""
+        self._enable_line_discounts()
+        partner = self._create_pricelist_partner('Cliente Descuento Manual', self._create_percentage_pricelist())
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.prod_3.id,
+            'discount': 10.0,
+        })
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'order_line': [(0, 0, {'product_id': self.prod_3.id, 'product_uom_qty': 1.0})],
+        })
+        line = order.order_line
+        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+
+        line.write({'discount': 5.0})
+        self.assertEqual(self._line_values(line), (100.0, 0.0, 0.0, 5.0))
+        self.assertEqual(self._line_badge(line), ('none', ''))

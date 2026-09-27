@@ -24,6 +24,10 @@
             <xpath expr="//list/field[@name='discount']" position="attributes">
                 <attribute name="readonly">1</attribute>
             </xpath>
+            <xpath expr="//list/field[@name='discount']" position="before">
+                <field name="pricelist_discount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
+                <field name="agreement_discount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
+            </xpath>
             <xpath expr="//list/field[@name='discount']" position="after">
                 <field name="pricing_rule_type" column_invisible="True"/>
                 <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'promo'"/>

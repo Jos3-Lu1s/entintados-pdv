@@ -57,6 +57,11 @@ class SaleOrder(models.Model):
             order._recompute_pricing_rules()
             order.show_update_pricelist = False
 
+    def _recompute_prices(self):
+        # "Actualizar precios": el core pone discount = 0 y llama a _compute_discount() sin forzar;
+        # forzado, se reaplica el acuerdo vigente en vez de releer ese 0 como acuerdo congelado.
+        return super(SaleOrder, self.with_context(force_price_recomputation=True))._recompute_prices()
+
     def _recompute_pricing_rules(self):
         for order in self:
             lines_to_update = order.order_line.filtered(
