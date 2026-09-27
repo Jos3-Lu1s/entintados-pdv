@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from unittest.mock import patch
+
 from odoo.exceptions import ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
@@ -1017,3 +1019,67 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                             expected,
                         )
                 self.assertEqual((line.price_unit, line.discount, line.pricing_rule_origin), expected)
+
+    def test_sent_quotation_change_partner_persists_new_pricelist(self):
+        """En cotización 'sent', guardar un cambio de cliente sin enviar pricelist_id (el campo es
+        readonly en la vista) persiste la tarifa del nuevo cliente y recalcula con ella."""
+        self.env.user.group_ids |= self.env.ref('product.group_product_pricelist')
+        pricelist_a = self.env['product.pricelist'].create({'name': 'Tarifa A'})
+        pricelist_b = self.env['product.pricelist'].create({
+            'name': 'Tarifa B',
+            'item_ids': [(0, 0, {
+                'applied_on': '0_product_variant',
+                'product_id': self.prod_1.id,
+                'compute_price': 'fixed',
+                'fixed_price': 80.0,
+            })],
+        })
+        pricelist_x = self.env['product.pricelist'].create({'name': 'Tarifa X'})
+        partner_a = self.partners.create({'name': 'Cliente Tarifa A', 'is_customer': True})
+        partner_b = self.partners.create({'name': 'Cliente Tarifa B', 'is_customer': True})
+        partner_a.property_product_pricelist = pricelist_a
+        partner_b.property_product_pricelist = pricelist_b
+
+        def create_sent_order():
+            order = self.sale_orders.create({
+                'partner_id': partner_a.id,
+                'order_line': [(0, 0, {'product_id': self.prod_1.id, 'product_uom_qty': 1.0})],
+            })
+            order.state = 'sent'
+            self.assertEqual(order.pricelist_id, pricelist_a)
+            self.assertEqual(order.order_line.price_unit, 500.0)
+            return order
+
+        with self.subTest('tarifa del nuevo cliente'):
+            order = create_sent_order()
+            vals = {'partner_id': partner_b.id}
+            order.write(vals)
+            self.assertEqual(vals, {'partner_id': partner_b.id}, "write no debe mutar vals.")
+            order.invalidate_recordset()
+            order.order_line.invalidate_recordset()
+            self.assertEqual(order.pricelist_id, pricelist_b)
+            self.assertEqual(order.order_line.price_unit, 80.0)
+
+        with self.subTest('cliente sin tarifa conserva la actual'):
+            order = create_sent_order()
+            partner_c = self.partners.create({'name': 'Cliente Sin Tarifa', 'is_customer': True})
+            Pricelist = self.env.registry['product.pricelist']
+            with patch.object(Pricelist, '_get_partner_pricelist_multi',
+                              lambda self, partner_ids: {pid: self.browse() for pid in partner_ids}):
+                partner_c.invalidate_recordset(['property_product_pricelist'])
+                self.assertFalse(partner_c.property_product_pricelist)
+                order.write({'partner_id': partner_c.id})
+            order.invalidate_recordset()
+            self.assertEqual(order.pricelist_id, pricelist_a)
+
+        with self.subTest('pricelist_id explícito tiene prioridad'):
+            order = create_sent_order()
+            order.write({'partner_id': partner_b.id, 'pricelist_id': pricelist_x.id})
+            order.invalidate_recordset()
+            self.assertEqual(order.pricelist_id, pricelist_x)
+
+        with self.subTest('pedido confirmado no cambia de tarifa'):
+            order = self._create_confirmed_order(partner_a, self.prod_1)
+            order.write({'partner_id': partner_b.id})
+            order.invalidate_recordset()
+            self.assertEqual(order.pricelist_id, pricelist_a)

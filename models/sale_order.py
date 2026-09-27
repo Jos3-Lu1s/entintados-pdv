@@ -33,6 +33,12 @@ class SaleOrder(models.Model):
             if 'opportunity_id' in vals:
                 order._sync_opportunity_stage()
             if 'partner_id' in vals and order.state in ('draft', 'sent'):
+                # pricelist_id es readonly en la vista y el core solo la reasigna en draft:
+                # sin esto, una cotización 'sent' guarda la tarifa del cliente anterior.
+                if 'pricelist_id' not in vals:
+                    pricelist = order.with_company(order.company_id).partner_id.property_product_pricelist
+                    if pricelist and pricelist != order.pricelist_id:
+                        order.pricelist_id = pricelist
                 order._recompute_pricing_rules()
             if vals.get('state') == 'sale' and order.state == 'sale':
                 order._cancel_sibling_quotations()
