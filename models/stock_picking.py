@@ -99,12 +99,9 @@ class StockPicking(models.Model):
 
     def _action_done(self):
             res = super()._action_done()
-            for picking in self:
-                if picking._is_material_output_type() and not picking.document_file:
-                    picking._generate_material_document()
             return res
                     
-    """ def _generate_material_document(self):
+    def _generate_material_document(self):
         self.ensure_one()
 
         report = self.env.ref(
@@ -121,7 +118,7 @@ class StockPicking(models.Model):
         self.write({
             'document_file': base64.b64encode(pdf_content),
             'document_filename': 'Solicitud_Material_%s.pdf' % (self.name or self.id),
-        }) """
+        })
     
     @api.depends('picking_type_id')
     def _compute_is_material_output_type(self):
@@ -135,13 +132,14 @@ class StockPicking(models.Model):
             
     def _is_current_user_auditor(self):
         """True si el usuario actual pertenece al departamento de Auditoría."""
-        department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
-        if not department:
+        """ department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)"""
+        self.ensure_one()
+        if not self.approval_request_id:
             return False
         employee = self.env['hr.employee'].search(
             [('user_id', '=', self.env.user.id)], limit=1
         )
-        return bool(employee and employee.department_id == department)
+        return bool(employee and employee in self.approval_request_id.material_auditor_ids)
     
     def _compute_is_material_auditor(self):
         for picking in self:

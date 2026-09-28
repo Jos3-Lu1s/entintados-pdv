@@ -8,6 +8,8 @@ from odoo.exceptions import UserError
 
 
 DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
+APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
+
 
 class MailActivity(models.Model):
     """Soporte de calendario (reuniones con hora y eventos de día completo) y acceso de lectura ampliado."""
@@ -159,7 +161,10 @@ class MailActivity(models.Model):
     
     def action_feedback(self, feedback=False, attachment_ids=None):
         demo_activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+    
         for activity in self:
+            # --- Bloqueo de la actividad de Demostración ---
             if (
                 demo_activity_type
                 and activity.activity_type_id == demo_activity_type
@@ -172,4 +177,11 @@ class MailActivity(models.Model):
                         "Se completa automáticamente al validar el uso de material "
                         "(adjuntando evidencia y validando la entrega)."
                     ))
+    
+            # --- Redirección: aprobar salida de material desde la actividad ---
+            if activity.res_model == 'approval.request' and category_salida:
+                request = self.env['approval.request'].browse(activity.res_id)
+                if request.category_id == category_salida and not request.material_auditor_ids:
+                    return request.action_approve()
+    
         return super().action_feedback(feedback=feedback, attachment_ids=attachment_ids)
