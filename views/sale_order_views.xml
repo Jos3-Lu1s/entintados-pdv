@@ -27,6 +27,8 @@
             <xpath expr="//list/field[@name='discount']" position="before">
                 <field name="pricelist_discount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
                 <field name="agreement_discount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
+                <field name="extra_discount_allowed" column_invisible="True"/>
+                <field name="extra_discount" readonly="not extra_discount_allowed" optional="show" groups="sale.group_discount_per_so_line"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="after">
                 <field name="pricing_rule_type" column_invisible="True"/>

@@ -1306,3 +1306,264 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         line.write({'discount': 5.0})
         self.assertEqual(self._line_values(line), (100.0, 0.0, 0.0, 5.0))
         self.assertEqual(self._line_badge(line), ('none', ''))
+
+    # --- Descuento adicional por línea (SPEC 03) ---
+
+    def _line_extra_values(self, line):
+        """(price_unit, % tarifa, % acuerdo, % adicional, discount combinado)."""
+        return tuple(round(value, 2) for value in (
+            line.price_unit, line.pricelist_discount, line.agreement_discount,
+            line.extra_discount, line.discount,
+        ))
+
+    def _apply_discount_wizard(self, order, percentage, discount_type='sol_discount'):
+        """Aplica el wizard "Descuento"; `percentage` en fracción (0.05 = 5 %), como el core."""
+        wizard = self.env['sale.order.discount'].create({
+            'sale_order_id': order.id,
+            'discount_type': discount_type,
+            'discount_percentage': percentage,
+        })
+        wizard.action_apply_discount()
+
+    def _create_agreement_partner(self, name, pricelist, discount=10.0, product=None):
+        partner = self._create_pricelist_partner(name, pricelist)
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': (product or self.prod_3).id,
+            'discount': discount,
+        })
+        return partner
+
+    def _create_fixed_price_partner(self, name, pricelist, price=70.0, product=None):
+        partner = self._create_pricelist_partner(name, pricelist)
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': (product or self.prod_3).id,
+            'fixed_price': price,
+        })
+        return partner
+
+    def _create_order(self, partner, *products):
+        return self.sale_orders.create({
+            'partner_id': partner.id,
+            'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': 1.0}) for product in products],
+        })
+
+    def _create_step_pricelist(self):
+        """−20 % para prod_3 solo desde 10 unidades."""
+        return self._create_percentage_pricelist(items=[{
+            'applied_on': '0_product_variant',
+            'product_id': self.prod_3.id,
+            'percent_price': 20.0,
+            'min_quantity': 10.0,
+        }])
+
+    def test_wizard_line_discount_keeps_breakdown(self):
+        """El wizard "En todas las líneas" suma un adicional sin borrar tarifa ni acuerdo."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+
+        with self.subTest('con acuerdo'):
+            partner = self._create_agreement_partner('Cliente Wizard Acuerdo', pricelist)
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 10.0, 5.0, 31.6))
+            self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+            self.assertAlmostEqual(line.price_subtotal, 68.40)
+
+        with self.subTest('sin acuerdo'):
+            partner = self._create_pricelist_partner('Cliente Wizard Sin Acuerdo', pricelist)
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 0.0, 5.0, 24.0))
+            self.assertAlmostEqual(line.price_subtotal, 76.0)
+
+    def test_wizard_line_discount_skips_ineligible_lines(self):
+        """El wizard no toca el precio fijo ni las líneas del producto de descuento."""
+        self._enable_line_discounts()
+        partner = self._create_fixed_price_partner('Cliente Wizard Precio Fijo', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_3, self.prod_1)
+        fixed_line = order.order_line.filtered(lambda l: l.product_id == self.prod_3)
+        eligible_line = order.order_line.filtered(lambda l: l.product_id == self.prod_1)
+
+        self._apply_discount_wizard(order, 0.10, discount_type='so_discount')
+        discount_product = order.company_id.sale_discount_product_id
+        discount_line = order.order_line.filtered(lambda l: l.product_id == discount_product)
+        self.assertTrue(discount_line)
+        discount_line_before = self._line_extra_values(discount_line)
+
+        self._apply_discount_wizard(order, 0.05)
+        self.assertEqual(self._line_extra_values(fixed_line), (70.0, 0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(self._line_badge(fixed_line), ('fixed_price', 'Precio Fijo'))
+        self.assertEqual(self._line_extra_values(discount_line), discount_line_before)
+        self.assertEqual(eligible_line.extra_discount, 5.0)
+
+    def test_wizard_line_discount_zero_clears_extra(self):
+        """Aplicar el wizard con 0 % quita el adicional y deja el combinado tarifa × acuerdo."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner('Cliente Wizard Cero', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_3)
+        line = order.order_line
+
+        self._apply_discount_wizard(order, 0.05)
+        self.assertEqual(line.extra_discount, 5.0)
+        self._apply_discount_wizard(order, 0.0)
+        self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 10.0, 0.0, 28.0))
+        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+
+    def test_extra_discount_persists_on_recompute(self):
+        """Cantidad, "Actualizar precios" y cambio de cliente conservan el adicional."""
+        self._enable_line_discounts()
+        pricelist = self._create_step_pricelist()
+        partner = self._create_agreement_partner('Cliente Adicional Escalón', pricelist)
+
+        with self.subTest('cantidad por write'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            self.assertEqual(self._line_extra_values(line), (100.0, 0.0, 10.0, 5.0, 14.5))
+            line.write({'product_uom_qty': 12.0})
+            self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 10.0, 5.0, 31.6))
+
+        with self.subTest('cantidad por Form'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            with Form(order) as order_form:
+                with order_form.order_line.edit(0) as line_form:
+                    line_form.product_uom_qty = 12.0
+            self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 10.0, 5.0, 31.6))
+
+        with self.subTest('Actualizar precios'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            order.action_update_prices()
+            self.assertEqual(self._line_extra_values(line), (100.0, 0.0, 10.0, 5.0, 14.5))
+
+        partner_b = self._create_agreement_partner('Cliente Adicional B', pricelist, discount=15.0)
+
+        with self.subTest('cambio de cliente por write'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            order.write({'partner_id': partner_b.id})
+            self.assertEqual(self._line_extra_values(line), (100.0, 0.0, 15.0, 5.0, 19.25))
+            self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (15.0%)'))
+
+        with self.subTest('cambio de cliente por Form'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            with Form(order) as order_form:
+                order_form.partner_id = partner_b
+            self.assertEqual(self._line_extra_values(line), (100.0, 0.0, 15.0, 5.0, 19.25))
+
+    def test_extra_discount_reset(self):
+        """Cambiar de producto, o a un cliente con precio fijo, pone el adicional en 0."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+        partner = self._create_agreement_partner('Cliente Adicional Reset', pricelist)
+
+        with self.subTest('producto por write'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            line.write({'product_id': self.prod_1.id})
+            self.assertEqual(self._line_extra_values(line), (500.0, 20.0, 0.0, 0.0, 20.0))
+
+        with self.subTest('producto por Form'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            with Form(order) as order_form:
+                with order_form.order_line.edit(0) as line_form:
+                    line_form.product_id = self.prod_1
+            self.assertEqual(self._line_extra_values(line), (500.0, 20.0, 0.0, 0.0, 20.0))
+
+        partner_fixed = self._create_fixed_price_partner('Cliente Adicional Fijo', pricelist)
+
+        with self.subTest('cliente con precio fijo por write'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            order.write({'partner_id': partner_fixed.id})
+            self.assertEqual(self._line_extra_values(line), (70.0, 0.0, 0.0, 0.0, 0.0))
+            self.assertEqual(self._line_badge(line), ('fixed_price', 'Precio Fijo'))
+
+        with self.subTest('cliente con precio fijo por Form'):
+            order = self._create_order(partner, self.prod_3)
+            line = order.order_line
+            self._apply_discount_wizard(order, 0.05)
+            with Form(order) as order_form:
+                order_form.partner_id = partner_fixed
+            self.assertEqual(self._line_extra_values(line), (70.0, 0.0, 0.0, 0.0, 0.0))
+            self.assertEqual(self._line_badge(line), ('fixed_price', 'Precio Fijo'))
+
+    def test_extra_discount_edit_recombines_without_repricing(self):
+        """Editar el adicional recombina con la tarifa guardada, sin volver a consultarla."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+        partner = self._create_agreement_partner('Cliente Adicional Edición', pricelist)
+        order_write = self._create_order(partner, self.prod_3)
+        order_form = self._create_order(partner, self.prod_3)
+        self.assertEqual(self._line_extra_values(order_write.order_line), (100.0, 20.0, 10.0, 0.0, 28.0))
+        pricelist.item_ids.write({'percent_price': 30.0})
+
+        with self.subTest('write'):
+            line = order_write.order_line
+            line.write({'extra_discount': 5.0})
+            self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 10.0, 5.0, 31.6))
+
+        with self.subTest('Form'):
+            line = order_form.order_line
+            with Form(order_form) as form:
+                with form.order_line.edit(0) as line_form:
+                    line_form.extra_discount = 5.0
+                    self.assertEqual(round(line_form.discount, 2), 31.6)
+            self.assertEqual(self._line_extra_values(line), (100.0, 20.0, 10.0, 5.0, 31.6))
+
+    def test_extra_discount_constraints(self):
+        """El servidor rechaza el adicional fuera de 0–100 o en una línea de precio fijo."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+        partner = self._create_fixed_price_partner('Cliente Adicional Restricción', pricelist)
+        order = self._create_order(partner, self.prod_3, self.prod_1)
+        fixed_line = order.order_line.filtered(lambda l: l.product_id == self.prod_3)
+        eligible_line = order.order_line.filtered(lambda l: l.product_id == self.prod_1)
+
+        with self.assertRaises(ValidationError):
+            fixed_line.write({'extra_discount': 5.0})
+        for value in (150.0, -1.0):
+            with self.subTest(extra_discount=value), self.assertRaises(ValidationError):
+                eligible_line.write({'extra_discount': value})
+
+    def test_manual_discount_clears_extra(self):
+        """Un discount manual limpia también el adicional."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner('Cliente Adicional Manual', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_3)
+        line = order.order_line
+        self._apply_discount_wizard(order, 0.05)
+
+        line.write({'discount': 7.0})
+        self.assertEqual(self._line_extra_values(line), (100.0, 0.0, 0.0, 0.0, 7.0))
+        self.assertEqual(self._line_badge(line), ('none', ''))
+
+    def test_new_line_after_wizard_has_no_extra(self):
+        """Una línea agregada después del wizard no hereda el adicional."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner('Cliente Adicional Nueva', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_3)
+        old_line = order.order_line
+        self._apply_discount_wizard(order, 0.05)
+
+        new_line = self._add_line_with_form(order, self.prod_3)
+        self.assertEqual(self._line_extra_values(new_line), (100.0, 20.0, 10.0, 0.0, 28.0))
+        self.assertEqual(old_line.extra_discount, 5.0)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 from odoo.tools import SQL, float_round
 from odoo.tools.sql import column_exists, create_column
 
@@ -63,6 +64,16 @@ class SaleOrderLine(models.Model):
         readonly=False,
         copy=False,
     )
+    extra_discount = fields.Float(
+        string='Desc. Adicional (%)',
+        digits='Discount',
+        compute='_compute_discount',
+        store=True,
+        precompute=True,
+        readonly=False,
+        copy=False,
+    )
+    extra_discount_allowed = fields.Boolean(compute='_compute_extra_discount_allowed')
 
     def _auto_init(self):
         # Columnas creadas y rellenadas antes del super(): si las crea el ORM, el compute se
@@ -83,9 +94,60 @@ class SaleOrderLine(models.Model):
             else:
                 # Instalación limpia: `pricing_rule_type` aún no existe, no hay acuerdos previos.
                 cr.execute("UPDATE sale_order_line SET agreement_discount = 0")
+        if not column_exists(cr, 'sale_order_line', 'extra_discount'):
+            # combine(t, a, 0) == combine(t, a): los importes guardados no cambian.
+            create_column(cr, 'sale_order_line', 'extra_discount', 'numeric')
+            cr.execute("UPDATE sale_order_line SET extra_discount = 0")
         return super()._auto_init()
 
+    @api.depends('display_type', 'pricing_rule_type', 'product_id', 'is_reward_line')
+    def _compute_extra_discount_allowed(self):
+        for line in self:
+            line.extra_discount_allowed = line._is_extra_discount_allowed()
+
+    def _is_extra_discount_allowed(self):
+        """Línea que puede recibir descuento adicional: no es precio fijo, recompensa, producto
+        de descuento de la compañía ni sección/nota."""
+        self.ensure_one()
+        return not (
+            self.display_type
+            or self.pricing_rule_type == 'fixed_price'
+            or getattr(self, 'is_reward_line', False)
+            or (self.product_id and self.product_id == self.company_id.sale_discount_product_id)
+        )
+
+    @api.constrains('extra_discount', 'pricing_rule_type', 'product_id')
+    def _check_extra_discount(self):
+        for line in self:
+            if not 0.0 <= line.extra_discount <= 100.0:
+                raise ValidationError(_(
+                    "El descuento adicional de la línea «%(line)s» debe estar entre 0 y 100 %%.",
+                    line=line.name,
+                ))
+            if line.extra_discount and not line._is_extra_discount_allowed():
+                raise ValidationError(_(
+                    "La línea «%(line)s» no admite descuento adicional: es de precio fijo, "
+                    "recompensa, producto de descuento o sección/nota.",
+                    line=line.name,
+                ))
+
     def write(self, vals):
+        # Adicional editado sin `discount`: se recombina con la tarifa y el acuerdo guardados.
+        # Los write internos (limpieza manual, asignaciones del compute) ya fijan `discount`.
+        recombine_extra = (
+            'extra_discount' in vals
+            and 'discount' not in vals
+            and not self.env.context.get('skip_manual_discount_breakdown')
+        )
+        if 'product_id' in vals and 'extra_discount' not in vals:
+            # En una línea guardada `_origin` es la propia línea: el compute no ve el cambio de
+            # producto, así que el adicional se quita aquí, en el mismo write.
+            changed = self.filtered(lambda line: line.product_id.id != vals['product_id'])
+            if changed and changed != self:
+                (self - changed).write(dict(vals))
+                return changed.write(dict(vals))
+            if changed:
+                vals = dict(vals, extra_discount=0.0)
         recompute_lines = self.browse()
         if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
             for line in self:
@@ -107,19 +169,24 @@ class SaleOrderLine(models.Model):
         manual_discount = (
             'discount' in vals
             and not self.env.context.get('skip_manual_discount_breakdown')
-            and not {'pricelist_discount', 'agreement_discount', 'pricing_rule_type'} & vals.keys()
+            and not {'pricelist_discount', 'agreement_discount', 'extra_discount', 'pricing_rule_type'} & vals.keys()
         )
         res = super().write(vals)
         if manual_discount:
             self.with_context(skip_manual_discount_breakdown=True).write({
                 'pricelist_discount': 0.0,
                 'agreement_discount': 0.0,
+                'extra_discount': 0.0,
                 'pricing_rule_type': 'none',
                 'pricing_rule_origin': '',
                 'pricing_rule_id': False,
             })
         elif recompute_lines:
             recompute_lines.with_context(force_price_recomputation=True)._compute_discount()
+        elif recombine_extra:
+            for line in self.with_context(skip_manual_discount_breakdown=True):
+                line.discount = line._combine_discounts(
+                    line.pricelist_discount, line.agreement_discount, line.extra_discount)
         return res
 
     def _keeps_saved_pricing(self):
@@ -134,6 +201,13 @@ class SaleOrderLine(models.Model):
             and self.product_id == self._origin.product_id
             and self.order_id.partner_id == self._origin.order_id.partner_id
         )
+
+    @api.onchange('extra_discount')
+    def _onchange_extra_discount(self):
+        # Solo recombina: no vuelve a consultar la tarifa.
+        for line in self:
+            line.discount = line._combine_discounts(
+                line.pricelist_discount, line.agreement_discount, line.extra_discount)
 
     @api.onchange('product_id')
     def _onchange_product_id(self):
@@ -218,6 +292,13 @@ class SaleOrderLine(models.Model):
             for line in self
             if not force_recompute and line._keeps_saved_pricing()
         }
+        # Adicional actual (no el de `_origin`): en el formulario puede traer lo que el usuario
+        # acaba de escribir. Solo sobrevive en líneas guardadas que conservan su producto.
+        extra = {
+            line: line.extra_discount
+            for line in self
+            if line._origin.id and line.product_id == line._origin.product_id
+        }
         super()._compute_discount()
         discount_enabled = self.env['product.pricelist.item']._is_discount_feature_enabled()
         # Llamado directo sobre líneas guardadas (p. ej. `_recompute_prices`), asignar `discount`
@@ -269,12 +350,19 @@ class SaleOrderLine(models.Model):
                     line.pricing_rule_origin = ''
                     line.pricing_rule_id = False
 
+            extra_discount = extra.get(line, 0.0) if line._is_extra_discount_allowed() else 0.0
             line.pricelist_discount = pricelist_discount
             line.agreement_discount = agreement_discount
-            line.discount = line._combine_discounts(pricelist_discount, agreement_discount)
+            line.extra_discount = extra_discount
+            line.discount = line._combine_discounts(pricelist_discount, agreement_discount, extra_discount)
 
-    def _combine_discounts(self, pricelist_discount, agreement_discount):
-        """Descuento en cascada: el acuerdo se aplica sobre el precio ya rebajado por la tarifa."""
-        combined = 100.0 * (1.0 - (1.0 - pricelist_discount / 100.0) * (1.0 - agreement_discount / 100.0))
+    def _combine_discounts(self, pricelist_discount, agreement_discount, extra_discount=0.0):
+        """Descuento en cascada: el acuerdo se aplica sobre el precio ya rebajado por la tarifa y
+        el adicional sobre el resultado."""
+        combined = 100.0 * (1.0 - (
+            (1.0 - pricelist_discount / 100.0)
+            * (1.0 - agreement_discount / 100.0)
+            * (1.0 - extra_discount / 100.0)
+        ))
         digits = self.env['decimal.precision'].precision_get('Discount')
         return float_round(combined, precision_digits=digits)
