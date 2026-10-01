@@ -33,8 +33,8 @@ class SaleOrder(models.Model):
             if 'opportunity_id' in vals:
                 order._sync_opportunity_stage()
             if 'partner_id' in vals and order.state in ('draft', 'sent'):
-                # pricelist_id es readonly en la vista y el core solo la reasigna en draft:
-                # sin esto, una cotización 'sent' guarda la tarifa del cliente anterior.
+                # El core solo reasigna pricelist_id automáticamente en draft:
+                # si no se pasa pricelist_id explícito al cambiar cliente en 'sent', se asigna la tarifa del cliente.
                 if 'pricelist_id' not in vals:
                     pricelist = order.with_company(order.company_id).partner_id.property_product_pricelist
                     if pricelist and pricelist != order.pricelist_id:
@@ -60,10 +60,19 @@ class SaleOrder(models.Model):
     def _recompute_prices(self):
         # "Actualizar precios": el core pone discount = 0 y llama a _compute_discount() sin forzar;
         # forzado, se reaplica el acuerdo vigente en vez de releer ese 0 como acuerdo congelado.
-        # Ese discount = 0 no es un descuento manual: no debe borrar el adicional.
-        return super(SaleOrder, self.with_context(
+        # Ese discount = 0 tampoco es un descuento manual, y el manual previo se restaura después.
+        manual_lines = self.order_line.filtered(lambda line: line.pricing_rule_type == 'manual')
+        manual_discounts = {line: line.discount for line in manual_lines}
+        res = super(SaleOrder, self.with_context(
             force_price_recomputation=True, skip_manual_discount_breakdown=True,
         ))._recompute_prices()
+        for line, discount in manual_discounts.items():
+            if line.pricing_rule_type == 'manual' and line.discount != discount:
+                line.with_context(skip_manual_discount_breakdown=True).write({
+                    'discount': discount,
+                    **line._manual_discount_values(discount),
+                })
+        return res
 
     def _recompute_pricing_rules(self):
         for order in self:

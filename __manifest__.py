@@ -85,6 +85,9 @@ Catálogo de entintado
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
+            # Indicador del origen del precio en las líneas de venta
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
         ],
     },
 

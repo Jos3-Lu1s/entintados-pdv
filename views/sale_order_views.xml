@@ -18,21 +18,26 @@
                 <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
                 <attribute name="context">{'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
             </xpath>
-            <xpath expr="//field[@name='pricelist_id']" position="attributes">
-                <attribute name="readonly">1</attribute>
+
+            <xpath expr="//list/field[@name='price_unit']" position="attributes">
+                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price'</attribute>
+            </xpath>
+            <!-- force_save: el servidor no recalcula el origen si `price_unit` viene en los valores. -->
+            <xpath expr="//list/field[@name='price_unit']" position="before">
+                <field name="price_origin" nolabel="1" widget="price_origin_icon" readonly="1" force_save="1" width="24px"/>
+                <field name="price_origin_label" column_invisible="True" force_save="1"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="attributes">
-                <attribute name="readonly">1</attribute>
+                <attribute name="readonly">not manual_discount_allowed</attribute>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="before">
-                <field name="pricelist_discount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
-                <field name="agreement_discount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
-                <field name="extra_discount_allowed" column_invisible="True"/>
-                <field name="extra_discount" readonly="not extra_discount_allowed" optional="show" groups="sale.group_discount_per_so_line"/>
+                <field name="manual_discount_allowed" column_invisible="True"/>
+                <field name="technical_discount" column_invisible="True"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="after">
                 <field name="pricing_rule_type" column_invisible="True"/>
-                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'promo'"/>
+                <field name="pricing_rule_id" column_invisible="True"/>
+                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
             </xpath>
         </field>
     </record>
