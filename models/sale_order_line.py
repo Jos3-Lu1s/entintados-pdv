@@ -361,8 +361,11 @@ class SaleOrderLine(models.Model):
             and not reset_manual
             and (not line._origin.id or line.product_id == line._origin.product_id)
         }
-        super()._compute_discount()
         # El % que deja el core es el de la tarifa, que ya va en el precio: se descarta siempre.
+        # Las líneas de precio fijo no pasan por el core: llamado directo sobre líneas guardadas
+        # (p. ej. `_recompute_prices`), su % sería un write real y la restricción lo rechazaría.
+        fixed_lines = self.filtered(lambda line: line.pricing_rule_type == 'fixed_price')
+        super(SaleOrderLine, self - fixed_lines)._compute_discount()
         # Llamado directo sobre líneas guardadas (p. ej. `_recompute_prices`), asignar `discount`
         # pasa por write(): no es un descuento manual.
         for line in self.with_context(skip_manual_discount_breakdown=True):
@@ -394,11 +397,17 @@ class SaleOrderLine(models.Model):
                 else:
                     discount = 0.0
                     badge = ('none', '', False)
-            # `discount` antes que el badge: en una línea guardada cada asignación es un write y
-            # la restricción de precio fijo vería el descuento anterior.
-            line.discount = discount
-            line.technical_discount = discount
-            line.pricing_rule_type, line.pricing_rule_origin, line.pricing_rule_id = badge
+            # En una línea guardada cada asignación es un write y la restricción de precio fijo
+            # vería el valor intermedio: hacia precio fijo, `discount` (= 0) antes que el badge;
+            # en otro caso, el badge antes que `discount`, para no dejar precio fijo con descuento.
+            if badge[0] == 'fixed_price':
+                line.discount = discount
+                line.technical_discount = discount
+                line.pricing_rule_type, line.pricing_rule_origin, line.pricing_rule_id = badge
+            else:
+                line.pricing_rule_type, line.pricing_rule_origin, line.pricing_rule_id = badge
+                line.discount = discount
+                line.technical_discount = discount
 
     def _apply_fixed_price_agreement(self, rule):
         """Precio fijo de acuerdo: gana sobre la tarifa y sobre cualquier descuento o precio manual.

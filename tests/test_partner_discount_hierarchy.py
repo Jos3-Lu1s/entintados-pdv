@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+from lxml import etree
+
 from odoo.exceptions import ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
@@ -1450,4 +1452,48 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                     self._edit_first_line(order, product_uom_qty=12.0)
                 self.assertEqual(self._line_values(line), (80.0, 0.0, 'none', 'pricelist'))
                 self.assertIn(pricelist.name, line.price_origin_label)
+
+    def test_update_prices_with_fixed_price_line(self):
+        """"Actualizar precios" con una línea de precio fijo bajo tarifa de porcentaje."""
+        self._enable_line_discounts()
+        partner = self._create_fixed_price_partner('Cliente Fijo Actualizar', self._create_percentage_pricelist())
+        prod_q = self.templates.create({'name': 'Rodillo 9 Pulgadas', 'list_price': 100.0}).product_variant_ids[0]
+        order = self._create_order(partner, self.prod_3, prod_q)
+        fixed_line = order.order_line.filtered(lambda l: l.product_id == self.prod_3)
+        plain_line = order.order_line.filtered(lambda l: l.product_id == prod_q)
+
+        for attempt in (1, 2):
+            with self.subTest(attempt=attempt):
+                order.action_update_prices()
+                self.assertEqual(self._line_values(fixed_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+                self.assertEqual(self._line_values(plain_line), (95.0, 0.0, 'none', 'pricelist'))
+
+    def test_partner_change_from_fixed_price_line(self):
+        """Cambiar el cliente de una cotización con una línea que ya es de precio fijo."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+        partner_fixed = self._create_fixed_price_partner('Cliente Fijo Origen', pricelist)
+        targets = (
+            ('precio fijo 60', self._create_fixed_price_partner('Cliente Fijo 60', pricelist, price=60.0),
+             (60.0, 0.0, 'fixed_price', 'fixed_price')),
+            ('sin acuerdo', self._create_pricelist_partner('Cliente Sin Acuerdo', pricelist),
+             (95.0, 0.0, 'none', 'pricelist')),
+            ('acuerdo 10 %', self._create_agreement_partner('Cliente Acuerdo 10', pricelist),
+             (95.0, 10.0, 'product', 'pricelist')),
+        )
+        for label, target, expected in targets:
+            with self.subTest(label):
+                order = self._create_order(partner_fixed, self.prod_3)
+                self.assertEqual(self._line_values(order.order_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+                order.write({'partner_id': target.id})
+                self.assertEqual(self._line_values(order.order_line), expected)
+
+    def test_update_prices_button_hidden(self):
+        """El botón "Actualizar precios" queda oculto en el formulario del pedido."""
+        # Con el grupo de tarifas el botón está en la arquitectura (sin él, el core lo quita).
+        self._enable_line_discounts()
+        arch = self.env['sale.order'].get_views([(False, 'form')])['views']['form']['arch']
+        buttons = etree.fromstring(arch).xpath("//button[@name='action_update_prices']")
+        self.assertEqual(len(buttons), 1)
+        self.assertIn(buttons[0].get('invisible'), ('1', 'True', 'true'))
 

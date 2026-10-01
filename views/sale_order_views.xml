@@ -19,6 +19,11 @@
                 <attribute name="context">{'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
             </xpath>
 
+            <!-- Los precios ya se recalculan al cambiar la tarifa: "Actualizar precios" no se ofrece. -->
+            <xpath expr="//button[@name='action_update_prices']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
             <xpath expr="//list/field[@name='price_unit']" position="attributes">
                 <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price'</attribute>
             </xpath>
