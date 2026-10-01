@@ -145,6 +145,7 @@ Catálogo de entintado
         'wizards/partner_risk_exceeded_view.xml',
         'wizards/crm_field_visit_confirm_wizard_view.xml',
         'wizards/crm_material_request_partner_wizzard_views.xml',
+        'wizards/crm_material_auditor_assign_wizard_views.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
