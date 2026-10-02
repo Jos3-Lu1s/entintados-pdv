@@ -100,6 +100,9 @@
                                        widget="monetary"
                                        invisible="rule_type != 'fixed_price'"
                                        required="rule_type == 'fixed_price'"/>
+                                <field name="product_uom_id"
+                                       readonly="1"
+                                       invisible="rule_type != 'fixed_price'"/>
                                 <field name="company_id" column_invisible="True"/>
                             </list>
                         </field>

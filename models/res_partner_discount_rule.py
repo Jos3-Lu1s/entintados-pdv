@@ -64,6 +64,13 @@ class ResPartnerDiscountRule(models.Model):
         digits='Product Price',
         default=0.0,
     )
+    # El precio fijo está en la UdM del producto; en la venta se convierte a la de la línea.
+    product_uom_id = fields.Many2one(
+        comodel_name='uom.uom',
+        string='UdM',
+        related='product_id.uom_id',
+        readonly=True,
+    )
     name = fields.Char(
         string='Descripción',
         compute='_compute_name',
@@ -77,7 +84,10 @@ class ResPartnerDiscountRule(models.Model):
         readonly=True,
     )
 
-    @api.depends('applied_on', 'rule_type', 'product_id', 'line_id', 'scheme_id', 'discount', 'fixed_price')
+    @api.depends(
+        'applied_on', 'rule_type', 'product_id', 'product_id.uom_id', 'line_id', 'scheme_id',
+        'discount', 'fixed_price',
+    )
     def _compute_name(self):
         for rule in self:
             target = ""
@@ -89,7 +99,7 @@ class ResPartnerDiscountRule(models.Model):
                 target = rule.scheme_id.name or _("Esquema no especificado")
 
             if rule.rule_type == 'fixed_price':
-                rule.name = f"{target}: ${rule.fixed_price:,.2f}"
+                rule.name = f"{target}: ${rule.fixed_price:,.2f} / {rule.product_id.uom_id.name}"
             else:
                 rule.name = f"{target}: {rule.discount:.2f}%"
 

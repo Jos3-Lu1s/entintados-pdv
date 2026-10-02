@@ -153,12 +153,17 @@ class SaleOrderLine(models.Model):
 
     def write(self, vals):
         recompute_lines = self.browse()
+        # Precio fijo en la UdM del producto, por línea: se convierte a su UdM final tras el write.
+        fixed_price_by_line = {}
+        explicit_price = 'price_unit' in vals
         if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
             for line in self:
                 product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else line.product_id
                 if product and product.type != 'service' and line.order_id.partner_id:
                     rule = line.order_id.partner_id._get_partner_pricing_rule(product)
                     if rule.get('type') == 'fixed_price':
+                        if not explicit_price:
+                            fixed_price_by_line[line] = rule['price']
                         vals.setdefault('price_unit', rule['price'])
                         vals['technical_price_unit'] = rule['price']
                         vals['discount'] = 0.0
@@ -187,6 +192,16 @@ class SaleOrderLine(models.Model):
             and not self.env.context.get('skip_manual_discount_breakdown')
             and vals.get('technical_price_unit') != vals['price_unit']
         )
+        # Cambio de UdM sin precio (código, RPC, importación o el formulario, donde `price_unit` es de
+        # solo lectura en precio fijo): tras el write `_origin` ya trae la UdM nueva, así que el
+        # precio fijo se convierte aquí desde la UdM anterior.
+        fixed_uom = {}
+        if 'product_uom_id' in vals and 'price_unit' not in vals and 'product_id' not in vals:
+            fixed_uom = {
+                line: (line.product_uom_id, line.price_unit)
+                for line in self
+                if line.pricing_rule_type == 'fixed_price' and not line.qty_invoiced
+            }
         manual_price_lines = self.browse()
         if manual_price:
             fixed_lines = self.filtered(lambda line: line.pricing_rule_type == 'fixed_price')
@@ -198,6 +213,21 @@ class SaleOrderLine(models.Model):
                     ))
             manual_price_lines = self - fixed_lines
         res = super().write(vals)
+        for line, base_price in fixed_price_by_line.items():
+            price = line.product_id.uom_id._compute_price(base_price, line.product_uom_id)
+            if line.currency_id.compare_amounts(line.price_unit, price):
+                line.with_context(skip_manual_discount_breakdown=True).write({
+                    'price_unit': price,
+                    'technical_price_unit': price,
+                })
+        for line, (old_uom, old_price) in fixed_uom.items():
+            if line.product_uom_id == old_uom:
+                continue
+            price = old_uom._compute_price(old_price, line.product_uom_id)
+            line.with_context(skip_manual_discount_breakdown=True).write({
+                'price_unit': price,
+                'technical_price_unit': price,
+            })
         if manual_price_lines:
             manual_price_lines.with_context(skip_manual_discount_breakdown=True).write(
                 self._manual_price_values())
@@ -306,9 +336,10 @@ class SaleOrderLine(models.Model):
                 continue
             if not force_recompute and line._keeps_saved_pricing():
                 # Línea guardada: la tarifa se recalcula (cantidad/UdM), pero un precio fijo
-                # de acuerdo ya aplicado se conserva congelado.
+                # de acuerdo ya aplicado se conserva congelado, convertido a la UdM de la línea.
                 frozen_type = line._origin.pricing_rule_type
-                frozen_price = line._origin.price_unit
+                frozen_price = line._origin.product_uom_id._compute_price(
+                    line._origin.price_unit, line.product_uom_id)
                 super(SaleOrderLine, line)._reset_price_unit()
                 if frozen_type == 'fixed_price':
                     line.price_unit = frozen_price
@@ -412,15 +443,17 @@ class SaleOrderLine(models.Model):
     def _apply_fixed_price_agreement(self, rule):
         """Precio fijo de acuerdo: gana sobre la tarifa y sobre cualquier descuento o precio manual.
 
+        El precio de la regla está en la UdM del producto: se convierte a la de la línea.
         `discount` va primero: en una línea guardada cada asignación es un write y la restricción
         de precio fijo vería el descuento anterior.
         """
         self.ensure_one()
         line = self.with_context(skip_manual_discount_breakdown=True)
+        price = self.product_id.uom_id._compute_price(rule['price'], self.product_uom_id)
         line.discount = 0.0
         line.technical_discount = 0.0
-        line.price_unit = rule['price']
-        line.technical_price_unit = rule['price']
+        line.price_unit = price
+        line.technical_price_unit = price
         line.pricing_rule_type = 'fixed_price'
         line.pricing_rule_origin = rule.get('origin_label') or 'Precio Fijo'
         line.pricing_rule_id = rule.get('rule') and rule['rule'].id or False

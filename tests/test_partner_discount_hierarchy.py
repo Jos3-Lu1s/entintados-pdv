@@ -1497,3 +1497,96 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(len(buttons), 1)
         self.assertIn(buttons[0].get('invisible'), ('1', 'True', 'true'))
 
+
+    # --- Precio fijo y UdM de la línea ---
+
+    def _create_fixed_price_uom_partner(self, name):
+        """Producto en Unidades con precio de lista 400 y cliente con precio fijo 300."""
+        product = self.templates.create({'name': f'Esmalte {name}', 'list_price': 400.0}).product_variant_ids[0]
+        pricelist = self.env['product.pricelist'].create({'name': f'Tarifa {name}'})
+        partner = self._create_fixed_price_partner(f'Cliente {name}', pricelist, price=300.0, product=product)
+        return partner, product
+
+    def test_fixed_price_new_line_converts_uom(self):
+        """Una línea nueva de precio fijo toma el precio convertido a su UdM."""
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        partner, product = self._create_fixed_price_uom_partner('UdM Nueva')
+        pack_6 = self.env.ref('uom.product_uom_pack_6')
+        expected = (1800.0, 0.0, 'fixed_price', 'fixed_price')
+
+        with self.subTest('creación directa'):
+            order = self.sale_orders.create({
+                'partner_id': partner.id,
+                'order_line': [(0, 0, {
+                    'product_id': product.id,
+                    'product_uom_qty': 1.0,
+                    'product_uom_id': pack_6.id,
+                })],
+            })
+            self.assertEqual(self._line_values(order.order_line), expected)
+
+        with self.subTest('formulario sin guardar'):
+            order_form = Form(self.sale_orders)
+            order_form.partner_id = partner
+            with order_form.order_line.new() as line_form:
+                line_form.product_id = product
+                self.assertEqual(line_form.price_unit, 300.0)
+                line_form.product_uom_id = pack_6
+                self.assertEqual(line_form.price_unit, 1800.0)
+            order = order_form.save()
+            self.assertEqual(self._line_values(order.order_line), expected)
+            self.assertEqual(order.order_line.technical_price_unit, 1800.0)
+
+    def test_fixed_price_saved_line_uom_change(self):
+        """En una cotización guardada, cambiar la UdM convierte el precio fijo."""
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        partner, product = self._create_fixed_price_uom_partner('UdM Guardada')
+        order = self._create_order(partner, product)
+        line = order.order_line
+        self.assertEqual(self._line_values(line), (300.0, 0.0, 'fixed_price', 'fixed_price'))
+
+        steps = (
+            ('Pack of 6', self.env.ref('uom.product_uom_pack_6'), 1800.0),
+            ('Unidades', product.uom_id, 300.0),
+            ('Docenas', self.env.ref('uom.product_uom_dozen'), 3600.0),
+        )
+        for label, uom, price in steps:
+            with self.subTest(label):
+                self._edit_first_line(order, product_uom_id=uom)
+                self.assertEqual(self._line_values(line), (price, 0.0, 'fixed_price', 'fixed_price'))
+                self.assertEqual(line.technical_price_unit, price)
+
+    def test_fixed_price_saved_line_keeps_frozen_on_uom_change(self):
+        """Si la regla cambió en la ficha, el cambio de UdM convierte el precio congelado."""
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        partner, product = self._create_fixed_price_uom_partner('UdM Congelada')
+        order = self._create_order(partner, product)
+        self.rules.search([('partner_id', '=', partner.id)]).fixed_price = 280.0
+
+        self._edit_first_line(order, product_uom_id=self.env.ref('uom.product_uom_pack_6'))
+        self.assertEqual(self._line_values(order.order_line), (1800.0, 0.0, 'fixed_price', 'fixed_price'))
+
+    def test_fixed_price_write_uom(self):
+        """`write` por código de la UdM, sola o con el producto, convierte el precio fijo."""
+        partner, product = self._create_fixed_price_uom_partner('UdM Write')
+        pack_6 = self.env.ref('uom.product_uom_pack_6')
+        expected = (1800.0, 0.0, 'fixed_price', 'fixed_price')
+
+        with self.subTest('solo UdM'):
+            line = self._create_order(partner, product).order_line
+            line.write({'product_uom_id': pack_6.id})
+            self.assertEqual(self._line_values(line), expected)
+            self.assertEqual(line.technical_price_unit, line.price_unit)
+
+        with self.subTest('producto y UdM'):
+            line = self._create_order(partner, self.prod_3).order_line
+            line.write({'product_id': product.id, 'product_uom_id': pack_6.id})
+            self.assertEqual(self._line_values(line), expected)
+            self.assertEqual(line.technical_price_unit, line.price_unit)
+
+    def test_fixed_price_rule_name_shows_uom(self):
+        """La regla de precio fijo muestra la UdM del producto en su nombre."""
+        partner, product = self._create_fixed_price_uom_partner('UdM Ficha')
+        rule = self.rules.search([('partner_id', '=', partner.id)])
+        self.assertEqual(rule.product_uom_id, product.uom_id)
+        self.assertEqual(rule.name, f"{product.display_name}: $300.00 / {product.uom_id.name}")
