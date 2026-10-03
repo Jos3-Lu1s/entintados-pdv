@@ -228,7 +228,7 @@ class ApprovalRequest(models.Model):
             for line in self.product_line_ids:
                 if not line.product_id:
                     continue
-                uom_id = getattr(line, 'product_uom_id', False) or line.product_id.uom_id
+                uom_id = line.product_uom_id or line.product_id.uom_id
                 self.env['stock.move'].create({
                     'description_picking': line.description or line.product_id.display_name,
                     'product_id': line.product_id.id,

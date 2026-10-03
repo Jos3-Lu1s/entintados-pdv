@@ -114,6 +114,8 @@ class StockPicking(models.Model):
         pdf_content, _report_format = report._render_qweb_pdf(
             report.report_name, [self.id]
         )
+        if not isinstance(pdf_content, bytes):
+            return
 
         self.write({
             'document_file': base64.b64encode(pdf_content),
@@ -158,11 +160,6 @@ class StockPicking(models.Model):
             return auditor.digital_signature
         if getattr(auditor, 'sign_signature', None):
             return auditor.sign_signature
-        if auditor.partner_id and getattr(auditor.partner_id, 'signature', None):
-            return auditor.partner_id.signature
-        employee = self.env['hr.employee'].search([('user_id', '=', auditor.id)], limit=1)
-        if employee and getattr(employee, 'signature', None):
-            return employee.signature
         return False
 
     def action_audit_approve_material(self):

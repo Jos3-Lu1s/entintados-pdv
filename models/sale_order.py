@@ -193,12 +193,13 @@ class SaleOrder(models.Model):
         activity_type = self.env.ref(activity_xmlid, raise_if_not_found=False)
         if not activity_type:
             return
-        self.activity_schedule(
+        activity = self.activity_schedule(
             activity_type_id=activity_type.id,
             user_id=self.opportunity_id.user_id.id or self.env.uid,
-            summary=activity_type.summary,
             note=note,
-        ).action_feedback(feedback=note)
+        )
+        if activity:
+            activity.action_feedback(feedback=note)
     def _get_no_effect_on_threshold_lines(self):
         lines = super()._get_no_effect_on_threshold_lines()
         if self.env.context.get('exclude_protected_discount_lines'):
