@@ -86,7 +86,7 @@ class ResPartnerDiscountRule(models.Model):
 
     @api.depends(
         'applied_on', 'rule_type', 'product_id', 'product_id.uom_id', 'line_id', 'scheme_id',
-        'discount', 'fixed_price',
+        'discount', 'fixed_price', 'company_id.currency_id',
     )
     def _compute_name(self):
         for rule in self:
@@ -99,7 +99,9 @@ class ResPartnerDiscountRule(models.Model):
                 target = rule.scheme_id.name or _("Esquema no especificado")
 
             if rule.rule_type == 'fixed_price':
-                rule.name = f"{target}: ${rule.fixed_price:,.2f} / {rule.product_id.uom_id.name}"
+                # Precio en la moneda de la compañía: código ISO, porque `$` es MXN y también USD.
+                currency = rule.company_id.currency_id or self.env.company.currency_id
+                rule.name = f"{target}: {rule.fixed_price:,.2f} {currency.name} / {rule.product_id.uom_id.name}"
             else:
                 rule.name = f"{target}: {rule.discount:.2f}%"
 

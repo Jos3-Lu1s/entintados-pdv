@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from datetime import timedelta
 from unittest.mock import patch
 
 from lxml import etree
 
+from odoo import fields
 from odoo.exceptions import ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
@@ -1361,6 +1363,46 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             order.order_line.write({'product_id': self.prod_1.id})
             self.assertEqual(self._line_values(order.order_line), (475.0, 0.0, 'none', 'pricelist'))
 
+    def test_pricelist_switch_never_marks_price_manual(self):
+        """Cambiar de tarifa en el formulario y guardar nunca deja el origen en manual, aunque la
+        tarifa dé más decimales que los de `price_unit` (12.25 - 10 % = 11.025 → 11.03)."""
+        self.env.user.group_ids |= self.env.ref('product.group_product_pricelist')
+        product = self.products.create({'name': 'Producto 12.25', 'list_price': 12.25})
+
+        def percentage(name, percent):
+            return self.env['product.pricelist'].create({'name': name, 'item_ids': [(0, 0, {
+                'applied_on': '0_product_variant',
+                'product_id': product.id,
+                'compute_price': 'percentage',
+                'percent_price': percent,
+            })]})
+
+        pricelist_a = self.env['product.pricelist'].create({'name': 'Tarifa Lista'})
+        pricelist_b = percentage('Tarifa -10 %', 10.0)
+        pricelist_c = percentage('Tarifa -3.33 %', 3.33)
+        partner = self.partners.create({'name': 'Cliente Cambio Tarifa', 'is_customer': True})
+        partner.property_product_pricelist = pricelist_a
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': 1.0})],
+        })
+        line = order.order_line
+        # De C a B el origen no cambia ('pricelist'), así que el formulario no lo envía al guardar.
+        for pricelist, price, origin in (
+            (pricelist_c, 11.84, 'pricelist'),
+            (pricelist_b, 11.03, 'pricelist'),
+            (pricelist_a, 12.25, 'list'),
+            (pricelist_c, 11.84, 'pricelist'),
+            (pricelist_b, 11.03, 'pricelist'),
+        ):
+            with Form(order) as order_form:
+                order_form.pricelist_id = pricelist
+            self.assertEqual((line.price_unit, line.price_origin), (price, origin), pricelist.name)
+
+        # Un precio tecleado sigue siendo manual.
+        self._edit_first_line(order, price_unit=11.5)
+        self.assertEqual((line.price_unit, line.price_origin), (11.5, 'manual'))
+
     def test_price_origin_list_and_labels(self):
         """El origen del precio distingue precio de venta, tarifa y precio fijo, con su detalle."""
         self._enable_line_discounts()
@@ -1589,4 +1631,366 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         partner, product = self._create_fixed_price_uom_partner('UdM Ficha')
         rule = self.rules.search([('partner_id', '=', partner.id)])
         self.assertEqual(rule.product_uom_id, product.uom_id)
-        self.assertEqual(rule.name, f"{product.display_name}: $300.00 / {product.uom_id.name}")
+        self.assertEqual(
+            rule.name,
+            f"{product.display_name}: 300.00 {self.env.company.currency_id.name} / {product.uom_id.name}",
+        )
+
+    # --- Precio fijo y moneda del pedido ---
+
+    def _setup_other_currency(self, rates=((None, 17.0),)):
+        """Moneda O distinta de la de la compañía C, con `1 C = rate O` desde cada fecha.
+
+        Se borran las tasas de C para que valga 1 frente a sí misma. Devuelve (C, O).
+        """
+        company = self.env.company
+        company_currency = company.currency_id
+        usd, mxn = self.env.ref('base.USD'), self.env.ref('base.MXN')
+        other = mxn if company_currency == usd else usd
+        other.active = True
+        self.env['res.currency.rate'].search([
+            ('currency_id', 'in', (company_currency | other).ids),
+            ('company_id', 'in', (company.id, False)),
+        ]).unlink()
+        for date, rate in rates:
+            self.env['res.currency.rate'].create({
+                'name': date or fields.Date.today() - timedelta(days=30),
+                'currency_id': other.id,
+                'company_id': company.id,
+                'rate': rate,
+            })
+        return company_currency, other
+
+    def _create_currency_pricelist(self, name, currency):
+        return self.env['product.pricelist'].create({'name': name, 'currency_id': currency.id})
+
+    def _create_fixed_price_currency_partner(self, name, pricelist):
+        """Producto en Unidades con precio de lista 100 y cliente con precio fijo 70."""
+        product = self.templates.create({'name': f'Sellador {name}', 'list_price': 100.0}).product_variant_ids[0]
+        partner = self._create_fixed_price_partner(f'Cliente {name}', pricelist, price=70.0, product=product)
+        return partner, product
+
+    def test_fixed_price_new_line_converts_currency(self):
+        """Una línea nueva de precio fijo toma el precio convertido a la moneda de la tarifa."""
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Nueva', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Nueva', other)
+
+        with self.subTest('tarifa en moneda de la compañía'):
+            partner, product = self._create_fixed_price_currency_partner('Moneda C', pricelist_c)
+            order = self._create_order(partner, product)
+            self.assertEqual(order.currency_id, company_currency)
+            self.assertEqual(self._line_values(order.order_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+
+        with self.subTest('tarifa en otra moneda'):
+            partner, product = self._create_fixed_price_currency_partner('Moneda O', pricelist_o)
+            order = self._create_order(partner, product)
+            self.assertEqual(order.currency_id, other)
+            self.assertEqual(self._line_values(order.order_line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+            self.assertEqual(order.order_line.technical_price_unit, 1190.0)
+
+        with self.subTest('otra moneda y "Pack of 6"'):
+            partner, product = self._create_fixed_price_currency_partner('Moneda O Pack', pricelist_o)
+            order = self.sale_orders.create({
+                'partner_id': partner.id,
+                'order_line': [(0, 0, {
+                    'product_id': product.id,
+                    'product_uom_qty': 1.0,
+                    'product_uom_id': self.env.ref('uom.product_uom_pack_6').id,
+                })],
+            })
+            self.assertEqual(self._line_values(order.order_line), (7140.0, 0.0, 'fixed_price', 'fixed_price'))
+
+    def test_fixed_price_currency_uses_order_date_rate(self):
+        """La conversión usa la tasa vigente en `date_order`, no la del día de ejecución."""
+        today = fields.Date.today()
+        _company_currency, other = self._setup_other_currency(rates=(
+            (today - timedelta(days=400), 17.0),
+            (today - timedelta(days=10), 20.0),
+        ))
+        pricelist_o = self._create_currency_pricelist('T-O Fecha', other)
+        partner, product = self._create_fixed_price_currency_partner('Moneda Fecha', pricelist_o)
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'date_order': fields.Datetime.now() - timedelta(days=200),
+            'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': 1.0})],
+        })
+        self.assertEqual(self._line_values(order.order_line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+
+    def test_fixed_price_saved_line_pricelist_currency_change(self):
+        """En una cotización guardada, cambiar la tarifa a otra moneda convierte el precio congelado."""
+        self._enable_line_discounts()
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Form', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Form', other)
+
+        with self.subTest('ida y vuelta'):
+            partner, product = self._create_fixed_price_currency_partner('Moneda Form', pricelist_c)
+            order = self._create_order(partner, product)
+            line = order.order_line
+            for label, pricelist, currency, price in (
+                ('T-C → T-O', pricelist_o, other, 1190.0),
+                ('T-O → T-C', pricelist_c, company_currency, 70.0),
+            ):
+                with self.subTest(label):
+                    with Form(order) as order_form:
+                        order_form.pricelist_id = pricelist
+                    self.assertEqual(order.currency_id, currency)
+                    self.assertEqual(self._line_values(line), (price, 0.0, 'fixed_price', 'fixed_price'))
+                    self.assertEqual(line.technical_price_unit, price)
+
+        with self.subTest('regla cambiada en la ficha'):
+            partner, product = self._create_fixed_price_currency_partner('Moneda Form Congelada', pricelist_c)
+            order = self._create_order(partner, product)
+            self.rules.search([('partner_id', '=', partner.id)]).fixed_price = 60.0
+            with Form(order) as order_form:
+                order_form.pricelist_id = pricelist_o
+            self.assertEqual(self._line_values(order.order_line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+
+    def test_fixed_price_currency_round_trip_converts_in_form(self):
+        """Tras ida y vuelta de moneda guardando, el precio fijo vuelve exacto y el siguiente cambio
+        de tarifa lo convierte en el formulario, no hasta guardar.
+
+        Con 1 C = 0.0544401 O, 70 C → 3.81 O; reconvertir el redondeado daría 69.99 C con
+        `technical_price_unit` = 70, y la línea parecería de precio manual.
+        """
+        self._enable_line_discounts()
+        company_currency, other = self._setup_other_currency(rates=((None, 0.0544401376),))
+        pricelist_c = self._create_currency_pricelist('T-C Redondeo', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Redondeo', other)
+        partner, product = self._create_fixed_price_currency_partner('Moneda Redondeo', pricelist_c)
+        order = self._create_order(partner, product)
+        line = order.order_line
+
+        for pricelist, price in ((pricelist_o, 3.81), (pricelist_c, 70.0)):
+            with Form(order) as order_form:
+                order_form.pricelist_id = pricelist
+            self.assertEqual(line.price_unit, price, pricelist.name)
+            self.assertFalse(line._has_core_manual_price(), pricelist.name)
+        self.assertEqual(line.technical_price_unit, 70.0)
+
+        with Form(order) as order_form:
+            order_form.pricelist_id = pricelist_o
+            with order_form.order_line.edit(0) as line_form:
+                # Lo que ve el usuario antes de guardar.
+                self.assertEqual(line_form.price_unit, 3.81)
+        self.assertEqual(self._line_values(line), (3.81, 0.0, 'fixed_price', 'fixed_price'))
+
+    def test_fixed_price_write_pricelist_currency(self):
+        """`write` por código de la tarifa convierte el precio fijo congelado."""
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Write', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Write', other)
+        partner, product = self._create_fixed_price_currency_partner('Moneda Write', pricelist_c)
+        order = self._create_order(partner, product)
+        line = order.order_line
+
+        order.write({'pricelist_id': pricelist_o.id})
+        self.assertEqual(order.currency_id, other)
+        self.assertEqual(self._line_values(line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+        self.assertEqual(line.technical_price_unit, line.price_unit)
+
+    def test_fixed_price_write_product_currency(self):
+        """`write` por código del producto aplica el precio fijo convertido a la moneda del pedido."""
+        _company_currency, other = self._setup_other_currency()
+        pricelist_o = self._create_currency_pricelist('T-O Producto', other)
+        partner, product = self._create_fixed_price_currency_partner('Moneda Producto', pricelist_o)
+        line = self._create_order(partner, self.prod_3).order_line
+
+        line.write({'product_id': product.id})
+        self.assertEqual(self._line_values(line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+        self.assertEqual(line.technical_price_unit, line.price_unit)
+
+    def test_fixed_price_partner_change_currency(self):
+        """Cambiar a un cliente con precio fijo en una cotización en otra moneda lo convierte."""
+        _company_currency, other = self._setup_other_currency()
+        pricelist_o = self._create_currency_pricelist('T-O Cliente', other)
+        partner, product = self._create_fixed_price_currency_partner('Moneda Cliente', pricelist_o)
+        plain_partner = self._create_pricelist_partner('Cliente Moneda Sin Acuerdo', pricelist_o)
+        order = self._create_order(plain_partner, product)
+        self.assertEqual(round(order.order_line.price_unit, 2), 1700.0)
+
+        order.write({'partner_id': partner.id})
+        self.assertEqual(order.currency_id, other)
+        self.assertEqual(self._line_values(order.order_line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+
+    def test_fixed_price_date_change_keeps_price(self):
+        """Cambiar solo `date_order` no reconvierte el precio fijo, igual que el core con la tarifa."""
+        today = fields.Date.today()
+        _company_currency, other = self._setup_other_currency(rates=(
+            (today - timedelta(days=400), 17.0),
+            (today - timedelta(days=10), 20.0),
+        ))
+        pricelist_o = self._create_currency_pricelist('T-O Cambio Fecha', other)
+        partner, product = self._create_fixed_price_currency_partner('Moneda Cambio Fecha', pricelist_o)
+        order = self.sale_orders.create({
+            'partner_id': partner.id,
+            'date_order': fields.Datetime.now() - timedelta(days=200),
+            'order_line': [(0, 0, {'product_id': product.id, 'product_uom_qty': 1.0})],
+        })
+        before = self._line_values(order.order_line)
+
+        order.write({'date_order': fields.Datetime.now()})
+        self.assertEqual(self._line_values(order.order_line), before)
+
+    def test_fixed_price_rule_name_shows_currency(self):
+        """La regla de precio fijo muestra el código ISO de la moneda de la compañía."""
+        pricelist = self.env['product.pricelist'].create({'name': 'Tarifa Moneda Ficha'})
+        partner, product = self._create_fixed_price_currency_partner('Moneda Ficha', pricelist)
+        rule = self.rules.search([('partner_id', '=', partner.id)])
+        self.assertEqual(
+            rule.name,
+            f"{product.display_name}: 70.00 {self.env.company.currency_id.name} / {product.uom_id.name}",
+        )
+
+    # --- Cambio de moneda en todas las líneas del pedido ---
+
+    def _create_mixed_currency_order(self, name, pricelist):
+        """Cotización guardada con una línea de cada tipo; producto a 100 en moneda de la compañía.
+
+        Devuelve (pedido, {tipo: línea}) con precio fijo 70, acuerdo 10 %, sin acuerdo,
+        precio manual 90 y descuento manual 7 %.
+        """
+        partner = self._create_pricelist_partner(f'Cliente Mixto {name}', pricelist)
+        kinds = ('fijo', 'acuerdo', 'sin_acuerdo', 'precio_manual', 'descuento_manual')
+        products = {
+            kind: self.templates.create({'name': f'{kind} {name}', 'list_price': 100.0}).product_variant_ids[0]
+            for kind in kinds
+        }
+        self.rules.create({
+            'partner_id': partner.id, 'applied_on': '0_product', 'rule_type': 'fixed_price',
+            'product_id': products['fijo'].id, 'fixed_price': 70.0,
+        })
+        self.rules.create({
+            'partner_id': partner.id, 'applied_on': '0_product', 'rule_type': 'discount',
+            'product_id': products['acuerdo'].id, 'discount': 10.0,
+        })
+        order = self._create_order(partner, *products.values())
+        lines = {kind: order.order_line.filtered(lambda l, p=products[kind]: l.product_id == p) for kind in kinds}
+        lines['precio_manual'].write({'price_unit': 90.0})
+        lines['descuento_manual'].write({'discount': 7.0})
+        return order, lines
+
+    def _assert_mixed_currency_lines(self, lines, rate):
+        """Precios de `_create_mixed_currency_order` convertidos con `1 C = rate`."""
+        expected = {
+            'fijo': (70.0 * rate, 0.0, 'fixed_price', 'fixed_price'),
+            'acuerdo': (100.0 * rate, 10.0, 'product', 'list'),
+            'sin_acuerdo': (100.0 * rate, 0.0, 'none', 'list'),
+            'precio_manual': (90.0 * rate, 0.0, 'none', 'manual'),
+            'descuento_manual': (100.0 * rate, 7.0, 'manual', 'list'),
+        }
+        for kind, values in expected.items():
+            with self.subTest(kind):
+                self.assertEqual(self._line_values(lines[kind]), values)
+        # El precio manual sigue siéndolo: el precio calculado de referencia también se convierte.
+        self.assertEqual(round(lines['precio_manual'].technical_price_unit, 2), 100.0 * rate)
+
+    def test_currency_change_converts_all_lines_form(self):
+        """Cambiar la tarifa a otra moneda en el formulario convierte todas las líneas, ida y vuelta."""
+        self._enable_line_discounts()
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Mixta Form', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Mixta Form', other)
+        order, lines = self._create_mixed_currency_order('Form', pricelist_c)
+        self._assert_mixed_currency_lines(lines, 1.0)
+
+        with Form(order) as order_form:
+            order_form.pricelist_id = pricelist_o
+            with order_form.order_line.edit(order.order_line.ids.index(lines['precio_manual'].id)) as line_form:
+                # Lo que ve el usuario antes de guardar.
+                self.assertEqual(round(line_form.price_unit, 2), 1530.0)
+        self.assertEqual(order.currency_id, other)
+        self._assert_mixed_currency_lines(lines, 17.0)
+
+        with Form(order) as order_form:
+            order_form.pricelist_id = pricelist_c
+        self.assertEqual(order.currency_id, company_currency)
+        self._assert_mixed_currency_lines(lines, 1.0)
+
+    def test_currency_change_converts_all_lines_write(self):
+        """`write` por código de la tarifa convierte todas las líneas."""
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Mixta Write', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Mixta Write', other)
+        order, lines = self._create_mixed_currency_order('Write', pricelist_c)
+
+        order.write({'pricelist_id': pricelist_o.id})
+        self.assertEqual(order.currency_id, other)
+        self._assert_mixed_currency_lines(lines, 17.0)
+
+    def test_currency_change_converts_manual_price_on_partner_change(self):
+        """Cambiar a un cliente con tarifa en otra moneda convierte el precio manual."""
+        self._enable_line_discounts()
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Mixta Cliente', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Mixta Cliente', other)
+        partner_o = self._create_pricelist_partner('Cliente Moneda O', pricelist_o)
+
+        with self.subTest('write'):
+            order, lines = self._create_mixed_currency_order('Cliente Write', pricelist_c)
+            order.write({'partner_id': partner_o.id})
+            self.assertEqual(order.currency_id, other)
+            self.assertEqual(self._line_values(lines['precio_manual']), (1530.0, 0.0, 'none', 'manual'))
+            self.assertEqual(self._line_values(lines['sin_acuerdo']), (1700.0, 0.0, 'none', 'list'))
+
+        with self.subTest('Form'):
+            order, lines = self._create_mixed_currency_order('Cliente Form', pricelist_c)
+            with Form(order) as order_form:
+                order_form.partner_id = partner_o
+            self.assertEqual(order.currency_id, other)
+            self.assertEqual(self._line_values(lines['precio_manual']), (1530.0, 0.0, 'none', 'manual'))
+            self.assertEqual(self._line_values(lines['sin_acuerdo']), (1700.0, 0.0, 'none', 'list'))
+
+    def test_currency_change_converts_global_discount_line(self):
+        """La línea de descuento por monto del asistente "Descuento" también se convierte."""
+        self._enable_line_discounts()
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Desc Global', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Desc Global', other)
+        partner = self._create_pricelist_partner('Cliente Desc Global', pricelist_c)
+        order = self._create_order(partner, self.prod_3)
+        self.env['sale.order.discount'].create({
+            'sale_order_id': order.id,
+            'discount_type': 'amount',
+            'discount_amount': 50.0,
+        }).action_apply_discount()
+        discount_line = order.order_line.filtered(lambda l: l._is_global_discount())
+        self.assertEqual(discount_line.price_unit, -50.0)
+
+        for label, pricelist, price in (('T-C → T-O', pricelist_o, -850.0), ('T-O → T-C', pricelist_c, -50.0)):
+            with self.subTest(label):
+                with Form(order) as order_form:
+                    order_form.pricelist_id = pricelist
+                self.assertEqual(round(discount_line.price_unit, 2), price)
+                self.assertEqual(round(order.amount_untaxed, 2), round(-price, 2))
+
+    def test_currency_change_uses_new_pricelist_rule(self):
+        """Al cambiar a una tarifa en otra moneda con regla para el producto, se usa esa regla."""
+        self._enable_line_discounts()
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Regla', company_currency)
+        pricelist_o = self.env['product.pricelist'].create({
+            'name': 'T-O Regla',
+            'currency_id': other.id,
+            'item_ids': [(0, 0, {
+                'applied_on': '0_product_variant',
+                'product_id': self.prod_3.id,
+                'compute_price': 'fixed',
+                'fixed_price': 1500.0,
+            })],
+        })
+        partner = self._create_pricelist_partner('Cliente Regla Moneda', pricelist_c)
+
+        for label in ('write', 'Form'):
+            with self.subTest(label):
+                order = self._create_order(partner, self.prod_3)
+                line = order.order_line
+                # Regla de la tarifa anterior en caché.
+                self.assertFalse(line.pricelist_item_id)
+                if label == 'write':
+                    order.write({'pricelist_id': pricelist_o.id})
+                else:
+                    with Form(order) as order_form:
+                        order_form.pricelist_id = pricelist_o
+                self.assertEqual(self._line_values(line), (1500.0, 0.0, 'none', 'pricelist'))

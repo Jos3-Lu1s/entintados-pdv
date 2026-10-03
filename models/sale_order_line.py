@@ -153,7 +153,8 @@ class SaleOrderLine(models.Model):
 
     def write(self, vals):
         recompute_lines = self.browse()
-        # Precio fijo en la UdM del producto, por línea: se convierte a su UdM final tras el write.
+        # Precio fijo en la UdM del producto y la moneda de la compañía, por línea: se convierte a
+        # su UdM y moneda finales tras el write.
         fixed_price_by_line = {}
         explicit_price = 'price_unit' in vals
         if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
@@ -190,8 +191,16 @@ class SaleOrderLine(models.Model):
             and 'price_origin' not in vals
             and not self.env.context.get('sale_write_from_compute')
             and not self.env.context.get('skip_manual_discount_breakdown')
-            and vals.get('technical_price_unit') != vals['price_unit']
         )
+        if manual_price and 'technical_price_unit' in vals:
+            # Se compara con la precisión de la moneda, como `_has_core_manual_price`: `price_unit`
+            # llega redondeado a sus dígitos y `technical_price_unit` no (una tarifa de -10 % sobre
+            # 12.25 da 11.03 frente a 11.025), y esa diferencia no es un precio tecleado.
+            manual_price = any(
+                (line.currency_id or line.company_id.currency_id or self.env.company.currency_id)
+                .compare_amounts(vals['technical_price_unit'], vals['price_unit'])
+                for line in self
+            )
         # Cambio de UdM sin precio (código, RPC, importación o el formulario, donde `price_unit` es de
         # solo lectura en precio fijo): tras el write `_origin` ya trae la UdM nueva, así que el
         # precio fijo se convierte aquí desde la UdM anterior.
@@ -215,6 +224,7 @@ class SaleOrderLine(models.Model):
         res = super().write(vals)
         for line, base_price in fixed_price_by_line.items():
             price = line.product_id.uom_id._compute_price(base_price, line.product_uom_id)
+            price = line._convert_price_currency(price, line._get_fixed_price_company().currency_id)
             if line.currency_id.compare_amounts(line.price_unit, price):
                 line.with_context(skip_manual_discount_breakdown=True).write({
                     'price_unit': price,
@@ -288,6 +298,9 @@ class SaleOrderLine(models.Model):
     )
     def _compute_price_unit(self):
         force_recompute = self.env.context.get('force_price_recomputation')
+        # Depende de la tarifa del pedido, pero la regla en caché (`pricelist_item_id`, que no
+        # depende de ella) puede ser la de la tarifa anterior: como `_recompute_prices` del core.
+        self.invalidate_recordset(['pricelist_item_id'])
         # Líneas que el core no recalcula: conservan su origen tal cual.
         previous = {line: (line.price_origin, line.price_origin_label) for line in self}
         core_skipped = {
@@ -315,6 +328,25 @@ class SaleOrderLine(models.Model):
                 rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
                 if rule.get('type') == 'fixed_price':
                     line._apply_fixed_price_agreement(rule)
+        # Cambio de moneda en el formulario: la tarifa recalcula las demás líneas en la moneda
+        # nueva, pero las que conservan su precio (manual, descuento global…) se convierten aquí.
+        # Por código, `_origin` ya trae la moneda nueva: lo convierte `SaleOrder.write`.
+        for line in self:
+            origin = line._origin
+            if (
+                origin.id
+                and origin.currency_id
+                and line.currency_id
+                and origin.currency_id != line.currency_id
+                and line._keeps_price_on_currency_change()
+                # Ya convertido (el cálculo puede correr más de una vez en el mismo onchange).
+                and not origin.currency_id.compare_amounts(line.price_unit, origin.price_unit)
+            ):
+                line.with_context(skip_manual_discount_breakdown=True).update({
+                    'price_unit': line._convert_price_currency(origin.price_unit, origin.currency_id),
+                    'technical_price_unit': line._convert_price_currency(
+                        origin.technical_price_unit, origin.currency_id),
+                })
 
     def _has_core_manual_price(self):
         """Mismo criterio que el core: `price_unit` distinto del último precio calculado."""
@@ -336,10 +368,14 @@ class SaleOrderLine(models.Model):
                 continue
             if not force_recompute and line._keeps_saved_pricing():
                 # Línea guardada: la tarifa se recalcula (cantidad/UdM), pero un precio fijo
-                # de acuerdo ya aplicado se conserva congelado, convertido a la UdM de la línea.
+                # de acuerdo ya aplicado se conserva congelado, convertido a la UdM y a la moneda
+                # de la línea (cambio de tarifa). Se parte de `technical_price_unit`, sin redondear:
+                # desde `price_unit`, ya redondeado en la otra moneda, 300 MXN → 16.33 USD → 299.96.
                 frozen_type = line._origin.pricing_rule_type
                 frozen_price = line._origin.product_uom_id._compute_price(
-                    line._origin.price_unit, line.product_uom_id)
+                    line._origin.technical_price_unit, line.product_uom_id)
+                if line._origin.currency_id != line.currency_id:
+                    frozen_price = line._convert_price_currency(frozen_price, line._origin.currency_id)
                 super(SaleOrderLine, line)._reset_price_unit()
                 if frozen_type == 'fixed_price':
                     line.price_unit = frozen_price
@@ -443,13 +479,15 @@ class SaleOrderLine(models.Model):
     def _apply_fixed_price_agreement(self, rule):
         """Precio fijo de acuerdo: gana sobre la tarifa y sobre cualquier descuento o precio manual.
 
-        El precio de la regla está en la UdM del producto: se convierte a la de la línea.
+        El precio de la regla está en la UdM del producto y en la moneda de la compañía: se
+        convierte a la UdM y a la moneda de la línea.
         `discount` va primero: en una línea guardada cada asignación es un write y la restricción
         de precio fijo vería el descuento anterior.
         """
         self.ensure_one()
         line = self.with_context(skip_manual_discount_breakdown=True)
         price = self.product_id.uom_id._compute_price(rule['price'], self.product_uom_id)
+        price = self._convert_price_currency(price, self._get_fixed_price_company().currency_id)
         line.discount = 0.0
         line.technical_discount = 0.0
         line.price_unit = price
@@ -459,6 +497,40 @@ class SaleOrderLine(models.Model):
         line.pricing_rule_id = rule.get('rule') and rule['rule'].id or False
         line.price_origin = 'fixed_price'
         line.price_origin_label = line.pricing_rule_origin
+
+    def _get_fixed_price_company(self):
+        self.ensure_one()
+        return self.order_id.company_id or self.company_id or self.env.company
+
+    def _convert_price_currency(self, price, from_currency):
+        """Precio de `from_currency` a la moneda de la línea, como la tarifa del core: tasa de la
+        fecha del pedido y sin redondear (lo redondean los dígitos del campo)."""
+        self.ensure_one()
+        if not from_currency or not self.currency_id or from_currency == self.currency_id:
+            return price
+        return from_currency._convert(
+            price,
+            self.currency_id,
+            self._get_fixed_price_company(),
+            self._get_order_date() or fields.Date.context_today(self),
+            round=False,
+        )
+
+    def _keeps_price_on_currency_change(self):
+        """Línea cuyo precio no recalcula la tarifa al cambiar la moneda del pedido: precio manual,
+        descuento global, envío o recompensa. Se convierte tal cual a la moneda nueva.
+
+        El precio fijo se convierte aparte: congelado en `_reset_price_unit` o reaplicado.
+        """
+        self.ensure_one()
+        return bool(
+            self.order_id
+            and not self.display_type
+            and not self.is_downpayment
+            and not self.qty_invoiced
+            and self.pricing_rule_type != 'fixed_price'
+            and (self._is_global_discount() or self._has_core_manual_price() or self._keeps_manual_price())
+        )
 
     def _has_fixed_price_agreement(self):
         self.ensure_one()
