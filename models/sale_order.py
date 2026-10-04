@@ -36,7 +36,7 @@ class SaleOrder(models.Model):
         previous_prices = {}
         if 'pricelist_id' in vals or 'partner_id' in vals:
             previous_prices = {
-                line: (line.currency_id, line.price_unit, line.technical_price_unit)
+                line: (line.currency_id, line.product_uom_id, line.price_unit, line.technical_price_unit)
                 for line in self.order_line
                 if line._keeps_price_on_currency_change()
                 or (not force and line.pricing_rule_type == 'fixed_price' and not line.qty_invoiced)
@@ -58,20 +58,24 @@ class SaleOrder(models.Model):
                 order._advance_opportunity_to_closed()
                 if order.opportunity_id:
                     order._schedule_confirm_quotation_activity()
-        for line, (old_currency, old_price, old_technical) in previous_prices.items():
-            if (
-                not line.exists()
-                or line.currency_id == old_currency
-                # Precio ya recalculado o convertido (p. ej. enviado por el formulario).
-                or old_currency.compare_amounts(line.price_unit, old_price)
-            ):
+        for line, (old_currency, old_uom, old_price, old_technical) in previous_prices.items():
+            if not line.exists() or line.currency_id == old_currency:
+                continue
+            fixed_price = line.pricing_rule_type == 'fixed_price'
+            if fixed_price and old_uom and old_uom != line.product_uom_id:
+                # Un cambio de UdM en el mismo guardado ya convirtió el precio fijo a la UdM nueva
+                # dentro del super(), pero no de moneda: se compara contra el capturado en esa UdM.
+                old_price = old_uom._compute_price(old_price, line.product_uom_id)
+                old_technical = old_uom._compute_price(old_technical, line.product_uom_id)
+            # Precio ya recalculado o convertido (p. ej. enviado por el formulario).
+            if old_currency.compare_amounts(line.price_unit, old_price):
                 continue
             technical = line._convert_price_currency(old_technical, old_currency)
             line.with_context(skip_manual_discount_breakdown=True).write({
                 # Precio fijo: ambos campos salen del valor sin redondear. Si difieren, el siguiente
                 # cambio de tarifa en el formulario toma la línea por precio manual y no la convierte.
                 'price_unit': (
-                    technical if line.pricing_rule_type == 'fixed_price'
+                    technical if fixed_price
                     else line._convert_price_currency(old_price, old_currency)
                 ),
                 'technical_price_unit': technical,

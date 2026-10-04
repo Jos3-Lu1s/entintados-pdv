@@ -1959,6 +1959,142 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             f"{product.display_name}: 70.00 {self.env.company.currency_id.name} / {product.uom_id.name}",
         )
 
+    # --- Tarifa y otros cambios de la línea en el mismo guardado ---
+
+    def _save_pricelist_and_line(self, order, path, line_values, pricelist=None, partner=None):
+        """Cambia tarifa (o cliente) y campos de la primera línea en un solo guardado.
+
+        `line_values` son valores de `Form` (registros); con `write` se pasan sus ids.
+        """
+        if path == 'Form':
+            with Form(order) as order_form:
+                if partner:
+                    order_form.partner_id = partner
+                if pricelist:
+                    order_form.pricelist_id = pricelist
+                with order_form.order_line.edit(0) as line_form:
+                    for field_name, value in line_values.items():
+                        setattr(line_form, field_name, value)
+            return
+        vals = {}
+        if partner:
+            vals['partner_id'] = partner.id
+        if pricelist:
+            vals['pricelist_id'] = pricelist.id
+        vals['order_line'] = [(1, order.order_line.id, {
+            field_name: value.id if hasattr(value, 'ids') else value
+            for field_name, value in line_values.items()
+        })]
+        order.write(vals)
+
+    def test_fixed_price_pricelist_and_uom_same_save(self):
+        """Cambiar la tarifa a otra moneda y la UdM en el mismo guardado convierte las dos cosas."""
+        self._enable_line_discounts()
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C UdM Mismo', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O UdM Mismo', other)
+        pack_6 = self.env.ref('uom.product_uom_pack_6')
+
+        for path in ('Form', 'write'):
+            for label, start, target, currency, price in (
+                ('T-C → T-O', pricelist_c, pricelist_o, other, 7140.0),
+                ('T-O → T-C', pricelist_o, pricelist_c, company_currency, 420.0),
+            ):
+                with self.subTest(path=path, direction=label):
+                    partner, product = self._create_fixed_price_currency_partner(
+                        f'UdM Mismo {path} {label}', start)
+                    order = self._create_order(partner, product)
+                    line = order.order_line
+                    if path == 'Form':
+                        with Form(order) as order_form:
+                            order_form.pricelist_id = target
+                            with order_form.order_line.edit(0) as line_form:
+                                line_form.product_uom_id = pack_6
+                                # Lo que ve el usuario antes de guardar.
+                                self.assertEqual(round(line_form.price_unit, 2), price)
+                    else:
+                        self._save_pricelist_and_line(order, path, {'product_uom_id': pack_6}, pricelist=target)
+                    self.assertEqual(order.currency_id, currency)
+                    self.assertEqual(line.product_uom_id, pack_6)
+                    self.assertEqual(self._line_values(line), (price, 0.0, 'fixed_price', 'fixed_price'))
+                    self.assertEqual(round(line.technical_price_unit, 2), price)
+
+    def test_fixed_price_currency_change_combined_regressions(self):
+        """Otros cambios junto con el de moneda en el mismo guardado: sin doble conversión."""
+        self._enable_line_discounts()
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Combinado', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Combinado', other)
+        pack_6 = self.env.ref('uom.product_uom_pack_6')
+
+        for path in ('Form', 'write'):
+            with self.subTest(path=path, case='tarifa + producto'):
+                partner, product = self._create_fixed_price_currency_partner(f'Combinado Producto {path}', pricelist_c)
+                order = self._create_order(partner, self.prod_3)
+                self._save_pricelist_and_line(order, path, {'product_id': product}, pricelist=pricelist_o)
+                self.assertEqual(order.currency_id, other)
+                self.assertEqual(self._line_values(order.order_line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+                self.assertEqual(round(order.order_line.technical_price_unit, 2), 1190.0)
+
+            with self.subTest(path=path, case='cliente + UdM'):
+                partner, product = self._create_fixed_price_currency_partner(f'Combinado Cliente {path}', pricelist_o)
+                plain_partner = self._create_pricelist_partner(f'Combinado Sin Acuerdo {path}', pricelist_c)
+                order = self._create_order(plain_partner, product)
+                self._save_pricelist_and_line(order, path, {'product_uom_id': pack_6}, partner=partner)
+                self.assertEqual(order.currency_id, other)
+                self.assertEqual(self._line_values(order.order_line), (7140.0, 0.0, 'fixed_price', 'fixed_price'))
+                self.assertEqual(round(order.order_line.technical_price_unit, 2), 7140.0)
+
+            with self.subTest(path=path, case='tarifa + cantidad'):
+                partner, product = self._create_fixed_price_currency_partner(f'Combinado Cantidad {path}', pricelist_c)
+                order = self._create_order(partner, product)
+                self._save_pricelist_and_line(order, path, {'product_uom_qty': 3.0}, pricelist=pricelist_o)
+                self.assertEqual(order.currency_id, other)
+                self.assertEqual(order.order_line.product_uom_qty, 3.0)
+                self.assertEqual(self._line_values(order.order_line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
+                self.assertEqual(round(order.order_line.technical_price_unit, 2), 1190.0)
+
+    def test_manual_price_pricelist_and_uom_same_save(self):
+        """Un precio manual con tarifa y UdM en un guardado queda igual que con dos guardados."""
+        self._enable_line_discounts()
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        company_currency, other = self._setup_other_currency()
+        pricelist_c = self._create_currency_pricelist('T-C Manual UdM', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O Manual UdM', other)
+        pack_6 = self.env.ref('uom.product_uom_pack_6')
+
+        def manual_line(name):
+            product = self.templates.create({'name': f'Manual UdM {name}', 'list_price': 100.0}).product_variant_ids[0]
+            partner = self._create_pricelist_partner(f'Cliente Manual UdM {name}', pricelist_c)
+            line = self._create_order(partner, product).order_line
+            line.write({'price_unit': 90.0})
+            self.assertEqual(line.price_origin, 'manual')
+            return line
+
+        def snapshot(line):
+            return (
+                line.order_id.currency_id,
+                line.product_uom_id,
+                round(line.price_unit, 2),
+                round(line.technical_price_unit, 2),
+                line.price_origin,
+            )
+
+        for path in ('Form', 'write'):
+            with self.subTest(path=path):
+                separate = manual_line(f'Separado {path}')
+                self._save_pricelist_and_line(separate.order_id, path, {}, pricelist=pricelist_o)
+                self._save_pricelist_and_line(separate.order_id, path, {'product_uom_id': pack_6})
+
+                combined = manual_line(f'Junto {path}')
+                self._save_pricelist_and_line(
+                    combined.order_id, path, {'product_uom_id': pack_6}, pricelist=pricelist_o)
+
+                self.assertEqual(snapshot(combined), snapshot(separate))
+                self.assertEqual(snapshot(combined)[0], other)
+
     # --- Cambio de moneda en todas las líneas del pedido ---
 
     def _create_mixed_currency_order(self, name, pricelist):
