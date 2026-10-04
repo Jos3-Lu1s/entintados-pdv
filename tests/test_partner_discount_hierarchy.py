@@ -2065,6 +2065,8 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         pricelist_c = self._create_currency_pricelist('T-C Desc Global', company_currency)
         pricelist_o = self._create_currency_pricelist('T-O Desc Global', other)
         partner = self._create_pricelist_partner('Cliente Desc Global', pricelist_c)
+        # El asistente descuenta el monto con impuestos incluidos.
+        self.prod_3.taxes_id = False
         order = self._create_order(partner, self.prod_3)
         self.env['sale.order.discount'].create({
             'sale_order_id': order.id,
