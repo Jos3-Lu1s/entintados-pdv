@@ -1363,6 +1363,122 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             order.order_line.write({'product_id': self.prod_1.id})
             self.assertEqual(self._line_values(order.order_line), (475.0, 0.0, 'none', 'pricelist'))
 
+    def test_manual_price_survives_partner_change_in_same_edit(self):
+        """AUD-0026: cambiar el cliente y teclear un precio en la misma edición del formulario
+        conserva el precio tecleado al guardar, en cualquier orden. Sin él, B tendría 100."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner('Cliente Misma Edición A', self._create_percentage_pricelist())
+        partner_b = self._create_agreement_partner(
+            'Cliente Misma Edición B', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}),
+            discount=15.0)
+
+        def price_values(line):
+            return (round(line.price_unit, 2), line.price_origin, line.price_origin_label)
+
+        expected = (90.0, 'manual', 'Modificado de forma manual')
+
+        with self.subTest('cliente y después precio'):
+            order = self._create_order(partner, self.prod_3)
+            with Form(order) as order_form:
+                order_form.partner_id = partner_b
+                with order_form.order_line.edit(0) as line_form:
+                    line_form.price_unit = 90.0
+            self.assertEqual(order.pricelist_id, partner_b.property_product_pricelist)
+            self.assertEqual(price_values(order.order_line), expected)
+
+        with self.subTest('precio y después cliente'):
+            order = self._create_order(partner, self.prod_3)
+            with Form(order) as order_form:
+                with order_form.order_line.edit(0) as line_form:
+                    line_form.price_unit = 90.0
+                order_form.partner_id = partner_b
+            self.assertEqual(order.pricelist_id, partner_b.property_product_pricelist)
+            self.assertEqual(price_values(order.order_line), expected)
+
+    def _create_same_type_agreement_partner(self, name, rule_type, discount):
+        """Cliente con tarifa sin reglas y un acuerdo `rule_type` de `discount` %.
+
+        Devuelve el cliente y el producto al que aplica el acuerdo.
+        """
+        partner = self._create_pricelist_partner(name, self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
+        if rule_type == 'global':
+            partner.discount = discount / 100.0
+            return partner, self.prod_3
+        target = {
+            'product': ('0_product', 'product_id', self.prod_3),
+            'line': ('1_line', 'line_id', self.line_1),
+            'scheme': ('2_scheme', 'scheme_id', self.schema_a),
+        }[rule_type]
+        applied_on, field_name, record = target
+        self.rules.create({
+            'partner_id': partner.id,
+            'applied_on': applied_on,
+            'rule_type': 'discount',
+            field_name: record.id,
+            'discount': discount,
+        })
+        return partner, (self.prod_3 if rule_type == 'product' else self.prod_1)
+
+    def test_partner_change_same_rule_type_keeps_agreement(self):
+        """Cambiar en el formulario a un cliente con acuerdo del mismo tipo y otro % guarda el
+        acuerdo del cliente nuevo, no un descuento manual."""
+        self._enable_line_discounts()
+        expected_badges = {
+            'product': 'Desc. Producto (15.0%)',
+            'line': f"Desc. Línea: {self.line_1.name} (15.0%)",
+            'scheme': f"Desc. Esquema: {self.schema_a.name} (15.0%)",
+            'global': 'Desc. Global Cliente (15.0%)',
+        }
+        for rule_type, expected_badge in expected_badges.items():
+            with self.subTest(rule_type=rule_type):
+                partner, product = self._create_same_type_agreement_partner(
+                    f'Cliente {rule_type} 10', rule_type, 10.0)
+                partner_b, __ = self._create_same_type_agreement_partner(
+                    f'Cliente {rule_type} 15', rule_type, 15.0)
+                order = self._create_order(partner, product)
+                line = order.order_line
+                self.assertEqual((round(line.discount, 2), line.pricing_rule_type), (10.0, rule_type))
+
+                with Form(order) as order_form:
+                    order_form.partner_id = partner_b
+
+                self.assertEqual(round(line.discount, 2), 15.0)
+                self.assertEqual(self._line_badge(line), (rule_type, expected_badge))
+
+    def test_manual_discount_still_detected(self):
+        """Un descuento tecleado, o escrito sin `technical_discount` o con otro distinto, queda manual."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner(
+            'Cliente Control Manual', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
+        expected = ('manual', 'Desc. Manual (7.0%)')
+
+        with self.subTest('formulario'):
+            line = self._create_order(partner, self.prod_3).order_line
+            self._edit_first_line(line.order_id, discount=7.0)
+            self.assertEqual(round(line.discount, 2), 7.0)
+            self.assertEqual(self._line_badge(line), expected)
+
+        with self.subTest('write sin technical_discount'):
+            line = self._create_order(partner, self.prod_3).order_line
+            line.write({'discount': 7.0})
+            self.assertEqual(self._line_badge(line), expected)
+
+        with self.subTest('write con technical_discount distinto'):
+            line = self._create_order(partner, self.prod_3).order_line
+            line.write({'discount': 7.0, 'technical_discount': 10.0})
+            self.assertEqual(self._line_badge(line), expected)
+            self.assertEqual(round(line.technical_discount, 2), 7.0)
+
+    def test_write_discount_with_technical_discount_not_manual(self):
+        """`discount` y `technical_discount` iguales en un `write` no cambian el tipo ni el badge."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner(
+            'Cliente Write Técnico', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
+        line = self._create_order(partner, self.prod_3).order_line
+        line.write({'discount': 7.0, 'technical_discount': 7.0})
+        self.assertEqual(round(line.discount, 2), 7.0)
+        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+
     def test_pricelist_switch_never_marks_price_manual(self):
         """Cambiar de tarifa en el formulario y guardar nunca deja el origen en manual, aunque la
         tarifa dé más decimales que los de `price_unit` (12.25 - 10 % = 11.025 → 11.03)."""

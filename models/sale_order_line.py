@@ -184,6 +184,13 @@ class SaleOrderLine(models.Model):
             and not self.env.context.get('skip_manual_discount_breakdown')
             and 'pricing_rule_type' not in vals
         )
+        if manual_discount and 'technical_discount' in vals:
+            # El formulario no envía `pricing_rule_type` si no cambió (otro cliente con acuerdo del
+            # mismo tipo): un `discount` igual a su `technical_discount` viene del cálculo.
+            manual_discount = bool(float_compare(
+                vals['technical_discount'] or 0.0, vals['discount'] or 0.0,
+                precision_digits=self.env['decimal.precision'].precision_get('Discount'),
+            ))
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
         manual_price = (
             'price_unit' in vals
