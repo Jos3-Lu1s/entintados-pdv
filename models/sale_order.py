@@ -17,7 +17,19 @@ class SaleOrder(models.Model):
         index=True,
         help="Referencia interna del concepto, proyecto u obra cotizada",
     )
-    
+    # Solo para la vista: el bloqueo de Ajustes no se aplica en el servidor.
+    price_unit_edit_locked = fields.Boolean(compute='_compute_edit_locked')
+    discount_edit_locked = fields.Boolean(compute='_compute_edit_locked')
+
+    @api.depends('company_id')
+    @api.depends_context('uid')
+    def _compute_edit_locked(self):
+        can_edit_price = self.env.user.has_group('entintados_pdv.group_sale_edit_price_unit')
+        can_edit_discount = self.env.user.has_group('entintados_pdv.group_sale_edit_discount')
+        for order in self:
+            order.price_unit_edit_locked = not (order.company_id.sale_price_unit_editable or can_edit_price)
+            order.discount_edit_locked = not (order.company_id.sale_discount_editable or can_edit_discount)
+
     @api.model_create_multi
     def create(self, vals_list):
         orders = super().create(vals_list)

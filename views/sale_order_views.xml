@@ -24,8 +24,25 @@
                 <attribute name="invisible">1</attribute>
             </xpath>
 
+            <xpath expr="//field[@name='order_line']" position="before">
+                <field name="price_unit_edit_locked" invisible="1"/>
+                <field name="discount_edit_locked" invisible="1"/>
+            </xpath>
+            <xpath expr="//button[@name='action_open_discount_wizard'][not(@disabled)]" position="attributes">
+                <attribute name="invisible">locked or state == 'cancel' or discount_edit_locked</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_open_discount_wizard'][@disabled]" position="attributes">
+                <attribute name="invisible">not (locked or state == 'cancel') or discount_edit_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="attributes">
+                <attribute name="readonly">parent.price_unit_edit_locked</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='discount']" position="attributes">
+                <attribute name="readonly">parent.discount_edit_locked</attribute>
+            </xpath>
+
             <xpath expr="//list/field[@name='price_unit']" position="attributes">
-                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price'</attribute>
+                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or parent.price_unit_edit_locked</attribute>
             </xpath>
             <!-- force_save: el servidor no recalcula el origen si `price_unit` viene en los valores. -->
             <xpath expr="//list/field[@name='price_unit']" position="before">
@@ -33,7 +50,7 @@
                 <field name="price_origin_label" column_invisible="True" force_save="1"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="attributes">
-                <attribute name="readonly">not manual_discount_allowed</attribute>
+                <attribute name="readonly">not manual_discount_allowed or parent.discount_edit_locked</attribute>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="before">
                 <field name="manual_discount_allowed" column_invisible="True"/>

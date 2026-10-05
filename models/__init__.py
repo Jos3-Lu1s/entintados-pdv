@@ -20,6 +20,8 @@ from . import sale_order_line
 from . import account_invoice_risk
 from . import res_company_risk
 from . import res_config_risk
+from . import res_company_sale
+from . import res_config_settings_sale
 from . import res_partner_risk
 from . import lines_product
 from . import product_pricelist_item

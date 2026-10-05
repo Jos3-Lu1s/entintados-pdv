@@ -137,6 +137,7 @@ Catálogo de entintado
         'views/account_financial_risk_view.xml',
         'views/portal_templates.xml',
         'views/res_config_risk_view.xml',
+        'views/res_config_settings_sale_views.xml',
         'views/res_partner_risk_view.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
