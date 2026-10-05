@@ -214,5 +214,17 @@
                 </p>
             </field>
         </record>
+
+        <record id="view_partner_form_custom_fiscal_field" model="ir.ui.view">
+            <field name="name">res.partner.form.custom.fiscal.field</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="arch" type="xml">
+                <field name="l10n_mx_edi_payment_policy" position="after">
+                    <field name="distributed_notes" invisible="is_supplier == False"/>
+                    <field name="percentage_patyc" invisible="is_supplier == False and distributed_notes == False"/>
+                </field>
+            </field>
+        </record>
     </data>
 </odoo>

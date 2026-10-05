@@ -202,4 +202,17 @@ class ProductTemplate(models.Model):
     def _onchange_lines_product_id(self):
         if self.lines_product_id:
             self.scheme_id = self.lines_product_id.scheme
+            
+    """ @api.constrains('standard_price', 'list_price')
+    def cost_checkout(self):
+        for product in self:
+            if product.standard_price >= product.list_price:
+                raise ValidationError(_(
+                    'El costo (%(cost)s) no puede ser mayor o igual al precio '
+                    'de venta (%(price)s) del producto "%(name)s".'
+                ) % {
+                    'cost': product.standard_price,
+                    'price': product.list_price,
+                    'name': product.name,
+                }) """
     

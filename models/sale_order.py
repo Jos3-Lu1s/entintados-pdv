@@ -258,3 +258,33 @@ class SaleOrder(models.Model):
                 result.pop(coupon, None)
         return result
     
+    def action_confirm(self):
+        self._check_stock_availability()
+        return super().action_confirm()
+
+    def _check_stock_availability(self):
+        for order in self:
+            insufficient_lines = []
+            for line in order.order_lines_for_stock_check():
+                available = line.product_id.with_context(
+                    warehouse=order.warehouse_id.id
+                ).qty_available
+                if line.product_uom_qty > available:
+                    insufficient_lines.append(_(
+                        '%(product)s: solicitado %(qty)s, disponible %(available)s'
+                    ) % {
+                        'product': line.product_id.display_name,
+                        'qty': line.product_uom_qty,
+                        'available': available,
+                    })
+            if insufficient_lines:
+                raise UserError(_(
+                    "No se puede confirmar la orden: no hay inventario suficiente "
+                    "para los siguientes productos:\n\n%s"
+                ) % '\n'.join(insufficient_lines))
+
+    def order_lines_for_stock_check(self):
+        self.ensure_one()
+        return self.order_line.filtered(
+            lambda l: l.product_id.is_storable and not l.display_type
+        )

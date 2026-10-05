@@ -83,6 +83,14 @@ class ResPartner(models.Model):
         string="Acuerdos comerciales",
         help="Reglas específicas de precios fijos y descuentos por producto, línea o esquema.",
     )
+    
+    distributed_notes = fields.Boolean(
+        string="Notas de credito distribuidas",
+    )
+    
+    percentage_patyc = fields.Integer(
+        string="Porcentaje de pago",
+    )
 
     def _get_partner_pricing_rule(self, product):
         """
