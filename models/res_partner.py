@@ -159,7 +159,7 @@ class ResPartner(models.Model):
                 }
 
         # 3. Descuento por Línea de producto
-        line = product_template.lines_product_id or getattr(product, 'lines_product_id', False)
+        line = product_template.lines_product_id
         if line:
             line_rule = self.discount_rule_ids.filtered(
                 lambda r: r.rule_type == 'discount'
@@ -179,7 +179,7 @@ class ResPartner(models.Model):
                 }
 
         # 4. Descuento por Esquema
-        scheme = product_template.scheme_id or (line and line.scheme) or getattr(product, 'scheme_id', False)
+        scheme = product_template.scheme_id
         if scheme:
             scheme_rule = self.discount_rule_ids.filtered(
                 lambda r: r.rule_type == 'discount'

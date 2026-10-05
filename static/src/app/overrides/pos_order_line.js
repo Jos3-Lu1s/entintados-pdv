@@ -76,13 +76,8 @@ patch(PosOrderline.prototype, {
         }
 
         const order = this.order_id || this.order;
-        if (order) {
-            if (typeof order._entintadosCheckActivePromoQualification === "function") {
-                order._entintadosCheckActivePromoQualification();
-            }
-            if (typeof order._entintadosReconcileDiscounts === "function") {
-                order._entintadosReconcileDiscounts();
-            }
+        if (order && typeof order._entintadosReconcileDiscounts === "function") {
+            order._entintadosReconcileDiscounts();
         }
 
         return res;

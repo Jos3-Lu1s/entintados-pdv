@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.PriceOriginField">
+        <span t-if="origin"
+              role="button"
+              tabindex="0"
+              class="o_price_origin_icon d-inline-block px-1"
+              t-att-aria-label="title"
+              t-att-title="title"
+              t-on-click.stop="onClick">
+            <i role="img" t-attf-class="fa {{origin.icon}} {{origin.color}}"/>
+        </span>
+    </t>
+
+    <t t-name="entintados_pdv.PriceOriginPopover">
+        <div class="o_price_origin_popover p-2" style="max-width: 320px;">
+            <div class="fw-bold" t-esc="props.title"/>
+            <div t-if="props.detail" class="text-muted small mt-1" t-esc="props.detail"/>
+        </div>
+    </t>
+
+</templates>

@@ -188,11 +188,16 @@ class CrmLead(models.Model):
     def _create_meeting_activity(self, activity_type):
         """Crea una nueva actividad de reunión del tipo indicado."""
         self.ensure_one()
-        return self.activity_schedule(
+        activity = self.activity_schedule(
             activity_type_id=activity_type.id,
             user_id=self.user_id.id or self.env.uid,
             summary=activity_type.summary,
         )
+        # activity_schedule devuelve False si el contexto trae
+        # 'mail_activity_automation_skip'.
+        if not activity:
+            raise UserError(_("No se pudo crear la actividad de reunión."))
+        return activity
 
     def _get_or_create_meeting_activity(self, activity_type):
         """Devuelve la actividad de reunión existente o crea una si no hay ninguna."""
@@ -245,7 +250,7 @@ class CrmLead(models.Model):
             # reagendarlo, en vez de crear uno nuevo (evita duplicados/huérfanos).
             return {
                 'type': 'ir.actions.act_window',
-                'name': activity_type.name,
+                'name': activity_type.display_name,
                 'res_model': 'calendar.event',
                 'res_id': event.id,
                 'view_mode': 'form',
@@ -496,9 +501,6 @@ class CrmLead(models.Model):
             return user.sign_signature
         if user.partner_id and getattr(user.partner_id, 'signature', None):
             return user.partner_id.signature
-        employee = self.env['hr.employee'].search([('user_id', '=', user.id)], limit=1)
-        if employee and getattr(employee, 'signature', None):
-            return employee.signature
         return False
     
     def _get_material_approver(self):
@@ -547,4 +549,4 @@ class CrmStage(models.Model):
                     raise ValidationError((
                         'El tipo "%s" ya está asignado a la etapa "%s". '
                         'Cada tipo solo puede usarse en una etapa.'
-                    ) % (dict(record._fields['stage_type'].selection).get(record.stage_type), duplicate.name))
+                    ) % (record._fields['stage_type'].convert_to_export(record.stage_type, record), duplicate.name))
