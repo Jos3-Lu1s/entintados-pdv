@@ -91,19 +91,22 @@ def format_points_long(points):
     '9 Onzas 24 Pts. (456 Pts.)'
     >>> format_points_long(24.5)
     '24.5 Pts.'
+    >>> format_points_long(-456)
+    '-9 Onzas 24 Pts. (-456 Pts.)'
     """
     total = float(points or 0)
+    sign = "-" if total < 0 else ""
     ounces, rest = split_points(abs(total))
     fmt_total = _fmt_num(total)
     if not ounces:
-        return "%s Pts." % _fmt_num(total)
-    parts = ["%d %s" % (ounces, "Onza" if ounces == 1 else "Onzas")]
+        return "%s Pts." % fmt_total
+    parts = ["%s%d %s" % (sign, ounces, "Onza" if ounces == 1 else "Onzas")]
     if rest:
         parts.append("%s Pts." % _fmt_num(rest))
     return "%s (%s Pts.)" % (" ".join(parts), fmt_total)
 
 
-def to_points(ounces=0, points=0):
+def to_points(ounces: float = 0, points: float = 0):
     """Convierte una cantidad en notación mixta a puntos totales.
 
     >>> to_points(9, 24)
@@ -141,4 +144,7 @@ def parse_points(value):
     ounces, points = match.group("ounces"), match.group("points")
     if ounces is None and points is None:
         return None
-    return to_points(ounces or 0, points or 0)
+    ounces_val = float(ounces) if ounces else 0
+    points_val = float(points) if points else 0
+    return to_points(ounces_val, points_val)
+

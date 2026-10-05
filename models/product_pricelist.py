@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo import Command, api, fields, models
+from odoo.fields import Domain
 
-from ..utils.points import format_points
 
 class ProductPricelist(models.Model):
-    _inherit='product.pricelist'
-
+    _inherit = 'product.pricelist'
 
     partner_ids = fields.Many2many(
         'res.partner',
@@ -27,7 +25,6 @@ class ProductPricelist(models.Model):
              "como disponible en los Puntos de Venta compatibles (misma compañía y moneda).",
     )
 
-
     def _compute_partner_ids(self):
         all_partners = self.env['res.partner'].search([])
         for pricelist in self:
@@ -36,7 +33,7 @@ class ProductPricelist(models.Model):
             )
             pricelist.partner_ids = partners
             pricelist.partner_count = len(partners)
-    
+
     def _inverse_partner_ids(self):
         pass
 
@@ -59,21 +56,18 @@ class ProductPricelist(models.Model):
             if not pricelist.show_in_pos:
                 continue
 
-            domain = [('company_id', 'in', [False, pricelist.company_id.id])] if pricelist.company_id else []
-            pos_configs = self.env['pos.config'].search(domain)
-
-            for config in pos_configs:
-                if pricelist.company_id and pricelist.company_id != config.company_id:
-                    continue
+            domain = Domain('company_id', '=', pricelist.company_id.id) if pricelist.company_id else Domain.TRUE
+            for config in self.env['pos.config'].search(domain):
                 if config.use_pricelist and pricelist.currency_id != config.currency_id:
                     continue
                 if pricelist not in config.available_pricelist_ids:
-                    config.available_pricelist_ids = [(4, pricelist.id)]
+                    config.available_pricelist_ids = [Command.link(pricelist.id)]
 
     def _remove_from_pos_configs(self):
         pos_configs = self.env['pos.config'].search([('available_pricelist_ids', 'in', self.ids)])
-        for config in pos_configs:
-            config.available_pricelist_ids = [(3, pricelist.id) for pricelist in self]
+        pos_configs.write({
+            'available_pricelist_ids': [Command.unlink(pricelist_id) for pricelist_id in self.ids],
+        })
 
     @api.model_create_multi
     def create(self, vals_list):

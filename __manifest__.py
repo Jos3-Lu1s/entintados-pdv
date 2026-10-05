@@ -85,6 +85,9 @@ Catálogo de entintado
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
+            # Indicador del origen del precio en las líneas de venta
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
         ],
     },
 
@@ -134,6 +137,7 @@ Catálogo de entintado
         'views/account_financial_risk_view.xml',
         'views/portal_templates.xml',
         'views/res_config_risk_view.xml',
+        'views/res_config_settings_sale_views.xml',
         'views/res_partner_risk_view.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
@@ -142,10 +146,10 @@ Catálogo de entintado
         'wizards/partner_risk_exceeded_view.xml',
         'wizards/crm_field_visit_confirm_wizard_view.xml',
         'wizards/crm_material_request_partner_wizzard_views.xml',
+        'wizards/crm_material_auditor_assign_wizard_views.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
-        'views/sale_loyalty_reward_wizard_views.xml',
     ],
     'demo': [],
     "installable": True,

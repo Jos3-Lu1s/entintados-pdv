@@ -34,13 +34,6 @@ class PosOrderLine(models.Model):
         ondelete='set null',
     )
 
-    def _export_for_ui(self, orderline):
-        result = super()._export_for_ui(orderline)
-        result['pricing_rule_type'] = orderline.pricing_rule_type
-        result['pricing_rule_origin'] = orderline.pricing_rule_origin
-        result['pricing_rule_id'] = orderline.pricing_rule_id.id if orderline.pricing_rule_id else False
-        return result
-
     @api.model
     def _load_pos_data_fields(self, config):
         params = super()._load_pos_data_fields(config)
