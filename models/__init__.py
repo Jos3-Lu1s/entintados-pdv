@@ -35,3 +35,5 @@ from . import approvals
 from . import approvals_product_line
 from . import res_partner_discount_rule
 from . import pos_order_line
+from . import vendor_credit_wizard
+from . import account_payment_register
