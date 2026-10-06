@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
+from ..utils.default_code import REQUIRE_DEFAULT_CODE, clean_default_code
 from ..utils.points import format_points
 
 
@@ -56,6 +57,66 @@ class ProductTemplate(models.Model):
         store=True,
         readonly=True,
     )
+
+    # --- Referencia interna ---------------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            clean_default_code(vals)
+        if not self.env.context.get(REQUIRE_DEFAULT_CODE):
+            return super().create(vals_list)
+        templates = super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: False})
+        ).create(vals_list).with_env(self.env)
+        templates._check_default_code_required()
+        return templates
+
+    def write(self, vals):
+        clean_default_code(vals)
+        if not self.env.context.get(REQUIRE_DEFAULT_CODE):
+            return super().write(vals)
+        result = super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: False})
+        ).write(vals)
+        self._check_default_code_required()
+        return result
+
+    def web_save(self, vals, specification, next_id=None):
+        return super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: True})
+        ).web_save(vals, specification, next_id=next_id)
+
+    def web_save_multi(self, vals_list, specification):
+        return super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: True})
+        ).web_save_multi(vals_list, specification)
+
+    def load(self, fields, data):
+        # El ORM convierte la ValidationError de cada fila en un mensaje de
+        # error y revierte el lote completo si hubo alguno.
+        return super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: True})
+        ).load(fields, data)
+
+    @api.model
+    def name_create(self, name):
+        raise UserError(_(
+            "Para crear un producto debe capturar su referencia interna. "
+            "Use «Crear y editar…»."
+        ))
+
+    def _check_default_code_required(self):
+        # Con más de una variante la referencia vive en cada variante y el
+        # formulario de la plantilla ni siquiera muestra el campo.
+        missing = self.filtered(
+            lambda t: t.product_variant_count <= 1 and not t.default_code)
+        if missing:
+            raise ValidationError(_(
+                "Debe capturar la referencia interna de los siguientes "
+                "productos: %s.",
+                ", ".join(missing.mapped('display_name')),
+            ))
 
     # --- Cálculos -------------------------------------------------------
 
