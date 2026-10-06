@@ -88,6 +88,21 @@ class ProductTemplate(models.Model):
 
     # --- Validaciones ---------------------------------------------------
 
+    @api.constrains('tint_role', 'type', 'is_storable')
+    def _check_tint_product_type(self):
+        """Garantiza que solo bienes almacenables con inventario activo
+        puedan tener un rol de entintado (base o colorante)."""
+        for product in self:
+            if product.tint_role and (product.type != 'consu' or not product.is_storable):
+                raise ValidationError(_(
+                    "Solamente los productos de tipo «Bien» almacenables (con seguimiento de inventario) "
+                    "pueden configurarse como bases o colorantes de entintado. "
+                    "El producto «%(product)s» tiene tipo «%(type)s» y almacenable=%(storable)s.",
+                    product=product.display_name,
+                    type=product.type,
+                    storable=product.is_storable,
+                ))
+
     @api.constrains('tint_role', 'tint_base_type_id', 'tint_size_id')
     def _check_tint_base(self):
         ### Detecta la mala configuración al capturar el catálogo.
@@ -127,6 +142,18 @@ class ProductTemplate(models.Model):
                 ))
 
     # --- Asistencia en el formulario ------------------------------------
+
+    @api.onchange('type', 'is_storable')
+    def _onchange_tint_product_type(self):
+        """Limpia la configuración de entintado si el producto deja de ser
+        un bien almacenable."""
+        for product in self:
+            if product.type != 'consu' or not product.is_storable:
+                if product.tint_role:
+                    product.tint_role = False
+                    product.tint_base_type_id = False
+                    product.tint_size_id = False
+                    product.lines_product_id = False
 
     @api.onchange('tint_role')
     def _onchange_tint_role(self):

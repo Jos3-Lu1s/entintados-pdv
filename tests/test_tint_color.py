@@ -30,10 +30,12 @@ class TestTintColor(TransactionCase):
         cls.colorant_a = cls.env['product.product'].create({
             'name': 'Colorante prueba A', 'uom_id': point.id,
             'tint_role': 'colorant', 'list_price': 2.0,
+            'is_storable': True,
         })
         cls.colorant_b = cls.env['product.product'].create({
             'name': 'Colorante prueba B', 'uom_id': point.id,
             'tint_role': 'colorant', 'list_price': 3.0,
+            'is_storable': True,
         })
         cls.color = cls.colors.create({'name': 'Color de prueba', 'code': 'TEST-COL-01'})
         cls.pos_config = cls.env['pos.config'].search([], limit=1)
@@ -131,6 +133,7 @@ class TestTintColor(TransactionCase):
             'tint_role': 'base',
             'tint_base_type_id': self.white.id,
             'tint_size_id': self.liter.id,
+            'is_storable': True,
         })
         with self.assertRaises(ValidationError):
             self._create_formula(self.deep, self.gallon, [(base, 10)])

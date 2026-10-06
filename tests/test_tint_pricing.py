@@ -62,6 +62,7 @@ class TestTintPricing(TransactionCase):
             'uom_id': cls.point.id,
             'list_price': 2.0,
             'standard_price': 1.0,
+            'is_storable': True,
         })
         cls.colorant = cls.colorant_tmpl.product_variant_id
 
@@ -73,6 +74,7 @@ class TestTintPricing(TransactionCase):
             'tint_size_id': size.id,
             'lines_product_id': line.id if line else False,
             'list_price': list_price,
+            'is_storable': True,
         })
         return tmpl.product_variant_id
 

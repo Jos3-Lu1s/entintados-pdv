@@ -53,6 +53,7 @@ class TestTintSchemaLinesViews(TransactionCase):
             'lines_product_id': line1.id,
             'list_price': 500.0,
             'standard_price': 300.0,
+            'is_storable': True,
         })
 
         self.assertEqual(prod1.scheme_id, schema)
@@ -108,6 +109,7 @@ class TestTintSchemaLinesViews(TransactionCase):
             'lines_product_id': line.id,
             'list_price': 700.0,
             'standard_price': 400.0,
+            'is_storable': True,
         })
 
         line.invalidate_recordset(['presentation_count', 'product_count'])
