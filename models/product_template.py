@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
+from ..utils.default_code import REQUIRE_DEFAULT_CODE, clean_default_code
 from ..utils.points import format_points
 
 
@@ -57,6 +58,66 @@ class ProductTemplate(models.Model):
         readonly=True,
     )
 
+    # --- Referencia interna ---------------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            clean_default_code(vals)
+        if not self.env.context.get(REQUIRE_DEFAULT_CODE):
+            return super().create(vals_list)
+        templates = super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: False})
+        ).create(vals_list).with_env(self.env)
+        templates._check_default_code_required()
+        return templates
+
+    def write(self, vals):
+        clean_default_code(vals)
+        if not self.env.context.get(REQUIRE_DEFAULT_CODE):
+            return super().write(vals)
+        result = super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: False})
+        ).write(vals)
+        self._check_default_code_required()
+        return result
+
+    def web_save(self, vals, specification, next_id=None):
+        return super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: True})
+        ).web_save(vals, specification, next_id=next_id)
+
+    def web_save_multi(self, vals_list, specification):
+        return super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: True})
+        ).web_save_multi(vals_list, specification)
+
+    def load(self, fields, data):
+        # El ORM convierte la ValidationError de cada fila en un mensaje de
+        # error y revierte el lote completo si hubo alguno.
+        return super(
+            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: True})
+        ).load(fields, data)
+
+    @api.model
+    def name_create(self, name):
+        raise UserError(_(
+            "Para crear un producto debe capturar su referencia interna. "
+            "Use «Crear y editar…»."
+        ))
+
+    def _check_default_code_required(self):
+        # Con más de una variante la referencia vive en cada variante y el
+        # formulario de la plantilla ni siquiera muestra el campo.
+        missing = self.filtered(
+            lambda t: t.product_variant_count <= 1 and not t.default_code)
+        if missing:
+            raise ValidationError(_(
+                "Debe capturar la referencia interna de los siguientes "
+                "productos: %s.",
+                ", ".join(missing.mapped('display_name')),
+            ))
+
     # --- Cálculos -------------------------------------------------------
 
     @api.depends('tint_role', 'tint_base_type_id', 'tint_size_id')
@@ -87,6 +148,21 @@ class ProductTemplate(models.Model):
             product.tint_extraction_liters = liters
 
     # --- Validaciones ---------------------------------------------------
+
+    @api.constrains('tint_role', 'type', 'is_storable')
+    def _check_tint_product_type(self):
+        """Garantiza que solo bienes almacenables con inventario activo
+        puedan tener un rol de entintado (base o colorante)."""
+        for product in self:
+            if product.tint_role and (product.type != 'consu' or not product.is_storable):
+                raise ValidationError(_(
+                    "Solamente los productos de tipo «Bien» almacenables (con seguimiento de inventario) "
+                    "pueden configurarse como bases o colorantes de entintado. "
+                    "El producto «%(product)s» tiene tipo «%(type)s» y almacenable=%(storable)s.",
+                    product=product.display_name,
+                    type=product.type,
+                    storable=product.is_storable,
+                ))
 
     @api.constrains('tint_role', 'tint_base_type_id', 'tint_size_id')
     def _check_tint_base(self):
@@ -127,6 +203,18 @@ class ProductTemplate(models.Model):
                 ))
 
     # --- Asistencia en el formulario ------------------------------------
+
+    @api.onchange('type', 'is_storable')
+    def _onchange_tint_product_type(self):
+        """Limpia la configuración de entintado si el producto deja de ser
+        un bien almacenable."""
+        for product in self:
+            if product.type != 'consu' or not product.is_storable:
+                if product.tint_role:
+                    product.tint_role = False
+                    product.tint_base_type_id = False
+                    product.tint_size_id = False
+                    product.lines_product_id = False
 
     @api.onchange('tint_role')
     def _onchange_tint_role(self):
@@ -202,4 +290,17 @@ class ProductTemplate(models.Model):
     def _onchange_lines_product_id(self):
         if self.lines_product_id:
             self.scheme_id = self.lines_product_id.scheme
+            
+    """ @api.constrains('standard_price', 'list_price')
+    def cost_checkout(self):
+        for product in self:
+            if product.standard_price >= product.list_price:
+                raise ValidationError(_(
+                    'El costo (%(cost)s) no puede ser mayor o igual al precio '
+                    'de venta (%(price)s) del producto "%(name)s".'
+                ) % {
+                    'cost': product.standard_price,
+                    'price': product.list_price,
+                    'name': product.name,
+                }) """
     

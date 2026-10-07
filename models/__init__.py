@@ -5,6 +5,7 @@ from . import tint_size
 from . import tint_base_type
 from . import tint_base_capacity
 from . import product_template
+from . import product_product
 from . import tint_gallery
 from . import tint_color
 from . import tint_color_formula
@@ -35,3 +36,5 @@ from . import approvals
 from . import approvals_product_line
 from . import res_partner_discount_rule
 from . import pos_order_line
+from . import vendor_credit_wizard
+from . import account_payment_register

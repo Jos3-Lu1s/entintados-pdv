@@ -36,6 +36,7 @@ class CrmMaterialRequestPartnerWizzard(models.TransientModel):
                 'name': self.partner_name,
                 'email': self.lead_id.email_from,
                 'phone': self.partner_phone,
+                'is_customer': True,
             })
             self.lead_id.partner_id = partner.id
         else:

@@ -28,3 +28,5 @@ access_crm_field_visit_confirm_wizard_user,crm.field.visit.confirm.wizard (usuar
 access_crm_material_request_partner_wizzard_user,crm.material.request.partner.wizzard (usuario interno),model_crm_material_request_partner_wizzard,base.group_user,1,1,1,1
 access_res_partner_discount_rule_user,res.partner.discount.rule (usuario interno),model_res_partner_discount_rule,base.group_user,1,1,1,1
 access_crm_material_auditor_assign_wizard_user,crm.material.auditor.assign.wizard (usuario interno),model_crm_material_auditor_assign_wizard,base.group_user,1,1,1,1
+access_vendor_credit_wizard,vendor.credit.group,model_vendor_credit_group,account.group_account_invoice,1,1,1,1
+access_vendor_credit_wizard_line,vendor.credit.group.line,model_vendor_credit_group_line,account.group_account_invoice,1,1,1,1

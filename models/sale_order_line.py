@@ -210,11 +210,12 @@ class SaleOrderLine(models.Model):
             )
         # Cambio de UdM sin precio (código, RPC, importación o el formulario, donde `price_unit` es de
         # solo lectura en precio fijo): tras el write `_origin` ya trae la UdM nueva, así que el
-        # precio fijo se convierte aquí desde la UdM anterior.
+        # precio fijo se convierte aquí desde la UdM anterior. Se parte de `technical_price_unit`, sin
+        # redondear, como el onchange: tras un cambio de moneda `price_unit` ya perdió decimales.
         fixed_uom = {}
         if 'product_uom_id' in vals and 'price_unit' not in vals and 'product_id' not in vals:
             fixed_uom = {
-                line: (line.product_uom_id, line.price_unit)
+                line: (line.product_uom_id, line.technical_price_unit)
                 for line in self
                 if line.pricing_rule_type == 'fixed_price' and not line.qty_invoiced
             }

@@ -88,6 +88,8 @@ Catálogo de entintado
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
+            # Sin creación rápida de productos: quedarían sin referencia interna
+            "entintados_pdv/static/src/fields/product_no_quick_create/product_no_quick_create.js",
         ],
     },
 
@@ -106,10 +108,12 @@ Catálogo de entintado
         'data/hr_departament_data.xml',
         'data/approval_request_data.xml',
         'data/code_tint.xml',
+        'data/note_seq.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',
         'views/product_template_tint_views.xml',
+        'views/product_default_code_views.xml',
         'views/tint_gallery_views.xml',
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
@@ -126,6 +130,8 @@ Catálogo de entintado
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
         'views/account_move_views.xml',
+        'views/account_payment_register.xml',
+        'views/vendor_credit_wizard_views.xml',
         'views/account_payment_views.xml',
         'views/crm_lead_views.xml',
         'views/crm_lead_to_opportunity_views.xml',
