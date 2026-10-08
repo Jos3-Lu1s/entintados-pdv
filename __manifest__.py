@@ -55,6 +55,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades
             "entintados_pdv/static/src/app/utils/tint_points.js",
+            "entintados_pdv/static/src/app/utils/pos_stock.js",
             "entintados_pdv/static/src/app/utils/pricing_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
@@ -72,6 +73,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.xml",
             # Overrides (patch) a componentes/servicios del core POS
             "entintados_pdv/static/src/app/overrides/pos_store.js",
+            "entintados_pdv/static/src/app/overrides/pos_stock.js",
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
             "entintados_pdv/static/src/app/overrides/orderline.js",
             "entintados_pdv/static/src/app/overrides/orderline.xml",

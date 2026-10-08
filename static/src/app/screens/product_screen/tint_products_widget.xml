@@ -75,6 +75,9 @@
                     <t t-set-slot="rows">
                         <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
+                            t-att-class="isProductOutOfStock(product) ? 'opacity-50' : ''"
+                            t-att-aria-disabled="isProductOutOfStock(product) ? 'true' : 'false'"
+                            t-att-title="isProductOutOfStock(product) ? 'Sin existencias disponibles' : ''"
                             t-on-click="() => this.addProductToOrder(product)">
                             <td class="py-2 text-nowrap">
                                 <span class="text-secondary-emphasis font-monospace small" t-esc="product.default_code or '—'"/>
@@ -92,6 +95,10 @@
                             </td>
                             <td class="py-2 text-nowrap">
                                 <span class="text-secondary-emphasis small" t-esc="product.uom_id and product.uom_id.name or '—'"/>
+                            </td>
+                            <td class="py-2 text-end text-nowrap"
+                                t-att-class="product.is_storable and product.pos_stock_qty &lt;= 0 ? 'text-danger fw-bold' : ''">
+                                <span t-esc="product.is_storable ? product.pos_stock_qty : '—'"/>
                             </td>
                             <td class="py-2 text-end fw-bold text-nowrap text-dark fs-6" t-esc="tintRowPriceFormatted(product)"/>
                         </tr>

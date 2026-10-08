@@ -39,4 +39,24 @@
             </xpath>
         </field>
     </record>
+
+    <record id="account_move_vendor_credit_buttons" model="ir.ui.view">
+        <field name="name">account.move.vendor.credit.buttons</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_vendor_credit_sources" type="object"
+                        class="oe_stat_button" icon="fa-files-o"
+                        invisible="vendor_credit_source_count == 0">
+                    <field name="vendor_credit_source_count" widget="statinfo" string="Facturas de origen"/>
+                </button>
+                <button name="action_view_vendor_credit_notes" type="object"
+                        class="oe_stat_button" icon="fa-pencil-square-o"
+                        invisible="vendor_credit_note_count == 0">
+                    <field name="vendor_credit_note_count" widget="statinfo" string="Notas grupales"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
 </odoo>

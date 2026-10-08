@@ -1,15 +1,6 @@
 from odoo import api, Command, fields, models, _
 from odoo.exceptions import UserError
 
-
-class AccountMove(models.Model):
-    _inherit = 'account.move'
-
-    vendor_credit_source_ids = fields.Many2many(
-        'account.move', 'vendor_credit_source_rel', 'credit_id', 'invoice_id',
-        string='Facturas de origen', copy=False, check_company=True,
-    )
-
 class VendorCreditGroup(models.Model):
     _name = 'vendor.credit.group'
     _description = 'Nota de crédito agrupada de proveedor'
@@ -26,7 +17,31 @@ class VendorCreditGroup(models.Model):
     )
 
     credit_id = fields.Many2one('account.move', string='Nota de crédito', readonly=True, copy=False, check_company=True)
-    state = fields.Selection([('draft', 'Borrador'), ('generated', 'Nota generada')], compute='_compute_state', store=True)
+    state = fields.Selection([('draft', 'Borrador'), ('generated', 'Nota generada'), ('cancel', 'Cancelado')], default='draft', required=True, copy=False)
+    invoice_count = fields.Integer(compute='_compute_invoice_count')
+
+    @api.depends('line_ids.selected')
+    def _compute_invoice_count(self):
+        for group in self:
+            group.invoice_count = len(group.line_ids.filtered('selected'))
+
+    def action_view_invoices(self):
+        self.ensure_one()
+        invoices = self.line_ids.filtered('selected').invoice_id
+        return self.env['account.move']._action_open_moves(invoices, _('Facturas'))
+
+    def action_cancel(self):
+        for group in self:
+            if group.state == 'cancel':
+                continue
+            credit = group.credit_id
+            if credit:
+                if credit.state == 'posted':
+                    credit.button_draft()
+                if credit.state == 'draft':
+                    credit.button_cancel()
+                credit.vendor_credit_source_ids = [Command.clear()]
+            group.write({'credit_id': False, 'state': 'cancel'})
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -54,6 +69,27 @@ class VendorCreditGroup(models.Model):
         if any(self.mapped('credit_id')):
             raise UserError(_('No puedes eliminar una agrupación que ya generó su nota.'))
         return super().unlink()
+    
+    def _reconcile_credit_with_invoices(self, credit, allocations):
+        self.ensure_one()
+        payable = lambda line: line.account_id.account_type == 'liability_payable'
+        credit_line = credit.line_ids.filtered(payable)
+        skipped = []
+        for allocation in allocations:
+            invoice = allocation.invoice_id
+            # Solo se concilia cuando el importe es el saldo completo de la factura
+            if self.currency_id.compare_amounts(allocation.amount, invoice.amount_residual) != 0:
+                skipped.append(invoice.display_name)
+                continue
+            invoice_line = invoice.line_ids.filtered(
+                lambda line: payable(line) and not line.reconciled
+            )
+            (credit_line + invoice_line).reconcile()
+        if skipped:
+            credit.message_post(body=_(
+                'Estas facturas no se concilieron automáticamente porque el importe '
+                'acreditado es menor a su saldo: %s'
+            ) % ', '.join(skipped))
 
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
     partner_id = fields.Many2one('res.partner', string='Proveedor', required=True, check_company=True)
@@ -103,6 +139,8 @@ class VendorCreditGroup(models.Model):
         self.ensure_one()
         if self.credit_id:
             return self.action_open_credit()
+        if self.state == 'cancel':
+            raise UserError(_('No puedes generar una nota desde una agrupación cancelada.'))
         selected_lines = self.line_ids.filtered('selected')
         if not selected_lines:
             raise UserError(_('Selecciona al menos una factura.'))
@@ -150,7 +188,10 @@ class VendorCreditGroup(models.Model):
         })
         if self.currency_id.compare_amounts(credit.amount_total, self.amount_total):
             raise UserError(_('Los impuestos o redondeos de estas facturas no permiten obtener exactamente el importe solicitado. Ajusta los importes o genera notas individuales.'))
-        self.credit_id = credit
+        (self.line_ids - selected_lines).unlink()
+        self.write({'credit_id': credit.id, 'state': 'generated'})
+        credit.action_post()
+        self._reconcile_credit_with_invoices(credit, selected_lines)
         return {
             'type': 'ir.actions.act_window', 'name': _('Nota de crédito'),
             'res_model': 'account.move', 'view_mode': 'form', 'res_id': credit.id,
