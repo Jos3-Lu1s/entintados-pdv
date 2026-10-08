@@ -1892,6 +1892,42 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                 self.assertEqual(line_form.price_unit, 3.81)
         self.assertEqual(self._line_values(line), (3.81, 0.0, 'fixed_price', 'fixed_price'))
 
+    def test_fixed_price_uom_change_after_currency_change(self):
+        """Tras cambiar de moneda, cambiar solo la UdM guarda el precio que mostró el formulario.
+
+        Con 1 C = 0.0544401376 O, 70 C → 3.810809632 O: por docena da 45.73, pero desde el
+        redondeado 3.81 daría 45.72, y de vuelta a C y por unidad, 69.99.
+        """
+        self._enable_line_discounts()
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        company_currency, other = self._setup_other_currency(rates=((None, 0.0544401376),))
+        pricelist_c = self._create_currency_pricelist('T-C UdM Tras Moneda', company_currency)
+        pricelist_o = self._create_currency_pricelist('T-O UdM Tras Moneda', other)
+        dozen = self.env.ref('uom.product_uom_dozen')
+
+        for path in ('Form', 'write'):
+            with self.subTest(path=path):
+                partner, product = self._create_fixed_price_currency_partner(
+                    f'UdM Tras Moneda {path}', pricelist_c)
+                order = self._create_order(partner, product)
+                line = order.order_line
+                self._save_pricelist_and_line(order, path, {}, pricelist=pricelist_o)
+                self.assertEqual(line.price_unit, 3.81)
+
+                if path == 'Form':
+                    with Form(order) as order_form:
+                        with order_form.order_line.edit(0) as line_form:
+                            line_form.product_uom_id = dozen
+                            # Lo que ve el usuario antes de guardar.
+                            self.assertEqual(round(line_form.price_unit, 2), 45.73)
+                else:
+                    self._save_pricelist_and_line(order, path, {'product_uom_id': dozen})
+                self.assertEqual(self._line_values(line), (45.73, 0.0, 'fixed_price', 'fixed_price'))
+
+                self._save_pricelist_and_line(order, path, {}, pricelist=pricelist_c)
+                self._save_pricelist_and_line(order, path, {'product_uom_id': product.uom_id})
+                self.assertEqual(self._line_values(line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+
     def test_fixed_price_write_pricelist_currency(self):
         """`write` por código de la tarifa convierte el precio fijo congelado."""
         company_currency, other = self._setup_other_currency()

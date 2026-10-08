@@ -16,3 +16,4 @@ from . import test_tint_pos_config
 from . import test_pos_stock
 from . import test_partner_discount_hierarchy
 from . import test_sale_line_edit_lock
+from . import test_product_default_code
