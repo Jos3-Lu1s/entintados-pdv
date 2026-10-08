@@ -1,5 +1,6 @@
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
 import { patch } from "@web/core/utils/patch";
+import { formatCurrency } from "@web/core/currency";
 
 /**
  * Parche para el componente visual Orderline del POS para evitar la duplicación
@@ -23,6 +24,22 @@ patch(Orderline.prototype, {
             values.pricingRuleOrigin = line.pricing_rule_origin || null;
             values.pricingRuleType = line.pricing_rule_type || null;
             values.hasPricingRule = Boolean(line.pricing_rule_origin);
+        }
+
+        if (this.props.mode === "display" && !this.props.basic_receipt) {
+            const components = [line, ...(line.combo_line_ids || [])];
+            const priceExcl = components.reduce((total, component) => total + component.priceExcl, 0);
+            const priceExclNoDiscount = components.reduce(
+                (total, component) => total + component.priceExclNoDiscount, 0);
+            if (values.price) {
+                values.price = formatCurrency(priceExcl, line.currency.id);
+            }
+            values.noDiscountPrice = formatCurrency(priceExclNoDiscount, line.currency.id);
+            if (values.displayPriceUnit && line.qty) {
+                values.displayPriceUnit = `${formatCurrency(priceExclNoDiscount / line.qty, line.currency.id)} / ${
+                    line.product_id?.uom_id?.name || ""
+                }`;
+            }
         }
 
         if (this.props.mode === "display" && values.name) {
