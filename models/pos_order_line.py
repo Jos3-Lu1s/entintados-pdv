@@ -6,6 +6,8 @@ from odoo import api, fields, models
 class PosOrderLine(models.Model):
     _inherit = 'pos.order.line'
 
+    tint_color_code = fields.Char(string='Código del color entintado', readonly=True, copy=False)
+
     pricing_rule_type = fields.Selection(
         selection=[
             ('none', 'Sin acuerdo'),
@@ -37,5 +39,5 @@ class PosOrderLine(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         params = super()._load_pos_data_fields(config)
-        params += ['pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id']
+        params += ['pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id', 'tint_color_code']
         return params

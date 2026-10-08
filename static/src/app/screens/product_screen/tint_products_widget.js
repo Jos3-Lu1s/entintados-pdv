@@ -38,6 +38,9 @@ patch(ProductScreen.prototype, {
     },
 
     setTintTab(tab) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         this.tintUi.tab = tab;
     },
 
@@ -69,6 +72,9 @@ patch(ProductScreen.prototype, {
 
     /** Abre el diálogo para crear color desde la pestaña de Entintados */
     async onClickCreateColorFromTab() {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
             if (payload.galleryId) {
@@ -117,6 +123,9 @@ patch(ProductScreen.prototype, {
     },
 
     async addProductToOrder(productTmpl) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         if (this.isProductOutOfStock(productTmpl)) {
             try {
                 await this.pos.refreshProductStock(productTmpl.product_variant_ids || []);

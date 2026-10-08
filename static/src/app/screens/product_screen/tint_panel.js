@@ -139,6 +139,9 @@ export class TintPanel extends Component {
 
     /** Selecciona la galería y carga los ids de sus colores. */
     async selectGallery(id) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         this.ui.galleryId = id;
         this.ui.colorId = null;
         this.ui.sizeIds = [];
@@ -203,6 +206,9 @@ export class TintPanel extends Component {
     }
 
     async selectColor(id) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         this.ui.colorId = id;
         this.panelState.showTechnicalDetails = false;
         // Conserva la galería y reinicia filtros de presentación y tipo de base.
@@ -256,6 +262,9 @@ export class TintPanel extends Component {
 
     /** Abre el modal para crear nuevo color desde el panel. */
     async onClickCreateColor() {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
             if (payload.color?.base_type_summary) {
@@ -286,6 +295,9 @@ export class TintPanel extends Component {
 
     /** Genera fórmulas para las demás presentaciones compatibles del color seleccionado. */
     async generateOtherSizesForColor() {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         if (!this.canGenerateOtherSizesForColor || this.isGeneratingSizes) {
             return;
         }

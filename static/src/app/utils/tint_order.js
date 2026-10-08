@@ -256,6 +256,7 @@ export async function addTintedBaseToOrder(
             price_unit: finalUnitPrice,
             combo_line_ids: comboLines,
             is_tinted_base: true,
+            tint_color_code: color?.code || false,
         },
         {
             price_unit: finalUnitPrice,
