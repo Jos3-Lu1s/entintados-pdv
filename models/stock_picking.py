@@ -1,8 +1,11 @@
+import base64
 from odoo import fields, models, api, _
 from odoo.exceptions import UserError, ValidationError
 
 MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
 AUDIT_DEPARTMENT_XMLID = 'entintados_pdv.hr_department_auditoria'
+APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
+DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -60,6 +63,65 @@ class StockPicking(models.Model):
         compute="_compute_is_material_auditor",
     )
     
+    """ Campos de evidencia de salida de material y de uso del material """
+    document_file = fields.Binary(
+        string="Documento de entrega de material",
+        attachment=True,
+    )
+
+    document_filename = fields.Char(
+        string="Nombre del documento",
+    )
+    
+    evidence_attachment_ids = fields.Many2many(
+        "ir.attachment",
+        relation="stock_picking_evidence_attachment_rel",
+        column1="picking_id",
+        column2="attachment_id",
+        string="Evidencias",
+    )
+    
+    evidence_use_attachment_ids = fields.Many2many(
+        "ir.attachment",
+        relation="stock_picking_evidence_use_attachment_rel",
+        column1="picking_id",
+        column2="attachment_id",
+        string="Uso del material",
+    )
+    
+    validate_delivery = fields.Boolean(
+        string="Entrega validada",
+    )
+    
+    validate_material_use = fields.Boolean(
+        string="Uso de material validado",
+    )
+
+    def _action_done(self):
+            res = super()._action_done()
+            return res
+                    
+    def _generate_material_document(self):
+        self.ensure_one()
+
+        report = self.env.ref(
+            'entintados_pdv.action_report_material_stock_picking',
+            raise_if_not_found=False,
+        )
+        if not report:
+            return
+
+        pdf_content, _report_format = report._render_qweb_pdf(
+            report.report_name, [self.id]
+        )
+        if not isinstance(pdf_content, bytes):
+            return
+
+        self.write({
+            'document_file': base64.b64encode(pdf_content),
+            'document_filename': 'Solicitud_Material_%s.pdf' % (self.name or self.id),
+        })
+    
     @api.depends('picking_type_id')
     def _compute_is_material_output_type(self):
         for picking in self:
@@ -72,13 +134,14 @@ class StockPicking(models.Model):
             
     def _is_current_user_auditor(self):
         """True si el usuario actual pertenece al departamento de Auditoría."""
-        department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
-        if not department:
+        """ department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)"""
+        self.ensure_one()
+        if not self.approval_request_id:
             return False
         employee = self.env['hr.employee'].search(
             [('user_id', '=', self.env.user.id)], limit=1
         )
-        return bool(employee and employee.department_id == department)
+        return bool(employee and employee in self.approval_request_id.material_auditor_ids)
     
     def _compute_is_material_auditor(self):
         for picking in self:
@@ -97,14 +160,11 @@ class StockPicking(models.Model):
             return auditor.digital_signature
         if getattr(auditor, 'sign_signature', None):
             return auditor.sign_signature
-        if auditor.partner_id and getattr(auditor.partner_id, 'signature', None):
-            return auditor.partner_id.signature
-        employee = self.env['hr.employee'].search([('user_id', '=', auditor.id)], limit=1)
-        if employee and getattr(employee, 'signature', None):
-            return employee.signature
         return False
 
     def action_audit_approve_material(self):
+        activity_type = self.env.ref(APPROVE_MATERIAL_ACTIVITY_XMLID, raise_if_not_found=False)
+
         for picking in self:
             if not picking.is_material_output_type:
                 raise UserError(_("Esta acción solo aplica a salidas de tipo 'Salida de material'."))
@@ -126,9 +186,12 @@ class StockPicking(models.Model):
                 vals['signature_date'] = fields.Datetime.now()
             picking.write(vals)
 
-            picking.activity_ids.filtered(
-                lambda a: a.summary == 'Validación de Auditoría - Salida de material'
-            ).action_feedback(feedback=_('Validado por Auditoría.'))
+            if activity_type:
+                picking.activity_ids.filtered(
+                    lambda a: a.activity_type_id == activity_type
+                ).action_feedback(feedback=_('Validado por Auditoría.'))
+
+        return self.button_validate()
 
     def action_audit_refuse_material(self):
         for picking in self:
@@ -210,4 +273,38 @@ class StockPicking(models.Model):
                     "sin que provenga del flujo de Solicitud de Aprobación desde una "
                     "oportunidad de CRM. Genera la salida desde la oportunidad correspondiente."
                 ))
+                
+    def action_validate_delivery(self):
+        for picking in self:
+            if picking.state != 'done':
+                raise UserError(_("Solo se puede validar la entrega de salidas que estén en estado 'Hecho'."))
+            if not picking.evidence_attachment_ids:
+                raise UserError(_("Debe adjuntar al menos una evidencia de entrega antes de validar la entrega."))
+            picking.write({
+                'validate_delivery': True,
+            })
     
+    def action_validate_material_use(self):
+        demo_activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+
+        
+        for picking in self:
+            if picking.state != 'done':
+                raise UserError(_("Solo se puede validar el uso de material de salidas que estén en estado 'Hecho'."))
+            if not picking.validate_delivery:
+                raise UserError(_("Debe validar la entrega antes de validar el uso de material."))
+            if not picking.evidence_use_attachment_ids:
+                raise UserError(_("Debe adjuntar al menos una evidencia de uso de material antes de validar el uso."))
+            picking.write({
+                'validate_material_use': True,
+            })
+    
+            if picking.crm_lead_id:
+                picking.crm_lead_id.write({
+                    'demo_end': True,
+                })
+                if demo_activity_type:
+                    picking.crm_lead_id.activity_ids.filtered(
+                        lambda a: a.activity_type_id == demo_activity_type
+                    ).action_feedback(feedback=_('Demostración finalizada, uso de material validado.'))
+            

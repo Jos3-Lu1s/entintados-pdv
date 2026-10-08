@@ -5,7 +5,7 @@
     <t t-name="entintados_pdv.ProductScreenTintTabs" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="before">
-            <div class="o-tint-tabs d-flex align-items-center justify-content-between p-2 flex-shrink-0 border-bottom bg-view min-w-0 w-100">
+            <div t-if="!pos.config.module_pos_restaurant" class="o-tint-tabs d-flex align-items-center justify-content-between p-2 flex-shrink-0 border-bottom bg-view min-w-0 w-100">
                 <!-- Segmented Control Principal: Productos / Entintados -->
                 <div class="o-tint-segmented-control bg-light p-1 rounded-pill border d-inline-flex">
                     <button class="btn btn-sm rounded-pill px-3 py-1 text-nowrap fw-semibold transition-all d-flex align-items-center gap-1"
@@ -55,21 +55,21 @@
         </xpath>
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="attributes">
-            <attribute name="t-attf-class">{{ tintUi.tab === 'tint' ? 'd-none' : '' }}</attribute>
+            <attribute name="t-attf-class">{{ !pos.config.module_pos_restaurant and tintUi.tab === 'tint' ? 'd-none' : '' }}</attribute>
         </xpath>
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="after">
-            <TintPanel t-if="tintUi.tab === 'tint'" uiState="tintUi"/>
+            <TintPanel t-if="!pos.config.module_pos_restaurant and tintUi.tab === 'tint'" uiState="tintUi"/>
         </xpath>
 
         <!-- Oculta la cuadrícula nativa en modo lista -->
         <xpath expr="//div[@t-on-scroll='onScroll']" position="attributes">
-            <attribute name="t-attf-class">{{ tintUi.tab !== 'tint' and tintUi.viewMode === 'list' ? 'd-none' : '' }}</attribute>
+            <attribute name="t-attf-class">{{ !pos.config.module_pos_restaurant and tintUi.tab !== 'tint' and tintUi.viewMode === 'list' ? 'd-none' : '' }}</attribute>
         </xpath>
 
         <!-- Tabla de productos en modo lista -->
         <xpath expr="//div[hasclass('search-more-button')]" position="before">
-            <div t-if="tintUi.tab !== 'tint' and tintUi.viewMode === 'list'"
+            <div t-if="!pos.config.module_pos_restaurant and tintUi.tab !== 'tint' and tintUi.viewMode === 'list'"
                  class="o-tint-list d-flex flex-column flex-grow-1 min-h-0 px-2 pb-2 overflow-hidden">
                 <TintTable t-if="pos.productsToDisplay.length" columns="productListColumns">
                     <t t-set-slot="rows">
@@ -110,7 +110,7 @@
     <t t-name="entintados_pdv.ProductScreenActiveTintBanner" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
         <xpath expr="//ControlButtons" position="before">
             <t t-set="activeOrder" t-value="pos.getOrder()"/>
-            <div t-if="activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor"
+            <div t-if="!pos.config.module_pos_restaurant and activeOrder and activeOrder.uiState and activeOrder.uiState.selectedTintColor"
                  class="o-active-tint-banner d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
                     <i class="fa fa-paint-brush text-white fs-5 flex-shrink-0" role="img"/>

@@ -36,10 +36,12 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty','pos_loyalty', 'approvals', 'stock',],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
+            # Corrección de incompatibilidad Odoo 19 (community vs enterprise pos_settle_due)
+            ("after", "web/static/src/core/registry.js", "entintados_pdv/static/src/app/overrides/patch_registry.js"),
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
             # Componentes reutilizables (js + xml co-localizados)
@@ -53,6 +55,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/models/tint_models.js",
             # Utilidades
             "entintados_pdv/static/src/app/utils/tint_points.js",
+            "entintados_pdv/static/src/app/utils/pricing_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             # Pantalla de seleccion de color
@@ -71,6 +74,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_store.js",
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
             "entintados_pdv/static/src/app/overrides/orderline.js",
+            "entintados_pdv/static/src/app/overrides/orderline.xml",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.xml",
             # Widgets de campos reutilizables en formularios del POS
@@ -81,6 +85,11 @@ Catálogo de entintado
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
+            # Indicador del origen del precio en las líneas de venta
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
+            # Sin creación rápida de productos: quedarían sin referencia interna
+            "entintados_pdv/static/src/fields/product_no_quick_create/product_no_quick_create.js",
         ],
     },
 
@@ -98,10 +107,13 @@ Catálogo de entintado
         'data/type_operations_data.xml',
         'data/hr_departament_data.xml',
         'data/approval_request_data.xml',
+        'data/code_tint.xml',
+        'data/note_seq.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',
         'views/product_template_tint_views.xml',
+        'views/product_default_code_views.xml',
         'views/tint_gallery_views.xml',
         'views/tint_color_views.xml',
         'views/tint_color_formula_views.xml',
@@ -111,12 +123,15 @@ Catálogo de entintado
         # acción se define ahí.
         'views/lines_product_views.xml',
         'views/tint_menu_views.xml',
+        'views/pos_config_views.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
         'views/account_move_views.xml',
+        'views/account_payment_register.xml',
+        'views/vendor_credit_wizard_views.xml',
         'views/account_payment_views.xml',
         'views/crm_lead_views.xml',
         'views/crm_lead_to_opportunity_views.xml',
@@ -128,6 +143,7 @@ Catálogo de entintado
         'views/account_financial_risk_view.xml',
         'views/portal_templates.xml',
         'views/res_config_risk_view.xml',
+        'views/res_config_settings_sale_views.xml',
         'views/res_partner_risk_view.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
@@ -135,10 +151,11 @@ Catálogo de entintado
         'report/report_picking_crm.xml',
         'wizards/partner_risk_exceeded_view.xml',
         'wizards/crm_field_visit_confirm_wizard_view.xml',
+        'wizards/crm_material_request_partner_wizzard_views.xml',
+        'wizards/crm_material_auditor_assign_wizard_views.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
-        'views/sale_loyalty_reward_wizard_views.xml',
     ],
     'demo': [],
     "installable": True,

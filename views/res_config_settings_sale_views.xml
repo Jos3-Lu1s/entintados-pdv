@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_sale_edit_lock" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.entintados_pdv.sale.edit.lock</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//setting[@id='coupon_settings']" position="after">
+                <setting id="sale_price_unit_editable" company_dependent="1"
+                         help="Sin esta opción, solo el grupo «Editar precio unitario en ventas» cambia el precio unitario de las líneas">
+                    <field name="sale_price_unit_editable"/>
+                </setting>
+                <setting id="sale_discount_editable" company_dependent="1"
+                         invisible="not group_discount_per_so_line"
+                         help="Sin esta opción, solo el grupo «Editar descuento en ventas» cambia el descuento de las líneas y usa el botón «Descuento»">
+                    <field name="sale_discount_editable"/>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="seq_vendor_credit_group" model="ir.sequence">
+        <field name="name">Secuencia Nota de Crédito Distribuida</field>
+        <field name="code">vendor.credit.group</field>
+        <field name="prefix">NCD-</field>
+        <field name="padding">5</field>
+        <field name="number_next">1</field>
+        <field name="number_increment">1</field>
+        <field name="implementation">no_gap</field>
+    </record>
+</odoo>

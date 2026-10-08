@@ -6,15 +6,32 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//header" position="inside">
-                <button name="action_audit_approve_material" string="Validar (Auditoría)" type="object"
+            <!-- <xpath expr="//button[@name='button_validate']" position="attributes">
+                <attribute name="invisible">is_material_output_type</attribute>
+            </xpath> -->
+            <xpath expr="//button[@name='button_validate'][hasclass('oe_highlight')]" position="attributes">
+                <attribute name="invisible">state in ('draft', 'confirmed', 'done', 'cancel') or is_material_output_type</attribute>
+            </xpath>
+            
+            <!-- Botón con class="o_btn_validate" -->
+            <xpath expr="//button[@name='button_validate'][hasclass('o_btn_validate')]" position="attributes">
+                <attribute name="invisible">state in ('waiting', 'assigned', 'done', 'cancel') or is_material_output_type</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_validate']" position="after">
+                <button name="action_audit_approve_material" string="Validautoria" type="object"
                         class="btn-primary"
                         invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
-                <button name="action_audit_refuse_material" string="Rechazar (Auditoría)" type="object"
+            </xpath>
+            <xpath expr="//header" position="inside">
+                <button name="action_audit_refuse_material" string="Rechazar solicitud" type="object"
                         class="btn-secondary"
                         invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
                 <!-- <field name="material_approval_state" widget="statusbar" statusbar_visible="to_approve,approved,refused"/> -->
             </xpath>
+
+            <!-- <xpath expr="//button[@name='button_validate']" position="attributes">
+                <attribute name="invisible">(is_material_output_type and material_approval_state != 'to_approve') or (is_material_output_type and state == 'waiting') </attribute>
+            </xpath> -->
 
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button
@@ -44,10 +61,22 @@
             </xpath>
 
             <xpath expr="//page[@name='note']" position="after">
-                <page string="Evidencias" name="material_evidence" invisible="not is_material_output_type">
-                    <group>
-                        
+                <page string="Evidencias" name="material_evidence" invisible="not is_material_output_type or state != 'done'">
+                    <group string="Evidencia de entrega de material">
+                        <field name="document_file" widget="binary" filename="document_filename" readonly="1"/>
+
+                        <field name="evidence_attachment_ids"
+                           widget="many2many_binary" readonly="validate_delivery == True" />
                     </group>
+                    <button string="Validar entrega" type="object" name="action_validate_delivery" class="btn-primary" confirm="¿Está seguro de que desea validar la entrega? Esta acción no se puede deshacer."
+                            invisible="state != 'done' or validate_delivery == True"/>
+
+                    <group string="Evidencia de uso de material" invisible="not is_material_output_type or state != 'done' or validate_delivery != True">
+                        <field name="evidence_use_attachment_ids"
+                           widget="many2many_binary" readonly="validate_material_use == True"/>
+                    </group>
+                    <button string="Validar uso de material" type="object" name="action_validate_material_use" class="btn-primary" confirm="¿Está seguro de que desea validar el uso de material? Esta acción no se puede deshacer."
+                            invisible="state != 'done' or validate_material_use == True or validate_delivery != True"/>
                 </page>
             </xpath>
         </field>

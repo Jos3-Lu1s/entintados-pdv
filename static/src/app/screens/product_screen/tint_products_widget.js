@@ -23,13 +23,17 @@ patch(ProductScreen.prototype, {
             viewMode: "grid",
             galleryId: null,
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
             galleryColorIds: [],
             loadingColors: false,
             formulasVersion: 0,
             loadingFormulas: false,
         });
+    },
+
+    get isTintEnabled() {
+        return !this.pos.config.module_pos_restaurant;
     },
 
     setTintTab(tab) {
@@ -42,18 +46,21 @@ patch(ProductScreen.prototype, {
 
     /** Galería seleccionada actualmente. */
     get tintSelectedGallery() {
-        return this.tintUi.galleryId
+        return this.isTintEnabled && this.tintUi.galleryId
             ? this.pos.models["tint.gallery"]?.get?.(this.tintUi.galleryId)
             : null;
     },
 
     /** Reinicia la selección de galería y filtros de entintado. */
     changeTintGallery() {
+        if (!this.isTintEnabled) {
+            return;
+        }
         Object.assign(this.tintUi, {
             galleryId: null,
             colorId: null,
-            sizeId: null,
-            baseTypeId: null,
+            sizeIds: [],
+            baseTypeIds: [],
             galleryColorIds: [],
         });
         this.pos.searchProductWord = "";
@@ -61,20 +68,19 @@ patch(ProductScreen.prototype, {
 
     /** Abre el diálogo para crear color desde la pestaña de Entintados */
     async onClickCreateColorFromTab() {
-        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup, {
-            galleryId: this.tintUi.galleryId || false,
-        });
+        const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
-            if (payload.galleryId && this.tintUi.galleryId !== payload.galleryId) {
+            if (payload.galleryId) {
                 this.tintUi.galleryId = payload.galleryId;
-            }
-            if (this.tintUi.galleryId) {
                 const ids = await this.pos.data.call(
                     "tint.color.formula",
                     "get_color_ids_for_gallery",
                     [this.tintUi.galleryId]
                 );
                 this.tintUi.galleryColorIds = ids || [];
+                if (!this.tintUi.galleryColorIds.includes(payload.colorId)) {
+                    this.tintUi.galleryColorIds.push(payload.colorId);
+                }
             }
             this.tintUi.colorId = payload.colorId;
         }
@@ -104,6 +110,10 @@ patch(ProductScreen.prototype, {
     },
 
     async addProductToOrder(productTmpl) {
+        if (!this.isTintEnabled) {
+            return super.addProductToOrder(productTmpl);
+        }
+
         const order = this.pos.getOrder();
         const selectedColor = order?.uiState?.selectedTintColor;
         const baseProduct = productTmpl?.product_variant_ids?.[0];

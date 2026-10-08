@@ -34,5 +34,13 @@
             <field name="res_model">crm.lead</field>
         </record>
 
+        <record id="mail_activity_type_material_output" model="mail.activity.type">
+            <field name="name">Salida de material</field>
+            <field name="category">meeting</field>
+            <field name="icon">fa-truck</field>
+            <field name="summary">Programación de salida de material</field>
+            <field name="res_model">stock.picking</field>
+        </record>
+
     </data>
 </odoo>

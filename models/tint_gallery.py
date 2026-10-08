@@ -40,7 +40,7 @@ class TintGallery(models.Model):
         string="Fórmulas",
         help="Fórmulas de entintado que pertenecen a esta galería.")
     formula_count = fields.Integer(
-        string="Fórmulas", compute='_compute_counts',
+        string="Número de fórmulas", compute='_compute_counts',
         help="Número total de fórmulas registradas en esta galería.")
     color_count = fields.Integer(
         string="Colores", compute='_compute_counts',

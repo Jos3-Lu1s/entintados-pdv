@@ -3,6 +3,7 @@ from odoo.exceptions import ValidationError, UserError
 
 DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 FIELD_VISIT_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_field_visit'
+
 APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 
 class CrmLead(models.Model):
@@ -42,6 +43,18 @@ class CrmLead(models.Model):
         string="Estado de aprobación",
         readonly=True,
     )
+    
+    def _check_demo_before_leaving(self, old_stage, new_stage):
+        """Valida que no se avance de la etapa de demo mientras haya una
+        solicitud de materiales en curso sin que la demostración esté finalizada."""
+        if old_stage.stage_type != 'demo':
+            return
+        if self.approval_request_id and not self.demo_end:
+            raise ValidationError(_(
+                'No puedes avanzar desde la etapa "%s" mientras la solicitud de '
+                'salida de material esté en curso. Debes marcar "Demostración '
+                'finalizada" antes de continuar.'
+            ) % old_stage.name)
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
         res = super()._prepare_customer_values(partner_name, is_company=is_company, parent_id=parent_id)
@@ -57,6 +70,8 @@ class CrmLead(models.Model):
                     continue
 
                 record._check_field_visit_before_leaving(old_stage, new_stage)
+                record._check_demo_meeting_before_leaving(old_stage, new_stage)
+                record._check_demo_before_leaving(old_stage, new_stage)
 
                 if new_stage.stage_type in ('quotation', 'closed'):
                     raise ValidationError(_(
@@ -118,6 +133,15 @@ class CrmLead(models.Model):
         help="Verdadero cuando la visita de campo ya tiene una reunión con horario "
              "(inicio y fin) en el calendario.",
     )
+    
+    wharehouse_id = fields.Many2one(
+        'stock.location',
+        string="Almacén",
+    )
+    
+    demo_end = fields.Boolean(
+        string="Demostración finalizada",
+    )
 
     @api.depends(
         'crm_meeting_ids.crm_activity_type_id',
@@ -127,6 +151,7 @@ class CrmLead(models.Model):
         'crm_meeting_ids.allday',
     )
     def _compute_meeting_scheduled(self):
+        
         demo_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
         visit_type = self.env.ref(FIELD_VISIT_ACTIVITY_XMLID, raise_if_not_found=False)
         for lead in self:
@@ -163,11 +188,16 @@ class CrmLead(models.Model):
     def _create_meeting_activity(self, activity_type):
         """Crea una nueva actividad de reunión del tipo indicado."""
         self.ensure_one()
-        return self.activity_schedule(
+        activity = self.activity_schedule(
             activity_type_id=activity_type.id,
             user_id=self.user_id.id or self.env.uid,
             summary=activity_type.summary,
         )
+        # activity_schedule devuelve False si el contexto trae
+        # 'mail_activity_automation_skip'.
+        if not activity:
+            raise UserError(_("No se pudo crear la actividad de reunión."))
+        return activity
 
     def _get_or_create_meeting_activity(self, activity_type):
         """Devuelve la actividad de reunión existente o crea una si no hay ninguna."""
@@ -220,7 +250,7 @@ class CrmLead(models.Model):
             # reagendarlo, en vez de crear uno nuevo (evita duplicados/huérfanos).
             return {
                 'type': 'ir.actions.act_window',
-                'name': activity_type.name,
+                'name': activity_type.display_name,
                 'res_model': 'calendar.event',
                 'res_id': event.id,
                 'view_mode': 'form',
@@ -235,7 +265,6 @@ class CrmLead(models.Model):
     def action_schedule_demo_meeting(self):
         """Agenda la demostración en el calendario (requiere líneas de material)."""
         self.ensure_one()
-        self._ensure_material_request_allowed()
         return self._action_schedule_meeting(DEMO_ACTIVITY_XMLID)
 
     def _create_field_visit_meeting(self):
@@ -295,6 +324,38 @@ class CrmLead(models.Model):
                 'Antes de avanzar desde la etapa "%s" debes marcar como realizada '
                 '(hecha) la actividad de Visita de campo.'
             ) % old_stage.name)
+            
+    def _check_demo_meeting_before_leaving(self, old_stage, new_stage):
+        """Valida avance y retroceso en etapa de demo (reunión de demostración)."""
+        if old_stage.stage_type != 'demo':
+            return
+        ordered_ids = self.env['crm.stage'].search([], order='sequence, id').ids
+        if old_stage.id not in ordered_ids or new_stage.id not in ordered_ids:
+            return
+
+        old_index = ordered_ids.index(old_stage.id)
+        new_index = ordered_ids.index(new_stage.id)
+        demo_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        has_pending_activity = bool(demo_type and self._get_meeting_activities(demo_type))
+
+        if new_index < old_index:
+            if self.demo_meeting_scheduled or has_pending_activity:
+                raise ValidationError(_(
+                    'No puedes regresar a "%s" si la oportunidad ya tiene una '
+                    'demostración registrada.'
+                ) % new_stage.name)
+            return
+
+        if not self.demo_meeting_scheduled:
+            raise ValidationError(_(
+                'Antes de avanzar desde la etapa "%s" debes agendar la demostración '
+                'en el calendario con horario de inicio y fin.'
+            ) % old_stage.name)
+        if has_pending_activity:
+            raise ValidationError(_(
+                'Antes de avanzar desde la etapa "%s" debes marcar como realizada '
+                '(hecha) la actividad de Demostración.'
+            ) % old_stage.name)
 
     @api.constrains('stage_id', 'expected_revenue')
     def _check_expected_revenue_in_quotation(self):
@@ -319,7 +380,6 @@ class CrmLead(models.Model):
         return action
     
     def action_request_material_output(self):
-        """Genera la salida de material; exige que la demostración ya esté agendada."""
         self.ensure_one()
         self._ensure_material_request_allowed()
         if not self.demo_meeting_scheduled:
@@ -327,17 +387,21 @@ class CrmLead(models.Model):
                 "Primero agenda la demostración en el calendario "
                 "(marca el horario de inicio y fin del evento)."
             ))
-        return self._create_material_output()
-
-    def _create_material_output(self):
-        """Genera la salida de material (picking) con sus movimientos y abre el picking."""
-        self.ensure_one()
-        if not self.material_line_ids:
-            raise UserError(_("No hay líneas de material para solicitar salida."))
-        if self.picking_count > 0:
-            raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
         if self.approval_request_id:
             raise UserError(_("Ya existe una solicitud de aprobación en curso para esta oportunidad."))
+        
+        if not self.partner_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'crm.material.request.partner.wizzard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_lead_id': self.id},
+            }
+            
+        if not self.wharehouse_id:
+            raise UserError(_("Debes seleccionar un almacén de origen para la salida de material."))
+
 
         category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
         if not category:
@@ -352,13 +416,12 @@ class CrmLead(models.Model):
                 "Verifica el organigrama en Empleados."
             ))
 
-        first_line = self.material_line_ids[:1]
-
         approval_request = self.env['approval.request'].create({
-            'name': _('Salida de material - %s') % self.name,
+            'name': _('SM - %s') % self.name,
             'category_id': category.id,
             'request_owner_id': self.user_id.id or self.env.uid,
             'partner_id': self.partner_id.id,
+            'warehouse_id': self.wharehouse_id.id,
             'date': fields.Date.context_today(self),
             'crm_lead_id': self.id,
             'reason': '\n'.join(
@@ -378,16 +441,13 @@ class CrmLead(models.Model):
         approval_request.action_confirm()
 
         self.approval_request_id = approval_request.id
-        """ self._schedule_demo_activity() """
 
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'approval.request',
             'view_mode': 'form',
             'res_id': approval_request.id,
-        }
-        
-    
+        }   
         
     picking_ids = fields.One2many(
         comodel_name="stock.picking",
@@ -396,7 +456,7 @@ class CrmLead(models.Model):
     )
 
     picking_count = fields.Integer(
-        string="Salidas",
+        string="Número de salidas",
         compute="_compute_picking_count",
     )
 
@@ -441,9 +501,6 @@ class CrmLead(models.Model):
             return user.sign_signature
         if user.partner_id and getattr(user.partner_id, 'signature', None):
             return user.partner_id.signature
-        employee = self.env['hr.employee'].search([('user_id', '=', user.id)], limit=1)
-        if employee and getattr(employee, 'signature', None):
-            return employee.signature
         return False
     
     def _get_material_approver(self):
@@ -492,4 +549,4 @@ class CrmStage(models.Model):
                     raise ValidationError((
                         'El tipo "%s" ya está asignado a la etapa "%s". '
                         'Cada tipo solo puede usarse en una etapa.'
-                    ) % (dict(record._fields['stage_type'].selection).get(record.stage_type), duplicate.name))
+                    ) % (record._fields['stage_type'].convert_to_export(record.stage_type, record), duplicate.name))

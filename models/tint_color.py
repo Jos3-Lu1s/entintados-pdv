@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 
 
 class TintColor(models.Model):
@@ -27,7 +27,7 @@ class TintColor(models.Model):
         string="Fórmulas",
         help="Fórmulas de entintado registradas para este color.")
     formula_count = fields.Integer(
-        string="Fórmulas", compute='_compute_formula_count',
+        string="Número de fórmulas", compute='_compute_formula_count',
         help="Número de fórmulas registradas para este color.")
     has_formula = fields.Boolean(
         string="Tiene fórmula", compute='_compute_has_formula', store=True,
@@ -70,11 +70,12 @@ class TintColor(models.Model):
     def _search_base_type_ids(self, operator, value):
         return [('formula_ids.base_type_id', operator, value)]
 
-    @api.depends('formula_ids.base_type_id')
+    @api.depends('formula_ids.base_type_id', 'formula_ids.active')
     def _compute_base_type_summary(self):
         for color in self:
             # base_type_ids ya viene ordenado por secuencia del tipo de base.
-            names = color.formula_ids.base_type_id.mapped('name')
+            active_formulas = color.formula_ids.filtered('active')
+            names = active_formulas.base_type_id.mapped('name')
             color.base_type_summary = " · ".join(dict.fromkeys(names))
 
     @api.depends('name', 'code')
@@ -116,3 +117,10 @@ class TintColor(models.Model):
     @api.model
     def _load_pos_data_domain(self, data, config):
         return [('active', '=', True)]
+    
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if not vals.get('code'):
+                vals['code'] = self.env['ir.sequence'].next_by_code('tint.color') or _('New')
+        return super().create(vals_list)

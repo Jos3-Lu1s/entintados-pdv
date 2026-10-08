@@ -7,12 +7,16 @@
         <field name="inherit_id" ref="product.product_template_form_view" />
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
-                <page string="Entintado" name="tint">
+                <page
+                    string="Entintado"
+                    name="tint"
+                    invisible="type != 'consu' or not is_storable"
+                >
                     <group>
                         <group name="tint_role" string="Rol">
                             <field name="tint_role" />
                         </group>
-                        <group name="tint_prices" string="Esquemas">
+                        <group name="tint_prices" string="Esquemas" invisible="tint_role != 'base'">
                             <field name="lines_product_id" />
                             <field name="scheme_id" readonly="1"/>
                         </group>

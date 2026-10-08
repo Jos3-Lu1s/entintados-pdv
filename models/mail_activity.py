@@ -2,7 +2,13 @@
 
 from datetime import datetime, time, timedelta
 
-from odoo import api, fields, models
+from odoo import api, fields, models, _
+
+from odoo.exceptions import UserError
+
+
+DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
+APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 
 
 class MailActivity(models.Model):
@@ -152,3 +158,30 @@ class MailActivity(models.Model):
         if operation == 'read' and self._is_activity_analyst():
             return None
         return super()._check_access(operation)
+    
+    def action_feedback(self, feedback=False, attachment_ids=None):
+        demo_activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
+        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+    
+        for activity in self:
+            # --- Bloqueo de la actividad de Demostración ---
+            if (
+                demo_activity_type
+                and activity.activity_type_id == demo_activity_type
+                and activity.res_model == 'crm.lead'
+            ):
+                lead = self.env['crm.lead'].browse(activity.res_id)
+                if not lead.demo_end:
+                    raise UserError(_(
+                        "No puedes marcar esta actividad como hecha manualmente. "
+                        "Se completa automáticamente al validar el uso de material "
+                        "(adjuntando evidencia y validando la entrega)."
+                    ))
+    
+            # --- Redirección: aprobar salida de material desde la actividad ---
+            if activity.res_model == 'approval.request' and category_salida:
+                request = self.env['approval.request'].browse(activity.res_id)
+                if request.category_id == category_salida and not request.material_auditor_ids:
+                    return request.action_approve()
+    
+        return super().action_feedback(feedback=feedback, attachment_ids=attachment_ids)

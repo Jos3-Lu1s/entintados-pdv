@@ -37,11 +37,13 @@ export class TintFormulaPopup extends Component {
     setup() {
         this.pos = useService("pos");
         this.dialog = useService("dialog");
+        this.notification = useService("notification");
 
         this.state = useState({
             search: "",
             colorId: this.props.initialColorId || false,
             extractionDone: false,
+            isGeneratingSizes: false,
         });
 
         // Carga bajo demanda de fórmulas para la base y presentación.
@@ -71,6 +73,82 @@ export class TintFormulaPopup extends Component {
         if (payload?.colorId) {
             await this.loadFormulasForLine();
             this.selectColor(payload.colorId);
+        }
+    }
+
+    async generateOtherSizes() {
+        if (!this.selectedFormula || this.state.isGeneratingSizes) {
+            return;
+        }
+        this.state.isGeneratingSizes = true;
+        try {
+            let genRes = null;
+            if (this.pos.orm && typeof this.pos.orm.call === "function") {
+                genRes = await this.pos.orm.call(
+                    "tint.color.formula",
+                    "generate_other_sizes_pos",
+                    [[this.selectedFormula.id], this.pos.config.id]
+                );
+            } else if (this.pos.data && typeof this.pos.data.call === "function") {
+                genRes = await this.pos.data.call(
+                    "tint.color.formula",
+                    "generate_other_sizes_pos",
+                    [[this.selectedFormula.id], this.pos.config.id]
+                );
+            }
+
+            if (genRes?.data && this.pos.data?.models?.connectNewData) {
+                this.pos.data.models.connectNewData(genRes.data);
+            } else {
+                if (genRes?.["tint.color.formula"]?.length && this.pos.models["tint.color.formula"]?.load) {
+                    this.pos.models["tint.color.formula"].load(genRes["tint.color.formula"]);
+                }
+                if (genRes?.["tint.color.formula.line"]?.length && this.pos.models["tint.color.formula.line"]?.load) {
+                    this.pos.models["tint.color.formula.line"].load(genRes["tint.color.formula.line"]);
+                }
+            }
+
+            const createdCount = genRes?.created_count || 0;
+            const createdNames = (genRes?.created_sizes || []).join(", ");
+            const omittedSizes = genRes?.omitted_sizes || [];
+
+            if (createdCount > 0 && omittedSizes.length > 0) {
+                this.notification.add(
+                    _t(
+                        "Se generaron las presentaciones (%s), pero se omitieron por exceder la capacidad del envase: %s.",
+                        createdNames || createdCount,
+                        omittedSizes.join(", ")
+                    ),
+                    { type: "warning" }
+                );
+            } else if (createdCount > 0) {
+                const msg = createdNames
+                    ? _t("¡Se generaron las presentaciones exitosamente: %s!", createdNames)
+                    : _t("¡Se generaron %s presentaciones adicionales exitosamente!", createdCount);
+                this.notification.add(msg, { type: "success" });
+            } else if (omittedSizes.length > 0) {
+                this.notification.add(
+                    _t(
+                        "No se pudo generar ninguna presentación porque exceden la capacidad máxima del envase: %s.",
+                        omittedSizes.join(", ")
+                    ),
+                    { type: "warning" }
+                );
+            } else {
+                this.notification.add(
+                    _t("No había presentaciones pendientes por generar para esta fórmula."),
+                    { type: "info" }
+                );
+            }
+        } catch (error) {
+            console.error("Error al generar otras presentaciones:", error);
+            const errorMsg = error?.data?.message || error?.message;
+            this.notification.add(
+                errorMsg || _t("No se pudieron generar las demás presentaciones."),
+                { type: "danger" }
+            );
+        } finally {
+            this.state.isGeneratingSizes = false;
         }
     }
 

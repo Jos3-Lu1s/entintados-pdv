@@ -2,7 +2,7 @@
 import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
-import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
+import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
 
 let posStoreInstance = null;
 
@@ -20,107 +20,148 @@ patch(PosStore.prototype, {
         posStoreInstance = this;
         return result;
     },
+
+    async addLineToCurrentOrder(...args) {
+        const line = await super.addLineToCurrentOrder(...args);
+        const order = this.getOrder?.() || this.currentOrder;
+        if (order && typeof order._entintadosReconcileDiscounts === "function") {
+            order._entintadosReconcileDiscounts();
+        }
+        return line;
+    },
+
+    async addLineToOrder(...args) {
+        const line = await super.addLineToOrder(...args);
+        const order = this.getOrder?.() || this.currentOrder;
+        if (order && typeof order._entintadosReconcileDiscounts === "function") {
+            order._entintadosReconcileDiscounts();
+        }
+        return line;
+    },
 });
 
 patch(PosOrder.prototype, {
-    _updateRewardLines(...args) {
-        const beforeKeys = new Set(
-            (this.lines || []).filter((l) => l.is_reward_line).map((l) => l.reward_identifier_code)
-        );
-
-        const result = super._updateRewardLines(...args);
-
-        const afterLines = (this.lines || []).filter((l) => l.is_reward_line);
-        const partnerDiscount = Number(this.partner_id?.discount || 0) * 100;
-
-        for (const line of afterLines) {
-            if (beforeKeys.has(line.reward_identifier_code)) {
-                continue;
-            }
-            this._entintadosHandleNewReward(line, partnerDiscount);
+    set_partner(partner) {
+        if (this._entintadosSettingPartner) {
+            return super.set_partner ? super.set_partner(partner) : null;
         }
-
-        this._entintadosReconcileDiscounts(partnerDiscount);
-
-        return result;
+        this._entintadosSettingPartner = true;
+        try {
+            const res = super.set_partner ? super.set_partner(partner) : null;
+            this._entintadosHandlePartnerAssignment(partner);
+            return res;
+        } finally {
+            this._entintadosSettingPartner = false;
+        }
     },
 
-    // Interceptamos la eliminación de líneas para detectar cuando
-    // el cajero borra manualmente una línea de recompensa.
-    removeOrderline(line) {
-        const wasReward = line?.is_reward_line;
-        const decisionKey = line?.reward_identifier_code;
-        const isInternalRemoval = this._entintadosInternalRemoval === true;
-
-        const result = super.removeOrderline(line);
-
-        if (wasReward && decisionKey && !isInternalRemoval) {
-            // Eliminación manual del cajero: olvidamos la decisión previa
-            // para que el descuento regrese y se vuelva a preguntar si
-            // el producto vuelve a calificar más adelante.
-            if (this.uiState?.promoDecisions) {
-                delete this.uiState.promoDecisions[decisionKey];
-            }
+    setPartner(partner) {
+        if (this._entintadosSettingPartner) {
+            return super.setPartner ? super.setPartner(partner) : null;
         }
-
-        const partnerDiscount = Number(this.partner_id?.discount || 0) * 100;
-        this._entintadosReconcileDiscounts(partnerDiscount);
-
-        return result;
+        this._entintadosSettingPartner = true;
+        try {
+            const res = super.setPartner ? super.setPartner(partner) : null;
+            this._entintadosHandlePartnerAssignment(partner);
+            return res;
+        } finally {
+            this._entintadosSettingPartner = false;
+        }
     },
 
-    async _entintadosHandleNewReward(line, partnerDiscount) {
-        const program = line.reward_id?.program_id;
-        const isAutomaticPromotion =
-            program?.program_type === "promotion" && program?.trigger === "auto";
-
-        if (!isAutomaticPromotion || !posStoreInstance || partnerDiscount <= 0) {
-            return;
-        }
-
-        if (!this.uiState) this.uiState = {};
-        if (!this.uiState.promoDecisions) this.uiState.promoDecisions = {};
-
-        const decisionKey = line.reward_identifier_code;
-        if (this.uiState.promoDecisions[decisionKey]) {
-            if (this.uiState.promoDecisions[decisionKey] === "declined" && this.lines.includes(line)) {
-                this._entintadosInternalRemoval = true;
-                this.removeOrderline(line);
-                this._entintadosInternalRemoval = false;
-            }
-            return;
-        }
-
-        const choice = await new Promise((resolve) => {
-            posStoreInstance.dialog.add(ConfirmationDialog, {
-                title: "Promoción disponible",
-                body: `Este producto califica para la promoción "${program?.name}". El cliente tiene ${partnerDiscount}% de descuento asignado. Elegir la promoción quitará el descuento de TODA la orden. ¿Qué deseas aplicar?`,
-                confirmLabel: "Aplicar promoción",
-                cancelLabel: `Mantener descuento (${partnerDiscount}%)`,
-                confirm: () => resolve("promo"),
-                cancel: () => resolve("discount"),
-            });
-        });
-
-        this.uiState.promoDecisions[decisionKey] = choice === "promo" ? "accepted" : "declined";
-
-        if (choice === "discount" && this.lines.includes(line)) {
-            this._entintadosInternalRemoval = true;
-            this.removeOrderline(line);
-            this._entintadosInternalRemoval = false;
-        }
-
-        this._entintadosReconcileDiscounts(partnerDiscount);
+    _entintadosHandlePartnerAssignment(partner) {
+        this._entintadosReconcileDiscounts();
     },
 
-    _entintadosReconcileDiscounts(partnerDiscount) {
-        const hasAcceptedPromo = Object.values(this.uiState?.promoDecisions || {}).includes("accepted");
+    _entintadosReconcileDiscounts() {
+        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+        const models = this.models || posStoreInstance?.models;
 
         for (const line of this.lines || []) {
-            if (line.is_reward_line || line.price_type === "manual" || line.manual_price) {
+            if (line.is_reward_line) {
                 continue;
             }
-            line.discount = (partnerDiscount > 0 && !hasAcceptedPromo) ? partnerDiscount : 0;
+            if (line.is_tint_colorant || line.product_id?.tint_role === "colorant") {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
+                continue;
+            }
+
+            const product = line.product_id;
+            const rule = getPartnerPricingRule(models, partner, product);
+
+            if (rule.type === "fixed_price") {
+                // Prioridad 1: Precio Fijo en Producto (inviolable frente a promociones y descuentos)
+                if (!line.is_tinted_base) {
+                    if (typeof line.setUnitPrice === "function") {
+                        line.setUnitPrice(rule.price);
+                    } else if (typeof line.set_unit_price === "function") {
+                        line.set_unit_price(rule.price);
+                    } else {
+                        line.price_unit = rule.price;
+                    }
+                    line.price_type = "manual";
+                    line.manual_price = true;
+                }
+                line.fixed_price_locked = true;
+
+                if (typeof line.setDiscount === "function") {
+                    line.setDiscount(0);
+                } else if (typeof line.set_discount === "function") {
+                    line.set_discount(0);
+                } else {
+                    line.discount = 0;
+                }
+
+                line.pricing_rule_type = rule.originType || "fixed_price";
+                line.pricing_rule_origin = rule.originLabel || "Precio Fijo";
+                line.pricing_rule_id = rule.rule?.id || false;
+                continue;
+            }
+
+            // Si la línea tenía precio fijo bloqueado y ya no aplica regla de precio fijo:
+            if (line.fixed_price_locked && rule.type !== "fixed_price") {
+                line.fixed_price_locked = false;
+                if (!line.is_tinted_base) {
+                    line.price_type = "original";
+                    line.manual_price = false;
+                    const originalPrice = line.product_id?.lst_price ?? line.price_unit;
+                    if (typeof line.setUnitPrice === "function") {
+                        line.setUnitPrice(originalPrice);
+                    } else {
+                        line.price_unit = originalPrice;
+                    }
+                }
+            }
+
+            // Si el cajero colocó un precio manual en un producto común (y no es base entintada), no pisar
+            if (line.price_type === "manual" && !line.is_tinted_base) {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
+                continue;
+            }
+
+            // Aplicar descuento según jerarquía comercial (Niveles 2, 3, 4 y 5)
+            const targetDiscount = rule.type === "discount" ? rule.discount : 0;
+            if (typeof line.setDiscount === "function") {
+                line.setDiscount(targetDiscount);
+            } else if (typeof line.set_discount === "function") {
+                line.set_discount(targetDiscount);
+            } else {
+                line.discount = targetDiscount;
+            }
+
+            if (rule.type === "discount") {
+                line.pricing_rule_type = rule.originType || "product";
+                line.pricing_rule_origin = rule.originLabel || "";
+                line.pricing_rule_id = rule.rule?.id || false;
+            } else {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
+            }
         }
     },
 });

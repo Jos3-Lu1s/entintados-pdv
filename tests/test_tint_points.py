@@ -67,6 +67,14 @@ class TestTintPoints(TransactionCase):
         self.assertEqual(format_points_long(24.5), '24.5 Pts.')
         self.assertEqual(format_points_long(0.5), '0.5 Pts.')
 
+    def test_format_long_negative_keeps_sign(self):
+        """Una devolución o ajuste negativo no puede imprimirse como positivo."""
+        self.assertEqual(format_points_long(-456), '-9 Onzas 24 Pts. (-456 Pts.)')
+        self.assertEqual(format_points_long(-96), '-2 Onzas (-96 Pts.)')
+        self.assertEqual(format_points_long(-48), '-1 Onza (-48 Pts.)')
+        self.assertEqual(format_points_long(-456.5), '-9 Onzas 24.5 Pts. (-456.5 Pts.)')
+        self.assertEqual(format_points_long(-24), '-24 Pts.')
+
     def test_parse_variants(self):
         for text in ('9Y 24', '9Y24', '9 Y 24', '9 onzas 24 pts', '456', '456 Pts.'):
             self.assertEqual(parse_points(text), 456, "Falla el parseo de %r" % text)

@@ -1,8 +1,14 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import RedirectWarning
+
+import logging
+_logger = logging.getLogger(__name__)
 
 MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
 APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
+DEPARTMENT_AUDITORIA_XMLID = 'entintados_pdv.hr_department_auditoria'
+APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
 
 class Approval(models.Model):
     _inherit = 'approval.category'
@@ -17,6 +23,30 @@ class Approval(models.Model):
             }),
         },
     )
+    
+class ApprovalApprover(models.Model):
+    _inherit = 'approval.approver'
+
+    def action_approve(self):
+        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+
+        for approver in self:
+            request = approver.request_id
+            if (
+                category_salida
+                and request.category_id == category_salida
+                and not request.material_auditor_ids
+            ):
+                action = self.env.ref('entintados_pdv.action_crm_material_auditor_assign_wizard')
+                raise RedirectWarning(
+                    _("Antes de aprobar esta solicitud debes asignar uno o más "
+                      "auditores responsables de validar la salida de material."),
+                    action.id,
+                    _("Asignar auditores"),
+                    {'default_approval_request_id': request.id},
+                )
+
+        return super().action_approve()
     
 class ApprovalRequest(models.Model):
     _inherit = "approval.request"
@@ -44,6 +74,19 @@ class ApprovalRequest(models.Model):
     picking_count = fields.Integer(
         compute='_compute_picking_count',
         string="Cantidad de Salidas",
+    )
+    
+    warehouse_id = fields.Many2one(
+        'stock.location',
+        string="Almacén",
+    )
+    
+    material_auditor_ids = fields.Many2many(
+        'hr.employee',
+        string="Auditores asignados",
+        copy=False,
+        help="Empleados del departamento de Auditoría responsables de validar "
+             "la salida de material generada a partir de esta solicitud.",
     )
 
     @api.depends('generated_picking_id', 'picking_ids')
@@ -100,8 +143,26 @@ class ApprovalRequest(models.Model):
     )
 
     def action_approve(self, approver=None):
-        res = super().action_approve(approver=approver)
         category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+
+        # Si es la categoría de salida de material y AÚN no hay auditores
+        # asignados, se interrumpe la aprobación y se abre el wizard.
+        if (
+            category_salida
+            and len(self) == 1
+            and self.category_id == category_salida
+            and not self.material_auditor_ids
+        ):
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'crm.material.auditor.assign.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_approval_request_id': self.id},
+            }
+
+        res = super().action_approve(approver=approver)
+
         for request in self:
             if (
                 request.request_status == 'approved'
@@ -117,6 +178,12 @@ class ApprovalRequest(models.Model):
         category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
         if not category_salida or self.category_id != category_salida:
             return False
+        
+        if not self.material_auditor_ids:
+            raise UserError(_(
+                "No se puede generar la salida de material sin auditores "
+                "asignados a esta solicitud."
+            ))
 
         picking_type = self.env.ref(MATERIAL_OUTPUT_TYPE_XMLID, raise_if_not_found=False)
         if not picking_type:
@@ -138,6 +205,7 @@ class ApprovalRequest(models.Model):
 
         picking_vals = {
             'picking_type_id': picking_type.id,
+            'location_id': self.warehouse_id.id,
             'origin': origin,
             'partner_id': partner.id if partner else False,
             'approval_request_id': self.id,
@@ -160,7 +228,7 @@ class ApprovalRequest(models.Model):
             for line in self.product_line_ids:
                 if not line.product_id:
                     continue
-                uom_id = getattr(line, 'product_uom_id', False) or line.product_id.uom_id
+                uom_id = line.product_uom_id or line.product_id.uom_id
                 self.env['stock.move'].create({
                     'description_picking': line.description or line.product_id.display_name,
                     'product_id': line.product_id.id,
@@ -171,7 +239,31 @@ class ApprovalRequest(models.Model):
 
         picking.action_confirm()
         self.generated_picking_id = picking.id
+        self._notify_auditoria_department(picking)
+        
         return picking
+    
+    def _notify_auditoria_department(self, picking):
+        users = self.material_auditor_ids.mapped('user_id')
+        if not users:
+            return  # defensivo; ya se bloqueó antes en _create_material_picking
+
+        activity_type = self.env.ref(APPROVE_MATERIAL_ACTIVITY_XMLID, raise_if_not_found=False)
+
+        for user in users:
+            picking.activity_schedule(
+                activity_type_id=activity_type.id if activity_type else False,
+                user_id=user.id,
+                summary=activity_type.summary if activity_type else _('Aprobar salida de material'),
+                note=_(
+                    'Se generó la salida de material %(picking)s relacionada a la '
+                    'oportunidad %(lead)s. Favor de revisar y aprobar.'
+                ) % {
+                    'picking': picking.name or picking.id,
+                    'lead': self.crm_lead_id.name if self.crm_lead_id else '',
+                },
+                date_deadline=fields.Date.context_today(self),
+            )
     
     def action_view_crm_lead(self):
         self.ensure_one()

@@ -23,6 +23,7 @@ class TestTintGallery(TransactionCase):
         cls.colorant_a = cls.env['product.product'].create({
             'name': 'Colorante galería A', 'uom_id': point.id,
             'tint_role': 'colorant', 'list_price': 2.0,
+            'is_storable': True,
         })
 
         cls.gallery_a = cls.galleries.create({'name': 'Galería A', 'code': 'GALA'})

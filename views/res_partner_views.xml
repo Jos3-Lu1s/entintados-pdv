@@ -6,6 +6,9 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="base.view_partner_form"/>
             <field name="arch" type="xml">
+                <xpath expr="//field[@name='phone'][1]" position="attributes">
+                    <attribute name="required">1</attribute>
+                </xpath>
                 <xpath expr="//div[@name='partner_address_country']/../../.." position="after">
                     <div class="row g-3">
                         <div class="col-12">
@@ -68,6 +71,42 @@
 
                 <xpath expr="//field[@name='property_product_pricelist']" position="after">
                     <field name="discount" widget="percentage"/>
+                </xpath>
+
+                <xpath expr="//notebook" position="inside">
+                    <page string="Acuerdos comerciales" name="commercial_agreements" invisible="not is_sales_contact">
+                        <field name="is_sales_contact" invisible="1"/>
+                        <field name="discount_rule_ids">
+                            <list editable="bottom">
+                                <field name="applied_on"/>
+                                <field name="rule_type"/>
+                                <field name="product_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on != '0_product'"
+                                       required="applied_on == '0_product'"/>
+                                <field name="line_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on != '1_line'"
+                                       required="applied_on == '1_line'"/>
+                                <field name="scheme_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on != '2_scheme'"
+                                       required="applied_on == '2_scheme'"/>
+                                <field name="discount"
+                                       string="Descuento (%)"
+                                       invisible="rule_type != 'discount'"
+                                       required="rule_type == 'discount'"/>
+                                <field name="fixed_price"
+                                       widget="monetary"
+                                       invisible="rule_type != 'fixed_price'"
+                                       required="rule_type == 'fixed_price'"/>
+                                <field name="product_uom_id"
+                                       readonly="1"
+                                       invisible="rule_type != 'fixed_price'"/>
+                                <field name="company_id" column_invisible="True"/>
+                            </list>
+                        </field>
+                    </page>
                 </xpath>
             </field>
         </record>
@@ -176,6 +215,18 @@
                 </p><p>
                     Odoo helps you easily track all activities related to a customer.
                 </p>
+            </field>
+        </record>
+
+        <record id="view_partner_form_custom_fiscal_field" model="ir.ui.view">
+            <field name="name">res.partner.form.custom.fiscal.field</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="arch" type="xml">
+                <field name="l10n_mx_edi_payment_policy" position="after">
+                    <field name="distributed_notes" invisible="is_supplier == False"/>
+                    <field name="percentage_patyc" invisible="is_supplier == False and distributed_notes == False"/>
+                </field>
             </field>
         </record>
     </data>

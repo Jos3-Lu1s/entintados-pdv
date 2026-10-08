@@ -1,6 +1,7 @@
 
 import { _t } from "@web/core/l10n/translation";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
+import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
 
 /**
  * Utilidades para transformar fórmulas y bases en líneas de orden enlazadas (padre e hijas de colorante).
@@ -98,10 +99,22 @@ export function resolvePresentationRange(pos, baseProduct) {
 
 /**
  * Calcula los detalles completos del precio entintado (teórico, acotado y estado de rango).
+ * Si el cliente tiene un precio fijo acordado para la base, este sustituye el precio base
+ * y se le suman los colorantes dispensados sin acotamiento forzado de rango.
  */
-export function computeTintedPriceDetails(pos, baseProduct, formula) {
-    const basePrice =
+export function computeTintedPriceDetails(pos, baseProduct, formula, partner = null) {
+    let basePrice =
         baseProduct?.lst_price ?? baseProduct?.product_tmpl_id?.list_price ?? 0;
+
+    let isFixedPrice = false;
+    if (partner) {
+        const rule = getPartnerPricingRule(pos, partner, baseProduct);
+        if (rule.type === "fixed_price") {
+            basePrice = rule.price;
+            isFixedPrice = true;
+        }
+    }
+
     const colorantsPrice = formulaColorantPrice(pos, formula);
     const theoreticalPrice = basePrice + colorantsPrice;
     const range = resolvePresentationRange(pos, baseProduct);
@@ -109,12 +122,14 @@ export function computeTintedPriceDetails(pos, baseProduct, formula) {
     let finalPrice = theoreticalPrice;
     let status = "normal";
 
-    if (range.priceMin > 0 && theoreticalPrice < range.priceMin) {
-        finalPrice = range.priceMin;
-        status = "adjusted_min";
-    } else if (range.priceMax > 0 && theoreticalPrice > range.priceMax) {
-        finalPrice = range.priceMax;
-        status = "adjusted_max";
+    if (!isFixedPrice) {
+        if (range.priceMin > 0 && theoreticalPrice < range.priceMin) {
+            finalPrice = range.priceMin;
+            status = "adjusted_min";
+        } else if (range.priceMax > 0 && theoreticalPrice > range.priceMax) {
+            finalPrice = range.priceMax;
+            status = "adjusted_max";
+        }
     }
 
     return {
@@ -124,12 +139,13 @@ export function computeTintedPriceDetails(pos, baseProduct, formula) {
         finalPrice,
         status,
         range,
+        isFixedPrice,
     };
 }
 
 /** Calcula el precio total del producto entintado aplicando las reglas de acotamiento de rango. */
-export function computeTintedPrice(pos, baseProduct, formula) {
-    return computeTintedPriceDetails(pos, baseProduct, formula).finalPrice;
+export function computeTintedPrice(pos, baseProduct, formula, partner = null) {
+    return computeTintedPriceDetails(pos, baseProduct, formula, partner).finalPrice;
 }
 
 /** Calcula los litros a extraer según el porcentaje de extracción de la base. */
@@ -208,8 +224,9 @@ export async function addTintedBaseToOrder(
         (pos.models["product.pricelist"]?.getAll?.()?.[0]) ||
         false;
 
+    const partner = order.get_partner?.() || order.partner_id;
     const baseTmpl = baseProduct.product_tmpl_id;
-    const priceDetails = computeTintedPriceDetails(pos, baseProduct, formula);
+    const priceDetails = computeTintedPriceDetails(pos, baseProduct, formula, partner);
     const finalUnitPrice = priceDetails.finalPrice;
 
     // Las líneas hijas representan el consumo físico de colorante para inventario a $0.00 comercial.
@@ -268,15 +285,23 @@ export async function addTintedBaseToOrder(
         parent.price_type = "manual";
         parent.manual_price = true;
 
-        const partner = order.get_partner?.() || order.partner_id;
-        const partnerDiscount = partner?.discount || 0;
-        if (partnerDiscount > 0) {
+        const rule = getPartnerPricingRule(pos, partner, baseProduct);
+        if (rule.type === "fixed_price") {
+            parent.fixed_price_locked = true;
             if (typeof parent.setDiscount === "function") {
-                parent.setDiscount(partnerDiscount);
+                parent.setDiscount(0);
             } else if (typeof parent.set_discount === "function") {
-                parent.set_discount(partnerDiscount);
+                parent.set_discount(0);
             } else {
-                parent.discount = partnerDiscount;
+                parent.discount = 0;
+            }
+        } else if (rule.type === "discount" && rule.discount > 0) {
+            if (typeof parent.setDiscount === "function") {
+                parent.setDiscount(rule.discount);
+            } else if (typeof parent.set_discount === "function") {
+                parent.set_discount(rule.discount);
+            } else {
+                parent.discount = rule.discount;
             }
         }
 
