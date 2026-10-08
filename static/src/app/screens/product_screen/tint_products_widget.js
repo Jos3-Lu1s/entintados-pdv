@@ -6,6 +6,7 @@ import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 import { TintPanel } from "@entintados_pdv/app/screens/product_screen/tint_panel";
 import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
 import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
+import { requiresPosStock } from "@entintados_pdv/app/utils/pos_stock";
 
 // Registro de subcomponentes TintPanel y TintTable en ProductScreen.
 ProductScreen.components = { ...ProductScreen.components, TintPanel, TintTable };
@@ -20,7 +21,7 @@ patch(ProductScreen.prototype, {
         // Estado reactivo compartido para la navegación de entintados y filtros.
         this.tintUi = useState({
             tab: "products",
-            viewMode: "grid",
+            viewMode: "list",
             galleryId: null,
             colorId: null,
             sizeIds: [],
@@ -37,6 +38,9 @@ patch(ProductScreen.prototype, {
     },
 
     setTintTab(tab) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         this.tintUi.tab = tab;
     },
 
@@ -68,6 +72,9 @@ patch(ProductScreen.prototype, {
 
     /** Abre el diálogo para crear color desde la pestaña de Entintados */
     async onClickCreateColorFromTab() {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         const payload = await makeAwaitable(this.dialog, TintCreateColorPopup);
         if (payload?.colorId) {
             if (payload.galleryId) {
@@ -92,6 +99,7 @@ patch(ProductScreen.prototype, {
             { label: "Código", class: "text-nowrap", style: "width: 140px;" },
             { label: "Nombre" },
             { label: "UdM", class: "text-nowrap", style: "width: 100px;" },
+            { label: "Existencias", class: "text-end text-nowrap", style: "width: 120px;" },
             { label: "Precio", class: "text-end text-nowrap", style: "width: 120px;" },
         ];
     },
@@ -109,7 +117,29 @@ patch(ProductScreen.prototype, {
             : String(price);
     },
 
+    isProductOutOfStock(product) {
+        return requiresPosStock(product) && Number(product.pos_stock_qty || 0) <= 0 &&
+            !this.pos.getOrder()?.preset_id?.is_return;
+    },
+
     async addProductToOrder(productTmpl) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
+        if (this.isProductOutOfStock(productTmpl)) {
+            try {
+                await this.pos.refreshProductStock(productTmpl.product_variant_ids || []);
+            } catch {
+                this.pos.notification.add("No se pudieron consultar las existencias. Revisa la conexión.",
+                    { type: "warning" });
+                return;
+            }
+            if (this.isProductOutOfStock(productTmpl)) {
+                this.pos.notification.add("Este producto no tiene existencias disponibles.",
+                    { type: "warning" });
+                return;
+            }
+        }
         if (!this.isTintEnabled) {
             return super.addProductToOrder(productTmpl);
         }

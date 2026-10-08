@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.ProductScreenCustomerRequired"
+       t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('rightpane')]" position="attributes">
+            <attribute name="class" add="position-relative" separator=" "/>
+        </xpath>
+        <xpath expr="//div[hasclass('rightpane')]" position="inside">
+            <div t-if="!pos.getOrder()?.partner_id"
+                 class="position-absolute bg-view d-flex flex-column align-items-center justify-content-center text-center p-4"
+                 style="inset: 0; z-index: 20;">
+                <i class="fa fa-user-circle fa-3x mb-3 text-primary"/>
+                <h4>Selecciona primero un cliente</h4>
+                <p>Asigna un cliente para seleccionar productos e iniciar la compra.</p>
+                <button class="btn btn-primary btn-lg" t-on-click="() => pos.selectPartner()">
+                    <i class="fa fa-user me-2"/>Seleccionar cliente
+                </button>
+            </div>
+        </xpath>
+    </t>
+</templates>

@@ -25,6 +25,20 @@ patch(Orderline.prototype, {
             values.hasPricingRule = Boolean(line.pricing_rule_origin);
         }
 
+        if (this.props.mode === "display" && values.name) {
+            const productCode = line.product_id?.default_code ||
+                line.product_id?.product_tmpl_id?.default_code;
+            const codes = [...new Set([productCode, line.tint_color_code].filter(Boolean))];
+            const prefix = codes.map((code) => `[${code}]`).join(" ");
+            if (prefix && !values.name.startsWith(prefix + " ")) {
+                // El nombre del core puede incluir ya la referencia del producto.
+                const existingPrefix = productCode ? `[${productCode}] ` : "";
+                const name = existingPrefix && values.name.startsWith(existingPrefix)
+                    ? values.name.slice(existingPrefix.length) : values.name;
+                values.name = `${prefix} ${name}`;
+            }
+        }
+
         return values;
     },
 });

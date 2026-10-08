@@ -42,6 +42,9 @@ export class TintColorScreen extends Component {
     }
 
     async selectColor(color) {
+        if (!this.pos.requireCustomer()) {
+            return;
+        }
         const order = this.pos.getOrder();
 
         if (!order) {

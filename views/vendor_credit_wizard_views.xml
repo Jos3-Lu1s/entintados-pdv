@@ -8,9 +8,17 @@
                 <header>
                     <button name="action_create_credit" type="object" string="Crear nota en borrador" class="btn-primary" invisible="state != 'draft'"/>
                     <button name="action_open_credit" type="object" string="Ver nota de crédito" invisible="not credit_id"/>
-                    <field name="state" widget="statusbar"/>
+                    <button name="action_cancel" type="object" string="Cancelar" invisible="state == 'cancel'" confirm="Se cancelará la nota de crédito relacionada y se desvincularán las facturas. Si la nota estaba contabilizada o conciliada, se regresará a borrador y se desconciliará. ¿Continuar?"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,generated"/>
                 </header>
                 <sheet>
+
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_view_invoices" type="object" class="oe_stat_button"
+                            icon="fa-file-text-o" invisible="invoice_count == 0">
+                        <field name="invoice_count" widget="statinfo" string="Facturas"/>
+                    </button>
+                </div>
                 
                 <div class="oe_title">
                     <h1>
