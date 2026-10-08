@@ -9,26 +9,33 @@ export const POINTS_PER_OUNCE = 48;
 /** Símbolo que denota las onzas de colorante. */
 export const OUNCE_SYMBOL = "Y";
 
-/** Descompone puntos totales en onzas (Y) y puntos sobrantes. */
-export function splitPoints(points) {
-    const total = Math.round(points || 0);
-    const sign = total < 0 ? -1 : 1;
-    const abs = Math.abs(total);
-    return [sign * Math.trunc(abs / POINTS_PER_OUNCE), sign * (abs % POINTS_PER_OUNCE)];
+function cleanNum(n) {
+    return Number(Math.round(n * 10000) / 10000).toString();
 }
 
-/** Formatea puntos a texto en notación tradicional (ej. "9Y 24", "2Y", "24 Pts."). */
+/** Descompone puntos totales en onzas (Y) y puntos sobrantes. */
+export function splitPoints(points) {
+    const total = Number(points || 0);
+    const sign = total < 0 ? -1 : 1;
+    const abs = Math.abs(total);
+    const ounces = Math.floor(abs / POINTS_PER_OUNCE);
+    const rest = Number((abs % POINTS_PER_OUNCE).toFixed(4));
+    return [sign * ounces, sign * rest];
+}
+
+/** Formatea puntos a texto en notación tradicional (ej. "9Y 24", "9Y 24.5", "2Y", "24 Pts."). */
 export function formatPoints(points) {
-    const total = Math.round(points || 0);
+    const total = Number(points || 0);
     if (total < 0) {
         return `-${formatPoints(-total)}`;
     }
     const [ounces, rest] = splitPoints(total);
-    if (ounces && rest) {
-        return `${ounces}${OUNCE_SYMBOL} ${rest}`;
+    const restVal = Math.abs(rest);
+    if (ounces && restVal > 0) {
+        return `${ounces}${OUNCE_SYMBOL} ${cleanNum(restVal)}`;
     }
     if (ounces) {
         return `${ounces}${OUNCE_SYMBOL}`;
     }
-    return `${rest} Pts.`;
+    return `${cleanNum(restVal)} Pts.`;
 }

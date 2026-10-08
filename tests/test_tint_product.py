@@ -33,6 +33,7 @@ class TestTintProduct(TransactionCase):
         cls.bucket = cls.sizes.search([('code', '=', 'Q')], limit=1)
 
     def _create_base(self, base_type, size, **values):
+        values.setdefault('is_storable', True)
         values.update({
             'name': values.get('name', 'Base de prueba'),
             'tint_role': 'base',
@@ -44,6 +45,7 @@ class TestTintProduct(TransactionCase):
     def _create_colorant(self, **values):
         values.setdefault('name', 'Colorante de prueba')
         values.setdefault('uom_id', self.point.id)
+        values.setdefault('is_storable', True)
         values['tint_role'] = 'colorant'
         return self.templates.create(values)
 
@@ -94,6 +96,7 @@ class TestTintProduct(TransactionCase):
                 'name': 'Base incompleta',
                 'tint_role': 'base',
                 'tint_size_id': self.liter.id,
+                'is_storable': True,
             })
 
     def test_base_without_size_fails(self):
@@ -102,6 +105,7 @@ class TestTintProduct(TransactionCase):
                 'name': 'Base incompleta',
                 'tint_role': 'base',
                 'tint_base_type_id': self.white.id,
+                'is_storable': True,
             })
 
     def test_base_with_combination_absent_from_matrix_fails(self):
@@ -123,8 +127,8 @@ class TestTintProduct(TransactionCase):
         self.assertEqual(colorant.uom_id, self.ounce)
 
     def test_colorant_fields(self):
-        colorant = self._create_colorant(price_per_point=2.5)
-        self.assertEqual(colorant.price_per_point, 2.5)
+        colorant = self._create_colorant(list_price=2.5)
+        self.assertEqual(colorant.list_price, 2.5)
         self.assertEqual(colorant.uom_id, self.point)
 
     # --- Extracción previa ---------------------------------------------
@@ -154,11 +158,144 @@ class TestTintProduct(TransactionCase):
         self.assertEqual(product.uom_id, self.point)
 
     def test_onchange_role_clears_opposite_fields(self):
+        schema = self.env['tint.schema'].create({'name': 'Esquema Test'})
+        line = self.env['lines.product'].create({'name': 'Línea Test', 'scheme': schema.id})
         product = self.templates.new({
             'name': 'Producto cambiante',
-            'tint_role': 'colorant',
-            'price_per_point': 2.0,
+            'tint_role': 'base',
+            'tint_base_type_id': self.white.id,
+            'tint_size_id': self.liter.id,
+            'lines_product_id': line.id,
+            'is_storable': True,
         })
-        product.tint_role = 'base'
+        product.tint_role = 'colorant'
         product._onchange_tint_role()
-        self.assertEqual(product.price_per_point, 0.0)
+        self.assertFalse(product.tint_base_type_id)
+        self.assertFalse(product.tint_size_id)
+        self.assertFalse(product.lines_product_id)
+
+    def test_colorant_cannot_have_lines_product_id(self):
+        schema = self.env['tint.schema'].create({'name': 'Esquema Test'})
+        line = self.env['lines.product'].create({'name': 'Línea Test', 'scheme': schema.id})
+        with self.assertRaises(ValidationError):
+            self._create_colorant(name='Colorante Con Línea', lines_product_id=line.id)
+
+    # --- Restricción de tipo de producto para entintado ----------------
+
+    def test_tint_role_requires_consu_type_and_storable(self):
+        """Bases y colorantes solo pueden ser de tipo 'consu' y con is_storable=True."""
+        # 1. Base con tipo servicio
+        with self.assertRaises(ValidationError):
+            self.templates.create({
+                'name': 'Base Servicio',
+                'type': 'service',
+                'is_storable': False,
+                'tint_role': 'base',
+                'tint_base_type_id': self.white.id,
+                'tint_size_id': self.liter.id,
+            })
+
+        # 2. Colorante con tipo combo
+        with self.assertRaises(ValidationError):
+            self.templates.create({
+                'name': 'Colorante Combo',
+                'type': 'combo',
+                'is_storable': False,
+                'tint_role': 'colorant',
+                'uom_id': self.point.id,
+            })
+
+        # 3. Base tipo consu pero no almacenable (is_storable=False)
+        with self.assertRaises(ValidationError):
+            self.templates.create({
+                'name': 'Base Consumible No Almacenable',
+                'type': 'consu',
+                'is_storable': False,
+                'tint_role': 'base',
+                'tint_base_type_id': self.white.id,
+                'tint_size_id': self.liter.id,
+            })
+
+        # 4. Colorante tipo consu pero no almacenable
+        with self.assertRaises(ValidationError):
+            self.templates.create({
+                'name': 'Colorante No Almacenable',
+                'type': 'consu',
+                'is_storable': False,
+                'tint_role': 'colorant',
+                'uom_id': self.point.id,
+            })
+
+    def test_tint_role_allowed_for_storable_consu(self):
+        """Bases y colorantes se crean exitosamente si son consu y almacenables."""
+        base = self._create_base(self.white, self.liter, name='Base Válida', type='consu', is_storable=True)
+        self.assertEqual(base.tint_role, 'base')
+        self.assertEqual(base.type, 'consu')
+        self.assertTrue(base.is_storable)
+
+        colorant = self._create_colorant(name='Colorante Válido', type='consu', is_storable=True)
+        self.assertEqual(colorant.tint_role, 'colorant')
+        self.assertEqual(colorant.type, 'consu')
+        self.assertTrue(colorant.is_storable)
+
+    def test_changing_product_to_non_storable_fails_validation(self):
+        """Modificar una base existente para cambiar tipo a servicio o desmarcar almacenable falla."""
+        base = self._create_base(self.white, self.liter, name='Base Existente')
+
+        with self.assertRaises(ValidationError):
+            base.write({'type': 'service'})
+
+        with self.assertRaises(ValidationError):
+            base.write({'is_storable': False})
+
+    def test_onchange_type_or_storable_clears_tint_role(self):
+        """Al cambiar interactivamente en formulario a servicio o no almacenable, se limpia entintado."""
+        schema = self.env['tint.schema'].create({'name': 'Esquema Onchange'})
+        line = self.env['lines.product'].create({'name': 'Línea Onchange', 'scheme': schema.id})
+
+        # Caso 1: Cambiar tipo a service
+        product1 = self.templates.new({
+            'name': 'Producto Formulario 1',
+            'type': 'consu',
+            'is_storable': True,
+            'tint_role': 'base',
+            'tint_base_type_id': self.white.id,
+            'tint_size_id': self.liter.id,
+            'lines_product_id': line.id,
+        })
+        product1.type = 'service'
+        product1._onchange_tint_product_type()
+        self.assertFalse(product1.tint_role)
+        self.assertFalse(product1.tint_base_type_id)
+        self.assertFalse(product1.tint_size_id)
+        self.assertFalse(product1.lines_product_id)
+
+        # Caso 2: Desmarcar is_storable
+        product2 = self.templates.new({
+            'name': 'Producto Formulario 2',
+            'type': 'consu',
+            'is_storable': True,
+            'tint_role': 'colorant',
+            'uom_id': self.point.id,
+        })
+        product2.is_storable = False
+        product2._onchange_tint_product_type()
+        self.assertFalse(product2.tint_role)
+
+    def test_regular_product_can_have_any_type(self):
+        """Productos sin rol de entintado no se ven afectados por la restricción."""
+        service = self.templates.create({
+            'name': 'Servicio de Instalación',
+            'type': 'service',
+        })
+        self.assertEqual(service.type, 'service')
+        self.assertFalse(service.tint_role)
+
+        consumable = self.templates.create({
+            'name': 'Cinta de Enmascarar',
+            'type': 'consu',
+            'is_storable': False,
+        })
+        self.assertEqual(consumable.type, 'consu')
+        self.assertFalse(consumable.is_storable)
+        self.assertFalse(consumable.tint_role)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 
 
 class TintGallery(models.Model):
@@ -9,10 +9,8 @@ class TintGallery(models.Model):
     Una galería agrupa las fórmulas que vienen de una misma fuente: el
     catálogo propio, el de un fabricante de la competencia, los colores
     descontinuados que aún se reproducen, o los desarrollos internos.
-
-    No confundir con `tint.collection`, que agrupa **colores** en cartas
-    comerciales. La galería agrupa **fórmulas**: un mismo color puede
-    resolverse con dosis distintas según de quién sea la receta.
+    La galería agrupa **fórmulas**: un mismo color puede resolverse con
+    dosis distintas según de quién sea la receta.
     """
 
     _name = 'tint.gallery'
@@ -42,7 +40,7 @@ class TintGallery(models.Model):
         string="Fórmulas",
         help="Fórmulas de entintado que pertenecen a esta galería.")
     formula_count = fields.Integer(
-        string="Fórmulas", compute='_compute_counts',
+        string="Número de fórmulas", compute='_compute_counts',
         help="Número total de fórmulas registradas en esta galería.")
     color_count = fields.Integer(
         string="Colores", compute='_compute_counts',
@@ -83,11 +81,22 @@ class TintGallery(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': self.display_name,
+            'name': _("Fórmulas: %s", self.display_name),
             'res_model': 'tint.color.formula',
             'view_mode': 'list,form',
             'domain': [('gallery_id', '=', self.id)],
             'context': {'default_gallery_id': self.id},
+        }
+
+    def action_open_colors(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Colores: %s", self.display_name),
+            'res_model': 'tint.color',
+            'view_mode': 'list,form',
+            'domain': [('formula_ids.gallery_id', '=', self.id)],
+            'context': self.env.context,
         }
 
     # --- Carga al POS ---------------------------------------------------

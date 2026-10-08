@@ -56,5 +56,14 @@
             <field name="sequence">80</field>
         </record>
 
+        <record id="tint_gallery_odoo_manual" model="tint.gallery">
+            <field name="name">Odoo Manual</field>
+            <field name="code">ODM</field>
+            <field name="sequence">90</field>
+            <field
+                name="description"
+            ><![CDATA[<p>Entintados manuales capturados directamente en Odoo.</p>]]></field>
+        </record>
+
     </data>
 </odoo>

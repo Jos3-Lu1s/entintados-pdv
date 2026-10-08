@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_form_inherit_signature" model="ir.ui.view">
+        <field name="name">res.users.form.inherit.signature</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='access_rights']" position="after">
+                <page string="Firma Digital" name="digital_signature_page">
+                    <group string="Firma Digital para Aprobaciones">
+                        <field name="digital_signature" widget="signature"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_users_form_simple_modif_inherit_signature" model="ir.ui.view">
+        <field name="name">res.users.preferences.form.inherit.signature</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form_simple_modif"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[last()]" position="after">
+                <group string="Firma Digital para Aprobaciones">
+                    <field name="digital_signature" widget="signature"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

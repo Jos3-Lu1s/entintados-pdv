@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="seq_tint_color" model="ir.sequence">
+        <field name="name">Secuencia Tint Color</field>
+        <field name="code">tint.color</field>
+        <field name="prefix">OMD-</field>
+        <field name="padding">4</field>
+        <field name="number_next">1</field>
+        <field name="number_increment">1</field>
+        <field name="implementation">no_gap</field>
+    </record>
+</odoo>

@@ -2,7 +2,7 @@
 import { _t } from "@web/core/l10n/translation";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
-import { TintFormulaPopup } from "@entintados_pdv/js/tint_formula_popup";
+import { TintFormulaPopup } from "@entintados_pdv/app/components/tint_formula_popup/tint_formula_popup";
 import {
     addTintedBaseToOrder,
     extractionLiters,
@@ -22,6 +22,9 @@ export async function runTintFlow(
     ctx,
     { baseProduct, replaceLine = null, qty = 1, initialColorId = false }
 ) {
+    if (!ctx.pos.requireCustomer()) {
+        return undefined;
+    }
     const tmpl = baseProduct?.product_tmpl_id;
 
     if (!tmpl || tmpl.tint_role !== "base") {
@@ -41,6 +44,7 @@ export async function runTintFlow(
     }
 
     const payload = await makeAwaitable(ctx.dialog, TintFormulaPopup, {
+        baseProduct,
         baseTypeId: tmpl.tint_base_type_id.id,
         sizeId: tmpl.tint_size_id.id,
         initialColorId,
@@ -53,6 +57,9 @@ export async function runTintFlow(
     const color = ctx.pos.models["tint.color"].get(payload.colorId);
 
     // Elimina la línea original para sustituirla por la estructura entintada.
+    if (!ctx.pos.requireCustomer()) {
+        return undefined;
+    }
     replaceLine?.delete();
 
     const parent = await addTintedBaseToOrder(ctx.pos, {
@@ -73,6 +80,9 @@ export async function runTintFlow(
 
 /** Agrega un entintado directamente desde una tarjeta del panel, solicitando confirmación de extracción si aplica. */
 export async function addTintedFromCard(ctx, { baseProduct, formula, color, qty = 1 }) {
+    if (!ctx.pos.requireCustomer()) {
+        return undefined;
+    }
     const tmpl = baseProduct?.product_tmpl_id;
     const baseType = tmpl?.tint_base_type_id;
     const liters = extractionLiters(baseType, tmpl?.tint_size_id);

@@ -10,11 +10,19 @@ class PosSession(models.Model):
     def _load_pos_data_models(self, config):
         models_to_load = super()._load_pos_data_models(config)
 
+        if 'res.partner.discount.rule' not in models_to_load:
+            models_to_load.append('res.partner.discount.rule')
+
+        if config and config.module_pos_restaurant:
+            return models_to_load
+
         tint_models = [
+            'tint.schema',
+            'lines.product',
+            'lines.product.presentation',
             'tint.size',
             'tint.base.type',
             'tint.base.capacity',
-            'tint.collection',
             # La galería es el primer nivel del filtrado en caja, así que va
             # antes que las fórmulas que la referencian.
             'tint.gallery',

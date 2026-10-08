@@ -131,7 +131,7 @@
                                     <field
                                         name="colorant_id"
                                         options="{'no_create': True}"
-                                        domain="[('tint_role', '=', 'colorant'), ('lines_product_id', '=', line_scheme_id), ('scheme_id', '=', scheme_id)]"
+                                        domain="[('tint_role', '=', 'colorant')]"
                                     />
                                     <field name="points" sum="Total" />
                                     <field name="points_display" string="Notación" />

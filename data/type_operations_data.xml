@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <record id="picking_type_material_output" model="stock.picking.type">
+            <field name="name">Demostración</field>
+            <field name="code">outgoing</field>
+            <field name="sequence_code">DEMO</field>
+            <field name="warehouse_id" ref="stock.warehouse0"/>
+            <field name="company_id" ref="base.main_company"/>
+        </record>
+
+    </data>
+</odoo>

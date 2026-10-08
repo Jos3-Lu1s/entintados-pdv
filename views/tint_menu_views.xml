@@ -5,6 +5,7 @@
         name="Entintados"
         sequence="85"
         groups="entintados_pdv.group_tint_manager"
+        web_icon="entintados_pdv,static/description/icon_entintados.png"
     />
 
     <menuitem
@@ -42,14 +43,6 @@
         parent="menu_tint_catalog"
         action="tint_gallery_action"
         sequence="25"
-    />
-
-    <menuitem
-        id="menu_tint_collection"
-        name="Colecciones"
-        parent="menu_tint_catalog"
-        action="tint_collection_action"
-        sequence="30"
     />
 
     <menuitem
@@ -98,19 +91,11 @@
         sequence="40"
     />
 
-    <menuitem 
+    <menuitem
         id="lines_product_menu"
         name="Líneas de producto"
         parent="menu_tint_config"
         action="lines_product_action"
         sequence="50"
-    />
-
-    <menuitem
-        id="menu_product"
-        name="Productos"
-        parent="menu_tint_root"
-        action="product_template_action_tint"
-        sequence="100"
     />
 </odoo>
