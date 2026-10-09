@@ -25,5 +25,9 @@
                 <i class="fa fa-tag pe-1"/><em><t t-esc="vals.discount"/>% </em> discount off on <t t-esc="vals.noDiscountPrice"/>
             </li>
         </xpath>
+        <xpath expr="//div[hasclass('product-name')]/span[hasclass('qty')]" position="after">
+            <span t-if="props.mode === 'receipt' and props.line.product_id?.default_code"
+                  class="product-ref text-nowrap pe-2">[<t t-out="props.line.product_id.default_code"/>]</span>
+        </xpath>
     </t>
 </templates>
