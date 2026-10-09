@@ -236,4 +236,13 @@ patch(PosOrder.prototype, {
         }
         return super.removeOrderline(orderline);
     },
+    serializeForORM(...args) {
+        const data = super.serializeForORM(...args);
+        const n = Number(this.uiState?.invoice_split_count || this.invoice_split_count);
+        console.log("[ENTINTADOS] serializeForORM n =", n);
+        if (data && typeof data === "object" && n > 1) {
+            data.invoice_split_count = n;
+        }
+        return data;
+    },
 });

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="entintados_pdv.AddInfoPopup"
+       t-inherit="l10n_mx_edi_pos.AddInfoPopup"
+       t-inherit-mode="extension">
+        <!-- Ancla: el div que contiene el select "Invoice to public" -->
+        <xpath expr="//select[@name='l10n_mx_edi_cfdi_to_public']/.." position="after">
+            <div class="mb-3">
+                <label for="mx_detail_split_count" class="form-label">Número de facturas: </label>
+                <input type="number" min="1" step="1"
+                       id="mx_detail_split_count" class="detail form-control"
+                       name="invoice_split_count"
+                       t-model.number="state.invoice_split_count"/>
+            </div>
+        </xpath>
+    </t>
+</templates>

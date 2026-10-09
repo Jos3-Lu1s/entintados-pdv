@@ -36,6 +36,7 @@ from . import approvals
 from . import approvals_product_line
 from . import res_partner_discount_rule
 from . import pos_order_line
+from . import pos_order
 from . import pos_stock
 from . import pos_customer
 from . import vendor_credit_wizard
