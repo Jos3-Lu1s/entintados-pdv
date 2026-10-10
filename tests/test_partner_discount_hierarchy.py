@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from lxml import etree
 
-from odoo import fields
-from odoo.exceptions import ValidationError
+from odoo import Command, fields
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
 
@@ -1151,6 +1151,23 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         wizard.action_apply_discount()
 
+    def _create_global_discount_line(self, order, price_unit):
+        """Línea de descuento global como la que crea el core; el wizard ya no la crea."""
+        discount_product = self.env['sale.order.discount'].create({
+            'sale_order_id': order.id,
+        })._get_discount_product()
+        return self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': discount_product.id,
+            'name': 'Descuento',
+            'price_unit': price_unit,
+            'technical_price_unit': 0,
+            'product_uom_qty': 1.0,
+            'tax_ids': [Command.clear()],
+            'extra_tax_data': {'computation_key': f'global_discount,{order.id}'},
+            'sequence': 999,
+        })
+
     def _edit_first_line(self, order, **values):
         with Form(order) as order_form:
             with order_form.order_line.edit(0) as line_form:
@@ -1556,10 +1573,8 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         fixed_line = order.order_line.filtered(lambda l: l.product_id == self.prod_3)
         eligible_line = order.order_line.filtered(lambda l: l.product_id == self.prod_1)
 
-        self._apply_discount_wizard(order, 0.10, discount_type='so_discount')
-        discount_product = order.company_id.sale_discount_product_id
-        discount_line = order.order_line.filtered(lambda l: l.product_id == discount_product)
-        self.assertTrue(discount_line)
+        discount_line = self._create_global_discount_line(order, -50.0)
+        self.assertTrue(discount_line._is_global_discount())
 
         program = self.env['loyalty.program'].create({
             'name': 'Promo Wizard',
@@ -1587,6 +1602,47 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self._apply_discount_wizard(order, 0.0)
         self.assertEqual(self._line_values(eligible_line), (475.0, 0.0, 'manual', 'pricelist'))
         self.assertEqual(self._line_badge(eligible_line), ('manual', 'Desc. Manual (0.0%)'))
+
+    def test_wizard_rejects_discounts_that_add_lines(self):
+        """"Descuento global" e "Importe fijo" agregarían una línea al pedido: se rechazan."""
+        self._enable_line_discounts()
+        partner = self._create_pricelist_partner('Cliente Sin Líneas', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_1)
+        lines_before = order.order_line
+        values_before = self._line_values(lines_before)
+
+        for discount_type, amount_field, amount in (
+            ('so_discount', 'discount_percentage', 0.10),
+            ('amount', 'discount_amount', 50.0),
+        ):
+            with self.subTest(discount_type):
+                wizard = self.env['sale.order.discount'].create({
+                    'sale_order_id': order.id,
+                    'discount_type': discount_type,
+                    amount_field: amount,
+                })
+                with self.assertRaises(UserError):
+                    wizard.action_apply_discount()
+                self.assertEqual(order.order_line, lines_before)
+                self.assertEqual(self._line_values(lines_before), values_before)
+
+    def test_wizard_default_applies_on_lines(self):
+        """Sin tipo explícito, el wizard aplica "En todas las líneas" sin agregar líneas."""
+        self._enable_line_discounts()
+        partner = self._create_pricelist_partner('Cliente Por Defecto', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_1)
+        line = order.order_line
+
+        wizard = self.env['sale.order.discount'].create({
+            'sale_order_id': order.id,
+            'discount_percentage': 0.05,
+        })
+        self.assertEqual(wizard.discount_type, 'sol_discount')
+        wizard.action_apply_discount()
+
+        self.assertEqual(order.order_line, line)
+        self.assertEqual(self._line_values(line), (475.0, 5.0, 'manual', 'pricelist'))
+        self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (5.0%)'))
 
     def test_saved_line_qty_change_follows_pricelist(self):
         """Línea guardada sin manual: subir a un escalón de tarifa actualiza precio y origen."""
@@ -2237,15 +2293,9 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         pricelist_c = self._create_currency_pricelist('T-C Desc Global', company_currency)
         pricelist_o = self._create_currency_pricelist('T-O Desc Global', other)
         partner = self._create_pricelist_partner('Cliente Desc Global', pricelist_c)
-        # El asistente descuenta el monto con impuestos incluidos.
         self.prod_3.taxes_id = False
         order = self._create_order(partner, self.prod_3)
-        self.env['sale.order.discount'].create({
-            'sale_order_id': order.id,
-            'discount_type': 'amount',
-            'discount_amount': 50.0,
-        }).action_apply_discount()
-        discount_line = order.order_line.filtered(lambda l: l._is_global_discount())
+        discount_line = self._create_global_discount_line(order, -50.0)
         self.assertEqual(discount_line.price_unit, -50.0)
 
         for label, pricelist, price in (('T-C → T-O', pricelist_o, -850.0), ('T-O → T-C', pricelist_c, -50.0)):
