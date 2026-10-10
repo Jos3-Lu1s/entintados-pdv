@@ -152,12 +152,21 @@ class SaleOrderLine(models.Model):
                 line.price_origin_label = 'Precio de venta del producto'
 
     def write(self, vals):
+        update_pricing_rule = 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update')
+        if update_pricing_rule and len(self) > 1:
+            # El acuerdo depende del cliente de cada línea: un solo `vals` llevaría la regla y el
+            # precio técnico de la última línea a todas.
+            for line in self:
+                line.write(vals)
+            return True
+        # Se inyectan valores del acuerdo: no deben volver al llamador, que puede reutilizar `vals`.
+        vals = dict(vals)
         recompute_lines = self.browse()
         # Precio fijo en la UdM del producto y la moneda de la compañía, por línea: se convierte a
         # su UdM y moneda finales tras el write.
         fixed_price_by_line = {}
         explicit_price = 'price_unit' in vals
-        if 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update'):
+        if update_pricing_rule:
             for line in self:
                 product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else line.product_id
                 if product and product.type != 'service' and line.order_id.partner_id:

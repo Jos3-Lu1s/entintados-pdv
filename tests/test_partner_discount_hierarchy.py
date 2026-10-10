@@ -2009,6 +2009,37 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(self._line_values(line), (1190.0, 0.0, 'fixed_price', 'fixed_price'))
         self.assertEqual(line.technical_price_unit, line.price_unit)
 
+    def test_write_product_batch_keeps_each_partner_agreement(self):
+        """AUD-0027: cambiar el producto de líneas de varios clientes en un solo `write` aplica a
+        cada una su propio acuerdo, en cualquier orden."""
+        pricelist = self.env['product.pricelist'].create({'name': 'Tarifa Lote'})
+        partner_a = self._create_fixed_price_partner('Cliente Lote A', pricelist, price=60.0)
+        partner_b = self._create_agreement_partner('Cliente Lote B', pricelist, discount=20.0)
+        partner_c = self._create_fixed_price_partner('Cliente Lote C', pricelist, price=80.0)
+        rule_a, rule_b, rule_c = (partner.discount_rule_ids for partner in (partner_a, partner_b, partner_c))
+        line_a, line_b, line_c = (
+            self._create_order(partner, self.prod_2).order_line
+            for partner in (partner_a, partner_b, partner_c)
+        )
+        expected = {
+            line_a: ((60.0, 0.0, 'fixed_price', 'fixed_price'), 60.0, rule_a),
+            line_b: ((100.0, 20.0, 'product', 'list'), 100.0, rule_b),
+            line_c: ((80.0, 0.0, 'fixed_price', 'fixed_price'), 80.0, rule_c),
+        }
+
+        for lines in (line_a | line_c, line_c | line_a, line_a | line_b | line_c):
+            with self.subTest(lines=lines.order_id.partner_id.mapped('name')):
+                lines.write({'product_id': self.prod_2.id})
+                vals = {'product_id': self.prod_3.id}
+                lines.write(vals)
+                self.assertEqual(vals, {'product_id': self.prod_3.id})
+                for line in lines:
+                    values, technical_price, rule = expected[line]
+                    self.assertEqual(self._line_values(line), values)
+                    self.assertEqual(round(line.technical_price_unit, 2), technical_price)
+                    self.assertEqual(line.pricing_rule_id, rule)
+                    self.assertFalse(line._has_core_manual_price())
+
     def test_fixed_price_partner_change_currency(self):
         """Cambiar a un cliente con precio fijo en una cotización en otra moneda lo convierte."""
         _company_currency, other = self._setup_other_currency()
