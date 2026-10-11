@@ -767,4 +767,29 @@ $tint-breakpoint-lg: 1199.98px;
     }
 }
 
+/* ==========================================================================
+   Pantalla de Cliente Requerido en POS (ProductScreen Customer Gate)
+   ========================================================================== */
+.o-pos-customer-gate {
+    inset: 0;
+    z-index: 20;
+    overflow-y: auto;
+}
 
+/* El switchpane inferior en POS móvil debe mantenerse siempre interactivo */
+.rightpane .switchpane {
+    position: relative;
+    z-index: 25;
+}
+
+.o-pos-customer-gate-text {
+    max-width: 38ch;
+}
+
+.o-pos-customer-gate-btn {
+    touch-action: manipulation;
+
+    @include tint-responsive-xs {
+        width: 100%;
+    }
+}

@@ -69,7 +69,7 @@
 
         <!-- Tabla de productos en modo lista -->
         <xpath expr="//div[hasclass('search-more-button')]" position="before">
-            <div t-if="!pos.config.module_pos_restaurant and tintUi.tab !== 'tint' and tintUi.viewMode === 'list'"
+            <div t-if="!pos.config.module_pos_restaurant and tintUi.tab !== 'tint' and tintUi.viewMode === 'list' and !pos.scanning"
                  class="o-tint-list d-flex flex-column flex-grow-1 min-h-0 px-2 pb-2 overflow-hidden">
                 <TintTable t-if="pos.productsToDisplay.length" columns="productListColumns">
                     <t t-set-slot="rows">

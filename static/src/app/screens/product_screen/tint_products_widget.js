@@ -1,4 +1,4 @@
-import { useState } from "@odoo/owl";
+import { useEffect, useState } from "@odoo/owl";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { patch } from "@web/core/utils/patch";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
@@ -31,6 +31,15 @@ patch(ProductScreen.prototype, {
             formulasVersion: 0,
             loadingFormulas: false,
         });
+        // La cámara se dibuja dentro de la zona de productos, que la pestaña Entintados oculta.
+        useEffect(
+            (scanning) => {
+                if (scanning) {
+                    this.tintUi.tab = "products";
+                }
+            },
+            () => [this.pos.scanning]
+        );
     },
 
     get isTintEnabled() {
@@ -40,6 +49,9 @@ patch(ProductScreen.prototype, {
     setTintTab(tab) {
         if (!this.pos.requireCustomer()) {
             return;
+        }
+        if (tab === "tint") {
+            this.pos.scanning = false;
         }
         this.tintUi.tab = tab;
     },
