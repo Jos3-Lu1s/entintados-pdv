@@ -97,6 +97,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
             # Sin creación rápida de productos: quedarían sin referencia interna
             "entintados_pdv/static/src/fields/product_no_quick_create/product_no_quick_create.js",
+            # Sin creación rápida de contactos: quedarían sin teléfono
+            "entintados_pdv/static/src/fields/partner_no_quick_create/partner_no_quick_create.js",
         ],
     },
 

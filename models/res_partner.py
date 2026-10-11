@@ -2,10 +2,15 @@
 
 import re
 
-from odoo import _, api, fields, models
+from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 PHONE_REGEX = re.compile(r'^\d{10}$')
+
+# Marca de contexto con la que los canales de captura del usuario piden
+# exigir el teléfono. create/write la retiran antes de llamar a super() para
+# que los contactos que el core crea por dentro no la hereden.
+REQUIRE_PARTNER_PHONE = 'entintados_require_partner_phone'
 
 MX_COUNTRY_CODE = '52'
 MX_ISO_CODE = 'MX'
@@ -265,7 +270,14 @@ class ResPartner(models.Model):
             if not vals.get('property_payment_term_id') and payment_term:
                 vals['property_payment_term_id'] = payment_term.id
 
-        return super().create(vals_list)
+        if not self.env.context.get(REQUIRE_PARTNER_PHONE):
+            return super().create(vals_list)
+        partners = super(
+            ResPartner, self.with_context(**{REQUIRE_PARTNER_PHONE: False})
+        ).create(vals_list).with_env(self.env)
+        # Los hijos de un contacto nuevo también se capturaron en el formulario.
+        (partners | partners.child_ids)._check_phone_required()
+        return partners
 
     def write(self, vals):
         if 'vat' in vals and isinstance(vals['vat'], str):
@@ -275,7 +287,47 @@ class ResPartner(models.Model):
                 duplicate = self._find_duplicate_by_vat(vat, exclude_ids=partner.ids)
                 if duplicate:
                     self._raise_vat_duplicate_error(vat, duplicate)
-        return super().write(vals)
+        if not self.env.context.get(REQUIRE_PARTNER_PHONE):
+            return super().write(vals)
+        previous_children = self.child_ids
+        updated_child_ids = [
+            command[1] for command in vals.get('child_ids') or []
+            if command[0] == Command.UPDATE
+        ]
+        result = super(
+            ResPartner, self.with_context(**{REQUIRE_PARTNER_PHONE: False})
+        ).write(vals)
+        # Un hijo antiguo que no se tocó en este guardado no debe bloquear
+        # la edición del padre.
+        new_children = self.child_ids - previous_children
+        updated_children = self.browse(updated_child_ids)
+        (self | new_children | updated_children)._check_phone_required()
+        return result
+
+    def web_save(self, vals, specification, next_id=None):
+        return super(
+            ResPartner, self.with_context(**{REQUIRE_PARTNER_PHONE: True})
+        ).web_save(vals, specification, next_id=next_id)
+
+    def web_save_multi(self, vals_list, specification):
+        return super(
+            ResPartner, self.with_context(**{REQUIRE_PARTNER_PHONE: True})
+        ).web_save_multi(vals_list, specification)
+
+    def load(self, fields, data):
+        # El ORM convierte la ValidationError de cada fila en un mensaje de
+        # error y revierte el lote completo si hubo alguno.
+        return super(
+            ResPartner, self.with_context(**{REQUIRE_PARTNER_PHONE: True})
+        ).load(fields, data)
+
+    def _check_phone_required(self):
+        missing = self.filtered(lambda partner: not self._has_phone(partner))
+        if missing:
+            raise ValidationError(_(
+                'El teléfono es obligatorio. Falta en: %(names)s.',
+                names=', '.join(missing.mapped('display_name')),
+            ))
 
     @api.onchange('vat')
     def _onchange_vat_uppercase(self):
@@ -346,14 +398,17 @@ class ResPartner(models.Model):
         # Sin país registrado se considera un contacto de México.
         return not partner.country_id or partner.country_id.code == MX_ISO_CODE
 
+    def _has_phone(self, partner):
+        # Un teléfono con solo espacios cuenta como vacío.
+        return bool((partner.phone or '').strip())
+
     @api.constrains('phone', 'country_id')
     def _check_phone_format(self):
         for partner in self:
-            if not partner.phone:
-                raise ValidationError(_(
-                    'El teléfono es obligatorio. Falta en: %(name)s.',
-                    name=partner.display_name,
-                ))
+            # La obligatoriedad se revisa solo en los canales del usuario;
+            # aquí únicamente se valida el formato de lo que se capturó.
+            if not self._has_phone(partner):
+                continue
             if self._is_mexican_partner(partner):
                 if not PHONE_REGEX.match(self._phone_digits(partner.phone)):
                     raise ValidationError(_(
