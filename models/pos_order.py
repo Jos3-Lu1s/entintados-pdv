@@ -19,6 +19,28 @@ class PosOrder(models.Model):
     entintados_invoice_count = fields.Integer(
         string="Facturas", compute="_compute_entintados_invoice_count")
 
+    @api.model
+    def _process_order(self, order, existing_order):
+        # combo_parent_id se enlaza al final del super(); antes de eso todo
+        # colorante hijo parece suelto. Las devoluciones (qty <= 0) no se tocan.
+        order_id = super()._process_order(order, existing_order)
+        self.browse(order_id)._check_colorant_lines()
+        return order_id
+
+    def _check_colorant_lines(self):
+        loose = self.lines.filtered(
+            lambda l: l.product_id.tint_role == 'colorant'
+            and l.qty > 0
+            and not l.combo_parent_id)
+        if loose:
+            raise UserError(_(
+                "El pedido %(order)s tiene colorantes sin su base entintada: "
+                "%(products)s. Los colorantes solo se venden dentro de un "
+                "producto entintado.",
+                order=self.name,
+                products=", ".join(loose.product_id.mapped('display_name')),
+            ))
+
     def _entintados_split_move_vals(self, move_vals, n):
         """n copias de move_vals con cantidades repartidas; la última absorbe el residuo."""
         prec = self.env["decimal.precision"].precision_get("Product Unit of Measure")

@@ -1,4 +1,5 @@
 import { patch } from "@web/core/utils/patch";
+import { _t } from "@web/core/l10n/translation";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
@@ -11,6 +12,16 @@ let stockNotification;
 
 patch(PosStore.prototype, {
     async addLineToOrder(vals, order, opts = {}, configure = true) {
+        // Va antes de consultar existencias para que el cajero vea este aviso
+        // y no el de existencias. Los colorantes hijos de una base entintada
+        // llegan en combo_line_ids del padre y no pasan por aquí.
+        if (this._isColorantLine(vals)) {
+            this.notification.add(
+                _t("Los colorantes solo se venden dentro de un producto entintado."),
+                { type: "warning" }
+            );
+            return;
+        }
         let mutex = stockMutexes.get(this);
         if (!mutex) {
             mutex = new Mutex();
@@ -42,6 +53,17 @@ patch(PosStore.prototype, {
             }
             return super.addLineToOrder(vals, order, opts, configure);
         });
+    },
+
+    _isColorantLine(vals) {
+        const template = typeof vals.product_tmpl_id === "number"
+            ? this.models["product.template"].get(vals.product_tmpl_id) : vals.product_tmpl_id;
+        if (template) {
+            return template.tint_role === "colorant";
+        }
+        const product = typeof vals.product_id === "number"
+            ? this.models["product.product"].get(vals.product_id) : vals.product_id;
+        return product?.product_tmpl_id?.tint_role === "colorant";
     },
 
     async handleConfigurableProduct(values, template, opts, configure) {

@@ -65,6 +65,12 @@
                     </div>
                 </page>
             </xpath>
+            <xpath expr="//field[@name='sale_ok']" position="attributes">
+                <attribute name="readonly">tint_role == 'colorant'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='available_in_pos']" position="attributes">
+                <attribute name="readonly">tint_role == 'colorant'</attribute>
+            </xpath>
         </field>
     </record>
 

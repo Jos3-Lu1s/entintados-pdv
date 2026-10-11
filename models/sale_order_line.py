@@ -110,6 +110,16 @@ class SaleOrderLine(models.Model):
                     line=line.name,
                 ))
 
+    @api.constrains('product_id')
+    def _check_colorant_not_sold_alone(self):
+        for line in self:
+            if line.product_id.tint_role == 'colorant':
+                raise ValidationError(_(
+                    "El colorante «%s» no se vende solo: solo puede salir "
+                    "como parte de un producto entintado en el Punto de Venta.",
+                    line.product_id.display_name,
+                ))
+
     def _manual_discount_values(self, discount):
         return {
             'technical_discount': discount,

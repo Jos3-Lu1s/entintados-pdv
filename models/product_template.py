@@ -6,6 +6,9 @@ from odoo.exceptions import UserError, ValidationError
 from ..utils.default_code import REQUIRE_DEFAULT_CODE, clean_default_code
 from ..utils.points import format_points
 
+# El colorante es materia prima: solo sale vendido dentro de una base entintada.
+COLORANT_FORCED_VALUES = {'sale_ok': False, 'available_in_pos': False}
+
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
@@ -64,6 +67,8 @@ class ProductTemplate(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             clean_default_code(vals)
+            if vals.get('tint_role') == 'colorant':
+                vals.update(COLORANT_FORCED_VALUES)
         if not self.env.context.get(REQUIRE_DEFAULT_CODE):
             return super().create(vals_list)
         templates = super(
@@ -75,11 +80,13 @@ class ProductTemplate(models.Model):
     def write(self, vals):
         clean_default_code(vals)
         if not self.env.context.get(REQUIRE_DEFAULT_CODE):
-            return super().write(vals)
-        result = super(
-            ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: False})
-        ).write(vals)
-        self._check_default_code_required()
+            result = super().write(vals)
+        else:
+            result = super(
+                ProductTemplate, self.with_context(**{REQUIRE_DEFAULT_CODE: False})
+            ).write(vals)
+            self._check_default_code_required()
+        self._force_colorant_not_saleable()
         return result
 
     def web_save(self, vals, specification, next_id=None):
@@ -105,6 +112,13 @@ class ProductTemplate(models.Model):
             "Para crear un producto debe capturar su referencia interna. "
             "Use «Crear y editar…»."
         ))
+
+    def _force_colorant_not_saleable(self):
+        colorants = self.filtered(
+            lambda p: p.tint_role == 'colorant'
+            and (p.sale_ok or p.available_in_pos))
+        if colorants:
+            super(ProductTemplate, colorants).write(COLORANT_FORCED_VALUES)
 
     def _check_default_code_required(self):
         # Con más de una variante la referencia vive en cada variante y el
@@ -226,6 +240,8 @@ class ProductTemplate(models.Model):
                     'entintados_pdv.uom_tint_point', raise_if_not_found=False)
                 if point:
                     product.uom_id = point
+                product.sale_ok = False
+                product.available_in_pos = False
                 product.tint_base_type_id = False
                 product.tint_size_id = False
                 product.lines_product_id = False
@@ -271,9 +287,9 @@ class ProductTemplate(models.Model):
     def _load_pos_data_search_read(self, data, config):
         # EXTENDS point_of_sale: garantiza que los colorantes lleguen al POS.
         #
-        # Los colorantes son insumo del entintado (sale_ok=False,
-        # available_in_pos=False), así que el dominio estándar los excluye y
-        # el límite de productos podría dejarlos fuera. Se añaden aquí después
+        # Los colorantes son insumo del entintado y el modelo les fuerza
+        # sale_ok=False y available_in_pos=False, así que el dominio estándar
+        # los excluye y el límite de productos podría dejarlos fuera. Se añaden aquí después
         # de la carga normal —igual que el core hace con el producto de
         # propina y los especiales— sin volverlos vendibles en caja. Al quedar
         # en data['product.template'], sus variantes product.product se cargan
