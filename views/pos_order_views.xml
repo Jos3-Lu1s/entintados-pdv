@@ -10,4 +10,43 @@
             </xpath>
         </field>
     </record>
+        <record id="view_pos_order_split_invoice_wizard_form" model="ir.ui.view">
+        <field name="name">pos.order.split.invoice.wizard.form</field>
+        <field name="model">pos.order.split.invoice.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Facturar en varias facturas">
+                <group>
+                    <field name="order_id"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="amount_total"/>
+                    <field name="invoice_count"/>
+                    <field name="amount_per_invoice"/>
+                </group>
+                <div class="text-muted">
+                    Las cantidades de cada línea se reparten en partes iguales y la última
+                    factura absorbe el redondeo. El pago de la orden se concilia con todas las facturas.
+                </div>
+                <footer>
+                    <button string="Generar facturas" name="action_confirm" type="object"
+                            class="btn-primary" data-hotkey="q"/>
+                    <button string="Cancelar" special="cancel" data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_pos_order_form_split_invoice_button" model="ir.ui.view">
+        <field name="name">pos.order.form.split.invoice.button</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="is_refund" invisible="1"/>
+                <field name="entintados_invoice_count" invisible="1"/>
+                <button name="action_open_split_invoice_wizard" type="object"
+                        string="Dividir en facturas"
+                        invisible="entintados_invoice_count &gt; 0 or state not in ('paid', 'done') or is_refund"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>
