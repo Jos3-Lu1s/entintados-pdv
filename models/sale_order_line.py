@@ -80,25 +80,34 @@ class SaleOrderLine(models.Model):
     )
     manual_discount_allowed = fields.Boolean(compute='_compute_manual_discount_allowed')
 
-    @api.depends('display_type', 'pricing_rule_type', 'product_id', 'is_reward_line')
+    @api.depends('display_type', 'pricing_rule_type', 'product_id', 'is_reward_line', 'is_downpayment')
     def _compute_manual_discount_allowed(self):
         for line in self:
             line.manual_discount_allowed = line._is_manual_discount_allowed()
 
     def _is_manual_discount_allowed(self):
         """Línea que admite descuento manual: no es precio fijo de acuerdo, recompensa, producto
-        de descuento de la compañía ni sección/nota."""
+        de descuento de la compañía, anticipo ni sección/nota.
+
+        El anticipo es un importe ya cobrado: su descuento pasa a la deducción de la factura final.
+        """
         self.ensure_one()
         return not (
             self.display_type
+            or self.is_downpayment
             or self.pricing_rule_type == 'fixed_price'
             or getattr(self, 'is_reward_line', False)
             or (self.product_id and self.product_id == self.company_id.sale_discount_product_id)
         )
 
-    @api.constrains('discount', 'pricing_rule_type')
+    @api.constrains('discount', 'pricing_rule_type', 'is_downpayment')
     def _check_manual_discount(self):
         for line in self:
+            if line.is_downpayment and line.discount:
+                raise ValidationError(_(
+                    "La línea «%(line)s» es un anticipo: no admite descuento.",
+                    line=line.name,
+                ))
             if line.pricing_rule_type == 'fixed_price' and line.discount:
                 raise ValidationError(_(
                     "La línea «%(line)s» tiene precio fijo de acuerdo: no admite descuento.",
@@ -247,7 +256,8 @@ class SaleOrderLine(models.Model):
                         "La línea «%(line)s» tiene precio fijo de acuerdo: no se puede cambiar su precio.",
                         line=line.name,
                     ))
-            manual_price_lines = self - fixed_lines
+            # El core escribe el importe del anticipo al publicar su factura: no es un precio tecleado.
+            manual_price_lines = self - fixed_lines - self.filtered('is_downpayment')
         res = super().write(vals)
         for line, base_price in fixed_price_by_line.items():
             price = line.product_id.uom_id._compute_price(base_price, line.product_uom_id)
@@ -304,7 +314,11 @@ class SaleOrderLine(models.Model):
     def _onchange_price_unit_manual(self):
         # Solo si difiere del último precio calculado: el onchange también se dispara por el cálculo.
         for line in self:
-            if line.pricing_rule_type != 'fixed_price' and line._has_core_manual_price():
+            if (
+                line.pricing_rule_type != 'fixed_price'
+                and not line.is_downpayment
+                and line._has_core_manual_price()
+            ):
                 line.update(line._manual_price_values())
 
     @api.onchange('product_id')

@@ -7,7 +7,7 @@ class SaleOrderDiscount(models.TransientModel):
 
     def action_apply_discount(self):
         # El % sustituye al descuento de cada línea y queda como manual, también con 0 %.
-        # Nunca toca precio fijo, recompensas, producto de descuento ni secciones/notas.
+        # Nunca toca precio fijo, recompensas, producto de descuento, anticipos ni secciones/notas.
         # "Descuento global" e "Importe fijo" se rechazan porque agregan líneas al pedido.
         self.ensure_one()
         if self.discount_type != 'sol_discount':

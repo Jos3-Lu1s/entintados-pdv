@@ -45,8 +45,8 @@
                 <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or parent.price_unit_edit_locked</attribute>
             </xpath>
             <!-- force_save: el servidor no recalcula el origen si `price_unit` viene en los valores. -->
-            <xpath expr="//list/field[@name='price_unit']" position="before">
-                <field name="price_origin" nolabel="1" widget="price_origin_icon" readonly="1" force_save="1" width="24px"/>
+            <xpath expr="//list/field[@name='price_unit']" position="after">
+                <field name="price_origin" nolabel="1" widget="price_origin_icon" readonly="1" force_save="1" width="24px" invisible="is_downpayment"/>
                 <field name="price_origin_label" column_invisible="True" force_save="1"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="attributes">

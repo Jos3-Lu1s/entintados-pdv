@@ -1644,6 +1644,73 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(self._line_values(line), (475.0, 5.0, 'manual', 'pricelist'))
         self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (5.0%)'))
 
+    def _create_order_with_posted_down_payment(self, amount):
+        """Pedido confirmado P × 10 a 100, sin impuestos, con un anticipo fijo publicado."""
+        product = self.templates.create({
+            'name': 'Producto Anticipo',
+            'list_price': 100.0,
+            'taxes_id': [Command.clear()],
+            'invoice_policy': 'order',
+        }).product_variant_ids
+        partner = self._create_pricelist_partner(
+            'Cliente Anticipo', self.env['product.pricelist'].create({'name': 'Tarifa Anticipo'}),
+        )
+        order = self._create_confirmed_order(partner, product, qty=10.0)
+        self.env['sale.advance.payment.inv'].create({
+            'sale_order_ids': [Command.set(order.ids)],
+            'advance_payment_method': 'fixed',
+            'fixed_amount': amount,
+        }).create_invoices()
+        down_payment_invoice = order.invoice_ids
+        down_payment_invoice.with_context(bypass_risk=True).action_post()
+        self.assertEqual(down_payment_invoice.state, 'posted')
+        return order, down_payment_invoice
+
+    def test_wizard_skips_down_payment_line(self):
+        """El wizard no descuenta el anticipo: la factura final lo deduce completo."""
+        self._enable_line_discounts()
+        order, down_payment_invoice = self._create_order_with_posted_down_payment(300.0)
+        product_line = order.order_line.filtered(lambda l: l.product_id and not l.is_downpayment)
+        down_payment_line = order.order_line.filtered(lambda l: l.is_downpayment and not l.display_type)
+        self.assertEqual(round(down_payment_line.price_unit, 2), 300.0)
+
+        self._apply_discount_wizard(order, 0.10)
+        self.assertEqual(round(product_line.discount, 2), 10.0)
+        self.assertEqual(self._line_badge(product_line), ('manual', 'Desc. Manual (10.0%)'))
+        self.assertEqual(down_payment_line.discount, 0.0)
+        self.assertEqual(down_payment_line.pricing_rule_type, 'none')
+        self.assertEqual(order.amount_total, 900.0)
+
+        final_invoice = order._create_invoices(final=True)
+        deduction = final_invoice.invoice_line_ids.filtered('is_downpayment')
+        self.assertEqual(deduction.discount, 0.0)
+        self.assertEqual(deduction.price_subtotal, -300.0)
+        self.assertEqual(final_invoice.amount_total, 600.0)
+        self.assertEqual(down_payment_invoice.amount_total + final_invoice.amount_total, order.amount_total)
+
+    def test_down_payment_line_rejects_discount(self):
+        """La línea de anticipo no admite descuento manual ni por escritura directa."""
+        self._enable_line_discounts()
+        order, _down_payment_invoice = self._create_order_with_posted_down_payment(300.0)
+        product_line = order.order_line.filtered(lambda l: l.product_id and not l.is_downpayment)
+        down_payment_line = order.order_line.filtered(lambda l: l.is_downpayment and not l.display_type)
+
+        self.assertTrue(product_line.manual_discount_allowed)
+        self.assertFalse(down_payment_line.manual_discount_allowed)
+        with self.assertRaises(ValidationError):
+            down_payment_line.write({'discount': 10.0})
+        self.assertEqual(down_payment_line.discount, 0.0)
+
+    def test_down_payment_line_has_no_price_origin(self):
+        """Publicar el anticipo escribe su importe en la línea sin marcarlo como precio manual."""
+        self._enable_line_discounts()
+        order, _down_payment_invoice = self._create_order_with_posted_down_payment(300.0)
+        down_payment_line = order.order_line.filtered(lambda l: l.is_downpayment and not l.display_type)
+
+        self.assertEqual(round(down_payment_line.price_unit, 2), 300.0)
+        self.assertFalse(down_payment_line.price_origin)
+        self.assertFalse(down_payment_line.price_origin_label)
+
     def test_saved_line_qty_change_follows_pricelist(self):
         """Línea guardada sin manual: subir a un escalón de tarifa actualiza precio y origen."""
         self._enable_line_discounts()
