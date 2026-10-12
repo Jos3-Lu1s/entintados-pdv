@@ -129,9 +129,18 @@ patch(ProductScreen.prototype, {
             : String(price);
     },
 
+    getAvailableQty(product) {
+        const stock = Number(product.pos_stock_qty || 0);
+        const inOrder = Number(this.state.quantityByProductTmplId?.[product.id] || 0);
+        return Number((stock - inOrder).toFixed(3));
+    },
+
     isProductOutOfStock(product) {
-        return requiresPosStock(product) && Number(product.pos_stock_qty || 0) <= 0 &&
-            !this.pos.getOrder()?.preset_id?.is_return;
+        return (
+            requiresPosStock(product) &&
+            this.getAvailableQty(product) <= 0 &&
+            !this.pos.getOrder()?.preset_id?.is_return
+        );
     },
 
     async addProductToOrder(productTmpl) {
@@ -147,8 +156,13 @@ patch(ProductScreen.prototype, {
                 return;
             }
             if (this.isProductOutOfStock(productTmpl)) {
-                this.pos.notification.add("Este producto no tiene existencias disponibles.",
-                    { type: "warning" });
+                const inOrder = Number(this.state.quantityByProductTmplId?.[productTmpl.id] || 0);
+                this.pos.notification.add(
+                    inOrder > 0
+                        ? `Ya agregaste todas las existencias disponibles (${inOrder}).`
+                        : "Este producto no tiene existencias disponibles.",
+                    { type: "warning" }
+                );
                 return;
             }
         }
@@ -179,5 +193,21 @@ patch(ProductScreen.prototype, {
             order.uiState.selectedTintColor = null;
             order.uiState.selectedTintColorId = null;
         }
+    },
+      toggleStockFilter(mode) {
+        this.tintUi.stockFilter = this.tintUi.stockFilter === mode ? null : mode;
+    },
+
+    /** Con existencias: cantidad > 0. Sin existencias: producto controlado con cantidad <= 0. */
+    matchesStockFilter(product, mode) {
+        const qty = Number(product.pos_stock_qty || 0);
+        return mode === "in_stock" ? qty > 0 : requiresPosStock(product) && qty <= 0;
+    },
+
+    /** Lista de la tabla: parte de lo que ya devuelve pos.productsToDisplay y le aplica el filtro. */
+    getListProducts() {
+        const products = this.pos.productsToDisplay;
+        const mode = this.tintUi.stockFilter;
+        return mode ? products.filter((p) => this.matchesStockFilter(p, mode)) : products;
     },
 });

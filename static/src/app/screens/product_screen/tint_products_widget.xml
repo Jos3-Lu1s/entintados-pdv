@@ -24,6 +24,24 @@
 
                 <!-- Acciones contextuales según pestaña activa -->
                 <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                     <!-- Filtro de existencias (solo en vista lista) -->
+                    <div t-if="tintUi.tab === 'products' and tintUi.viewMode === 'list'"
+                         class="btn-group btn-group-sm rounded-pill border bg-light p-1" role="group" aria-label="Filtro de existencias">
+                        <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1 text-nowrap"
+                                t-att-class="tintUi.stockFilter === 'in_stock' ? 'bg-success text-white shadow-xs fw-semibold' : 'text-secondary-emphasis bg-transparent'"
+                                t-on-click="() => this.toggleStockFilter('in_stock')"
+                                title="Mostrar solo productos con existencias">
+                            <i class="fa fa-check-circle"/>
+                            <span class="small">Con existencias</span>
+                        </button>
+                        <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1 text-nowrap"
+                                t-att-class="tintUi.stockFilter === 'out_of_stock' ? 'bg-danger text-white shadow-xs fw-semibold' : 'text-secondary-emphasis bg-transparent'"
+                                t-on-click="() => this.toggleStockFilter('out_of_stock')"
+                                title="Mostrar solo productos sin existencias">
+                            <i class="fa fa-ban"/>
+                            <span class="small">Sin existencias</span>
+                        </button>
+                    </div>
                     <!-- Vista Productos: Alternador Cuadrícula / Lista -->
                     <div t-if="tintUi.tab === 'products'" class="btn-group btn-group-sm rounded-pill border bg-light p-1" role="group" aria-label="Vista de productos">
                         <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1"
@@ -69,11 +87,12 @@
 
         <!-- Tabla de productos en modo lista -->
         <xpath expr="//div[hasclass('search-more-button')]" position="before">
-            <div t-if="!pos.config.module_pos_restaurant and tintUi.tab !== 'tint' and tintUi.viewMode === 'list' and !pos.scanning"
-                 class="o-tint-list d-flex flex-column flex-grow-1 min-h-0 px-2 pb-2 overflow-hidden">
-                <TintTable t-if="pos.productsToDisplay.length" columns="productListColumns">
+           <div t-if="!pos.config.module_pos_restaurant and tintUi.tab !== 'tint' and tintUi.viewMode === 'list' and !pos.scanning"
+                class="o-tint-list d-flex flex-column flex-grow-1 min-h-0 px-2 pb-2 overflow-hidden">
+                <t t-set="filteredList" t-value="getListProducts()"/>
+                <TintTable t-if="filteredList.length" columns="productListColumns">
                     <t t-set-slot="rows">
-                        <tr t-foreach="pos.productsToDisplay" t-as="product" t-key="product.id"
+                        <tr t-foreach="filteredList" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
                             t-att-class="isProductOutOfStock(product) ? 'opacity-50' : ''"
                             t-att-aria-disabled="isProductOutOfStock(product) ? 'true' : 'false'"
@@ -97,8 +116,8 @@
                                 <span class="text-secondary-emphasis small" t-esc="product.uom_id and product.uom_id.name or '—'"/>
                             </td>
                             <td class="py-2 text-end text-nowrap"
-                                t-att-class="product.is_storable and product.pos_stock_qty &lt;= 0 ? 'text-danger fw-bold' : ''">
-                                <span t-esc="product.is_storable ? product.pos_stock_qty : '—'"/>
+                                t-att-class="product.is_storable and getAvailableQty(product) &lt;= 0 ? 'text-danger fw-bold' : 'text-success fw-bold'">
+                                <span t-esc="product.is_storable ? getAvailableQty(product) : '—'"/>
                             </td>
                             <td class="py-2 text-end fw-bold text-nowrap text-dark fs-6" t-esc="tintRowPriceFormatted(product)"/>
                         </tr>
