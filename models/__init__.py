@@ -39,6 +39,7 @@ from . import pos_order_line
 from . import pos_order
 from . import pos_stock
 from . import pos_customer
+from . import pos_order_split_invoice_wizard
 from . import vendor_credit_wizard
 from . import account_payment_register
 from . import account_move

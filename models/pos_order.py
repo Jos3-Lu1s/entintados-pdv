@@ -69,24 +69,32 @@ class PosOrder(models.Model):
 
     def _create_invoice(self, move_vals):
         n = self.invoice_split_count if len(self) == 1 else 1
-        _logger.info("[ENTINTADOS] _create_invoice orden=%s n=%s", self.mapped("name"), n)
         if n <= 1 or self.is_refund:
             return super()._create_invoice(move_vals)
         if self.config_id.cash_rounding:
             raise UserError(_("No se puede dividir la factura cuando el POS usa redondeo de efectivo."))
 
         AccountMove = self.env["account.move"].sudo().with_company(self.company_id)
+        currency = self.currency_id
         invoices = self.env["account.move"].browse()
-        for i, vals in enumerate(self._entintados_split_move_vals(move_vals, n), start=1):
-            invoice = AccountMove.with_context(
-                default_move_type=vals["move_type"], linked_to_pos=True
-            ).create(vals)
-            invoice.message_post(body=_(
-                "Factura %(i)s de %(n)s creada desde el punto de venta (orden %(order)s).",
-                i=i, n=n, order=self.name,
-            ))
+        vals_list = self._entintados_split_move_vals(move_vals, n)
+
+        for i, vals in enumerate(vals_list, start=1):
+            ctx_move = AccountMove.with_context(
+                default_move_type=vals["move_type"], linked_to_pos=True)
+            if i == n:
+                target = currency.round(self.amount_total - sum(invoices.mapped("amount_total")))
+                invoice, note = self._entintados_create_balanced_invoice(
+                    ctx_move, vals, target, 0.05 * n)
+            else:
+                invoice, note = ctx_move.create(vals), None
+            body = _("Factura %(i)s de %(n)s creada desde el punto de venta (orden %(order)s).",
+                     i=i, n=n, order=self.name)
+            if note:
+                body += " " + _("Redondeo: %s", note)
+            invoice.message_post(body=body)
             invoices |= invoice
-        self._entintados_adjust_rounding(invoices)
+
         self.split_invoice_ids = invoices
         return invoices[0]
 
@@ -99,6 +107,7 @@ class PosOrder(models.Model):
             return res
 
         company = self.company_id
+
         extras.filtered(lambda m: m.state == "draft").sudo().with_company(company) \
             .with_context(**self._get_invoice_post_context())._post()
 
@@ -117,31 +126,109 @@ class PosOrder(models.Model):
                 extra.with_context(skip_invoice_sync=True)._generate_and_send()
         return res
 
-    def _entintados_adjust_rounding(self, invoices):
-        """La última factura absorbe el desfase de redondeo para que la suma
-        de las facturas sea igual al total de la orden."""
+    """ def _entintados_adjust_rounding(self, invoices):
+       
+        _logger.warning("[ENTINTADOS] AJUSTE LLAMADO orden=%s facturas=%s",
+                        self.name, invoices.mapped("name"))
         currency = self.currency_id
         last = invoices[-1]
         target = currency.round(self.amount_total - sum(invoices[:-1].mapped("amount_total")))
         diff = currency.round(last.amount_total - target)
-        if currency.is_zero(diff) or abs(diff) > 0.05:
-            return
+        _logger.warning("[ENTINTADOS] total_orden=%s objetivo=%s ultima=%s diff=%s estado=%s",
+                        self.amount_total, target, last.amount_total, diff, last.state)
+        result = ""
 
-        lines = last.invoice_line_ids.filtered(lambda l: not l.display_type and l.quantity)
-        if not lines:
-            return
-        line = max(lines, key=lambda l: l.price_subtotal)
-        original = line.price_unit
-        sign = 1 if diff > 0 else -1
+        if currency.is_zero(diff):
+            result = "sin diferencia"
+        elif abs(diff) > 0.10:
+            result = "diferencia demasiado grande (%s)" % diff
+        else:
+            lines = last.invoice_line_ids.filtered(lambda l: not l.display_type and l.quantity)
+            ordered = list(lines.sorted("sequence", reverse=True))
+            step = currency.rounding
+            done = False
+            for k in range(1, 11):
+                for line in ordered:
+                    original = line.price_unit
+                    for sign in (-1, 1):
+                        line.write({"price_unit": original + sign * step * k})
+                        last.invalidate_recordset()
+                        _logger.warning("[ENTINTADOS] intento k=%s sign=%s linea=%s precio=%s -> total=%s",
+                                        k, sign, line.id, line.price_unit, last.amount_total)
+                        if currency.is_zero(last.amount_total - target):
+                            result = "ajustado: precio %s -> %s" % (original, line.price_unit)
+                            done = True
+                            break
+                    if done:
+                        break
+                    line.write({"price_unit": original})
+                if done:
+                    break
+            if not done:
+                result = "no se pudo cuadrar (diferencia %s)" % diff
 
-        for k in range(1, 8):
-            line.price_unit = original - sign * 0.01 * k
-            if currency.is_zero(last.amount_total - target):
-                _logger.info("[ENTINTADOS] redondeo ajustado: precio %s -> %s",
-                             original, line.price_unit)
-                return
-        line.price_unit = original
-        _logger.warning("[ENTINTADOS] no se pudo ajustar el redondeo (diff=%s)", diff)
+        last.message_post(body="Redondeo de división: objetivo %s, total de esta factura %s. Resultado: %s"
+                          % (target, last.amount_total, result))
+        return True """
+    
+    def _entintados_create_balanced_invoice(self, AccountMove, vals, target, max_diff):
+        """Crea la última factura y, si su total no coincide con el objetivo,
+        la recrea con el precio unitario de una línea ajustado en centavos."""
+        currency = self.currency_id
+        invoice = AccountMove.create(vals)
+        diff = currency.round(invoice.amount_total - target)
+        if currency.is_zero(diff):
+            return invoice, _("total cuadrado sin ajuste")
+        if abs(diff) > max_diff:
+            return invoice, _("diferencia demasiado grande (%s), sin ajuste", diff)
+
+        cmds = vals["invoice_line_ids"]
+        candidates = [
+            idx for idx, c in enumerate(cmds)
+            if c[0] == 0 and isinstance(c[2], dict)
+            and not c[2].get("display_type") and c[2].get("quantity")
+        ]
+        candidates.sort(
+            key=lambda idx: cmds[idx][2].get("price_unit", 0.0) * cmds[idx][2].get("quantity", 0.0),
+            reverse=True,
+        )
+        step = currency.rounding
+        sign = -1 if diff > 0 else 1     # bajar si sobra, subir si falta
+
+        for idx in candidates[:2]:
+            line = cmds[idx][2]
+            qty = line["quantity"]
+            # Tasa de impuestos de la línea (si no se puede leer, se asume 16%)
+            tax_ids = []
+            for c in line.get("tax_ids") or []:
+                if c[0] == 6:
+                    tax_ids = list(c[2])
+                elif c[0] == 4:
+                    tax_ids.append(c[1])
+            taxes = self.env["account.tax"].browse(tax_ids).filtered(
+                lambda t: t.amount_type == "percent" and not t.price_include)
+            rate = sum(taxes.mapped("amount")) / 100.0 if taxes else 0.16
+            # Cuánto mueve el total de la factura cada centavo del precio unitario
+            per_step = qty * step * (1 + rate)
+            k_est = max(1, int(round(abs(diff) / per_step))) if per_step else 1
+
+            for k in range(max(1, k_est - 2), k_est + 3):
+                new_cmds = list(cmds)
+                new_line = dict(line)
+                old_price = line.get("price_unit", 0.0)
+                new_line["price_unit"] = old_price + sign * step * k
+                new_cmds[idx] = (0, cmds[idx][1], new_line)
+                invoice.unlink()
+                invoice = AccountMove.create(dict(vals, invoice_line_ids=new_cmds))
+                if currency.is_zero(invoice.amount_total - target):
+                    return invoice, _(
+                        "ajustado: precio de la línea %(idx)s %(old)s -> %(new)s",
+                        idx=idx + 1, old=old_price, new=new_line["price_unit"])
+
+        # Sin éxito: se deja la factura original, sin ajustar
+        invoice.unlink()
+        invoice = AccountMove.create(vals)
+        return invoice, _("no se pudo cuadrar (diferencia %s)", diff)
     
     @api.depends("account_move", "split_invoice_ids")
     def _compute_entintados_invoice_count(self):
@@ -160,4 +247,14 @@ class PosOrder(models.Model):
             "type": "ir.actions.act_window",
             "domain": [("id", "in", invoices.ids)],
             "context": {"default_move_type": "out_invoice"},
+        }
+    def action_open_split_invoice_wizard(self):
+        self.ensure_one()
+        return {
+            "name": _("Facturar en varias facturas"),
+            "type": "ir.actions.act_window",
+            "res_model": "pos.order.split.invoice.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_order_id": self.id, "default_invoice_count": 2},
         }
