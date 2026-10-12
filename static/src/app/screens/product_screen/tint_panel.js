@@ -13,6 +13,7 @@ import {
 import { addTintedFromCard } from "@entintados_pdv/app/utils/tint_flow";
 import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
 import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
+import { requiresPosStock } from "@entintados_pdv/app/utils/pos_stock";
 
 /**
  * Panel de entintado. Permite seleccionar color, filtrar por galería,
@@ -32,6 +33,7 @@ export class TintPanel extends Component {
         this.panelState = useState({
             isGeneratingSizes: false,
             showTechnicalDetails: false,
+            stockFilter: null,
         });
         // Modo debug para diagnósticos del catálogo.
         this.isDebug = Boolean(odoo.debug);
@@ -60,6 +62,7 @@ export class TintPanel extends Component {
             { label: "Tipo de base", class: "text-nowrap", style: "width: 130px;" },
             { label: "Presentación", class: "text-nowrap", style: "width: 130px;" },
             { label: "Dosis fórmula", class: "text-end text-nowrap", style: "width: 130px;" },
+            { label: "Existencias", class: "text-end text-nowrap", style: "width: 120px;" },
             { label: "Precio", class: "text-end text-nowrap", style: "width: 120px;" },
         ];
     }
@@ -604,6 +607,53 @@ export class TintPanel extends Component {
     toggleTechnicalDetails() {
         this.panelState.showTechnicalDetails = !this.panelState.showTechnicalDetails;
     }
+     // Existencias de las bases
+
+    toggleStockFilter(mode) {
+        this.panelState.stockFilter = this.panelState.stockFilter === mode ? null : mode;
+    }
+
+    /** Existencias disponibles = cargadas − unidades del mismo producto ya en la orden actual. */
+    getAvailableQty(baseProduct) {
+        const tmpl = baseProduct?.product_tmpl_id;
+        const stock = Number(tmpl?.pos_stock_qty || 0);
+        let inOrder = 0;
+        for (const line of this.pos.getOrder()?.lines || []) {
+            if (!line.is_reward_line && line.product_id?.product_tmpl_id?.id === tmpl?.id) {
+                inOrder += Number(line.qty || 0);
+            }
+        }
+        return Number((stock - inOrder).toFixed(3));
+    }
+
+    isBaseStorable(baseProduct) {
+        return Boolean(baseProduct?.product_tmpl_id?.is_storable);
+    }
+
+    isBaseOutOfStock(baseProduct) {
+        const tmpl = baseProduct?.product_tmpl_id;
+        return (
+            Boolean(tmpl) &&
+            requiresPosStock(tmpl) &&
+            this.getAvailableQty(baseProduct) <= 0 &&
+            !this.pos.getOrder()?.preset_id?.is_return
+        );
+    }
+
+    /** Con existencias: disponible > 0. Sin existencias: controlado con disponible <= 0. */
+    matchesStockFilter(baseProduct, mode) {
+        const qty = this.getAvailableQty(baseProduct);
+        return mode === "in_stock"
+            ? qty > 0
+            : requiresPosStock(baseProduct.product_tmpl_id) && qty <= 0;
+    }
+
+    /** Tarjetas de bases con el filtro de existencias aplicado. */
+    get displayCards() {
+        const mode = this.panelState.stockFilter;
+        const cards = this.cards;
+        return mode ? cards.filter((c) => this.matchesStockFilter(c.baseProduct, mode)) : cards;
+    }
 
     // Interacción
 
@@ -634,6 +684,24 @@ export class TintPanel extends Component {
     }
 
     async addCard(card) {
+        if (this.isBaseOutOfStock(card.baseProduct)) {
+            try {
+                await this.pos.refreshProductStock([card.baseProduct]);
+            } catch {
+                this.notification.add(
+                    _t("No se pudieron consultar las existencias. Revisa la conexión."),
+                    { type: "warning" }
+                );
+                return;
+            }
+            if (this.isBaseOutOfStock(card.baseProduct)) {
+                this.notification.add(
+                    _t("Esta base no tiene existencias disponibles."),
+                    { type: "warning" }
+                );
+                return;
+            }
+        }
         await addTintedFromCard(this, {
             baseProduct: card.baseProduct,
             formula: card.formula,
