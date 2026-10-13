@@ -66,6 +66,22 @@
 
                     <!-- Right: Acciones del color y filtros -->
                     <div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                        <div class="btn-group btn-group-sm rounded-pill border bg-light p-1" role="group" aria-label="Filtro de existencias">
+                            <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1 text-nowrap"
+                                    t-att-class="panelState.stockFilter === 'in_stock' ? 'bg-success text-white shadow-xs fw-semibold' : 'text-secondary-emphasis bg-transparent'"
+                                    t-on-click="() => this.toggleStockFilter('in_stock')"
+                                    title="Mostrar solo bases con existencias">
+                                <i class="fa fa-check-circle"/>
+                                <span class="small">Con existencias</span>
+                            </button>
+                            <button class="btn btn-sm rounded-pill px-3 py-1 border-0 d-flex align-items-center gap-1 text-nowrap"
+                                    t-att-class="panelState.stockFilter === 'out_of_stock' ? 'bg-danger text-white shadow-xs fw-semibold' : 'text-secondary-emphasis bg-transparent'"
+                                    t-on-click="() => this.toggleStockFilter('out_of_stock')"
+                                    title="Mostrar solo bases sin existencias">
+                                <i class="fa fa-ban"/>
+                                <span class="small">Sin existencias</span>
+                            </button>
+                        </div>
                         <button t-if="canGenerateOtherSizesForColor"
                                 class="btn btn-xs btn-outline-primary rounded-pill px-2 py-1 shadow-xs text-nowrap"
                                 title="Generar fórmulas para las demás presentaciones compatibles de este color"
@@ -257,8 +273,12 @@
 
                         <TintTable t-elif="cards.length" columns="baseColumns">
                             <t t-set-slot="rows">
-                                <tr t-foreach="cards" t-as="card" t-key="card.key"
+                                <!-- NUEVO: lista ya filtrada por existencias -->
+                                <t t-set="visibleCards" t-value="displayCards"/>
+                                <tr t-foreach="visibleCards" t-as="card" t-key="card.key"
                                     class="o-tint-row-tr"
+                                    t-att-class="isBaseOutOfStock(card.baseProduct) ? 'opacity-50' : ''"
+                                    t-att-title="isBaseOutOfStock(card.baseProduct) ? 'Sin existencias disponibles' : ''"
                                     t-on-click="() => this.addCard(card)">
                                     <td class="py-2 text-nowrap">
                                         <span class="text-secondary-emphasis font-monospace small" t-esc="card.defaultCode or card.baseProduct.default_code or card.baseProduct.product_tmpl_id?.default_code or '—'"/>
@@ -278,6 +298,11 @@
                                             (<t t-esc="card.totalPoints"/> Pts)
                                         </small>
                                     </td>
+                                    <!-- NUEVO: columna Existencias, entre Dosis fórmula y Precio -->
+                                    <td class="py-2 text-end text-nowrap"
+                                        t-att-class="isBaseStorable(card.baseProduct) and getAvailableQty(card.baseProduct) &lt;= 0 ? 'text-danger fw-bold' : 'text-success fw-bold'">
+                                        <span t-esc="isBaseStorable(card.baseProduct) ? getAvailableQty(card.baseProduct) : '—'"/>
+                                    </td>
                                     <td class="py-2 text-end fw-bold text-nowrap fs-6">
                                         <span class="text-success" t-esc="formatPrice(card.price)"/>
                                         <t t-if="card.priceStatus === 'adjusted_min'">
@@ -286,6 +311,12 @@
                                         <t t-elif="card.priceStatus === 'adjusted_max'">
                                             <span class="badge rounded-pill bg-info-subtle text-info-emphasis border ms-1 text-xxs px-1" title="Ajustado al precio máximo de la línea">Máx</span>
                                         </t>
+                                    </td>
+                                </tr>
+                                <!-- NUEVO: mensaje cuando el filtro no deja ninguna base -->
+                                <tr t-if="!visibleCards.length">
+                                    <td t-att-colspan="baseColumns.length" class="text-center text-secondary-emphasis py-4">
+                                        Ninguna base coincide con el filtro de existencias
                                     </td>
                                 </tr>
                             </t>
