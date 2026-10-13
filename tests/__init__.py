@@ -19,3 +19,4 @@ from . import test_sale_line_edit_lock
 from . import test_product_default_code
 from . import test_colorant_not_sold_alone
 from . import test_commercial_agreements_access
+from . import test_partner_merge_agreements
