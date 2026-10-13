@@ -180,6 +180,16 @@ class SaleOrderLine(models.Model):
             return True
         # Se inyectan valores del acuerdo: no deben volver al llamador, que puede reutilizar `vals`.
         vals = dict(vals)
+        if (
+            'price_unit' not in vals
+            and 'product_id' not in vals
+            and not self.env.context.get('skip_manual_discount_breakdown')
+        ):
+            # El formulario fuerza el envío del origen aunque `price_unit` no viaje (precio
+            # bloqueado): escribirlo protegería del recálculo a todo `_compute_price_unit` y el
+            # precio de la tarifa no se guardaría.
+            vals.pop('price_origin', None)
+            vals.pop('price_origin_label', None)
         recompute_lines = self.browse()
         # Precio fijo en la UdM del producto y la moneda de la compañía, por línea: se convierte a
         # su UdM y moneda finales tras el write.

@@ -73,13 +73,14 @@
                 </xpath>
 
                 <xpath expr="//field[@name='property_product_pricelist']" position="after">
-                    <field name="discount" widget="percentage"/>
+                    <field name="commercial_agreements_editable" invisible="1"/>
+                    <field name="discount" widget="percentage" readonly="not commercial_agreements_editable"/>
                 </xpath>
 
                 <xpath expr="//notebook" position="inside">
                     <page string="Acuerdos comerciales" name="commercial_agreements" invisible="not is_sales_contact">
                         <field name="is_sales_contact" invisible="1"/>
-                        <field name="discount_rule_ids">
+                        <field name="discount_rule_ids" readonly="not commercial_agreements_editable">
                             <list editable="bottom">
                                 <field name="applied_on"/>
                                 <field name="rule_type"/>

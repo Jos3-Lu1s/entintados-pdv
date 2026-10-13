@@ -202,6 +202,55 @@ class TestSaleLineEditLock(TransactionCase):
                 self.assertEqual(self._db_values(line), screen)
                 self.assertNotEqual(line.pricing_rule_type, 'manual')
 
+    def _create_tier_pricelist(self, tiers):
+        """Tarifa con un precio fijo de `self.product` por cada `(cantidad mínima, precio)`."""
+        return self.env['product.pricelist'].create({
+            'name': 'Tarifa Escalones Bloqueo',
+            'item_ids': [(0, 0, {
+                'applied_on': '0_product_variant',
+                'product_id': self.product.id,
+                'min_quantity': min_quantity,
+                'compute_price': 'fixed',
+                'fixed_price': price,
+            }) for min_quantity, price in tiers],
+        })
+
+    def test_locked_tier_change_saves_screen_price(self):
+        """Con el precio bloqueado, cruzar un escalón de la tarifa guarda el precio de la pantalla."""
+        self._set_company_flags(price=False)
+        self._set_exempt_groups(self.salesman)
+        dozen = self.env.ref('uom.product_uom_dozen')
+        one_tier = [(3, 90.0)]
+        two_tiers = [(3, 90.0), (10, 80.0)]
+
+        scenarios = (
+            ('cantidad 1 a 3', one_tier, 1.0, False, {'product_uom_qty': 3.0}, 90.0, 'pricelist'),
+            ('cantidad 3 a 1', one_tier, 3.0, False, {'product_uom_qty': 1.0}, 100.0, 'list'),
+            ('Unidad a Docena', one_tier, 1.0, False, {'product_uom_id': dozen}, 1080.0, 'pricelist'),
+            ('pedido confirmado, cantidad 1 a 3', one_tier, 1.0, True, {'product_uom_qty': 3.0}, 90.0, 'pricelist'),
+            ('escalón 3 a escalón 10', two_tiers, 3.0, False, {'product_uom_qty': 10.0}, 80.0, 'pricelist'),
+        )
+        for label, tiers, qty, confirm, line_values, price, origin in scenarios:
+            with self.subTest(label):
+                partner = self._create_partner(f'Cliente Escalón {label}', self._create_tier_pricelist(tiers))
+                order = self.env['sale.order'].create({
+                    'partner_id': partner.id,
+                    'user_id': self.salesman.id,
+                    'order_line': [(0, 0, {'product_id': self.product.id, 'product_uom_qty': qty})],
+                })
+                if confirm:
+                    order.action_confirm()
+                    self.assertEqual(order.state, 'sale')
+                with Form(order.with_user(self.salesman)) as order_form:
+                    with order_form.order_line.edit(0) as line_form:
+                        for field_name, value in line_values.items():
+                            setattr(line_form, field_name, value)
+                        screen = self._screen_values(line_form)
+                line = order.order_line
+                self.assertEqual(screen, (price, 0.0, 'none', origin))
+                self.assertEqual(self._db_values(line), screen)
+                self.assertEqual(round(line.price_subtotal, 2), round(price * line.product_uom_qty, 2))
+
     def test_discount_button_hidden_when_locked(self):
         """Los dos botones "Descuento" se ocultan cuando el descuento está bloqueado."""
         arch = self.env['sale.order'].with_user(self.salesman).get_views([(False, 'form')])['views']['form']['arch']
