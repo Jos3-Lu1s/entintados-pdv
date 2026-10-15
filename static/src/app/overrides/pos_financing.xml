@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.DeferredPaymentButtons" t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('payment-buttons')]" position="inside">
+            <div class="d-flex flex-column gap-1" t-if="!currentOrder.isRefund and !currentOrder.is_settling_account">
+                <button class="btn btn-secondary btn-lg" t-on-click="() => this.setDeferredPayment('ppd_partial')">Pago inicial + saldo PPD</button>
+                <button class="btn btn-secondary btn-lg" t-on-click="() => this.setDeferredPayment('credit')">Crédito autorizado</button>
+                <button t-if="currentOrder.pos_payment_flow === 'ppd_partial' or currentOrder.pos_payment_flow === 'credit'" class="btn btn-link" t-on-click="() => this.clearDeferredPayment()">Cambiar a pago completo</button>
+                <div class="text-muted small">Para PPD, captura primero lo que el cliente paga hoy. El resto quedará por cobrar.</div>
+                <div t-if="currentOrder.pos_payment_flow === 'ppd_partial' or currentOrder.pos_payment_flow === 'credit'" class="alert alert-info mb-0" role="status">
+                    <t t-esc="deferredPaymentSummary"/>
+                </div>
+            </div>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.CollectOutstandingInvoice" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
+            <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="() => this.onClickCollectOutstandingInvoice()">
+                <i class="fa fa-money me-1"/>Cobrar saldo pendiente
+            </button>
+        </xpath>
+    </t>
+</templates>

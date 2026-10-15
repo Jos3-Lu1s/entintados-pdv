@@ -4,3 +4,4 @@ from . import crm_field_visit_confirm_wizard
 from . import crm_material_request_partner_wizzard
 from . import sale_order_discount
 from . import crm_material_auditor_assign_wizard
+from . import advance_accounting

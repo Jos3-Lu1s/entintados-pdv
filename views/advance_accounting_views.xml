@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="advance_accounting_settings" model="ir.ui.view">
+        <field name="name">res.config.settings.advances</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="entintados_pdv.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='partner_financial_risk_setting_container']" position="after">
+                <block title="Anticipos y riesgo financiero" id="advance_accounting_settings">
+                    <setting string="Anticipos de clientes y proveedores" company_dependent="1">
+                        <field name="advance_risk_enabled"/>
+                        <div class="content-group">
+                            <label for="downpayment_account_id" string="Cuenta de anticipos de clientes"/>
+                            <field name="downpayment_account_id" domain="[('account_type', '=', 'liability_current'), ('reconcile', '=', True), ('company_ids', 'in', company_id)]"/>
+                            <label for="supplier_advance_account_id"/>
+                            <field name="supplier_advance_account_id"/>
+                            <label for="advance_product_id"/>
+                            <field name="advance_product_id"/>
+                            <button name="action_setup_advance_accounts" type="object" string="Preparar cuentas y producto de anticipos" class="btn-link" groups="account.group_account_manager"/>
+                            <div class="text-muted">Los impuestos se seleccionan según el comprobante. La preparación no asigna IVA ni modifica los diarios bancarios.</div>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+    <record id="advance_account_move_form" model="ir.ui.view">
+        <field name="name">account.move.advances</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="is_advance_invoice" invisible="1"/>
+                <button name="action_apply_advance" type="object" string="Aplicar anticipo" invisible="move_type not in ('in_invoice', 'out_invoice') or is_advance_invoice or state == 'cancel'" groups="account.group_account_invoice"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_advance_links" type="object" class="oe_stat_button" icon="fa-exchange" invisible="advance_link_count == 0">
+                    <field name="advance_link_count" widget="statinfo" string="Anticipos / aplicaciones"/>
+                </button>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page name="advance_details" string="Anticipos" invisible="move_type not in ('in_invoice', 'out_invoice', 'in_refund', 'out_refund')">
+                    <group>
+                        <group>
+                            <field name="advance_document" readonly="state != 'draft'" invisible="move_type not in ('in_invoice', 'out_invoice')"/>
+                            <field name="advance_fiscal_kind" readonly="state != 'draft'" invisible="not is_advance_invoice"/>
+                            <field name="advance_purchase_id" readonly="state != 'draft'" invisible="move_type != 'in_invoice'"/>
+                            <field name="advance_target_id" readonly="state != 'draft'" invisible="move_type not in ('in_refund', 'out_refund')"/>
+                        </group>
+                        <group invisible="not is_advance_invoice">
+                            <field name="advance_paid"/>
+                            <field name="advance_applied"/>
+                            <field name="advance_reserved"/>
+                            <field name="advance_available"/>
+                        </group>
+                    </group>
+                    <field name="advance_source_ids" readonly="1"/>
+                    <field name="advance_final_ids" readonly="1"/>
+                </page>
+            </xpath>
+        </field>
+    </record>
+    <record id="advance_partner_risk" model="ir.ui.view">
+        <field name="name">res.partner.advances.risk</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="entintados_pdv.res_partner_view_risk"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='financial_risk']/group[@name='risk_general']" position="after">
+                <group string="Anticipos y crédito disponible">
+                    <group>
+                        <field name="risk_gross_total"/>
+                        <field name="risk_pos_open"/>
+                        <field name="customer_advance_available"/>
+                        <field name="advance_purchase_power"/>
+                    </group>
+                    <group>
+                        <field name="supplier_advance_available"/>
+                        <button name="action_view_available_advances" type="object" string="Ver anticipos y aplicaciones" class="btn-link"/>
+                        <div class="text-muted">Los anticipos a proveedores no incrementan el crédito de cliente. Las aplicaciones en borrador reservan saldo hasta confirmarlas o cancelarlas.</div>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+    <record id="advance_purchase_form" model="ir.ui.view">
+        <field name="name">purchase.order.advances</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_create_advance_invoice" type="object" string="Factura de anticipo" invisible="state != 'purchase'" groups="account.group_account_invoice"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_advance_invoices" type="object" class="oe_stat_button" icon="fa-money" invisible="advance_invoice_count == 0" groups="account.group_account_invoice">
+                    <field name="advance_invoice_count" widget="statinfo" string="Anticipos"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+    <record id="purchase_advance_invoice_form" model="ir.ui.view">
+        <field name="name">purchase.advance.invoice.form</field>
+        <field name="model">purchase.advance.invoice</field>
+        <field name="arch" type="xml">
+            <form string="Factura de anticipo del proveedor">
+                <group>
+                    <field name="purchase_id"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="reference"/>
+                    <field name="fiscal_kind"/>
+                    <field name="amount_type"/>
+                    <field name="amount" invisible="amount_type != 'fixed'"/>
+                    <field name="percentage" invisible="amount_type != 'percentage'"/>
+                    <field name="tax_ids" widget="many2many_tags"/>
+                </group>
+                <p>Registra el comprobante recibido del proveedor. Se prepara una factura en borrador; no se emite un CFDI por cuenta del proveedor ni se registra un pago automáticamente.</p>
+                <footer>
+                    <button name="action_create" type="object" string="Preparar factura" class="btn-primary"/>
+                    <button string="Cancelar" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    <record id="account_advance_apply_form" model="ir.ui.view">
+        <field name="name">account.advance.apply.form</field>
+        <field name="model">account.advance.apply</field>
+        <field name="arch" type="xml">
+            <form string="Aplicar anticipo">
+                <group>
+                    <field name="invoice_id"/>
+                    <field name="company_id" invisible="1"/>
+                    <field name="partner_id" invisible="1"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="source_move_type" invisible="1"/>
+                    <field name="source_id" domain="[('state', '=', 'posted'), ('is_advance_invoice', '=', True), ('move_type', '=', source_move_type), ('commercial_partner_id', '=', partner_id), ('company_id', '=', company_id), ('currency_id', '=', currency_id)]" options="{'no_create': True}"/>
+                    <field name="available"/>
+                    <field name="amount"/>
+                    <field name="mode"/>
+                </group>
+                <p>La aplicación no mueve efectivo. Elige el procedimiento que corresponde a los comprobantes: factura por remanente o factura completa con nota de aplicación. Para proveedores, registra los CFDI recibidos antes de contabilizar.</p>
+                <footer>
+                    <button name="action_apply" type="object" string="Preparar aplicación" class="btn-primary"/>
+                    <button string="Cancelar" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

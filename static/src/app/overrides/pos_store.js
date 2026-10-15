@@ -76,8 +76,16 @@ patch(PosOrder.prototype, {
     _entintadosReconcileDiscounts() {
         const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
         const models = this.models || posStoreInstance?.models;
+        const nativeAdvanceProduct = (this.config || this.config_id || posStoreInstance?.config)?.down_payment_product_id;
 
         for (const line of this.lines || []) {
+            if (line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref ||
+                (line.sale_order_origin_id && line.product_id?.id === nativeAdvanceProduct?.id)) {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
+                continue;
+            }
             if (line.is_reward_line) {
                 continue;
             }

@@ -43,3 +43,6 @@ from . import pos_order_split_invoice_wizard
 from . import vendor_credit_wizard
 from . import account_payment_register
 from . import account_move
+from . import advance_accounting
+from . import advance_pos
+from . import pos_financing

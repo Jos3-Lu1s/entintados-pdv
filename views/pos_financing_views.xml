@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_financing_config" model="ir.ui.view">
+        <field name="name">pos.config.financing</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Pagos parciales y crédito">
+                    <field name="ppd_payment_term_id"/>
+                    <button name="action_prepare_deferred_payments" type="object" string="Preparar saldo pendiente y crédito" class="btn-link" groups="point_of_sale.group_pos_manager"/>
+                    <div class="text-muted">PPD permite un pago inicial sin autorización de crédito. La venta a crédito exige autorización y límite disponible. El saldo pendiente no es dinero recibido en caja.</div>
+                </group>
+            </xpath>
+        </field>
+    </record>
+    <record id="pos_financing_order_form" model="ir.ui.view">
+        <field name="name">pos.order.financing</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="pos_payment_flow" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="pos_financing_invoice_form" model="ir.ui.view">
+        <field name="name">account.move.pos.financing</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_payment_term_id']" position="after">
+                <field name="pos_financing_flow" invisible="pos_financing_flow in (False, 'standard')"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

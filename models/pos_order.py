@@ -235,6 +235,10 @@ class PosOrder(models.Model):
         for order in self:
             order.entintados_invoice_count = len(order.account_move | order.split_invoice_ids)
 
+    def action_view_invoice(self):
+        # Preserve the native button name: pos_sale extends this same button.
+        return self.action_view_invoice_custom()
+
     def action_view_invoice_custom(self):
         self.ensure_one()
         invoices = self.account_move | self.split_invoice_ids

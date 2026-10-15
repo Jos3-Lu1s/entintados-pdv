@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="payment_term_pos_ppd" model="account.payment.term">
+        <field name="name">PPD - saldo pendiente</field>
+        <field name="note">Pago parcial o diferido. El saldo permanece por cobrar.</field>
+        <field name="line_ids" eval="[(5, 0, 0), (0, 0, {'value': 'percent', 'value_amount': 100, 'nb_days': 0})]"/>
+    </record>
+</odoo>

@@ -315,7 +315,7 @@ class ResPartner(models.Model):
             "amount_residual:sum",
             "amount_residual_currency:sum",
         ]
-        groupby = ["partner_id", "account_id", "currency_id"]
+        groupby = ["partner_id", "account_id", "currency_id", "company_id"]
         return {
             "draft": {
                 "domain": company_domain
@@ -371,9 +371,14 @@ class ResPartner(models.Model):
 
     @api.depends(
         "move_line_ids.amount_residual",
+        "move_line_ids.amount_residual_currency",
+        "move_line_ids.parent_state",
+        "move_line_ids.account_id",
+        "move_line_ids.currency_id",
         "move_line_ids.date_maturity",
         "company_id.invoice_unpaid_margin",
     )
+    @api.depends_context('company', 'allowed_company_ids')
     def _compute_risk_account_amount(self):
         self.update(
             {
@@ -412,23 +417,21 @@ class ResPartner(models.Model):
         for (
             partner,
             _account,
-            currency,  # noqa: B007
+            currency,
+            company,
             amount_residual,
             amount_residual_currency,  # noqa: B007
         ) in groups["draft"]["read_group"]:
             if partner.id not in self.ids:
                 continue  # pragma: no cover
-            vals["risk_invoice_draft"] += currency._convert(
-                amount_residual,
-                self.risk_currency_id,
-                self.env.company,
-                fields.Date.context_today(self),
-                round=False,
+            vals["risk_invoice_draft"] += self._get_amount_in_risk_currency(
+                currency, amount_residual_currency, amount_residual, _account, company
             )
         for (
             partner,
             account,
             currency,
+            company,
             amount_residual,
             amount_residual_currency,
         ) in groups["open"]["read_group"]:
@@ -436,16 +439,17 @@ class ResPartner(models.Model):
                 continue  # pragma: no cover
             if self.property_account_receivable_id.id == account.id:
                 vals["risk_invoice_open"] += self._get_amount_in_risk_currency(
-                    currency, amount_residual_currency, amount_residual, account
+                    currency, amount_residual_currency, amount_residual, account, company
                 )
             else:
                 vals["risk_account_amount"] += self._get_amount_in_risk_currency(
-                    currency, amount_residual_currency, amount_residual, account
+                    currency, amount_residual_currency, amount_residual, account, company
                 )
         for (
             partner,
             account,
             currency,
+            company,
             amount_residual,
             amount_residual_currency,
         ) in groups["unpaid"]["read_group"]:
@@ -453,29 +457,23 @@ class ResPartner(models.Model):
                 continue  # pragma: no cover
             if self.property_account_receivable_id.id == account.id:
                 vals["risk_invoice_unpaid"] += self._get_amount_in_risk_currency(
-                    currency, amount_residual_currency, amount_residual, account
+                    currency, amount_residual_currency, amount_residual, account, company
                 )
             else:
                 vals["risk_account_amount_unpaid"] += self._get_amount_in_risk_currency(
-                    currency, amount_residual_currency, amount_residual, account
+                    currency, amount_residual_currency, amount_residual, account, company
                 )
         return vals
 
     def _get_amount_in_risk_currency(
-        self, currency, amount_residual_currency, amount_residual, account
+        self, currency, amount_residual_currency, amount_residual, account, company=None
     ):
-        acc_currency_id = currency.id
-        risk_currency_id = self.risk_currency_id.id
-        if currency.id == risk_currency_id:
+        company = company or self.env.company
+        if currency == self.risk_currency_id:
             return amount_residual_currency
-        elif acc_currency_id == risk_currency_id:
-            return amount_residual
-        return currency._convert(
-            amount_residual,
-            self.risk_currency_id,
-            self.env.company,
-            fields.Date.context_today(self),
-            round=False,
+        return company.currency_id._convert(
+            amount_residual, self.risk_currency_id, company,
+            fields.Date.context_today(self), round=False,
         )
 
     @api.depends(lambda x: x._get_depends_compute_risk_exception())

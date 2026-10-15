@@ -17,6 +17,20 @@ class VendorCreditGroup(models.Model):
     )
 
     credit_id = fields.Many2one('account.move', string='Nota de crédito', readonly=True, copy=False, check_company=True)
+    credit_ids = fields.Many2many(
+        'account.move', 'vendor_credit_group_move_rel', 'group_id', 'move_id',
+        string='Notas de crédito', readonly=True, copy=False, check_company=True,
+    )
+    credit_count = fields.Integer(compute='_compute_credit_count')
+
+    def _get_credits(self):
+        return self.credit_ids | self.credit_id
+
+    @api.depends('credit_ids', 'credit_id')
+    def _compute_credit_count(self):
+        for group in self:
+            group.credit_count = len(group._get_credits())
+
     state = fields.Selection([('draft', 'Borrador'), ('generated', 'Nota generada'), ('cancel', 'Cancelado')], default='draft', required=True, copy=False)
     invoice_count = fields.Integer(compute='_compute_invoice_count')
 
@@ -34,14 +48,22 @@ class VendorCreditGroup(models.Model):
         for group in self:
             if group.state == 'cancel':
                 continue
-            credit = group.credit_id
-            if credit:
+            for credit in group._get_credits():
                 if credit.state == 'posted':
                     credit.button_draft()
                 if credit.state == 'draft':
                     credit.button_cancel()
                 credit.vendor_credit_source_ids = [Command.clear()]
-            group.write({'credit_id': False, 'state': 'cancel'})
+            group.write({'credit_id': False, 'credit_ids': [Command.clear()], 'state': 'cancel'})
+
+    def action_draft(self):
+        for group in self:
+            if group.state != 'cancel':
+                raise UserError(_('Solo puedes restablecer a borrador una agrupación cancelada.'))
+            if group._get_credits():
+                raise UserError(_('Cancela las notas relacionadas antes de restablecer la agrupación.'))
+        self.write({'state': 'draft'})
+        return True
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -50,46 +72,35 @@ class VendorCreditGroup(models.Model):
                 vals['name'] = self.env['ir.sequence'].next_by_code('vendor.credit.group') or _('New')
         return super().create(vals_list)
 
-    @api.depends('credit_id')
-    def _compute_state(self):
-        for record in self:
-            record.state = 'generated' if record.credit_id else 'draft'
-
     def action_open_credit(self):
         self.ensure_one()
-        return {'type': 'ir.actions.act_window', 'res_model': 'account.move', 'view_mode': 'form', 'res_id': self.credit_id.id, 'target': 'current'}
+        return self.env['account.move']._action_open_moves(self._get_credits(), _('Notas de crédito'))
 
     def write(self, vals):
         protected = {'partner_id', 'company_id', 'currency_id', 'journal_id', 'date', 'reason', 'line_ids'}
-        if protected.intersection(vals) and any(self.mapped('credit_id')):
-            raise UserError(_('No puedes modificar una agrupación que ya generó su nota.'))
+        if protected.intersection(vals) and any(
+                group.state != 'draft' or group._get_credits() for group in self):
+            raise UserError(_('Solo puedes modificar una agrupación en borrador.'))
         return super().write(vals)
 
     def unlink(self):
-        if any(self.mapped('credit_id')):
+        if any(group._get_credits() for group in self):
             raise UserError(_('No puedes eliminar una agrupación que ya generó su nota.'))
         return super().unlink()
     
     def _reconcile_credit_with_invoices(self, credit, allocations):
         self.ensure_one()
-        payable = lambda line: line.account_id.account_type == 'liability_payable'
-        credit_line = credit.line_ids.filtered(payable)
-        skipped = []
-        for allocation in allocations:
-            invoice = allocation.invoice_id
-            # Solo se concilia cuando el importe es el saldo completo de la factura
-            if self.currency_id.compare_amounts(allocation.amount, invoice.amount_residual) != 0:
-                skipped.append(invoice.display_name)
-                continue
-            invoice_line = invoice.line_ids.filtered(
-                lambda line: payable(line) and not line.reconciled
-            )
-            (credit_line + invoice_line).reconcile()
-        if skipped:
-            credit.message_post(body=_(
-                'Estas facturas no se concilieron automáticamente porque el importe '
-                'acreditado es menor a su saldo: %s'
-            ) % ', '.join(skipped))
+        invoices = allocations.invoice_id
+        lines = (credit | invoices).line_ids.filtered(
+            lambda line: line.account_id.account_type == 'liability_payable'
+            and not line.reconciled
+        )
+        # Conciliar por cuenta, incluyendo los vencimientos múltiples.
+        for account in lines.account_id:
+            account_lines = lines.filtered(lambda line: line.account_id == account)
+            if (account_lines.filtered(lambda line: line.move_id == credit)
+                    and account_lines.filtered(lambda line: line.move_id in invoices)):
+                account_lines.reconcile()
 
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
     partner_id = fields.Many2one('res.partner', string='Proveedor', required=True, check_company=True)
@@ -137,7 +148,7 @@ class VendorCreditGroup(models.Model):
 
     def action_create_credit(self):
         self.ensure_one()
-        if self.credit_id:
+        if self._get_credits():
             return self.action_open_credit()
         if self.state == 'cancel':
             raise UserError(_('No puedes generar una nota desde una agrupación cancelada.'))
@@ -153,7 +164,7 @@ class VendorCreditGroup(models.Model):
         invoices = selected_lines.mapped('invoice_id')
         if len(invoices) != len(selected_lines):
             raise UserError(_('No puedes repetir una factura.'))
-        commands = []
+        credits = self.env['account.move']
         for allocation in selected_lines:
             invoice = allocation.invoice_id
             if (invoice.move_type != 'in_invoice' or invoice.state != 'posted'
@@ -167,6 +178,7 @@ class VendorCreditGroup(models.Model):
                 raise UserError(_('El importe de %s debe ser mayor que cero y no superar su saldo pendiente.') % invoice.display_name)
             if self.currency_id.compare_amounts(invoice.amount_total, 0) <= 0:
                 raise UserError(_('La factura debe tener un total positivo.'))
+            commands = []
             ratio = allocation.amount / invoice.amount_total
             for line in invoice.invoice_line_ids.filtered(lambda item: item.display_type == 'product'):
                 values = line.copy_data({
@@ -176,27 +188,28 @@ class VendorCreditGroup(models.Model):
                 for key in ('move_id', 'purchase_line_id', 'sale_line_ids'):
                     values.pop(key, None)
                 commands.append(Command.create(values))
-        credit = self.env['account.move'].with_company(self.company_id).with_context(
-            default_move_type='in_refund',
-        ).create({
-            'move_type': 'in_refund', 'partner_id': self.partner_id.id,
-            'company_id': self.company_id.id, 'currency_id': self.currency_id.id,
-            'journal_id': self.journal_id.id, 'invoice_date': self.date, 'date': self.date,
-            'ref': self.reason, 'invoice_origin': ', '.join(invoices.mapped('name')),
-            'vendor_credit_source_ids': [Command.set(invoices.ids)],
-            'invoice_line_ids': commands,
-        })
-        if self.currency_id.compare_amounts(credit.amount_total, self.amount_total):
-            raise UserError(_('Los impuestos o redondeos de estas facturas no permiten obtener exactamente el importe solicitado. Ajusta los importes o genera notas individuales.'))
+            credit = self.env['account.move'].with_company(self.company_id).with_context(
+                default_move_type='in_refund',
+            ).create({
+                'move_type': 'in_refund', 'partner_id': self.partner_id.id,
+                'company_id': self.company_id.id, 'currency_id': self.currency_id.id,
+                'journal_id': self.journal_id.id, 'invoice_date': self.date, 'date': self.date,
+                'ref': self.reason, 'invoice_origin': invoice.name,
+                'vendor_credit_source_ids': [Command.set(invoice.ids)],
+                'invoice_line_ids': commands,
+            })
+            if self.currency_id.compare_amounts(credit.amount_total, allocation.amount):
+                raise UserError(_(
+                    'Los impuestos o redondeos de %s no permiten obtener exactamente '
+                    'el importe solicitado. Ajusta el importe.'
+                ) % invoice.display_name)
+            credit.action_post()
+            self._reconcile_credit_with_invoices(credit, allocation)
+            credits |= credit
         (self.line_ids - selected_lines).unlink()
-        self.write({'credit_id': credit.id, 'state': 'generated'})
-        credit.action_post()
-        self._reconcile_credit_with_invoices(credit, selected_lines)
-        return {
-            'type': 'ir.actions.act_window', 'name': _('Nota de crédito'),
-            'res_model': 'account.move', 'view_mode': 'form', 'res_id': credit.id,
-            'target': 'current', 'context': {'default_move_type': 'in_refund'},
-        }
+        self.write({'credit_ids': [Command.set(credits.ids)], 'state': 'generated'})
+        return self.action_open_credit()
+
 
 
 class VendorCreditGroupLine(models.Model):
@@ -211,20 +224,22 @@ class VendorCreditGroupLine(models.Model):
     amount = fields.Monetary(string='Importe a acreditar (con impuestos)', required=True)
 
     def _check_editable_group(self):
-        if any(self.mapped('group_id.credit_id')):
-            raise UserError(_('No puedes modificar las líneas de una nota generada.'))
+        if any(group.state != 'draft' or group._get_credits() for group in self.group_id):
+            raise UserError(_('Solo puedes modificar las líneas de una agrupación en borrador.'))
 
     @api.model_create_multi
     def create(self, vals_list):
         groups = self.env['vendor.credit.group'].browse([vals['group_id'] for vals in vals_list if vals.get('group_id')])
-        if any(groups.mapped('credit_id')):
-            raise UserError(_('No puedes agregar líneas a una nota generada.'))
+        if any(group.state != 'draft' or group._get_credits() for group in groups):
+            raise UserError(_('Solo puedes agregar líneas a una agrupación en borrador.'))
         return super().create(vals_list)
 
     def write(self, vals):
         self._check_editable_group()
-        if vals.get('group_id') and self.env['vendor.credit.group'].browse(vals['group_id']).credit_id:
-            raise UserError(_('No puedes mover líneas a una nota generada.'))
+        if vals.get('group_id'):
+            group = self.env['vendor.credit.group'].browse(vals['group_id'])
+            if group.state != 'draft' or group._get_credits():
+                raise UserError(_('Solo puedes mover líneas a una agrupación en borrador.'))
         return super().write(vals)
 
     def unlink(self):

@@ -1,0 +1,115 @@
+import { patch } from "@web/core/utils/patch";
+import { _t } from "@web/core/l10n/translation";
+import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
+import { NumberPopup } from "@point_of_sale/app/components/popups/number_popup/number_popup";
+import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
+
+patch(ControlButtons.prototype, {
+    onClickSaleAdvance() {
+        const order = this.pos.getOrder();
+        if (order?.lines.length || order?.payment_ids.length) {
+            this.notification.add(_t("Abre un pedido vacío para cobrar el anticipo de una cotización o pedido de Ventas."), { type: "warning" });
+            return;
+        }
+        this.onClickQuotation();
+    },
+    async onClickAdvances() {
+        const order = this.pos.getOrder();
+        const partner = order?.getPartner();
+        if (!partner) {
+            this.notification.add(_t("Selecciona el cliente para consultar o cobrar anticipos."), { type: "warning" });
+            return;
+        }
+        try {
+            const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
+            const format = (value) => this.pos.env.utils.formatCurrency(value);
+            const action = await makeAwaitable(this.dialog, SelectionPopup, {
+                title: _t("Anticipos: %s · Disponible para comprar: %s", format(info.advance_available),
+                    info.credit_limited ? format(info.purchase_power) : _t("sin límite configurado")),
+                list: [
+                    { id: "collect", label: _t("Registrar anticipo del cliente (saldo a favor)"), item: "collect" },
+                    { id: "apply", label: _t("Aplicar anticipo a esta venta"), item: "apply" },
+                ],
+            });
+            if (!action) {
+                return;
+            }
+            const product = this.pos.config.advance_product_id;
+            const template = product?.product_tmpl_id;
+            if (!template) {
+                this.notification.add(_t("El producto de anticipos no está disponible en este POS. Revisa su configuración y vuelve a cargar la caja."), { type: "warning" });
+                return;
+            }
+            if (action === "collect") {
+                if (order.lines.length || order.payment_ids.length) {
+                    this.notification.add(_t("Cobra el anticipo en un pedido vacío y separado de la venta."), { type: "warning" });
+                    return;
+                }
+                const value = await makeAwaitable(this.dialog, NumberPopup, { title: _t("Importe del anticipo antes de impuestos"), startingValue: "0" });
+                if (value === undefined) {
+                    return;
+                }
+                const amount = Number(value);
+                if (!Number.isFinite(amount) || amount <= 0) {
+                    return;
+                }
+                await this.pos.addLineToCurrentOrder({ product_tmpl_id: template, price_unit: amount, qty: 1, price_type: "manual" });
+                order.setToInvoice(true);
+                return;
+            }
+            const usable = info.sources.filter((source) => source.fiscal_kind !== "fiscal");
+            if (!usable.length) {
+                this.notification.add(_t("No hay anticipos disponibles para aplicar en caja. Los anticipos fiscales se aplican desde Contabilidad."), { type: "warning" });
+                return;
+            }
+            if (!order.lines.length || order.payment_ids.length) {
+                this.notification.add(_t("Agrega los productos de la venta y aplica el anticipo antes de registrar los pagos."), { type: "warning" });
+                return;
+            }
+            const source = await makeAwaitable(this.dialog, SelectionPopup, {
+                title: _t("Selecciona el anticipo"),
+                list: usable.map((item) => ({ id: item.id, label: `${item.name}: ${format(item.available)}`, item })),
+            });
+            if (!source) {
+                return;
+            }
+            const cartReserved = -order.lines.filter((line) => line.advance_source_ref === source.id)
+                .reduce((total, line) => total + line.prices.total_included_currency, 0);
+            const maximum = Math.min(source.available - cartReserved, order.priceIncl);
+            const value = await makeAwaitable(this.dialog, NumberPopup, { title: _t("Importe a aplicar con impuestos"), startingValue: String(maximum) });
+            if (value === undefined) {
+                return;
+            }
+            const amount = Number(value);
+            if (!Number.isFinite(amount) || amount <= 0 || amount > maximum) {
+                this.notification.add(_t("El importe supera el saldo disponible o el total de la venta."), { type: "warning" });
+                return;
+            }
+            const prepared = source.lines.map((original) => {
+                const taxes = original.tax_ids.map((id) => this.pos.models["account.tax"].get(id));
+                if (taxes.some((tax) => !tax)) {
+                    throw new Error(_t("Los impuestos del anticipo no están cargados en la caja."));
+                }
+                if (original.discount) {
+                    throw new Error(_t("Este anticipo tiene descuentos: aplícalo desde Contabilidad."));
+                }
+                if (taxes.some((tax) => tax.amount_type === "fixed")) {
+                    throw new Error(_t("Este anticipo tiene impuestos fijos: aplícalo desde Contabilidad."));
+                }
+                return { original, taxes };
+            });
+            for (const { original, taxes } of prepared) {
+                const line = await this.pos.addLineToCurrentOrder({
+                    product_tmpl_id: template, price_unit: -original.price_unit * amount / source.total,
+                    qty: original.quantity, tax_ids: taxes.map((tax) => ["link", tax]), advance_source_ref: source.id,
+                }, { merge: false });
+                line.advance_source_ref = source.id;
+                line.price_type = "manual";
+            }
+            order.setToInvoice(true);
+        } catch (error) {
+            this.notification.add(error.message || _t("No se pudo consultar el anticipo. Se requiere conexión con el servidor."), { type: "danger" });
+        }
+    },
+});

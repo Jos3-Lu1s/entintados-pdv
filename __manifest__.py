@@ -32,16 +32,21 @@ Catálogo de entintado
     # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Sales/Point of Sale',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.4',
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
+    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
             # Corrección de incompatibilidad Odoo 19 (community vs enterprise pos_settle_due)
             ("after", "web/static/src/core/registry.js", "entintados_pdv/static/src/app/overrides/patch_registry.js"),
+            "entintados_pdv/static/src/app/overrides/advance_controls.js",
+            "entintados_pdv/static/src/app/overrides/advance_controls.xml",
+            "entintados_pdv/static/src/app/overrides/advance_sale_pos.js",
+            "entintados_pdv/static/src/app/overrides/pos_financing.js",
+            "entintados_pdv/static/src/app/overrides/pos_financing.xml",
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
             # Componentes reutilizables (js + xml co-localizados)
@@ -154,6 +159,9 @@ Catálogo de entintado
         'views/res_config_risk_view.xml',
         'views/res_config_settings_sale_views.xml',
         'views/res_partner_risk_view.xml',
+        'views/advance_accounting_views.xml',
+        'data/pos_financing_data.xml',
+        'views/pos_financing_views.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
         'report/report_picking_action.xml',

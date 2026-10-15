@@ -39,6 +39,9 @@ class AccountMove(models.Model):
     def risk_exception_msg(self):
         self.ensure_one()
         partner = self.partner_id.commercial_partner_id
+        incremental_risk = self.risk_amount_total_currency
+        # Draft deductions have already reserved the original advance; do not discount it twice.
+        exposure = max(partner.risk_gross_total + incremental_risk - partner.customer_advance_available, 0)
         exception_msg = ""
         if partner.risk_exception:
             exception_msg = self.env._("Financial risk exceeded.\n")
@@ -50,7 +53,8 @@ class AccountMove(models.Model):
         # If risk_invoice_draft_include this invoice included in risk_total
         elif not partner.risk_invoice_draft_include and (
             partner.risk_invoice_open_include
-            and (partner.risk_total + self.risk_amount_total_currency)
+            and partner.sudo().credit_limit
+            and exposure
             > partner.sudo().credit_limit
         ):
             exception_msg = self.env._("This invoice exceeds the financial risk.\n")

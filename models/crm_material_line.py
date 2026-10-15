@@ -18,6 +18,7 @@ class CrmMaterialLine(models.Model):
         "product.product",
         string="Producto",
         required=True,
+        domain=[('type', '=', 'consu'), ('is_storable', '=', True)]
     )
     
     code_product = fields.Char(

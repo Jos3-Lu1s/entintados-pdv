@@ -18,3 +18,6 @@ from . import test_partner_discount_hierarchy
 from . import test_sale_line_edit_lock
 from . import test_product_default_code
 from . import test_colorant_not_sold_alone
+
+from . import test_vendor_credit_group
+from . import test_advance_accounting
