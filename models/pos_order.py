@@ -235,7 +235,7 @@ class PosOrder(models.Model):
         for order in self:
             order.entintados_invoice_count = len(order.account_move | order.split_invoice_ids)
 
-    def action_view_invoice_custom(self):
+    def action_view_invoice(self):
         self.ensure_one()
         invoices = self.account_move | self.split_invoice_ids
         if len(invoices) <= 1:

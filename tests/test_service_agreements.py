@@ -165,6 +165,7 @@ class TestServiceAgreements(TransactionCase):
         self.assertEqual(line.product_uom_qty, 3)
         self._assert_fixed_price(line, rule, 80.0)
 
+        self.env.user.group_ids |= self.env.ref('product.group_product_pricelist')
         pricelist = self.env['product.pricelist'].create({'name': 'Tarifa Servicios'})
         with Form(order) as order_form:
             order_form.pricelist_id = pricelist
