@@ -396,6 +396,16 @@ class ResPartner(models.Model):
             domain.append(('id', 'not in', exclude_ids))
         return self.sudo().search(domain, limit=1)
 
+    @api.constrains('discount')
+    def _check_discount_range(self):
+        # El widget de porcentaje guarda la fracción: 1.0 equivale al 100 %.
+        for partner in self:
+            if partner.discount < 0.0 or partner.discount > 1.0:
+                raise ValidationError(_(
+                    'El descuento de "%(name)s" debe encontrarse entre 0%% y 100%%.',
+                    name=partner.display_name,
+                ))
+
     @api.constrains('vat')
     def _check_vat_duplicate(self):
         for partner in self:
