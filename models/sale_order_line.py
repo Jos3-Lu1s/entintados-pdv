@@ -289,8 +289,11 @@ class SaleOrderLine(models.Model):
             manual_price_lines.with_context(skip_manual_discount_breakdown=True).write(
                 self._manual_price_values())
         if manual_discount:
-            self.with_context(skip_manual_discount_breakdown=True).write(
-                self._manual_discount_values(vals['discount'] or 0.0))
+            # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
+            # marcarlo manual desbloquearía el descuento de esa línea.
+            self.filtered(lambda line: line._is_manual_discount_allowed()).with_context(
+                skip_manual_discount_breakdown=True,
+            ).write(self._manual_discount_values(vals['discount'] or 0.0))
         elif recompute_lines:
             # Cambio de producto: se pierden precio y descuento manuales.
             recompute_lines = recompute_lines.with_context(
@@ -299,6 +302,32 @@ class SaleOrderLine(models.Model):
             recompute_lines._compute_price_unit()
             recompute_lines._compute_discount()
         return res
+
+    def copy_data(self, default=None):
+        """Duplicar: lo tecleado se conserva con su marca y lo demás sale del acuerdo vigente, que
+        puede haber cambiado desde el pedido original. Un precio fijo vigente gana sobre lo manual.
+
+        Sin esto se copian `discount` y `price_unit` pero no su origen (`copy=False`): el cálculo
+        de la línea nueva pondría el badge del acuerdo actual junto a importes que no son suyos.
+        """
+        vals_list = super().copy_data(default=default)
+        default = default or {}
+        for line, vals in zip(self, vals_list):
+            if not line._admits_partner_agreement():
+                continue
+            fixed_now = line._has_fixed_price_agreement()
+            if 'discount' not in default:
+                if line.pricing_rule_type == 'manual' and not fixed_now:
+                    vals.update(line._manual_discount_values(line.discount))
+                else:
+                    vals.pop('discount', None)
+            if 'price_unit' not in default:
+                if line.price_origin == 'manual' and not fixed_now:
+                    vals.update(line._manual_price_values())
+                else:
+                    vals.pop('price_unit', None)
+                    vals.pop('technical_price_unit', None)
+        return vals_list
 
     def _keeps_saved_pricing(self):
         """Línea guardada cuyo producto y cliente no cambiaron: conserva el acuerdo de `_origin`.

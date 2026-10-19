@@ -1346,6 +1346,62 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             with self.subTest(discount=value), self.assertRaises(ValidationError):
                 eligible_line.write({'discount': value})
 
+    def test_zero_discount_write_keeps_fixed_price(self):
+        """`discount = 0` escrito por importación o RPC no marca manual ni desbloquea el precio fijo."""
+        self._enable_line_discounts()
+        partner = self._create_fixed_price_partner('Cliente Fijo Importación', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_3, self.prod_1)
+        fixed_line = order.order_line.filtered(lambda l: l.product_id == self.prod_3)
+        eligible_line = order.order_line.filtered(lambda l: l.product_id == self.prod_1)
+
+        order.order_line.write({'discount': 0.0})
+        self.assertEqual(self._line_values(fixed_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+        self.assertEqual(self._line_badge(fixed_line), ('fixed_price', 'Precio Fijo'))
+        self.assertFalse(fixed_line.manual_discount_allowed)
+        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Desc. Manual (0.0%)'))
+        with self.assertRaises(ValidationError):
+            fixed_line.write({'discount': 15.0})
+
+    def test_copy_order_keeps_manual_and_reapplies_agreement(self):
+        """Duplicar conserva lo manual con su marca y aplica el acuerdo vigente al resto."""
+        self._enable_line_discounts()
+        pricelist = self._create_percentage_pricelist()
+
+        def order_with(name, vals=None):
+            partner = self._create_agreement_partner(name, pricelist)
+            order = self._create_order(partner, self.prod_3)
+            if vals:
+                order.order_line.write(vals)
+            return order, self.rules.search([('partner_id', '=', partner.id)])
+
+        with self.subTest('descuento manual'):
+            order, _rule = order_with('Cliente Copia Desc', {'discount': 7.0})
+            line = order.copy().order_line
+            self.assertEqual(self._line_values(line), (95.0, 7.0, 'manual', 'pricelist'))
+            self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (7.0%)'))
+
+        with self.subTest('precio manual'):
+            order, _rule = order_with('Cliente Copia Precio', {'price_unit': 90.0})
+            line = order.copy().order_line
+            self.assertEqual(self._line_values(line), (90.0, 10.0, 'product', 'manual'))
+            self.assertEqual(line.price_origin_label, 'Modificado de forma manual')
+
+        with self.subTest('acuerdo cambiado de %'):
+            order, rule = order_with('Cliente Copia Otro %')
+            rule.discount = 15.0
+            line = order.copy().order_line
+            self.assertEqual(self._line_values(line), (95.0, 15.0, 'product', 'pricelist'))
+            self.assertEqual(self._line_values(order.order_line), (95.0, 10.0, 'product', 'pricelist'))
+
+        for label, vals in (('acuerdo', None), ('descuento manual', {'discount': 7.0}),
+                            ('precio manual', {'price_unit': 90.0})):
+            with self.subTest(f'{label} y acuerdo ahora de precio fijo'):
+                order, rule = order_with(f'Cliente Copia Fijo {label}', vals)
+                rule.write({'rule_type': 'fixed_price', 'fixed_price': 70.0})
+                line = order.copy().order_line
+                self.assertEqual(self._line_values(line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+                self.assertEqual(self._line_badge(line), ('fixed_price', 'Precio Fijo'))
+
     def test_manual_price_unit(self):
         """Un precio tecleado se marca manual, conserva el acuerdo y solo se pierde al cambiar producto."""
         self._enable_line_discounts()
