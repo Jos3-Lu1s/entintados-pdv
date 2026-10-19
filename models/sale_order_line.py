@@ -303,6 +303,32 @@ class SaleOrderLine(models.Model):
             recompute_lines._compute_discount()
         return res
 
+    def copy_data(self, default=None):
+        """Duplicar: lo tecleado se conserva con su marca y lo demás sale del acuerdo vigente, que
+        puede haber cambiado desde el pedido original. Un precio fijo vigente gana sobre lo manual.
+
+        Sin esto se copian `discount` y `price_unit` pero no su origen (`copy=False`): el cálculo
+        de la línea nueva pondría el badge del acuerdo actual junto a importes que no son suyos.
+        """
+        vals_list = super().copy_data(default=default)
+        default = default or {}
+        for line, vals in zip(self, vals_list):
+            if not line._admits_partner_agreement():
+                continue
+            fixed_now = line._has_fixed_price_agreement()
+            if 'discount' not in default:
+                if line.pricing_rule_type == 'manual' and not fixed_now:
+                    vals.update(line._manual_discount_values(line.discount))
+                else:
+                    vals.pop('discount', None)
+            if 'price_unit' not in default:
+                if line.price_origin == 'manual' and not fixed_now:
+                    vals.update(line._manual_price_values())
+                else:
+                    vals.pop('price_unit', None)
+                    vals.pop('technical_price_unit', None)
+        return vals_list
+
     def _keeps_saved_pricing(self):
         """Línea guardada cuyo producto y cliente no cambiaron: conserva el acuerdo de `_origin`.
 
