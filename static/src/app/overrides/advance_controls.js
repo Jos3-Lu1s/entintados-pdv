@@ -25,11 +25,10 @@ patch(ControlButtons.prototype, {
             const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
             const format = (value) => this.pos.env.utils.formatCurrency(value);
             const action = await makeAwaitable(this.dialog, SelectionPopup, {
-                title: _t("Anticipos: %s · Disponible para comprar: %s", format(info.advance_available),
-                    info.credit_limited ? format(info.purchase_power) : _t("sin límite configurado")),
+                title: _t("Saldo a favor del cliente: %s", format(info.advance_available)),
                 list: [
-                    { id: "collect", label: _t("Registrar anticipo del cliente (saldo a favor)"), item: "collect" },
-                    { id: "apply", label: _t("Aplicar anticipo a esta venta"), item: "apply" },
+                    { id: "collect", label: _t("Recibir dinero del cliente"), description: _t("El importe pagado quedará a su favor para próximas compras."), item: "collect" },
+                    { id: "apply", label: _t("Usar saldo a favor en esta venta"), description: _t("Descuenta el anticipo recibido del importe que el cliente debe pagar."), item: "apply" },
                 ],
             });
             if (!action) {
@@ -42,10 +41,6 @@ patch(ControlButtons.prototype, {
                 return;
             }
             if (action === "collect") {
-                if (order.lines.length || order.payment_ids.length) {
-                    this.notification.add(_t("Cobra el anticipo en un pedido vacío y separado de la venta."), { type: "warning" });
-                    return;
-                }
                 const value = await makeAwaitable(this.dialog, NumberPopup, { title: _t("Importe del anticipo antes de impuestos"), startingValue: "0" });
                 if (value === undefined) {
                     return;
@@ -54,8 +49,17 @@ patch(ControlButtons.prototype, {
                 if (!Number.isFinite(amount) || amount <= 0) {
                     return;
                 }
-                await this.pos.addLineToCurrentOrder({ product_tmpl_id: template, price_unit: amount, qty: 1, price_type: "manual" });
-                order.setToInvoice(true);
+                // Preserve the sale and any payments already entered on its ticket.
+                const advanceOrder = order.lines.length || order.payment_ids.length
+                    ? this.pos.addNewOrder() : order;
+                if (advanceOrder !== order) {
+                    advanceOrder.setPartner(partner);
+                }
+                const line = await this.pos.addLineToCurrentOrder({ product_id: product, product_tmpl_id: template, price_unit: amount, qty: 1, price_type: "manual" }, { merge: false }, false);
+                if (!line) {
+                    return;
+                }
+                advanceOrder.setToInvoice(true);
                 return;
             }
             const usable = info.sources.filter((source) => source.fiscal_kind !== "fiscal");

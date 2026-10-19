@@ -110,6 +110,16 @@ class PosOrder(models.Model):
             raise UserError(_('No se pudo generar la factura de la operación. Revisa el saldo disponible, los datos del cliente y vuelve a sincronizar.'))
         return order_id
 
+    def _process_saved_order(self, draft):
+        # POS synchronizes other draft tickets together with the paid ticket.
+        # Enforce the invoice on the persisted lines before native payment and
+        # invoice processing, including drafts from older browser sessions.
+        self.ensure_one()
+        if (self.state != 'cancel' and not self.to_invoice
+                and any(line._is_accounting_advance_line() for line in self.lines)):
+            self.to_invoice = True
+        return super()._process_saved_order(draft)
+
     def action_pos_order_paid(self):
         self._check_pos_advances()
         # New UI orders may already arrive with state='paid'. The native

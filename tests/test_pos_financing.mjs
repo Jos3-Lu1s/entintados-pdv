@@ -7,9 +7,17 @@ const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_financin
     .replace(/^import .*;\r?\n/gm, '');
 
 function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
-    class Screen {}
+    class Screen {
+        onMounted() { this.nativeMounted = true; }
+        async toggleIsToInvoice() { this.currentOrder.setToInvoice(!this.currentOrder.to_invoice); }
+        async validateOrder(force) { this.validated = { invoice: this.currentOrder.to_invoice, force }; }
+        async addNewPaymentLine(method) { this.addedMethod = method; return true; }
+    }
     class Controls {}
-    vm.runInNewContext(source, { patch: (target, extension) => Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension)), PaymentScreen: Screen, ControlButtons: Controls,
+    vm.runInNewContext(source, { patch: (target, extension) => {
+        Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));
+        Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
+    }, PaymentScreen: Screen, ControlButtons: Controls,
         CustomSelectCreateDialog: class {}, _t: (value) => value });
     const cash = { id: 1, type: 'cash' };
     const deferred = { id: 2, type: 'pay_later' };
@@ -30,7 +38,7 @@ function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
     if (paid) makePayment(cash, paid);
     const screen = new Screen();
     const notices = [];
-    Object.assign(screen, { currentOrder: order,
+    Object.assign(screen, { currentOrder: order, payment_methods_from_config: [cash, deferred],
         notification: { add: (value) => notices.push(value) },
         pos: { config: { id: 1, payment_method_ids: [cash, deferred] }, currency: { round: (value) => value },
             data: { call: async () => ({ credit_authorized: authorized, credit_limited: true,
@@ -87,7 +95,70 @@ test('Repeated selection does not duplicate deferred debt; full payment preserve
 test('Creating reusable customer credit requires an actual payment, not financing', async () => {
     const { screen, order, notices } = fixture();
     order.lines[0].product_id.product_tmpl_id.is_accounting_advance = true;
+    assert.equal(screen.canOfferDeferredPayment, false);
     await screen.setDeferredPayment('credit');
     assert.equal(order.payment_ids.length, 1);
     assert.equal(notices.length, 1);
+});
+
+test('Financing options are offered for sales, never for empty tickets or native down payments', () => {
+    const { screen, order } = fixture();
+    assert.equal(screen.canOfferDeferredPayment, true);
+    screen.pos.config.down_payment_product_id = { id: 10 };
+    assert.equal(screen.canOfferDeferredPayment, false);
+    order.lines = [];
+    order.priceIncl = 0;
+    assert.equal(screen.canOfferDeferredPayment, false);
+});
+
+test('Advance invoices are restored on payment entry and cannot be switched off', async () => {
+    const { screen, order, notices } = fixture();
+    order.lines[0].product_id.product_tmpl_id.is_accounting_advance = true;
+    screen.onMounted();
+    assert.equal(screen.nativeMounted, true);
+    assert.equal(order.to_invoice, true);
+    await screen.toggleIsToInvoice();
+    assert.equal(order.to_invoice, true);
+    assert.equal(notices.length, 1);
+});
+
+test('Validation repairs old advances and applications before native payment validation', async () => {
+    for (const kind of ['customer', 'application', 'sale']) {
+        const { screen, order } = fixture();
+        if (kind === 'customer') order.lines[0].product_id.product_tmpl_id.is_accounting_advance = true;
+        if (kind === 'application') order.lines[0].advance_source_ref = 42;
+        if (kind === 'sale') {
+            screen.pos.config.advance_risk_enabled = true;
+            screen.pos.config.down_payment_product_id = { id: 10 };
+            order.lines[0].sale_order_origin_id = { id: 5 };
+        }
+        await screen.validateOrder(true);
+        assert.equal(order.to_invoice, true);
+        assert.deepEqual(screen.validated, { invoice: true, force: true });
+    }
+});
+
+test('Ordinary sales retain the native optional invoice behavior', async () => {
+    const { screen, order } = fixture();
+    screen.onMounted();
+    assert.equal(order.to_invoice, false);
+    await screen.validateOrder(false);
+    assert.deepEqual(screen.validated, { invoice: false, force: false });
+    await screen.toggleIsToInvoice();
+    assert.equal(order.to_invoice, true);
+    await screen.toggleIsToInvoice();
+    assert.equal(order.to_invoice, false);
+});
+
+test('Receiving customer funds hides and rejects on-account debt but accepts cash', async () => {
+    const { screen, order, deferred, notices } = fixture();
+    order.lines[0].product_id.product_tmpl_id.is_accounting_advance = true;
+    screen.onMounted();
+    assert.equal(screen.payment_methods_from_config.length, 1);
+    assert.equal(screen.payment_methods_from_config[0].type, 'cash');
+    assert.equal(await screen.addNewPaymentLine(deferred), false);
+    assert.equal(screen.addedMethod, undefined);
+    assert.equal(notices.length, 1);
+    assert.equal(await screen.addNewPaymentLine(screen.payment_methods_from_config[0]), true);
+    assert.equal(screen.addedMethod.type, 'cash');
 });

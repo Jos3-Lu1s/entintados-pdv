@@ -3,8 +3,80 @@ import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { CustomSelectCreateDialog } from "@pos_settle_due/app/views/view_dialogs/select_create_dialog";
+import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 
 patch(PaymentScreen.prototype, {
+    get appliedCustomerAdvance() {
+        return -this.currentOrder.lines.filter((line) => line.advance_source_ref)
+            .reduce((sum, line) => sum + line.prices.total_included_currency, 0);
+    },
+    get isCollectingCustomerAdvance() {
+        return this.currentOrder.lines.some((line) => line.price_unit * line.qty > 0 &&
+            (line.product_id?.product_tmpl_id?.is_accounting_advance ||
+                (this.pos.config.advance_risk_enabled && line.sale_order_origin_id &&
+                    line.product_id?.id === this.pos.config.down_payment_product_id?.id)));
+    },
+    async addNewPaymentLine(paymentMethod) {
+        if (this.isCollectingCustomerAdvance && paymentMethod.type === "pay_later") {
+            this.notification.add(_t("Recibe el anticipo con efectivo o tarjeta. Cuenta de cliente generaría una deuda, no un saldo a favor."), { type: "warning" });
+            return false;
+        }
+        return await super.addNewPaymentLine(...arguments);
+    },
+    get requiresAdvanceInvoice() {
+        return this.currentOrder.lines.some((line) =>
+            line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref ||
+            (this.pos.config.advance_risk_enabled && line.sale_order_origin_id &&
+                line.product_id?.id === this.pos.config.down_payment_product_id?.id));
+    },
+    onMounted() {
+        if (this.isCollectingCustomerAdvance) {
+            this.payment_methods_from_config = this.payment_methods_from_config.filter((method) => method.type !== "pay_later");
+        }
+        super.onMounted(...arguments);
+        if (this.requiresAdvanceInvoice) {
+            this.currentOrder.setToInvoice(true);
+        }
+    },
+    async toggleIsToInvoice() {
+        if (this.requiresAdvanceInvoice) {
+            this.currentOrder.setToInvoice(true);
+            this.notification.add(_t("Los anticipos y sus aplicaciones requieren factura. Se generará al validar el pago."), { type: "info" });
+            return;
+        }
+        return await super.toggleIsToInvoice(...arguments);
+    },
+    async validateOrder() {
+        // Also repair existing draft tickets created before invoice enforcement.
+        if (this.requiresAdvanceInvoice) {
+            this.currentOrder.setToInvoice(true);
+        }
+        return await super.validateOrder(...arguments);
+    },
+    get canOfferDeferredPayment() {
+        const order = this.currentOrder;
+        return !order.isRefund && !order.is_settling_account && order.priceIncl > 0 &&
+            !order.lines.some((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.() ||
+                (line.price_unit * line.qty > 0 &&
+                    (line.product_id?.product_tmpl_id?.is_accounting_advance ||
+                     line.product_id?.id === this.pos.config.down_payment_product_id?.id)));
+    },
+    async selectDeferredPayment() {
+        const flow = await makeAwaitable(this.dialog, SelectionPopup, {
+            title: _t("Forma de pago de la venta"),
+            list: [
+                { id: "standard", label: _t("Pago completo"), item: "standard" },
+                { id: "ppd_partial", label: _t("Pago inicial + saldo PPD"), description: _t("Captura primero el pago de hoy. El resto quedará por cobrar."), item: "ppd_partial" },
+                { id: "credit", label: _t("Crédito autorizado"), item: "credit" },
+            ],
+        });
+        if (flow === "standard") {
+            this.clearDeferredPayment();
+        } else if (flow) {
+            await this.setDeferredPayment(flow);
+        }
+    },
     clearDeferredPayment() {
         for (const line of [...this.currentOrder.payment_ids]) {
             if (line.payment_method_id.type === "pay_later") {

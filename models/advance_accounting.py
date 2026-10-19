@@ -328,6 +328,22 @@ class AccountPartialReconcile(models.Model):
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    @api.model
+    def _load_pos_data_fields(self, config):
+        names = super()._load_pos_data_fields(config)
+        return list(dict.fromkeys(names + ['customer_advance_available'])) if names else names
+
+    @api.model
+    def _load_pos_data_read(self, records, config):
+        values = super()._load_pos_data_read(records, config)
+        for value in values:
+            partner = records.browse(value['id']).with_company(config.company_id).with_context(
+                allowed_company_ids=config.company_id.ids)
+            value['customer_advance_available'] = partner.risk_currency_id._convert(
+                partner.customer_advance_available, config.currency_id, config.company_id,
+                fields.Date.context_today(partner))
+        return values
+
     pos_risk_order_ids = fields.One2many('pos.order', 'partner_id')
 
     customer_advance_available = fields.Monetary(

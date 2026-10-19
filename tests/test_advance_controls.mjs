@@ -20,8 +20,16 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
         lines: [{ quantity: 1, price_unit: 300, discount: 0, tax_ids: [] }] };
     const notices = [];
     let requests = 0;
+    let currentOrder = order;
     const pos = {
-        getOrder: () => order, config: { id: 4, advance_product_id: { id: 7, product_tmpl_id: template } },
+        getOrder: () => currentOrder,
+        addNewOrder() {
+            currentOrder = { lines: [], payment_ids: [],
+                setPartner(partner) { this.partner = partner; },
+                setToInvoice(value) { this.to_invoice = value; } };
+            return currentOrder;
+        },
+        config: { id: 4, advance_product_id: { id: 7, product_tmpl_id: template } },
         env: { utils: { formatCurrency: String } }, models: { 'account.tax': { get: (id) => tax && tax.id === id ? tax : undefined } },
         data: { async call(model, method, args) {
             requests++;
@@ -37,7 +45,7 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
                 return sum + command[1].amount / 100;
             }, 0);
             const line = { ...values, prices: { total_included_currency: values.price_unit * values.qty * (1 + rate) } };
-            order.lines.push(line);
+            currentOrder.lines.push(line);
             return line;
         },
     };
@@ -53,7 +61,7 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
     vm.runInContext(source, context);
     const controls = new Controls();
     Object.assign(controls, { pos, dialog: {}, notification: { add: (...args) => notices.push(args) } });
-    return { controls, order, notices, advance, requests: () => requests };
+    return { controls, order, notices, advance, currentOrder: () => currentOrder, requests: () => requests };
 }
 
 test('Collecting an advance creates an invoice line and no second cash payment', async () => {
@@ -72,6 +80,29 @@ test('Applying an advance reduces the sale amount without inventing a payment', 
     assert.equal(f.order.lines.at(-1).advance_source_ref, 10);
     assert.equal(f.order.to_invoice, true);
     assert.equal(f.order.payment_ids.length, 0);
+});
+
+test('Collecting credit preserves an existing sale or an empty ticket with payments', async () => {
+    for (const cart of [0, 500]) {
+        const f = fixture({ cart, replies: ['collect', '300'] });
+        f.order.payment_ids.push({ amount: 5000 });
+        await f.controls.onClickAdvances();
+        assert.notEqual(f.currentOrder(), f.order);
+        assert.equal(f.order.payment_ids[0].amount, 5000);
+        assert.equal(f.order.lines.length, cart ? 1 : 0);
+        assert.equal(f.currentOrder().partner.id, 8);
+        assert.equal(f.currentOrder().lines[0].price_unit, 300);
+        assert.equal(f.currentOrder().to_invoice, true);
+        assert.equal(f.currentOrder().payment_ids.length, 0);
+        assert.equal(f.notices.length, 0);
+    }
+});
+
+test('Cancelling the amount leaves the original ticket selected', async () => {
+    const f = fixture({ replies: ['collect', undefined] });
+    await f.controls.onClickAdvances();
+    assert.equal(f.currentOrder(), f.order);
+    assert.equal(f.order.lines.length, 1);
 });
 
 test('The current cart reservation cannot spend the same balance a second time', async () => {

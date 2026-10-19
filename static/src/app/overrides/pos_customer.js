@@ -29,6 +29,20 @@ patch(PosStore.prototype, {
 });
 
 patch(OrderPaymentValidation.prototype, {
+    async afterOrderValidation() {
+        const partner = this.order.getPartner();
+        const hasAdvance = this.order.lines.some((line) => line.advance_source_ref ||
+            line.product_id?.product_tmpl_id?.is_accounting_advance);
+        const result = await super.afterOrderValidation(...arguments);
+        if (partner && hasAdvance && this.order.finalized) {
+            try {
+                await this.pos.refreshTotalDueOfPartner(partner);
+            } catch {
+                this.pos.notification.add(_t("La venta se guardó. El saldo a favor se actualizará al recuperar la conexión."), { type: "warning" });
+            }
+        }
+        return result;
+    },
     async validateOrder(...args) {
         if (!this.pos.requireCustomer(this.order)) {
             return false;

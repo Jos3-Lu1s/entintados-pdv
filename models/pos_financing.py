@@ -23,8 +23,9 @@ class PosConfig(models.Model):
             raise UserError(_('La preparación de pagos pendientes requiere permisos de administrador del POS.'))
         method = self.payment_method_ids.filtered(lambda value: value.type == 'pay_later')[:1]
         if not method:
+            # Native type is computed (not stored); no journal means pay_later.
             method = self.env['pos.payment.method'].search([
-                ('company_id', '=', self.company_id.id), ('type', '=', 'pay_later'),
+                ('company_id', '=', self.company_id.id), ('journal_id', '=', False),
             ], limit=1)
             if not method:
                 method = self.env['pos.payment.method'].create({

@@ -291,6 +291,38 @@ class TestAdvanceAccounting(TransactionCase):
         product_line = next(command[2] for command in values if command[2].get('product_id'))
         self.assertEqual(product_line['account_id'], self.accounts['customer'].id)
 
+    def test_pos_draft_sync_restores_required_advance_invoice(self):
+        order = self._financed_pos_order(paid=100, pending=0, flow='standard')
+        order.lines.product_id = self.advance_product
+        order.payment_ids.filtered(lambda p: p.payment_method_id.type == 'pay_later').unlink()
+        order.to_invoice = False
+        order._process_saved_order(draft=True)
+        self.assertTrue(order.to_invoice)
+        self.assertEqual(order.state, 'draft')
+        self.assertFalse(order.account_move)
+        order._check_pos_advances()
+
+    def test_pos_cash_advance_sync_generates_and_pays_invoice_without_ui_flag(self):
+        cash_journal = self.env['account.journal'].create({
+            'name': 'Advance cash', 'code': 'ACSH', 'type': 'cash',
+            'company_id': self.company.id,
+        })
+        cash = self.env['pos.payment.method'].create({
+            'name': 'Cash advance', 'journal_id': cash_journal.id,
+            'company_id': self.company.id,
+        })
+        order = self._financed_pos_order(paid=100, pending=0, flow='standard', receipt_method=cash)
+        order.lines.product_id = self.advance_product
+        order.payment_ids.filtered(lambda p: p.payment_method_id.type == 'pay_later').unlink()
+        order.to_invoice = False
+        order.with_context(generate_pdf=False)._process_saved_order(draft=False)
+        self.assertTrue(order.to_invoice)
+        self.assertEqual(order.account_move.state, 'posted')
+        self.assertTrue(order.account_move.is_advance_invoice)
+        self.assertEqual(order.account_move.amount_total, 100)
+        self.assertEqual(order.account_move.amount_residual, 0)
+        self.assertEqual(order.account_move.advance_available, 100)
+
     def test_pos_loader_preserves_native_configuration_and_company(self):
         order = self._pos_order(100)
         config = order.config_id
@@ -303,6 +335,27 @@ class TestAdvanceAccounting(TransactionCase):
         companies = self.env['res.company']._load_pos_data_search_read({'pos.config': data}, config)
         company = next(value for value in companies if value['id'] == self.company.id)
         self.assertIn('tax_calculation_rounding_method', company)
+
+    def test_pos_purchase_consumes_customer_funds_without_creating_debt(self):
+        source = self._invoice(5000, advance=True)
+        self._pay(source)
+        order = self._financed_pos_order(paid=1500, pending=0, flow='standard')
+        order.payment_ids.unlink()
+        order.write({
+            'amount_total': 0, 'amount_paid': 0,
+            'lines': [Command.create({
+                'product_id': self.advance_product.id, 'qty': 1, 'price_unit': -1500,
+                'price_subtotal': -1500, 'price_subtotal_incl': -1500,
+                'advance_source_ref': source.id,
+            })],
+        })
+        order.with_context(generate_pdf=False)._process_saved_order(draft=False)
+        self.assertEqual(order.account_move.state, 'posted')
+        self.assertEqual(order.account_move.amount_total, 0)
+        self.assertEqual(order.account_move.amount_residual, 0)
+        self.assertEqual(source.advance_available, 3500)
+        data = self.env['res.partner']._load_pos_data_read(self.partner, order.config_id)[0]
+        self.assertEqual(data['customer_advance_available'], 3500)
 
     def test_financial_risk_converts_company_residual_correctly(self):
         other = self.env.ref('base.MXN') if self.company.currency_id != self.env.ref('base.MXN') else self.env.ref('base.USD')
@@ -462,7 +515,7 @@ class TestAdvanceAccounting(TransactionCase):
         self.assertEqual(line['advance_source_id'], source.id)
         self.assertEqual(line['account_id'], self.accounts['customer'].id)
 
-    def _financed_pos_order(self, paid=300, pending=700, flow='ppd_partial'):
+    def _financed_pos_order(self, paid=300, pending=700, flow='ppd_partial', receipt_method=None):
         self.env.user.group_ids |= self.env.ref('point_of_sale.group_pos_manager')
         product = self.env['product.product'].create({
             'name': 'Financed POS goods', 'type': 'service',
@@ -475,7 +528,7 @@ class TestAdvanceAccounting(TransactionCase):
         })
         config.action_prepare_deferred_payments()
         self.journals['bank'].inbound_payment_method_line_ids.payment_account_id = self.accounts['outstanding']
-        method = self.env['pos.payment.method'].create({
+        method = receipt_method or self.env['pos.payment.method'].create({
             'name': 'Actual bank receipt', 'journal_id': self.journals['bank'].id,
             'company_id': self.company.id, 'split_transactions': True,
         })
