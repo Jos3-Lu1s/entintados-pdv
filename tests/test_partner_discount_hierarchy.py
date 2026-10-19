@@ -1346,6 +1346,22 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             with self.subTest(discount=value), self.assertRaises(ValidationError):
                 eligible_line.write({'discount': value})
 
+    def test_zero_discount_write_keeps_fixed_price(self):
+        """`discount = 0` escrito por importación o RPC no marca manual ni desbloquea el precio fijo."""
+        self._enable_line_discounts()
+        partner = self._create_fixed_price_partner('Cliente Fijo Importación', self._create_percentage_pricelist())
+        order = self._create_order(partner, self.prod_3, self.prod_1)
+        fixed_line = order.order_line.filtered(lambda l: l.product_id == self.prod_3)
+        eligible_line = order.order_line.filtered(lambda l: l.product_id == self.prod_1)
+
+        order.order_line.write({'discount': 0.0})
+        self.assertEqual(self._line_values(fixed_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+        self.assertEqual(self._line_badge(fixed_line), ('fixed_price', 'Precio Fijo'))
+        self.assertFalse(fixed_line.manual_discount_allowed)
+        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Desc. Manual (0.0%)'))
+        with self.assertRaises(ValidationError):
+            fixed_line.write({'discount': 15.0})
+
     def test_manual_price_unit(self):
         """Un precio tecleado se marca manual, conserva el acuerdo y solo se pierde al cambiar producto."""
         self._enable_line_discounts()

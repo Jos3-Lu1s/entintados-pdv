@@ -289,8 +289,11 @@ class SaleOrderLine(models.Model):
             manual_price_lines.with_context(skip_manual_discount_breakdown=True).write(
                 self._manual_price_values())
         if manual_discount:
-            self.with_context(skip_manual_discount_breakdown=True).write(
-                self._manual_discount_values(vals['discount'] or 0.0))
+            # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
+            # marcarlo manual desbloquearía el descuento de esa línea.
+            self.filtered(lambda line: line._is_manual_discount_allowed()).with_context(
+                skip_manual_discount_breakdown=True,
+            ).write(self._manual_discount_values(vals['discount'] or 0.0))
         elif recompute_lines:
             # Cambio de producto: se pierden precio y descuento manuales.
             recompute_lines = recompute_lines.with_context(
