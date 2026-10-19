@@ -180,6 +180,16 @@ class SaleOrderLine(models.Model):
             return True
         # Se inyectan valores del acuerdo: no deben volver al llamador, que puede reutilizar `vals`.
         vals = dict(vals)
+        if (
+            'price_unit' not in vals
+            and 'product_id' not in vals
+            and not self.env.context.get('skip_manual_discount_breakdown')
+        ):
+            # El formulario fuerza el envío del origen aunque `price_unit` no viaje (precio
+            # bloqueado): escribirlo protegería del recálculo a todo `_compute_price_unit` y el
+            # precio de la tarifa no se guardaría.
+            vals.pop('price_origin', None)
+            vals.pop('price_origin_label', None)
         recompute_lines = self.browse()
         # Precio fijo en la UdM del producto y la moneda de la compañía, por línea: se convierte a
         # su UdM y moneda finales tras el write.
@@ -188,7 +198,7 @@ class SaleOrderLine(models.Model):
         if update_pricing_rule:
             for line in self:
                 product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else line.product_id
-                if product and product.type != 'service' and line.order_id.partner_id:
+                if line._admits_partner_agreement(product):
                     rule = line.order_id.partner_id._get_partner_pricing_rule(product)
                     if rule.get('type') == 'fixed_price':
                         if not explicit_price:
@@ -360,12 +370,7 @@ class SaleOrderLine(models.Model):
                 continue
             if not force_recompute and (line._keeps_saved_pricing() or line._keeps_manual_price()):
                 continue
-            if (
-                line.product_id
-                and not line.display_type
-                and line.order_id.partner_id
-                and not getattr(line, 'is_reward_line', False)
-            ):
+            if line._admits_partner_agreement():
                 rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
                 if rule.get('type') == 'fixed_price':
                     line._apply_fixed_price_agreement(rule)
@@ -428,12 +433,7 @@ class SaleOrderLine(models.Model):
                 continue
             super(SaleOrderLine, line)._reset_price_unit()
             rule = {}
-            if (
-                line.product_id
-                and not line.display_type
-                and line.order_id.partner_id
-                and not getattr(line, 'is_reward_line', False)
-            ):
+            if line._admits_partner_agreement():
                 rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
             if rule.get('type') == 'fixed_price':
                 line._apply_fixed_price_agreement(rule)
@@ -487,13 +487,7 @@ class SaleOrderLine(models.Model):
                 badge = (rule_type, origin, rule_id)
             else:
                 rule = {}
-                if (
-                    line.product_id
-                    and not line.display_type
-                    and line.order_id.partner_id
-                    and line.product_id.type != 'service'
-                    and not getattr(line, 'is_reward_line', False)
-                ):
+                if line._admits_partner_agreement():
                     rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
                 rule_id = rule.get('rule') and rule['rule'].id or False
                 if rule.get('type') == 'fixed_price':
@@ -573,14 +567,22 @@ class SaleOrderLine(models.Model):
             and (self._is_global_discount() or self._has_core_manual_price() or self._keeps_manual_price())
         )
 
+    def _admits_partner_agreement(self, product=None):
+        """Línea que recibe el acuerdo comercial del cliente, sea bien o servicio. `product`
+        evalúa el producto que llega en `write` antes de escribirlo."""
+        self.ensure_one()
+        return bool(
+            (product or self.product_id)
+            and not self.display_type
+            and self.order_id.partner_id
+            and not getattr(self, 'is_reward_line', False)
+            and not self.is_downpayment
+            and not self._is_global_discount()
+        )
+
     def _has_fixed_price_agreement(self):
         self.ensure_one()
-        if (
-            not self.product_id
-            or self.display_type
-            or not self.order_id.partner_id
-            or getattr(self, 'is_reward_line', False)
-        ):
+        if not self._admits_partner_agreement():
             return False
         rule = self.order_id.partner_id._get_partner_pricing_rule(self.product_id)
         return rule.get('type') == 'fixed_price'

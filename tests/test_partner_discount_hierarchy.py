@@ -138,6 +138,14 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                 'discount': 20.0,
             })
 
+    def test_partner_global_discount_range(self):
+        for value in (-0.10, 1.5):
+            with self.subTest(discount=value), self.assertRaises(ValidationError):
+                self.partner.write({'discount': value})
+        for value in (0.0, 1.0):
+            self.partner.write({'discount': value})
+            self.assertEqual(self.partner.discount, value)
+
     def test_hierarchy_resolution(self):
         """Verificar la jerarquía estricta de 5 niveles en _get_partner_pricing_rule."""
         # Limpiar reglas previas

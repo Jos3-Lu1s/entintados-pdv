@@ -84,6 +84,21 @@ class ResPartnerDiscountRule(models.Model):
         readonly=True,
     )
 
+    # _check_unique_rules da el mensaje legible; los índices cubren lo que escribe por SQL,
+    # como la fusión de contactos.
+    _partner_product_uniq = models.UniqueIndex(
+        "(partner_id, product_id) WHERE applied_on = '0_product'",
+        'Ya existe una regla comercial para este producto en el cliente.',
+    )
+    _partner_line_uniq = models.UniqueIndex(
+        "(partner_id, line_id) WHERE applied_on = '1_line'",
+        'Ya existe una regla comercial para esta línea de producto en el cliente.',
+    )
+    _partner_scheme_uniq = models.UniqueIndex(
+        "(partner_id, scheme_id) WHERE applied_on = '2_scheme'",
+        'Ya existe una regla comercial para este esquema en el cliente.',
+    )
+
     @api.depends(
         'applied_on', 'rule_type', 'product_id', 'product_id.uom_id', 'line_id', 'scheme_id',
         'discount', 'fixed_price', 'company_id.currency_id',
@@ -169,50 +184,82 @@ class ResPartnerDiscountRule(models.Model):
                         'El precio fijo no puede ser un valor negativo.'
                     ))
 
+    _TARGET_FIELDS = {'0_product': 'product_id', '1_line': 'line_id', '2_scheme': 'scheme_id'}
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Los índices únicos rechazan el INSERT antes de que corra la restricción de Python:
+        # se valida antes para conservar el mensaje que nombra el objetivo y el cliente.
+        candidates = []
+        for vals in vals_list:
+            applied_on = vals.get('applied_on', '0_product')
+            target_field = self._TARGET_FIELDS.get(applied_on)
+            candidates.append((vals.get('partner_id'), applied_on, target_field and vals.get(target_field), []))
+        self._check_unique_rule_values(candidates)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if {'partner_id', 'applied_on', *self._TARGET_FIELDS.values()} & vals.keys():
+            candidates = []
+            for rule in self:
+                applied_on = vals.get('applied_on', rule.applied_on)
+                target_field = self._TARGET_FIELDS.get(applied_on)
+                candidates.append((
+                    vals.get('partner_id', rule.partner_id.id),
+                    applied_on,
+                    vals.get(target_field, rule[target_field].id) if target_field else False,
+                    self.ids,
+                ))
+            self._check_unique_rule_values(candidates)
+        return super().write(vals)
+
     @api.constrains('partner_id', 'applied_on', 'product_id', 'line_id', 'scheme_id')
     def _check_unique_rules(self):
-        for rule in self:
-            if not rule.partner_id:
+        self._check_unique_rule_values([
+            (rule.partner_id.id, rule.applied_on, rule[self._TARGET_FIELDS[rule.applied_on]].id, rule.ids)
+            for rule in self
+            if rule.applied_on in self._TARGET_FIELDS
+        ])
+
+    @api.model
+    def _check_unique_rule_values(self, candidates):
+        """:param candidates: tuplas (partner_id, applied_on, target_id, ids que no cuentan como duplicado)"""
+        seen = set()
+        for partner_id, applied_on, target_id, exclude_ids in candidates:
+            target_field = self._TARGET_FIELDS.get(applied_on)
+            if not partner_id or not target_field or not target_id:
                 continue
-            if rule.applied_on == '0_product' and rule.product_id:
-                duplicate = self.search([
-                    ('id', '!=', rule.id),
-                    ('partner_id', '=', rule.partner_id.id),
-                    ('applied_on', '=', '0_product'),
-                    ('product_id', '=', rule.product_id.id),
-                ], limit=1)
-                if duplicate:
-                    raise ValidationError(_(
-                        'Ya existe una regla comercial para el producto "%(product)s" en el cliente "%(partner)s".',
-                        product=rule.product_id.display_name,
-                        partner=rule.partner_id.name,
-                    ))
-            elif rule.applied_on == '1_line' and rule.line_id:
-                duplicate = self.search([
-                    ('id', '!=', rule.id),
-                    ('partner_id', '=', rule.partner_id.id),
-                    ('applied_on', '=', '1_line'),
-                    ('line_id', '=', rule.line_id.id),
-                ], limit=1)
-                if duplicate:
-                    raise ValidationError(_(
-                        'Ya existe una regla comercial para la línea "%(line)s" en el cliente "%(partner)s".',
-                        line=rule.line_id.display_name,
-                        partner=rule.partner_id.name,
-                    ))
-            elif rule.applied_on == '2_scheme' and rule.scheme_id:
-                duplicate = self.search([
-                    ('id', '!=', rule.id),
-                    ('partner_id', '=', rule.partner_id.id),
-                    ('applied_on', '=', '2_scheme'),
-                    ('scheme_id', '=', rule.scheme_id.id),
-                ], limit=1)
-                if duplicate:
-                    raise ValidationError(_(
-                        'Ya existe una regla comercial para el esquema "%(scheme)s" en el cliente "%(partner)s".',
-                        scheme=rule.scheme_id.name,
-                        partner=rule.partner_id.name,
-                    ))
+            key = (partner_id, applied_on, target_id)
+            if key in seen or self.search_count([
+                ('id', 'not in', exclude_ids),
+                ('partner_id', '=', partner_id),
+                ('applied_on', '=', applied_on),
+                (target_field, '=', target_id),
+            ], limit=1):
+                self._raise_duplicate_rule(partner_id, applied_on, target_id)
+            seen.add(key)
+
+    @api.model
+    def _raise_duplicate_rule(self, partner_id, applied_on, target_id):
+        partner = self.env['res.partner'].browse(partner_id)
+        target = self.env[self._fields[self._TARGET_FIELDS[applied_on]].comodel_name].browse(target_id)
+        if applied_on == '0_product':
+            raise ValidationError(_(
+                'Ya existe una regla comercial para el producto "%(product)s" en el cliente "%(partner)s".',
+                product=target.display_name,
+                partner=partner.name,
+            ))
+        if applied_on == '1_line':
+            raise ValidationError(_(
+                'Ya existe una regla comercial para la línea "%(line)s" en el cliente "%(partner)s".',
+                line=target.display_name,
+                partner=partner.name,
+            ))
+        raise ValidationError(_(
+            'Ya existe una regla comercial para el esquema "%(scheme)s" en el cliente "%(partner)s".',
+            scheme=target.name,
+            partner=partner.name,
+        ))
 
     # --- Carga al POS ---------------------------------------------------
 

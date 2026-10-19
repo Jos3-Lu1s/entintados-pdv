@@ -3,7 +3,8 @@
 import re
 
 from odoo import Command, _, api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.tools import float_compare
 
 PHONE_REGEX = re.compile(r'^\d{10}$')
 
@@ -88,6 +89,7 @@ class ResPartner(models.Model):
         string="Acuerdos comerciales",
         help="Reglas específicas de precios fijos y descuentos por producto, línea o esquema.",
     )
+    commercial_agreements_editable = fields.Boolean(compute='_compute_commercial_agreements_editable')
     
     distributed_notes = fields.Boolean(
         string="Notas de credito distribuidas",
@@ -245,12 +247,31 @@ class ResPartner(models.Model):
             vat=vat, name=duplicate.display_name, id=duplicate.id,
         ))
 
+    @api.depends_context('uid')
+    def _compute_commercial_agreements_editable(self):
+        self.commercial_agreements_editable = self._can_edit_commercial_agreements()
+
+    def _can_edit_commercial_agreements(self):
+        return self.env.su or self.env.user.has_group('entintados_pdv.group_sale_commercial_agreements')
+
+    def _raise_commercial_discount_access(self):
+        raise AccessError(_(
+            'Solo los usuarios del grupo «Gestionar acuerdos comerciales» '
+            'pueden cambiar el descuento del cliente.'
+        ))
+
     @api.model_create_multi
     def create(self, vals_list):
         payment_term = self.env.ref(
             'account.account_payment_term_immediate',
             raise_if_not_found=False,
         )
+
+        if not self._can_edit_commercial_agreements() and any(
+            float_compare(vals.get('discount') or 0.0, 0.0, precision_digits=2)
+            for vals in vals_list
+        ):
+            self._raise_commercial_discount_access()
 
         for vals in vals_list:
             # Normalizar y validar RFC/VAT duplicado
@@ -280,6 +301,13 @@ class ResPartner(models.Model):
         return partners
 
     def write(self, vals):
+        # Reenviar el mismo descuento no es un cambio: el editor de clientes del PDV y otros
+        # flujos reenvían campos que no tocaron.
+        if 'discount' in vals and not self._can_edit_commercial_agreements() and any(
+            float_compare(vals['discount'] or 0.0, partner.discount, precision_digits=2)
+            for partner in self
+        ):
+            self._raise_commercial_discount_access()
         if 'vat' in vals and isinstance(vals['vat'], str):
             vat = vals['vat'].strip().upper()
             vals['vat'] = vat
@@ -303,6 +331,13 @@ class ResPartner(models.Model):
         updated_children = self.browse(updated_child_ids)
         (self | new_children | updated_children)._check_phone_required()
         return result
+
+    def copy_data(self, default=None):
+        vals_list = super().copy_data(default=default)
+        if not self._can_edit_commercial_agreements():
+            for vals in vals_list:
+                vals['discount'] = 0.0
+        return vals_list
 
     def web_save(self, vals, specification, next_id=None):
         return super(
@@ -360,6 +395,16 @@ class ResPartner(models.Model):
         if exclude_ids:
             domain.append(('id', 'not in', exclude_ids))
         return self.sudo().search(domain, limit=1)
+
+    @api.constrains('discount')
+    def _check_discount_range(self):
+        # El widget de porcentaje guarda la fracción: 1.0 equivale al 100 %.
+        for partner in self:
+            if partner.discount < 0.0 or partner.discount > 1.0:
+                raise ValidationError(_(
+                    'El descuento de "%(name)s" debe encontrarse entre 0%% y 100%%.',
+                    name=partner.display_name,
+                ))
 
     @api.constrains('vat')
     def _check_vat_duplicate(self):

@@ -21,3 +21,6 @@ from . import test_colorant_not_sold_alone
 
 from . import test_vendor_credit_group
 from . import test_advance_accounting
+from . import test_commercial_agreements_access
+from . import test_partner_merge_agreements
+from . import test_service_agreements
