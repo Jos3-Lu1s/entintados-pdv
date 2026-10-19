@@ -36,7 +36,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
+    'depends': ['base', 'contacts', 'account', 'l10n_mx_edi', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -123,6 +123,7 @@ Catálogo de entintado
         'data/approval_request_data.xml',
         'data/code_tint.xml',
         'data/note_seq.xml',
+        'data/account_payment_cfdi_cron.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
         'views/tint_base_capacity_views.xml',

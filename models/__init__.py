@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from . import tint_code_mixin
+from . import account_move_payment_cron
+from . import account_move_inventory_cancel
 from . import tint_size
 from . import tint_base_type
 from . import tint_base_capacity
