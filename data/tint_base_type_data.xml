@@ -12,8 +12,6 @@
       contenido antes de dispensar colorante, o el envase se sobrellena.
       Esa instrucción viaja en `operator_note` hasta la pantalla de caja
       y la etiqueta del envase.
-
-      TODO antes de salida a producción: cambiar a noupdate="1".
     -->
     <data noupdate="1">
 

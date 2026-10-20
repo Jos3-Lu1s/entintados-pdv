@@ -16,20 +16,16 @@ class VendorCreditGroup(models.Model):
         default=lambda self: _('New'),
     )
 
-    credit_id = fields.Many2one('account.move', string='Nota de crédito', readonly=True, copy=False, check_company=True)
     credit_ids = fields.Many2many(
         'account.move', 'vendor_credit_group_move_rel', 'group_id', 'move_id',
         string='Notas de crédito', readonly=True, copy=False, check_company=True,
     )
     credit_count = fields.Integer(compute='_compute_credit_count')
 
-    def _get_credits(self):
-        return self.credit_ids | self.credit_id
-
-    @api.depends('credit_ids', 'credit_id')
+    @api.depends('credit_ids')
     def _compute_credit_count(self):
         for group in self:
-            group.credit_count = len(group._get_credits())
+            group.credit_count = len(group.credit_ids)
 
     state = fields.Selection([('draft', 'Borrador'), ('generated', 'Nota generada'), ('cancel', 'Cancelado')], default='draft', required=True, copy=False)
     invoice_count = fields.Integer(compute='_compute_invoice_count')
@@ -48,19 +44,19 @@ class VendorCreditGroup(models.Model):
         for group in self:
             if group.state == 'cancel':
                 continue
-            for credit in group._get_credits():
+            for credit in group.credit_ids:
                 if credit.state == 'posted':
                     credit.button_draft()
                 if credit.state == 'draft':
                     credit.button_cancel()
                 credit.vendor_credit_source_ids = [Command.clear()]
-            group.write({'credit_id': False, 'credit_ids': [Command.clear()], 'state': 'cancel'})
+            group.write({'credit_ids': [Command.clear()], 'state': 'cancel'})
 
     def action_draft(self):
         for group in self:
             if group.state != 'cancel':
                 raise UserError(_('Solo puedes restablecer a borrador una agrupación cancelada.'))
-            if group._get_credits():
+            if group.credit_ids:
                 raise UserError(_('Cancela las notas relacionadas antes de restablecer la agrupación.'))
         self.write({'state': 'draft'})
         return True
@@ -74,17 +70,17 @@ class VendorCreditGroup(models.Model):
 
     def action_open_credit(self):
         self.ensure_one()
-        return self.env['account.move']._action_open_moves(self._get_credits(), _('Notas de crédito'))
+        return self.env['account.move']._action_open_moves(self.credit_ids, _('Notas de crédito'))
 
     def write(self, vals):
         protected = {'partner_id', 'company_id', 'currency_id', 'journal_id', 'date', 'reason', 'line_ids'}
         if protected.intersection(vals) and any(
-                group.state != 'draft' or group._get_credits() for group in self):
+                group.state != 'draft' or group.credit_ids for group in self):
             raise UserError(_('Solo puedes modificar una agrupación en borrador.'))
         return super().write(vals)
 
     def unlink(self):
-        if any(group._get_credits() for group in self):
+        if any(group.credit_ids for group in self):
             raise UserError(_('No puedes eliminar una agrupación que ya generó su nota.'))
         return super().unlink()
     
@@ -148,7 +144,7 @@ class VendorCreditGroup(models.Model):
 
     def action_create_credit(self):
         self.ensure_one()
-        if self._get_credits():
+        if self.credit_ids:
             return self.action_open_credit()
         if self.state == 'cancel':
             raise UserError(_('No puedes generar una nota desde una agrupación cancelada.'))
@@ -224,13 +220,13 @@ class VendorCreditGroupLine(models.Model):
     amount = fields.Monetary(string='Importe a acreditar (con impuestos)', required=True)
 
     def _check_editable_group(self):
-        if any(group.state != 'draft' or group._get_credits() for group in self.group_id):
+        if any(group.state != 'draft' or group.credit_ids for group in self.group_id):
             raise UserError(_('Solo puedes modificar las líneas de una agrupación en borrador.'))
 
     @api.model_create_multi
     def create(self, vals_list):
         groups = self.env['vendor.credit.group'].browse([vals['group_id'] for vals in vals_list if vals.get('group_id')])
-        if any(group.state != 'draft' or group._get_credits() for group in groups):
+        if any(group.state != 'draft' or group.credit_ids for group in groups):
             raise UserError(_('Solo puedes agregar líneas a una agrupación en borrador.'))
         return super().create(vals_list)
 
@@ -238,7 +234,7 @@ class VendorCreditGroupLine(models.Model):
         self._check_editable_group()
         if vals.get('group_id'):
             group = self.env['vendor.credit.group'].browse(vals['group_id'])
-            if group.state != 'draft' or group._get_credits():
+            if group.state != 'draft' or group.credit_ids:
                 raise UserError(_('Solo puedes mover líneas a una agrupación en borrador.'))
         return super().write(vals)
 

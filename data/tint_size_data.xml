@@ -6,10 +6,6 @@
       Volúmenes nominales verificados contra la matriz de capacidad del
       fabricante: la relación Cubeta : Galón : Litro es exactamente
       19 : 4 : 1 en las 21 combinaciones de la tabla.
-
-      TODO antes de salida a producción: cambiar a noupdate="1" para que
-      una actualización de módulo no sobreescriba ajustes del cliente.
-      Se deja actualizable durante el desarrollo para poder iterar.
     -->
     <data noupdate="1">
 

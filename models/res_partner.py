@@ -370,12 +370,6 @@ class ResPartner(models.Model):
             self.vat = self.vat.strip().upper()
 
     def init(self):
-        # Normaliza RFC existentes en la base de datos a mayúsculas.
-        self.env.cr.execute("""
-            UPDATE res_partner
-            SET vat = UPPER(TRIM(vat))
-            WHERE vat IS NOT NULL AND vat != UPPER(TRIM(vat));
-        """)
         # Índice único para RFC activos; ignora archivados y RFC genéricos.
         # Se recrea para mantener la definición actual.
         super().init()
