@@ -180,12 +180,17 @@ class SaleOrderLine(models.Model):
         )
 
     def _agreement_discount(self, product=None):
-        """% que el acuerdo vigente da a la línea, como en `_compute_discount`; 0 si no hay."""
+        """% que el acuerdo vigente da a la línea, como en `_compute_discount`; 0 si no hay.
+
+        `None` con precio fijo: su acuerdo es un precio, no un % con el que comparar un descuento.
+        """
         self.ensure_one()
         product = product or self.product_id
         if not product or not self._admits_partner_agreement(product):
             return 0.0
         rule = self.order_id.partner_id._get_partner_pricing_rule(product)
+        if rule.get('type') == 'fixed_price':
+            return None
         return rule['discount'] if rule.get('type') == 'discount' else 0.0
 
     def _is_manual_discount_vals(self, vals):
@@ -207,10 +212,11 @@ class SaleOrderLine(models.Model):
             # mismo tipo): un `discount` igual a su `technical_discount` viene del cálculo.
             return bool(float_compare(vals['technical_discount'] or 0.0, discount, precision_digits=digits))
         product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
-        return any(
-            float_compare(line._agreement_discount(product), discount, precision_digits=digits)
-            for line in self
-        )
+        for line in self:
+            agreement = line._agreement_discount(product)
+            if agreement is None or float_compare(agreement, discount, precision_digits=digits):
+                return True
+        return False
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -273,14 +279,16 @@ class SaleOrderLine(models.Model):
                         # acuerdo del producto nuevo (sin forzar se quedaría el congelado).
                         recompute_lines |= line
         manual_discount_lines = self.filtered(lambda line: line._is_manual_discount_vals(vals))
-        # Línea manual a la que se le escribe el % del acuerdo vigente: vuelve al badge del acuerdo.
+        # Línea a la que se le escribe el % del acuerdo vigente: toma el badge de ese acuerdo, sea
+        # cual sea el guardado. Precio fijo y promoción conservan el suyo.
         # En un recálculo forzado el `discount` lo escribe el propio `_compute_discount` del core.
-        agreement_discount_lines = (
-            self.filtered(lambda line: line.pricing_rule_type == 'manual') - manual_discount_lines
-            if self._is_untracked_discount_vals(vals)
-            and not self.env.context.get('force_price_recomputation')
-            else self.browse()
-        )
+        agreement_discount_lines = self.browse()
+        if self._is_untracked_discount_vals(vals) and not self.env.context.get('force_price_recomputation'):
+            product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
+            agreement_discount_lines = (self - manual_discount_lines).filtered(
+                lambda line: line.pricing_rule_type not in ('fixed_price', 'promo')
+                and line._admits_partner_agreement(product)
+            )
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
         manual_price = (
             'price_unit' in vals
