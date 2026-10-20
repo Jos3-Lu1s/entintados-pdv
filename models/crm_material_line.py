@@ -60,6 +60,73 @@ class CrmMaterialLine(models.Model):
         readonly=True,
         copy=False,
     )
+    
+    qty_available_branch = fields.Float(
+        string="Disp. sucursal",
+        compute="_compute_qty_scopes",
+        digits="Product Unit of Measure",
+    )
+    
+    qty_available_company = fields.Float(
+        string="Disp. empresa",
+        compute="_compute_qty_scopes",
+        digits="Product Unit of Measure",
+    )
+    
+    qty_available = fields.Float(
+        string="Disponible",
+        compute="_compute_qty_available",
+        digits="Product Unit of Measure",
+    )
+
+    @api.depends("product_id", "uom_id", "lead_id.wharehouse_id")
+    def _compute_qty_available(self):
+        for line in self:
+            location = line.lead_id.wharehouse_id
+            if not line.product_id or not location:
+                line.qty_available = 0.0
+                continue
+            product = line.product_id.with_context(location=location.id)
+            qty = product.free_qty
+            # Convertir a la unidad de medida de la línea si es distinta
+            if line.uom_id and line.uom_id != product.uom_id:
+                qty = product.uom_id._compute_quantity(qty, line.uom_id)
+            line.qty_available = qty
+
+    def _get_free_qty(self, locations):
+        """Cantidad libre del producto en las ubicaciones dadas, en la UdM de la línea."""
+        self.ensure_one()
+        if not self.product_id or not locations:
+            return 0.0
+        product = self.product_id.sudo().with_context(location=locations.ids)
+        qty = product.free_qty
+        if self.uom_id and self.uom_id != self.product_id.uom_id:
+            qty = self.product_id.uom_id._compute_quantity(qty, self.uom_id)
+        return qty
+
+    @api.depends("product_id", "uom_id", "lead_id.company_id")
+    def _compute_qty_scopes(self):
+        Warehouse = self.env["stock.warehouse"].sudo()
+        cache = {}  # evita repetir búsquedas para la misma empresa
+
+        def locations_for(domain_key, domain):
+            if domain_key not in cache:
+                cache[domain_key] = Warehouse.search(domain).view_location_id
+            return cache[domain_key]
+
+        for line in self:
+            branch = line.lead_id.company_id or self.env.company
+            root = branch.root_id
+
+            branch_locs = locations_for(
+                ("branch", branch.id), [("company_id", "=", branch.id)]
+            )
+            company_locs = locations_for(
+                ("company", root.id), [("company_id", "child_of", root.id)]
+            )
+
+            line.qty_available_branch = line._get_free_qty(branch_locs)
+            line.qty_available_company = line._get_free_qty(company_locs)
 
     @api.depends("product_id", "quantity")
     def _compute_subtotal(self):

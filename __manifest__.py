@@ -120,6 +120,7 @@ Catálogo de entintado
         'data/mail_activity_type_data.xml',
         'data/type_operations_data.xml',
         'data/hr_departament_data.xml',
+        'data/crm_approval_sequence.xml',
         'data/approval_request_data.xml',
         'data/code_tint.xml',
         'data/note_seq.xml',

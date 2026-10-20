@@ -10,6 +10,21 @@ DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 class StockPicking(models.Model):
     _inherit = "stock.picking"
 
+    is_crm_demo_output = fields.Boolean(compute='_compute_is_crm_demo_output')
+
+    @api.depends('picking_type_id', 'crm_lead_id', 'approval_request_id.crm_lead_id')
+    def _compute_is_crm_demo_output(self):
+        for picking in self:
+            picking.is_crm_demo_output = bool(picking._is_material_output_type() and
+                (picking.crm_lead_id or picking.approval_request_id.crm_lead_id))
+
+    def action_cancel(self):
+        result = super().action_cancel()
+        cancelled = self.filtered(lambda picking: picking.is_crm_demo_output and picking.state == 'cancel')
+        leads = cancelled.crm_lead_id | cancelled.approval_request_id.crm_lead_id
+        leads._mark_demo_lost(_('Cancelación de la salida de material de la demostración.'))
+        return result
+
     crm_lead_id = fields.Many2one(
         comodel_name="crm.lead",
         string="Oportunidad CRM",
@@ -307,4 +322,3 @@ class StockPicking(models.Model):
                     picking.crm_lead_id.activity_ids.filtered(
                         lambda a: a.activity_type_id == demo_activity_type
                     ).action_feedback(feedback=_('Demostración finalizada, uso de material validado.'))
-            

@@ -50,6 +50,28 @@ class ApprovalApprover(models.Model):
     
 class ApprovalRequest(models.Model):
     _inherit = "approval.request"
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        prepared = [dict(vals) for vals in vals_list]
+        names = []
+        for vals in prepared:
+            name = False
+            if vals.get('crm_lead_id', self.env.context.get('default_crm_lead_id')):
+                name = self.env.ref('entintados_pdv.seq_crm_approval_request').sudo().next_by_id()
+                vals['name'] = name
+            names.append(name)
+        requests = super().create(prepared)
+        for request, name in zip(requests, names):
+            if name and request.name != name:
+                request.name = name
+        return requests
+
+    def action_cancel(self):
+        result = super().action_cancel()
+        self.filtered(lambda request: request.request_status == 'cancel').crm_lead_id._mark_demo_lost(
+            _('Cancelación de la aprobación de la demostración.'))
+        return result
     
     crm_lead_id = fields.Many2one(
         'crm.lead',
@@ -277,4 +299,3 @@ class ApprovalRequest(models.Model):
             'res_id': self.crm_lead_id.id,
             'target': 'current',
         }
-    

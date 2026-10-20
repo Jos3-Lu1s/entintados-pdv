@@ -65,3 +65,13 @@ class ProductProduct(models.Model):
                 "productos: %s.",
                 ", ".join(missing.mapped('display_name')),
             ))
+            
+    def _get_free_qty_in(self, locations, uom=None):
+        """Cantidad libre en las ubicaciones dadas, convertida a la UdM indicada."""
+        self.ensure_one()
+        if not locations:
+            return 0.0
+        qty = self.sudo().with_context(location=locations.ids).free_qty
+        if uom and uom != self.uom_id:
+            qty = self.uom_id._compute_quantity(qty, uom)
+        return qty

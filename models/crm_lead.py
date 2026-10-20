@@ -9,6 +9,27 @@ APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
 
+    def _mark_demo_lost(self, reason):
+        # The caller already checked cancellation rights on the linked document.
+        # Auditors/warehouse users need not have general CRM write permissions.
+        for lead in self.sudo().filtered(lambda lead: lead.active or lead.probability != 0):
+            lead.action_set_lost()
+            lead.message_post(body=reason)
+
+    def action_cancel_demo(self):
+        self.ensure_one()
+        self.check_access('write')
+        if self.demo_end:
+            raise UserError(_('No puedes cancelar una demostración que ya está finalizada.'))
+        if self.stage_type != 'demo' and not self.approval_request_id:
+            raise UserError(_('Esta oportunidad no tiene una demostración en curso.'))
+        requests = self.env['approval.request'].search([('crm_lead_id', '=', self.id)]) | self.approval_request_id
+        pickings = self.picking_ids | requests.picking_ids | requests.generated_picking_id
+        pickings.filtered(lambda picking: picking._is_material_output_type() and picking.state not in ('done', 'cancel')).action_cancel()
+        requests.filtered(lambda request: request.request_status != 'cancel').action_cancel()
+        self._mark_demo_lost(_('Demostración cancelada desde CRM.'))
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
+
     stage_type = fields.Selection(
         related='stage_id.stage_type',
         string='Tipo de Etapa',
@@ -417,7 +438,6 @@ class CrmLead(models.Model):
             ))
 
         approval_request = self.env['approval.request'].create({
-            'name': _('SM - %s') % self.name,
             'category_id': category.id,
             'request_owner_id': self.user_id.id or self.env.uid,
             'partner_id': self.partner_id.id,
@@ -491,6 +511,26 @@ class CrmLead(models.Model):
             })
 
         return action
+
+    def _get_material_report_values(self):
+        self.ensure_one()
+        picking = self.picking_ids.filtered(
+            lambda item: item._is_material_output_type() and item.state != 'cancel'
+        ).sorted('id', reverse=True)[:1]
+        approver = picking.material_auditor_id or self._get_material_approver()
+        return {
+            'lead': self,
+            'picking': picking,
+            'partner': self.partner_id,
+            'salesperson': self.user_id or self.create_uid,
+            'approver': approver,
+            # CRM's template uses quantity/uom_id/description, not stock.move fields.
+            'lines': self.material_line_ids,
+            'date': fields.Date.context_today(self),
+            'approval_state': picking.material_approval_state if picking else 'to_audit',
+            'signature': picking.signature if picking else self._get_user_digital_signature(approver),
+            'signature_date': picking.signature_date if picking else False,
+        }
 
     def _get_user_digital_signature(self, user):
         if not user:

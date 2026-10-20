@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+    <record id="stock_picking_view_form_crm_demo_cancellation" model="ir.ui.view">
+        <field name="name">stock.picking.form.crm.demo.cancellation</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="is_crm_demo_output" invisible="1"/>
+                <button name="action_cancel" type="object" string="Cancelar demostración" groups="base.group_user"
+                        invisible="not is_crm_demo_output or state not in ('assigned', 'confirmed', 'draft', 'waiting')"
+                        confirm="Cancelar esta salida de material marcará automáticamente la oportunidad de CRM como perdida. ¿Deseas continuar?"/>
+            </xpath>
+            <xpath expr="//button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
+                <attribute name="invisible">is_crm_demo_output or state not in ('assigned', 'confirmed', 'draft', 'waiting')</attribute>
+            </xpath>
+        </field>
+    </record>
 
     <record id="stock_picking_view_form_inherit_crm" model="ir.ui.view">
         <field name="name">stock.picking.form.crm.lead</field>

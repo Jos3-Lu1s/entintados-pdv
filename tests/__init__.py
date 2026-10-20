@@ -10,6 +10,8 @@ from . import test_tint_product
 from . import test_tint_color
 from . import test_tint_gallery
 from . import test_crm_stage_validation
+from . import test_crm_demo_cancellation
+from . import test_crm_material_report
 from . import test_tint_pricing
 from . import test_tint_schema_lines_views
 from . import test_tint_pos_config

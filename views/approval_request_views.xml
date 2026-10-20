@@ -1,5 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="approval_request_view_form_crm_cancellation" model="ir.ui.view">
+        <field name="name">approval.request.form.crm.cancellation</field>
+        <field name="model">approval.request</field>
+        <field name="inherit_id" ref="approvals.approval_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="crm_lead_id" invisible="1"/>
+                <button name="action_cancel" type="object" string="Cancelar demostración"
+                        invisible="not crm_lead_id or request_status in ['new', 'cancel'] or request_owner_id != uid"
+                        confirm="Cancelar esta aprobación cancelará la demostración y marcará automáticamente la oportunidad de CRM como perdida. ¿Deseas continuar?"/>
+            </xpath>
+            <xpath expr="//button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
+                <attribute name="invisible">crm_lead_id or request_status in ['new', 'cancel'] or request_owner_id != uid</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="approval_product_line_list_inherit_availability" model="ir.ui.view">
+        <field name="name">approval.product.line.list.inherit.availability</field>
+        <field name="model">approval.product.line</field>
+        <field name="inherit_id" ref="approvals.approval_product_line_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='quantity']" position="after">
+                <field name="qty_available_branch" optional="show"/>
+                <field name="qty_available_company" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="approval_product_line_list_independent_inherit_availability" model="ir.ui.view">
+        <field name="name">approval.product.line.list.independent.inherit.availability</field>
+        <field name="model">approval.product.line</field>
+        <field name="inherit_id" ref="approvals.approval_product_line_view_tree_independent"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='quantity']" position="after">
+                <field name="qty_available_branch" optional="show"/>
+                <field name="qty_available_company" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
     <record id="approval_request_view_form_inherit_stock" model="ir.ui.view">
         <field name="name">approval.request.view.form.inherit.stock</field>
         <field name="model">approval.request</field>
