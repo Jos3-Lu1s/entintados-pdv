@@ -3,6 +3,7 @@
 from . import tint_code_mixin
 from . import account_move_payment_cron
 from . import account_move_inventory_cancel
+from . import l10n_mx_edi_document
 from . import tint_size
 from . import tint_base_type
 from . import tint_base_capacity
