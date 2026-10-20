@@ -1560,6 +1560,61 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(round(line.discount, 2), 7.0)
         self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
 
+    def test_create_with_discount_is_manual(self):
+        """Una línea creada con `discount` (importación o RPC) queda manual como por `write`, y
+        "Actualizar precios" lo conserva."""
+        self._enable_line_discounts()
+        partner = self._create_agreement_partner(
+            'Cliente Importación', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
+
+        def create_line(discount):
+            return self.sale_orders.create({
+                'partner_id': partner.id,
+                'order_line': [(0, 0, {'product_id': self.prod_3.id, 'discount': discount})],
+            }).order_line
+
+        for discount in (5.0, 0.0):
+            with self.subTest(discount=discount):
+                line = create_line(discount)
+                expected = (100.0, discount, 'manual', 'list')
+                self.assertEqual(self._line_values(line), expected)
+                self.assertEqual(self._line_badge(line), ('manual', f'Desc. Manual ({discount:.1f}%)'))
+                self.assertEqual(round(line.technical_discount, 2), discount)
+                line.order_id.action_update_prices()
+                self.assertEqual(self._line_values(line), expected)
+
+        with self.subTest('load()'):
+            result = self.sale_orders.load(
+                ['partner_id/.id', 'order_line/product_id/.id', 'order_line/discount'],
+                [[str(partner.id), str(self.prod_3.id), '5']],
+            )
+            self.assertFalse(result['messages'])
+            line = self.sale_orders.browse(result['ids']).order_line
+            self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (5.0%)'))
+            line.order_id.action_update_prices()
+            self.assertEqual(round(line.discount, 2), 5.0)
+
+        with self.subTest('discount igual a technical_discount'):
+            line = self.sale_orders.create({
+                'partner_id': partner.id,
+                'order_line': [(0, 0, {
+                    'product_id': self.prod_3.id, 'discount': 10.0, 'technical_discount': 10.0,
+                })],
+            }).order_line
+            self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+
+    def test_create_with_zero_discount_keeps_fixed_price(self):
+        """`discount = 0` al crear una línea de precio fijo no la marca manual ni la desbloquea."""
+        self._enable_line_discounts()
+        partner = self._create_fixed_price_partner(
+            'Cliente Importación Fijo', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
+        line = self.sale_orders.create({
+            'partner_id': partner.id,
+            'order_line': [(0, 0, {'product_id': self.prod_3.id, 'discount': 0.0})],
+        }).order_line
+        self.assertEqual(self._line_values(line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
+        self.assertFalse(line.manual_discount_allowed)
+
     def test_pricelist_switch_never_marks_price_manual(self):
         """Cambiar de tarifa en el formulario y guardar nunca deja el origen en manual, aunque la
         tarifa dé más decimales que los de `price_unit` (12.25 - 10 % = 11.025 → 11.03)."""
