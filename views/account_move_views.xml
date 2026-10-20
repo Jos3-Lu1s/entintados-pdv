@@ -46,6 +46,12 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
             <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_cancellation_returns" type="object"
+                        class="oe_stat_button" icon="fa-undo"
+                        invisible="not cancellation_return_ids">
+                    <field name="cancellation_return_ids" invisible="1"/>
+                    <span>Devoluciones por cancelación</span>
+                </button>
                 <button name="action_view_vendor_credit_sources" type="object"
                         class="oe_stat_button" icon="fa-files-o"
                         invisible="vendor_credit_source_count == 0">
@@ -56,6 +62,12 @@
                         invisible="vendor_credit_note_count == 0">
                     <field name="vendor_credit_note_count" widget="statinfo" string="Notas de crédito"/>
                 </button>
+            </xpath>
+            <xpath expr="//header" position="inside">
+                <button name="action_retry_cancellation_inventory_return" type="object"
+                        string="Reintentar devolución de inventario"
+                        invisible="move_type != 'out_invoice' or l10n_mx_edi_cfdi_state != 'cancel'"
+                        groups="account.group_account_invoice"/>
             </xpath>
         </field>
     </record>

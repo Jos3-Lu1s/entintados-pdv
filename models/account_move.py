@@ -77,3 +77,65 @@ class AccountMove(models.Model):
         self.ensure_one()
         notes = self.vendor_credit_note_ids
         return self._action_open_moves(notes, _('Notas de crédito'))
+
+    def _post(self, soft=True):
+        posted = super()._post(soft=soft)
+        to_stamp = posted.filtered(
+            lambda m: m.move_type == "out_invoice"
+            and m.country_code == "MX"
+            and m.invoice_line_ids.sale_line_ids
+            and m.l10n_mx_edi_cfdi_state != "sent"
+        )
+        if to_stamp:
+            to_stamp._l10n_mx_edi_cfdi_invoice_try_send()
+        return posted
+
+    def _l10n_mx_edi_cfdi_invoice_try_cancel(self, document, cancel_reason):
+        self.ensure_one()
+        if (
+            self.state == 'posted'
+            and self.l10n_mx_edi_cfdi_state == 'sent'
+            and self.move_type == 'out_invoice'
+            and self.l10n_mx_edi_payment_policy == 'PPD'
+        ):
+            # Use the fiscal history, including payments no longer reconciled.
+            payments = self.env['l10n_mx_edi.document'].search([
+                ('invoice_ids', 'in', self.ids),
+                ('state', '=', 'payment_sent'),
+                ('move_id.company_id', '=', self.company_id.id),
+            ])
+            self.env['res.company']._with_locked_records(
+                self | payments.move_id | payments.invoice_ids
+            )
+            failed_payments = []
+            # Snapshot before cancelling: native payment cancellation can reset
+            # the move and change the reconciliation/document relationships.
+            sources = [(doc, doc.move_id, doc.attachment_id.id) for doc in payments]
+            for payment_document, payment_move, attachment_id in sources:
+                cancel_domain = [
+                    ('state', '=', 'payment_cancel'),
+                    ('move_id', '=', payment_move.id),
+                    ('attachment_id', '=', attachment_id),
+                ]
+                # Sent documents remain in the history after cancellation.
+                if self.env['l10n_mx_edi.document'].search_count(cancel_domain):
+                    continue
+                payment_move._l10n_mx_edi_cfdi_invoice_try_cancel_payment(
+                    payment_document
+                )
+                if not self.env['l10n_mx_edi.document'].search_count(cancel_domain):
+                    failed_payments.append(payment_move.display_name)
+            if failed_payments:
+                # Raising would roll back the history of successful PAC calls.
+                self._l10n_mx_edi_cfdi_invoice_document_cancel_failed(
+                    _(
+                        'No se canceló la factura porque no fue posible cancelar '
+                        'los complementos de pago %(payment)s. Revise el error '
+                        'en sus documentos CFDI y reintente la cancelación.',
+                        payment=', '.join(failed_payments),
+                    ),
+                    document,
+                    cancel_reason,
+                )
+                return
+        return super()._l10n_mx_edi_cfdi_invoice_try_cancel(document, cancel_reason)

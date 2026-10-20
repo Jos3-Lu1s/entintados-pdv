@@ -39,7 +39,6 @@
                     <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
                     <field name="date" readonly="state != 'draft'"/>
                     <field name="reason" readonly="state != 'draft'"/>
-                    <field name="credit_id" readonly="1" invisible="not credit_id"/>
                 </group>
                 <div class="alert alert-info" role="status" invisible="state != 'cancel'">
                     Puedes restablecer esta agrupación a borrador para cambiar los importes o la

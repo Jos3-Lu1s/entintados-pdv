@@ -170,6 +170,39 @@ class SaleOrderLine(models.Model):
                 line.price_origin = 'list'
                 line.price_origin_label = 'Precio de venta del producto'
 
+    def _is_manual_discount_vals(self, vals):
+        """Descuento escrito por código, RPC o importación: sustituye al del acuerdo y queda manual."""
+        if (
+            'discount' not in vals
+            or 'pricing_rule_type' in vals
+            or self.env.context.get('skip_manual_discount_breakdown')
+        ):
+            return False
+        if 'technical_discount' in vals:
+            # El formulario no envía `pricing_rule_type` si no cambió (otro cliente con acuerdo del
+            # mismo tipo): un `discount` igual a su `technical_discount` viene del cálculo.
+            return bool(float_compare(
+                vals['technical_discount'] or 0.0, vals['discount'] or 0.0,
+                precision_digits=self.env['decimal.precision'].precision_get('Discount'),
+            ))
+        return True
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # El cálculo previo a la creación pone el badge del acuerdo junto al `discount` recibido.
+        manual_discounts = [
+            (vals['discount'] or 0.0) if self._is_manual_discount_vals(vals) else None
+            for vals in vals_list
+        ]
+        lines = super().create(vals_list)
+        for line, discount in zip(lines, manual_discounts):
+            # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
+            # marcarlo manual desbloquearía el descuento de esa línea.
+            if discount is not None and line._is_manual_discount_allowed():
+                line.with_context(skip_manual_discount_breakdown=True).write(
+                    line._manual_discount_values(discount))
+        return lines
+
     def write(self, vals):
         update_pricing_rule = 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update')
         if update_pricing_rule and len(self) > 1:
@@ -216,19 +249,7 @@ class SaleOrderLine(models.Model):
                         # Descuento o sin acuerdo: tras el write, el compute forzado resuelve el
                         # acuerdo del producto nuevo (sin forzar se quedaría el congelado).
                         recompute_lines |= line
-        # Descuento escrito por código, RPC o importación: sustituye al del acuerdo y queda manual.
-        manual_discount = (
-            'discount' in vals
-            and not self.env.context.get('skip_manual_discount_breakdown')
-            and 'pricing_rule_type' not in vals
-        )
-        if manual_discount and 'technical_discount' in vals:
-            # El formulario no envía `pricing_rule_type` si no cambió (otro cliente con acuerdo del
-            # mismo tipo): un `discount` igual a su `technical_discount` viene del cálculo.
-            manual_discount = bool(float_compare(
-                vals['technical_discount'] or 0.0, vals['discount'] or 0.0,
-                precision_digits=self.env['decimal.precision'].precision_get('Discount'),
-            ))
+        manual_discount = self._is_manual_discount_vals(vals)
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
         manual_price = (
             'price_unit' in vals

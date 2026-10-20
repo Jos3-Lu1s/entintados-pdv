@@ -137,15 +137,6 @@ class TestVendorCreditGroup(TransactionCase):
             self.assertEqual(credit.state, 'cancel')
             self.assertFalse(credit.vendor_credit_source_ids)
 
-    def test_legacy_group_opens_existing_credit(self):
-        invoice = self._invoice()
-        group = self._group(invoice)
-        group.action_create_credit()
-        credit = group.credit_ids
-        group.write({'credit_ids': [Command.clear()], 'credit_id': credit.id})
-        self.assertEqual(group.credit_count, 1)
-        self.assertEqual(group.action_create_credit()['res_id'], credit.id)
-
     def test_reset_cancelled_group_edit_and_regenerate(self):
         invoices = self._invoice() | self._invoice()
         group = self._group(invoices)

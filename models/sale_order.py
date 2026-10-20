@@ -365,3 +365,8 @@ class SaleOrder(models.Model):
         return self.order_line.filtered(
             lambda l: l.product_id.is_storable and not l.display_type
         )
+    
+    def _create_invoices(self, grouped=False, final=False, date=None):
+        moves = super()._create_invoices(grouped=grouped, final=final, date=date)
+        moves.filtered(lambda m: m.state == "draft").action_post()
+        return moves

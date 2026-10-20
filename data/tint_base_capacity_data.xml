@@ -12,8 +12,6 @@
 
       Este archivo se genera de forma programatica a partir de la tabla
       original para descartar errores de captura.
-
-      TODO antes de salida a produccion: cambiar a noupdate="1".
     -->
     <data noupdate="1">
 
