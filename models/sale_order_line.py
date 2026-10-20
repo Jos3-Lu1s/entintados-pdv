@@ -170,37 +170,66 @@ class SaleOrderLine(models.Model):
                 line.price_origin = 'list'
                 line.price_origin_label = 'Precio de venta del producto'
 
+    def _is_untracked_discount_vals(self, vals):
+        """`discount` sin el origen del acuerdo: código, RPC, importación o una vista sin esos campos."""
+        return (
+            'discount' in vals
+            and 'pricing_rule_type' not in vals
+            and 'technical_discount' not in vals
+            and not self.env.context.get('skip_manual_discount_breakdown')
+        )
+
+    def _agreement_discount(self, product=None):
+        """% que el acuerdo vigente da a la línea, como en `_compute_discount`; 0 si no hay.
+
+        `None` con precio fijo: su acuerdo es un precio, no un % con el que comparar un descuento.
+        """
+        self.ensure_one()
+        product = product or self.product_id
+        if not product or not self._admits_partner_agreement(product):
+            return 0.0
+        rule = self.order_id.partner_id._get_partner_pricing_rule(product)
+        if rule.get('type') == 'fixed_price':
+            return None
+        return rule['discount'] if rule.get('type') == 'discount' else 0.0
+
     def _is_manual_discount_vals(self, vals):
-        """Descuento escrito por código, RPC o importación: sustituye al del acuerdo y queda manual."""
+        """Descuento escrito por código, RPC o importación: sustituye al del acuerdo y queda manual.
+
+        Se evalúa sobre líneas ya existentes: sin `technical_discount`, un `discount` igual al del
+        acuerdo vigente viene del acuerdo.
+        """
         if (
             'discount' not in vals
             or 'pricing_rule_type' in vals
             or self.env.context.get('skip_manual_discount_breakdown')
         ):
             return False
+        digits = self.env['decimal.precision'].precision_get('Discount')
+        discount = vals['discount'] or 0.0
         if 'technical_discount' in vals:
             # El formulario no envía `pricing_rule_type` si no cambió (otro cliente con acuerdo del
             # mismo tipo): un `discount` igual a su `technical_discount` viene del cálculo.
-            return bool(float_compare(
-                vals['technical_discount'] or 0.0, vals['discount'] or 0.0,
-                precision_digits=self.env['decimal.precision'].precision_get('Discount'),
-            ))
-        return True
+            return bool(float_compare(vals['technical_discount'] or 0.0, discount, precision_digits=digits))
+        product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
+        for line in self:
+            agreement = line._agreement_discount(product)
+            if agreement is None or float_compare(agreement, discount, precision_digits=digits):
+                return True
+        return False
 
     @api.model_create_multi
     def create(self, vals_list):
         # El cálculo previo a la creación pone el badge del acuerdo junto al `discount` recibido.
-        manual_discounts = [
-            (vals['discount'] or 0.0) if self._is_manual_discount_vals(vals) else None
-            for vals in vals_list
-        ]
+        # Se copian los valores: el acuerdo vigente solo se resuelve con la línea ya creada.
+        sent_vals = [dict(vals) for vals in vals_list]
         lines = super().create(vals_list)
-        for line, discount in zip(lines, manual_discounts):
+        for line, vals in zip(lines, sent_vals):
             # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
             # marcarlo manual desbloquearía el descuento de esa línea.
-            if discount is not None and line._is_manual_discount_allowed():
+            if line._is_manual_discount_vals(vals) and line._is_manual_discount_allowed():
                 line.with_context(skip_manual_discount_breakdown=True).write(
-                    line._manual_discount_values(discount))
+                    line._manual_discount_values(vals['discount'] or 0.0))
         return lines
 
     def write(self, vals):
@@ -249,7 +278,17 @@ class SaleOrderLine(models.Model):
                         # Descuento o sin acuerdo: tras el write, el compute forzado resuelve el
                         # acuerdo del producto nuevo (sin forzar se quedaría el congelado).
                         recompute_lines |= line
-        manual_discount = self._is_manual_discount_vals(vals)
+        manual_discount_lines = self.filtered(lambda line: line._is_manual_discount_vals(vals))
+        # Línea a la que se le escribe el % del acuerdo vigente: toma el badge de ese acuerdo, sea
+        # cual sea el guardado. Precio fijo y promoción conservan el suyo.
+        # En un recálculo forzado el `discount` lo escribe el propio `_compute_discount` del core.
+        agreement_discount_lines = self.browse()
+        if self._is_untracked_discount_vals(vals) and not self.env.context.get('force_price_recomputation'):
+            product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
+            agreement_discount_lines = (self - manual_discount_lines).filtered(
+                lambda line: line.pricing_rule_type not in ('fixed_price', 'promo')
+                and line._admits_partner_agreement(product)
+            )
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
         manual_price = (
             'price_unit' in vals
@@ -309,10 +348,14 @@ class SaleOrderLine(models.Model):
         if manual_price_lines:
             manual_price_lines.with_context(skip_manual_discount_breakdown=True).write(
                 self._manual_price_values())
-        if manual_discount:
+        if agreement_discount_lines:
+            agreement_discount_lines.with_context(
+                force_price_recomputation=True, reset_manual_pricing=True,
+            )._compute_discount()
+        if manual_discount_lines:
             # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
             # marcarlo manual desbloquearía el descuento de esa línea.
-            self.filtered(lambda line: line._is_manual_discount_allowed()).with_context(
+            manual_discount_lines.filtered(lambda line: line._is_manual_discount_allowed()).with_context(
                 skip_manual_discount_breakdown=True,
             ).write(self._manual_discount_values(vals['discount'] or 0.0))
         elif recompute_lines:
