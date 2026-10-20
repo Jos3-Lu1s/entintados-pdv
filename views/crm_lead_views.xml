@@ -6,16 +6,17 @@
         <field name="inherit_id" ref="crm.crm_lead_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
+                <field name="can_cancel_demo" invisible="1"/>
                 <field name="demo_end" invisible="1"/>
                 <field name="stage_type" invisible="1"/>
                 <field name="approval_request_id" invisible="1"/>
                 <button name="action_cancel_demo" type="object" string="Cancelar demostración"
-                        invisible="not active or demo_end or (stage_type != 'demo' and not approval_request_id)"
+                        invisible="not can_cancel_demo or not active or demo_end or (stage_type != 'demo' and not approval_request_id)"
                         confirm="Cancelar la demostración marcará automáticamente esta oportunidad como perdida y cancelará sus aprobaciones y salidas de material pendientes. ¿Deseas continuar?"/>
             </xpath>
             <xpath expr="//sheet" position="before">
                 <div class="alert alert-warning mb-0" role="alert"
-                     invisible="not active or demo_end or (stage_type != 'demo' and not approval_request_id)">
+                     invisible="not can_cancel_demo or not active or demo_end or (stage_type != 'demo' and not approval_request_id)">
                     Cancelar la demostración, su aprobación o su salida de material marcará automáticamente esta oportunidad como perdida.
                 </div>
             </xpath>
@@ -57,8 +58,8 @@
                                 <field name="code_product"/>
                                 <field name="quantity"/>
                                 <field name="uom_id" readonly="1" force_save="1"/>
-                                <field name="qty_available_branch" optional="show"/>
-                                <field name="qty_available_company" optional="hide"/>
+                                <field name="qty_available_branch" widget="entintados_stock_availability" readonly="1" optional="show"/>
+                                <field name="qty_available_company" widget="entintados_stock_availability" readonly="1" optional="hide"/>
                                 <field name="description"/>
                             </list>
                         </field>
@@ -152,13 +153,8 @@
                         type="object"
                         class="oe_stat_button"
                         icon="fa-check-square-o"
-                        invisible="not approval_request_id">
-                    <div class="o_stat_info">
-                        <field name="approval_request_status" widget="badge" class="o_stat_text" decoration-success="approval_request_status == 'approved'"
-                           decoration-danger="approval_request_status == 'refused'"
-                           decoration-warning="approval_request_status in ('pending', 'submitted')"/>
-                        <span class="o_stat_text">Aprobación</span>
-                    </div>
+                        invisible="demo_approval_count == 0">
+                    <field name="demo_approval_count" widget="statinfo" string="Aprobaciones"/>
                 </button>
             
             </xpath>
@@ -171,7 +167,7 @@
         <field name="inherit_id" ref="crm.crm_lead_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//button[@name='action_sale_quotations_new']" position="attributes">
-                <attribute name="invisible">approval_request_id and not demo_end</attribute>
+                <attribute name="invisible">(not active and probability == 0) or (approval_request_id and not demo_end)</attribute>
             </xpath>
         </field>
     </record>

@@ -22,6 +22,7 @@ from . import test_product_default_code
 from . import test_colorant_not_sold_alone
 
 from . import test_vendor_credit_group
+from . import test_payment_register_percentages
 from . import test_advance_accounting
 from . import test_commercial_agreements_access
 from . import test_partner_merge_agreements

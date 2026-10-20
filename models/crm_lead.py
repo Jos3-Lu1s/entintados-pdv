@@ -9,26 +9,64 @@ APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
 
+    can_cancel_demo = fields.Boolean(compute='_compute_can_cancel_demo')
+
+    def _can_cancel_demo(self):
+        self.ensure_one()
+        request = self.sudo().approval_request_id
+        return bool(self.env.su or self.env.user == self.sudo()._get_material_approver()
+                    or self.env.user in request.material_auditor_ids.user_id)
+
+    @api.depends_context('uid')
+    @api.depends('user_id', 'approval_request_id.material_auditor_ids')
+    def _compute_can_cancel_demo(self):
+        for lead in self:
+            lead.can_cancel_demo = lead._can_cancel_demo()
+
+    def _return_demo_for_correction(self, request):
+        self.ensure_one()
+        lead = self.sudo()
+        if lead.approval_request_id != request or not lead.active or lead.demo_end:
+            raise UserError(_('Esta solicitud ya no corresponde a la demostración activa.'))
+        lead.write({'approval_request_id': False})
+        lead.message_post(body=_('Demostración rechazada por %s. Corrige los productos y solicita nuevamente la aprobación.') % self.env.user.display_name)
+        return {'type': 'ir.actions.act_window', 'res_model': 'crm.lead',
+                'res_id': lead.id, 'view_mode': 'form', 'target': 'current'}
+
     def _mark_demo_lost(self, reason):
         # The caller already checked cancellation rights on the linked document.
         # Auditors/warehouse users need not have general CRM write permissions.
-        for lead in self.sudo().filtered(lambda lead: lead.active or lead.probability != 0):
-            lead.action_set_lost()
-            lead.message_post(body=reason)
+        for lead in self.sudo():
+            requests = lead._get_demo_approvals()
+            for request in requests.filtered(lambda request: request.request_status != 'cancel'):
+                request._cancel_demo_document()
+            for picking in lead._get_demo_pickings().filtered(
+                    lambda picking: picking._is_material_output_type() and picking.state not in ('done', 'cancel')):
+                picking._cancel_demo_document()
+            if lead.active or lead.probability != 0:
+                lead.action_set_lost()
+                lead.message_post(body=reason)
 
     def action_cancel_demo(self):
         self.ensure_one()
-        self.check_access('write')
+        self.check_access('read')
+        if not self._can_cancel_demo():
+            raise UserError(_('Solo el jefe del organigrama o los auditores asignados pueden cancelar la demostración.'))
+        self = self.sudo()
         if self.demo_end:
             raise UserError(_('No puedes cancelar una demostración que ya está finalizada.'))
         if self.stage_type != 'demo' and not self.approval_request_id:
             raise UserError(_('Esta oportunidad no tiene una demostración en curso.'))
-        requests = self.env['approval.request'].search([('crm_lead_id', '=', self.id)]) | self.approval_request_id
-        pickings = self.picking_ids | requests.picking_ids | requests.generated_picking_id
-        pickings.filtered(lambda picking: picking._is_material_output_type() and picking.state not in ('done', 'cancel')).action_cancel()
-        requests.filtered(lambda request: request.request_status != 'cancel').action_cancel()
         self._mark_demo_lost(_('Demostración cancelada desde CRM.'))
         return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    def _check_can_create_quotation(self):
+        if self.filtered(lambda lead: not lead.active and lead.probability == 0):
+            raise UserError(_('No puedes generar una cotización para una oportunidad perdida. Reactiva la oportunidad antes de continuar.'))
+
+    def action_sale_quotations_new(self):
+        self._check_can_create_quotation()
+        return super().action_sale_quotations_new()
 
     stage_type = fields.Selection(
         related='stage_id.stage_type',
@@ -52,6 +90,27 @@ class CrmLead(models.Model):
         string="Solicitud de Aprobación",
         copy=False,
     )
+
+    demo_approval_ids = fields.One2many('approval.request', 'crm_lead_id', string='Historial de aprobaciones')
+    demo_approval_count = fields.Integer(compute='_compute_demo_approval_count')
+
+    def _get_demo_approvals(self):
+        self.ensure_one()
+        return self.demo_approval_ids | self.approval_request_id
+
+    @api.depends('demo_approval_ids', 'approval_request_id')
+    def _compute_demo_approval_count(self):
+        for lead in self:
+            lead.demo_approval_count = len(lead._get_demo_approvals())
+
+    def _get_demo_pickings(self):
+        self.ensure_one()
+        requests = self._get_demo_approvals()
+        return self.picking_ids | requests.picking_ids | requests.generated_picking_id
+
+    def _has_material_output(self):
+        self.ensure_one()
+        return bool(self._get_demo_pickings().filtered(lambda picking: picking.state != 'cancel'))
 
     approval_request_status = fields.Selection(
         related='approval_request_id.request_status',
@@ -135,7 +194,7 @@ class CrmLead(models.Model):
         self.ensure_one()
         if not self.material_line_ids:
             raise UserError(_("No hay líneas de material para solicitar salida."))
-        if self.picking_count > 0:
+        if self._has_material_output():
             raise UserError(_("Ya existe una salida de inventario generada para esta oportunidad."))
 
     crm_meeting_ids = fields.One2many(
@@ -480,13 +539,15 @@ class CrmLead(models.Model):
         compute="_compute_picking_count",
     )
 
-    @api.depends("picking_ids")
+    @api.depends('picking_ids', 'demo_approval_ids.picking_ids', 'demo_approval_ids.generated_picking_id',
+                 'approval_request_id.picking_ids', 'approval_request_id.generated_picking_id')
     def _compute_picking_count(self):
         for lead in self:
-            lead.picking_count = len(lead.picking_ids)
+            lead.picking_count = len(lead._get_demo_pickings())
 
     def action_view_pickings(self):
         self.ensure_one()
+        pickings = self._get_demo_pickings()
 
         action = {
             "type": "ir.actions.act_window",
@@ -494,7 +555,7 @@ class CrmLead(models.Model):
             "res_model": "stock.picking",
             "view_mode": "list,form",
             "domain": [
-                ("crm_lead_id", "=", self.id),
+                ("id", "in", pickings.ids),
             ],
             "context": {
                 "default_crm_lead_id": self.id,
@@ -504,10 +565,10 @@ class CrmLead(models.Model):
 
         # Si solamente existe una salida,
         # abrirla directamente en formulario.
-        if self.picking_count == 1:
+        if len(pickings) == 1:
             action.update({
                 "view_mode": "form",
-                "res_id": self.picking_ids.id,
+                "res_id": pickings.id,
             })
 
         return action
@@ -554,16 +615,18 @@ class CrmLead(models.Model):
     
     def action_view_approval_request(self):
         self.ensure_one()
-        if not self.approval_request_id:
-            return False
-        return {
+        requests = self._get_demo_approvals()
+        action = {
             'type': 'ir.actions.act_window',
-            'name': _('Solicitud de Aprobación'),
+            'name': _('Aprobaciones de la demostración'),
             'res_model': 'approval.request',
-            'view_mode': 'form',
-            'res_id': self.approval_request_id.id,
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', requests.ids)],
             'target': 'current',
         }
+        if len(requests) == 1:
+            action.update({'view_mode': 'form', 'res_id': requests.id})
+        return action
 
 class CrmStage(models.Model):
     _inherit = 'crm.stage'

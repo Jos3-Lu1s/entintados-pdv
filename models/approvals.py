@@ -67,11 +67,64 @@ class ApprovalRequest(models.Model):
                 request.name = name
         return requests
 
+    def _cancel_demo_document(self):
+        self.ensure_one()
+        return super(ApprovalRequest, self).action_cancel()
+
     def action_cancel(self):
-        result = super().action_cancel()
+        demos = self.filtered('crm_lead_id')
+        for request in demos:
+            if not request.crm_lead_id._can_cancel_demo() and self.env.user not in request.sudo().material_auditor_ids.user_id:
+                raise UserError(_('Solo el jefe del organigrama o los auditores asignados pueden cancelar la demostración.'))
+        result = None
+        for request in self:
+            result = super(ApprovalRequest, request.sudo() if request in demos else request).action_cancel()
         self.filtered(lambda request: request.request_status == 'cancel').crm_lead_id._mark_demo_lost(
             _('Cancelación de la aprobación de la demostración.'))
         return result
+
+    can_cancel_demo = fields.Boolean(compute='_compute_demo_permissions')
+    can_reject_demo = fields.Boolean(compute='_compute_demo_permissions')
+
+    @api.depends_context('uid')
+    @api.depends('crm_lead_id.user_id', 'material_auditor_ids', 'request_status')
+    def _compute_demo_permissions(self):
+        for request in self:
+            lead = request.crm_lead_id
+            request.can_cancel_demo = bool(lead and lead._can_cancel_demo())
+            request.can_reject_demo = bool(lead and (self.env.su or
+                self.env.user == lead.sudo()._get_material_approver()))
+
+    def _reject_demo(self):
+        self.ensure_one()
+        request = self.sudo()
+        pickings = request.picking_ids | request.generated_picking_id
+        if pickings.filtered(lambda picking: picking.state == 'done'):
+            raise UserError(_('No puedes rechazar una demostración cuya salida ya fue realizada.'))
+        action = self.crm_lead_id._return_demo_for_correction(self)
+        # Call the native methods directly: rejection must never mark CRM lost.
+        super(ApprovalRequest, request).action_refuse(request.approver_ids)
+        for picking in pickings.filtered(lambda picking: picking.state != 'cancel'):
+            picking._cancel_rejected_demo()
+        request.message_post(body=_('Solicitud rechazada y devuelta a CRM para corregir los productos.'))
+        return action
+
+    def action_reject_demo(self):
+        self.ensure_one()
+        self.check_access('read')
+        if not self.crm_lead_id or not self.can_reject_demo:
+            raise UserError(_('Solo el jefe encargado del organigrama puede rechazar esta aprobación.'))
+        if self.request_status != 'pending':
+            raise UserError(_('Solo puedes rechazar una aprobación pendiente.'))
+        return self._reject_demo()
+
+    def action_refuse(self, approver=None):
+        demos = self.filtered('crm_lead_id')
+        for request in demos:
+            request.action_reject_demo()
+        ordinary = self - demos
+        if ordinary:
+            return super(ApprovalRequest, ordinary).action_refuse(approver)
     
     crm_lead_id = fields.Many2one(
         'crm.lead',

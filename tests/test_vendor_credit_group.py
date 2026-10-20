@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from odoo import Command, fields
 from odoo.exceptions import UserError
+from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -197,3 +198,70 @@ class TestVendorCreditGroup(TransactionCase):
             invoice = self._invoice(registered_payment=True, payment_amount=100)
             self.assertEqual(invoice.amount_residual, 0)
             self.assertEqual(invoice.payment_state, 'in_payment')
+
+    def test_purchase_journal_is_automatic(self):
+        self.journal.sequence = 0
+        group = self.env['vendor.credit.group'].create({
+            'partner_id': self.partner.id, 'company_id': self.company.id,
+            'currency_id': self.company.currency_id.id, 'reason': 'Automatic purchase journal',
+        })
+        self.assertEqual(group.journal_id, self.journal)
+        self.assertEqual(group.journal_id.type, 'purchase')
+
+    def test_purchase_journal_follows_company(self):
+        company = self.env['res.company'].create({'name': 'Other vendor credit company'})
+        journal = self.env['account.journal'].create({
+            'name': 'Other company purchases', 'code': 'VCO', 'type': 'purchase', 'company_id': company.id,
+        })
+        group = self.env['vendor.credit.group'].with_context(allowed_company_ids=[self.company.id, company.id]).create({
+            'partner_id': self.partner.id, 'company_id': company.id,
+            'currency_id': company.currency_id.id, 'reason': 'Other company journal',
+        })
+        self.assertEqual(group.journal_id, journal)
+
+    def test_existing_purchase_journal_is_preserved(self):
+        group = self._group(self._invoice())
+        group._onchange_scope()
+        self.assertEqual(group.journal_id, self.journal)
+
+    def test_single_selection_action_selects_missing_or_deselects_all(self):
+        group = self._group(self._invoice() | self._invoice())
+        amounts = group.line_ids.mapped('amount')
+        self.assertEqual(group.selection_toggle_label, 'Deseleccionar todas')
+        group.action_toggle_invoice_selection()
+        self.assertFalse(any(group.line_ids.mapped('selected')))
+        self.assertEqual(group.amount_total, 0)
+        self.assertEqual(group.invoice_count, 0)
+        self.assertEqual(group.selection_toggle_label, 'Seleccionar todas')
+        group.line_ids[0].selected = True
+        self.assertEqual(group.selection_toggle_label, 'Seleccionar todas')
+        group.action_toggle_invoice_selection()
+        self.assertTrue(all(group.line_ids.mapped('selected')))
+        self.assertEqual(group.selection_toggle_label, 'Deseleccionar todas')
+        self.assertEqual(group.invoice_count, 2)
+        self.assertEqual(group.amount_total, sum(amounts))
+        self.assertEqual(group.line_ids.mapped('amount'), amounts)
+
+    def test_selection_label_updates_when_editing_a_single_checkbox(self):
+        group = self._group(self._invoice() | self._invoice())
+        with Form(group) as form:
+            self.assertEqual(form.selection_toggle_label, 'Deseleccionar todas')
+            with form.line_ids.edit(0) as line:
+                line.selected = False
+            self.assertEqual(form.selection_toggle_label, 'Seleccionar todas')
+
+    def test_selection_action_does_not_change_generated_or_cancelled_groups(self):
+        group = self._group(self._invoice())
+        group.action_create_credit()
+        with self.assertRaises(UserError):
+            group.action_toggle_invoice_selection()
+        group.action_cancel()
+        with self.assertRaises(UserError):
+            group.action_toggle_invoice_selection()
+
+    def test_only_one_selection_button_above_invoice_lines(self):
+        view = self.env.ref('entintados_pdv.vendor_credit_wizard_form')._get_combined_arch()
+        buttons = view.xpath('//button[@name="action_toggle_invoice_selection"]')
+        self.assertEqual(len(buttons), 1)
+        self.assertTrue(buttons[0].xpath('./field[@name="selection_toggle_label"]'))
+        self.assertTrue(buttons[0].getparent().xpath('following-sibling::field[@name="line_ids"]'))

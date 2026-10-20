@@ -11,6 +11,21 @@ class StockPicking(models.Model):
     _inherit = "stock.picking"
 
     is_crm_demo_output = fields.Boolean(compute='_compute_is_crm_demo_output')
+    can_cancel_demo = fields.Boolean(compute='_compute_can_cancel_demo')
+
+    @api.depends_context('uid')
+    @api.depends('crm_lead_id', 'approval_request_id.material_auditor_ids')
+    def _compute_can_cancel_demo(self):
+        for picking in self:
+            lead = picking.crm_lead_id or picking.approval_request_id.crm_lead_id
+            picking.can_cancel_demo = bool(lead and lead._can_cancel_demo())
+
+    def _cancel_rejected_demo(self):
+        self.ensure_one()
+        self.write({'material_approval_state': 'refused'})
+        self.activity_ids.filtered(lambda activity: activity.summary ==
+            'Validación de Auditoría - Salida de material').action_feedback(feedback=_('Rechazado por Auditoría.'))
+        return super(StockPicking, self).action_cancel()
 
     @api.depends('picking_type_id', 'crm_lead_id', 'approval_request_id.crm_lead_id')
     def _compute_is_crm_demo_output(self):
@@ -18,7 +33,13 @@ class StockPicking(models.Model):
             picking.is_crm_demo_output = bool(picking._is_material_output_type() and
                 (picking.crm_lead_id or picking.approval_request_id.crm_lead_id))
 
+    def _cancel_demo_document(self):
+        return super(StockPicking, self).action_cancel()
+
     def action_cancel(self):
+        for picking in self.filtered('is_crm_demo_output'):
+            if not picking.can_cancel_demo:
+                raise UserError(_('Solo el jefe del organigrama o los auditores asignados pueden cancelar la demostración.'))
         result = super().action_cancel()
         cancelled = self.filtered(lambda picking: picking.is_crm_demo_output and picking.state == 'cancel')
         leads = cancelled.crm_lead_id | cancelled.approval_request_id.crm_lead_id
@@ -153,11 +174,9 @@ class StockPicking(models.Model):
         self.ensure_one()
         if not self.approval_request_id:
             return False
-        employee = self.env['hr.employee'].search(
-            [('user_id', '=', self.env.user.id)], limit=1
-        )
-        return bool(employee and employee in self.approval_request_id.material_auditor_ids)
+        return self.env.user in self.approval_request_id.sudo().material_auditor_ids.user_id
     
+    @api.depends_context('uid')
     def _compute_is_material_auditor(self):
         for picking in self:
             picking.is_material_auditor = bool(
@@ -209,6 +228,16 @@ class StockPicking(models.Model):
         return self.button_validate()
 
     def action_audit_refuse_material(self):
+        self.ensure_one()
+        if self.is_crm_demo_output:
+            self.check_access('read')
+            if not self._is_current_user_auditor():
+                raise UserError(_('Solo los auditores asignados pueden rechazar esta salida.'))
+            if self.material_approval_state != 'to_audit' or self.state in ('done', 'cancel'):
+                raise UserError(_('Solo puedes rechazar una salida pendiente de auditoría.'))
+            action = self.approval_request_id.sudo()._reject_demo()
+            self.sudo().write({'material_auditor_id': self.env.uid})
+            return action
         for picking in self:
             if not picking.is_material_output_type:
                 raise UserError(_("Esta acción solo aplica a salidas de tipo 'Salida de material'."))

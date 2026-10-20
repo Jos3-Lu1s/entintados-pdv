@@ -25,31 +25,53 @@
                     </button>
                 </div>
 
-                <div class="oe_title">
-                    <h1>
-                        <field name="name" readonly="1"/>
-                    </h1>
+                <div class="oe_title mb-4">
+                    <div class="text-muted mb-1">NOTA DE CRÉDITO AGRUPADA</div>
+                    <h1><field name="name" readonly="1"/></h1>
+                    <p class="text-muted">Selecciona las facturas del proveedor y define el importe a acreditar.</p>
                 </div>
-            
+
                 <group>
-                    <field name="company_id" readonly="state != 'draft'" groups="base.group_multi_company"/>
-                    <field name="company_id" readonly="state != 'draft'" invisible="1"/>
-                    <field name="partner_id" readonly="state != 'draft'" domain="[('is_purchase_contact', '=', True), ('distributed_notes', '=', True)]" options="{'no_create': True}"/>
-                    <field name="currency_id" readonly="state != 'draft'" options="{'no_create': True}"/>
-                    <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
-                    <field name="date" readonly="state != 'draft'"/>
-                    <field name="reason" readonly="state != 'draft'"/>
+                    <group string="Proveedor y compañía">
+                        <field name="partner_id" readonly="state != 'draft'" domain="[('is_purchase_contact', '=', True), ('distributed_notes', '=', True)]" options="{'no_create': True}" placeholder="Selecciona un proveedor"/>
+                        <field name="company_id" string="Compañía" readonly="state != 'draft'" groups="base.group_multi_company"/>
+                        <field name="company_id" invisible="1"/>
+                        <field name="currency_id" string="Moneda" readonly="state != 'draft'" options="{'no_create': True}"/>
+                    </group>
+                    <group string="Datos de la nota">
+                        <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
+                        <field name="date" readonly="state != 'draft'"/>
+                        <field name="reason" readonly="state != 'draft'" placeholder="Por ejemplo: bonificación del proveedor"/>
+                    </group>
                 </group>
-                <div class="alert alert-info" role="status" invisible="state != 'cancel'">
+                <div class="alert alert-warning" role="status" invisible="state != 'cancel'">
+                    <strong>Agrupación cancelada.</strong>
                     Puedes restablecer esta agrupación a borrador para cambiar los importes o la
                     selección de facturas. Al generar nuevamente, se crearán nuevas notas;
                     las anteriores permanecerán canceladas.
                 </div>
-                <div class="alert alert-info" role="status" invisible="state == 'cancel'">
-                    Marca las facturas para generar una nota de crédito por cada una. Puedes ajustar el
-                    importe con impuestos de cada una; se distribuirá proporcionalmente entre sus
-                    líneas. Cada nota se contabilizará y conciliará automáticamente con su factura.
-                    Si cubre el saldo pendiente, ambas quedarán pagadas.
+                <div class="alert alert-info d-flex gap-2" role="status" invisible="state != 'draft'">
+                    <i class="fa fa-info-circle mt-1" aria-hidden="true"/>
+                    <div>
+                        Se generará una nota por cada factura seleccionada, con contabilización y conciliación automáticas.
+                        Los importes incluyen impuestos y se distribuyen proporcionalmente entre las líneas de cada factura.
+                    </div>
+                </div>
+                <div class="alert alert-success" role="status" invisible="state != 'generated'">
+                    <i class="fa fa-check-circle me-1" aria-hidden="true"/>
+                    Las notas de crédito fueron generadas y conciliadas con sus facturas.
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-4 mb-3">
+                    <div>
+                        <h3 class="mb-1">Facturas del proveedor</h3>
+                        <span class="text-muted">Facturas con pago parcial. Ajusta el importe de las que deseas incluir.</span>
+                    </div>
+                    <button name="action_toggle_invoice_selection" type="object" class="btn btn-secondary"
+                            invisible="state != 'draft' or not line_ids">
+                        <i class="fa fa-check-square-o me-1" aria-hidden="true"/>
+                        <field name="selection_toggle_label" readonly="1" nolabel="1" class="oe_inline"/>
+                    </button>
                 </div>
                 <field name="line_ids" readonly="state != 'draft'">
                     <list editable="bottom" create="0" delete="0" decoration-muted="not selected">
@@ -60,7 +82,10 @@
                         <field name="amount" readonly="not selected" force_save="1"/>
                     </list>
                 </field>
-                <group><field name="amount_total"/></group>
+                <group class="oe_subtotal_footer oe_right mt-3">
+                    <field name="invoice_count" string="Facturas seleccionadas" readonly="1"/>
+                    <field name="amount_total" widget="monetary" class="oe_subtotal_footer_separator" readonly="1"/>
+                </group>
                 </sheet>
             </form>
         </field>
@@ -76,7 +101,7 @@
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="currency_id" optional="hide"/>
                 <field name="amount_total"/>
-                <field name="state" widget="badge"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'generated'" decoration-muted="state == 'cancel'"/>
                 <field name="credit_count" string="Notas de crédito"/>
             </list>
         </field>

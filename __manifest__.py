@@ -94,6 +94,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/fields/stock_availability/stock_availability_field.js",
+            "entintados_pdv/static/src/fields/stock_availability/stock_availability_field.xml",
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",

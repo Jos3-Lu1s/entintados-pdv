@@ -101,11 +101,42 @@ class VendorCreditGroup(models.Model):
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
     partner_id = fields.Many2one('res.partner', string='Proveedor', required=True, check_company=True)
     currency_id = fields.Many2one('res.currency', string='Moneda', required=True, default=lambda self: self.env.company.currency_id)
-    journal_id = fields.Many2one('account.journal', string='Diario de compras', required=True, check_company=True)
+    journal_id = fields.Many2one(
+        'account.journal', string='Diario de compras', required=True, check_company=True,
+        compute='_compute_journal_id', store=True, readonly=False, precompute=True,
+        domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]",
+    )
     date = fields.Date(string='Fecha', required=True, default=fields.Date.context_today)
     reason = fields.Char(string='Motivo', required=True)
     line_ids = fields.One2many('vendor.credit.group.line', 'group_id', string='Facturas')
     amount_total = fields.Monetary(string='Total a acreditar', compute='_compute_amount_total')
+    selection_toggle_label = fields.Char(compute='_compute_selection_toggle_label')
+
+    @api.depends('company_id', 'currency_id')
+    def _compute_journal_id(self):
+        Journal = self.env['account.journal']
+        for group in self:
+            journal = group.journal_id
+            if (journal and journal.type == 'purchase' and journal.company_id == group.company_id
+                    and (not journal.currency_id or journal.currency_id == group.currency_id)):
+                continue
+            domain = [('type', '=', 'purchase'), ('company_id', '=', group.company_id.id)]
+            preferred = Journal.search(domain + [('currency_id', '=', group.currency_id.id)], limit=1)
+            group.journal_id = preferred or Journal.search(domain + [('currency_id', '=', False)], limit=1)
+
+    @api.depends('line_ids', 'line_ids.selected')
+    def _compute_selection_toggle_label(self):
+        for group in self:
+            all_selected = bool(group.line_ids) and all(group.line_ids.mapped('selected'))
+            group.selection_toggle_label = _('Deseleccionar todas') if all_selected else _('Seleccionar todas')
+
+    def action_toggle_invoice_selection(self):
+        self.ensure_one()
+        if self.state != 'draft' or self.credit_ids:
+            raise UserError(_('Solo puedes cambiar la selección de una agrupación en borrador.'))
+        if self.line_ids:
+            self.line_ids.write({'selected': not all(self.line_ids.mapped('selected'))})
+        return True
 
     @api.depends('line_ids.amount', 'line_ids.selected')
     def _compute_amount_total(self):
@@ -115,8 +146,6 @@ class VendorCreditGroup(models.Model):
     @api.onchange('partner_id', 'company_id', 'currency_id')
     def _onchange_scope(self):
         self.line_ids = [Command.clear()]
-        if self.journal_id.company_id != self.company_id:
-            self.journal_id = False
         if self.partner_id and self.partner_id.distributed_notes:
             self._populate_lines_from_partner()
 

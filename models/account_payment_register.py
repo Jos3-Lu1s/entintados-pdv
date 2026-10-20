@@ -3,9 +3,14 @@ from odoo import models, api, fields
 
 class AccountPaymentRegister(models.TransientModel):
     _inherit = 'account.payment.register'
-    
+
+    distributed_notes = fields.Boolean(related='partner_id.distributed_notes', readonly=True)
+    payment_percentage = fields.Float(
+        string="Porcentaje de pago", compute='_compute_discount_percentage',
+        help="Porcentaje de pago configurado en el contacto.",
+    )
     discount_percentage = fields.Float(
-        string="Descuento (%)",
+        string="Porcentaje restante",
         compute='_compute_discount_percentage',
         help="Porcentaje que se deja de pagar sobre esta factura, calculado "
              "como 100 menos el porcentaje de pago configurado en el proveedor.",
@@ -15,15 +20,17 @@ class AccountPaymentRegister(models.TransientModel):
     def _compute_discount_percentage(self):
         for wizard in self:
             partner = wizard.partner_id
-            if partner and partner.distributed_notes and partner.percentage_patyc:
-                wizard.discount_percentage = 100.0 - partner.percentage_patyc
-            else:
-                wizard.discount_percentage = 0.0
+            # The percentage widget expects fractions: 0.80 is displayed as 80%.
+            wizard.payment_percentage = partner.percentage_patyc / 100.0 if partner.distributed_notes else 0.0
+            wizard.discount_percentage = 1.0 - wizard.payment_percentage if partner.distributed_notes else 0.0
 
+    @api.depends('can_edit_wizard', 'source_amount', 'source_amount_currency', 'source_currency_id',
+                 'company_id', 'currency_id', 'payment_date', 'installments_mode',
+                 'partner_id', 'partner_id.distributed_notes', 'partner_id.percentage_patyc')
     def _compute_amount(self):
         super()._compute_amount()
         for wizard in self:
-            partner = wizard.partner_id
-            if partner and partner.distributed_notes and partner.percentage_patyc:
-                base_amount = wizard.source_amount_currency or wizard.source_amount
-                wizard.amount = base_amount * (partner.percentage_patyc / 100.0)
+            if (wizard.distributed_notes and wizard.can_edit_wizard and wizard.journal_id
+                    and wizard.currency_id and wizard.payment_date and not wizard.custom_user_amount):
+                # Keep native currency conversion/installments and manual amount overrides.
+                wizard.amount = wizard.currency_id.round(wizard.amount * wizard.payment_percentage)

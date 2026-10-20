@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.StockAvailabilityField">
+        <span class="d-inline-flex align-items-center justify-content-end gap-1 text-nowrap">
+            <t t-call="web.FloatField"/>
+            <i class="fa fa-area-chart" role="img"
+               t-att-class="hasStock ? 'text-success' : 'text-danger'"
+               t-att-title="stockLabel" t-att-aria-label="stockLabel"/>
+        </span>
+    </t>
+</templates>

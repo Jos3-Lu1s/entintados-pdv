@@ -32,12 +32,18 @@ class SaleOrder(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            opportunity_id = vals.get('opportunity_id', self.env.context.get('default_opportunity_id'))
+            if opportunity_id:
+                self.env['crm.lead'].browse(opportunity_id)._check_can_create_quotation()
         orders = super().create(vals_list)
         for order in orders:
             order._sync_opportunity_stage()
         return orders
 
     def write(self, vals):
+        if vals.get('opportunity_id'):
+            self.env['crm.lead'].browse(vals['opportunity_id'])._check_can_create_quotation()
         if 'partner_id' in vals:
             self = self.with_context(force_price_recomputation=True)
         # Cambio de tarifa o de cliente (y con ellos de moneda) por código, RPC, importación o el

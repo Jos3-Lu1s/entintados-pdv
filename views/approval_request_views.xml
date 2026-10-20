@@ -7,9 +7,15 @@
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
                 <field name="crm_lead_id" invisible="1"/>
+                <field name="can_cancel_demo" invisible="1"/>
+                <field name="can_reject_demo" invisible="1"/>
+                <button name="action_reject_demo" type="object" string="Rechazar y devolver a CRM" invisible="not crm_lead_id or not can_reject_demo or request_status != 'pending'" confirm="La solicitud regresará a CRM para corregir los productos. La oportunidad seguirá activa."/>
                 <button name="action_cancel" type="object" string="Cancelar demostración"
-                        invisible="not crm_lead_id or request_status in ['new', 'cancel'] or request_owner_id != uid"
+                        invisible="not crm_lead_id or not can_cancel_demo or request_status in ['cancel', 'refused']"
                         confirm="Cancelar esta aprobación cancelará la demostración y marcará automáticamente la oportunidad de CRM como perdida. ¿Deseas continuar?"/>
+            </xpath>
+            <xpath expr="//button[@name='action_refuse' and @data-hotkey='z']" position="attributes">
+                <attribute name="invisible">crm_lead_id or request_status in ['approved', 'refused', 'cancel'] or user_status != 'pending'</attribute>
             </xpath>
             <xpath expr="//button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
                 <attribute name="invisible">crm_lead_id or request_status in ['new', 'cancel'] or request_owner_id != uid</attribute>
@@ -22,8 +28,8 @@
         <field name="inherit_id" ref="approvals.approval_product_line_view_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='quantity']" position="after">
-                <field name="qty_available_branch" optional="show"/>
-                <field name="qty_available_company" optional="hide"/>
+                <field name="qty_available_branch" widget="entintados_stock_availability" readonly="1" optional="show"/>
+                <field name="qty_available_company" widget="entintados_stock_availability" readonly="1" optional="hide"/>
             </xpath>
         </field>
     </record>
@@ -34,8 +40,8 @@
         <field name="inherit_id" ref="approvals.approval_product_line_view_tree_independent"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='quantity']" position="after">
-                <field name="qty_available_branch" optional="show"/>
-                <field name="qty_available_company" optional="hide"/>
+                <field name="qty_available_branch" widget="entintados_stock_availability" readonly="1" optional="show"/>
+                <field name="qty_available_company" widget="entintados_stock_availability" readonly="1" optional="hide"/>
             </xpath>
         </field>
     </record>

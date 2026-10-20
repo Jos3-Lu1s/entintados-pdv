@@ -7,8 +7,9 @@
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
                 <field name="is_crm_demo_output" invisible="1"/>
+                <field name="can_cancel_demo" invisible="1"/>
                 <button name="action_cancel" type="object" string="Cancelar demostración" groups="base.group_user"
-                        invisible="not is_crm_demo_output or state not in ('assigned', 'confirmed', 'draft', 'waiting')"
+                        invisible="not is_crm_demo_output or not can_cancel_demo or state not in ('assigned', 'confirmed', 'draft', 'waiting')"
                         confirm="Cancelar esta salida de material marcará automáticamente la oportunidad de CRM como perdida. ¿Deseas continuar?"/>
             </xpath>
             <xpath expr="//button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
@@ -36,12 +37,12 @@
             <xpath expr="//button[@name='button_validate']" position="after">
                 <button name="action_audit_approve_material" string="Autorizar" type="object"
                         class="btn-primary"
-                        invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
+                        invisible="not is_material_auditor or material_approval_state != 'to_audit' or state in ('done', 'cancel')"/>
             </xpath>
             <xpath expr="//header" position="inside">
-                <button name="action_audit_refuse_material" string="Rechazar solicitud" type="object"
+                <button name="action_audit_refuse_material" string="Rechazar solicitud" confirm="La solicitud regresará a CRM para corregir los productos. La oportunidad seguirá activa." type="object"
                         class="btn-secondary"
-                        invisible="not is_material_auditor or material_approval_state != 'to_audit'"/>
+                        invisible="not is_material_auditor or material_approval_state != 'to_audit' or state in ('done', 'cancel')"/>
                 <!-- <field name="material_approval_state" widget="statusbar" statusbar_visible="to_approve,approved,refused"/> -->
             </xpath>
 

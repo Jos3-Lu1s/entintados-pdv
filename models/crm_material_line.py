@@ -145,7 +145,7 @@ class CrmMaterialLine(models.Model):
                 
     def write(self, vals):
         for line in self:
-            if line.lead_id.picking_count > 0:
+            if line.lead_id._has_material_output():
                 raise ValidationError(_(
                     "No se pueden modificar las líneas de material una vez "
                     "generada la salida de inventario."
@@ -158,10 +158,9 @@ class CrmMaterialLine(models.Model):
             lead_id = vals.get('lead_id')
             if lead_id:
                 lead = self.env['crm.lead'].browse(lead_id)
-                if lead.picking_count > 0:
+                if lead._has_material_output():
                     raise ValidationError(_(
                         "No se pueden agregar líneas de material una vez "
                         "generada la salida de inventario."
                     ))
         return super().create(vals_list)
-            

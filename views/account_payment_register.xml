@@ -6,11 +6,22 @@
         <field name="model">account.payment.register</field>
         <field name="inherit_id" ref="account.view_account_payment_register_form"/>
         <field name="arch" type="xml">
-            <field name="amount" position="after">
-                <field name="discount_percentage"
-                       invisible="not discount_percentage"
-                       widget="percentage"/>
-            </field>
+            <xpath expr="//form" position="inside">
+                <field name="distributed_notes" invisible="1"/>
+            </xpath>
+            <xpath expr="//div[@name='amount_div']/field[@name='amount']" position="after">
+                <span class="d-inline-flex align-items-center gap-1 text-nowrap" invisible="not distributed_notes">
+                    <field name="payment_percentage" widget="percentage" readonly="1" nolabel="1" class="oe_inline"/>
+                </span>
+            </xpath>
+            <xpath expr="//field[@name='payment_difference_handling']/preceding-sibling::field[@name='payment_difference']" position="replace">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <field name="payment_difference"/>
+                    <span class="d-inline-flex align-items-center gap-1 text-nowrap" invisible="not distributed_notes">
+                        <field name="discount_percentage" widget="percentage" readonly="1" nolabel="1" class="oe_inline"/>
+                    </span>
+                </div>
+            </xpath>
         </field>
     </record>
 
