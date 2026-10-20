@@ -1358,7 +1358,8 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(self._line_values(fixed_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
         self.assertEqual(self._line_badge(fixed_line), ('fixed_price', 'Precio Fijo'))
         self.assertFalse(fixed_line.manual_discount_allowed)
-        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Desc. Manual (0.0%)'))
+        # Sin acuerdo para la línea, 0 % es el descuento vigente: no es manual.
+        self.assertEqual(self._line_badge(eligible_line), ('none', ''))
         with self.assertRaises(ValidationError):
             fixed_line.write({'discount': 15.0})
 
