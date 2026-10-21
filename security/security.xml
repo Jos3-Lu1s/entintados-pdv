@@ -85,6 +85,12 @@
         <field name="perm_unlink" eval="False" />
     </record>
 
+    <record id="res_partner_discount_rule_company_rule" model="ir.rule">
+        <field name="name">Acuerdos comerciales: compañías permitidas</field>
+        <field name="model_id" ref="model_res_partner_discount_rule" />
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+
     <!-- Exentos del bloqueo de Ajustes de Ventas. Un privilegio por grupo: dos grupos en el
          mismo privilegio se mostrarían como selector excluyente y deben poder asignarse a la vez. -->
     <record id="privilege_sale_edit_price_unit" model="res.groups.privilege">
