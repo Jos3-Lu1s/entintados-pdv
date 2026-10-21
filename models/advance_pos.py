@@ -30,7 +30,7 @@ class PosOrderLine(models.Model):
     def _is_accounting_advance_line(self):
         self.ensure_one()
         return bool(self.product_id.is_accounting_advance or self.advance_source_ref or (
-            self.company_id.advance_risk_enabled and self.sale_order_origin_id
+            self.company_id.advance_risk_enabled
             and self.product_id == self.order_id.config_id.down_payment_product_id
         ))
 
@@ -81,7 +81,7 @@ class PosOrder(models.Model):
             for line in lines:
                 if not line.price_unit * line.qty:
                     raise UserError(_('El importe del anticipo debe ser distinto de cero.'))
-                native = bool(line.sale_order_origin_id and line.product_id == order.config_id.down_payment_product_id)
+                native = bool(line.product_id == order.config_id.down_payment_product_id)
                 if line.discount or not (line.product_id.is_accounting_advance or native):
                     raise UserError(_('Las líneas de anticipo no admiten descuentos y deben utilizar el producto de anticipos.'))
                 source = line._accounting_advance_source()

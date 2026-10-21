@@ -24,7 +24,7 @@ function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
     const order = {
         lines: [{ qty: 1, price_unit: 1000, product_id: { id: 10, product_tmpl_id: {} } }],
         priceIncl: 1000, payment_ids: [], to_invoice: false, pos_payment_flow: 'standard',
-        getPartner: () => ({ id: 7 }), setToInvoice(value) { this.to_invoice = value; },
+        getPartner: () => ({ id: 7, is_credit: authorized }), setToInvoice(value) { this.to_invoice = value; },
         update(values) { Object.assign(this, values); },
         addPaymentline(method) { return { status: true, data: makePayment(method, 0) }; },
     };
@@ -48,7 +48,7 @@ function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
 }
 
 test('PPD keeps the actual receipt and puts only the remainder on account', async () => {
-    const { screen, order } = fixture({ authorized: false });
+    const { screen, order } = fixture({ authorized: true });
     await screen.setDeferredPayment('ppd_partial');
     assert.equal(order.payment_ids[0].amount, 300);
     assert.equal(order.payment_ids[1].amount, 700);
@@ -61,6 +61,27 @@ test('PPD requires a real initial receipt', async () => {
     await screen.setDeferredPayment('ppd_partial');
     assert.equal(order.payment_ids.length, 0);
     assert.equal(notices.length, 1);
+});
+
+test('Customers without Credit cannot use payment options or add on-account debt', async () => {
+    for (const flow of ['ppd_partial', 'credit']) {
+        const { screen, order, notices, deferred } = fixture({ authorized: false });
+        assert.equal(screen.canOfferDeferredPayment, false);
+        await screen.setDeferredPayment(flow);
+        assert.equal(order.payment_ids.length, 1);
+        assert.equal(order.pos_payment_flow, 'standard');
+        assert.equal(await screen.addNewPaymentLine(deferred), false);
+        assert.ok(notices.length >= 1);
+        assert.equal(await screen.addNewPaymentLine({ type: 'cash' }), true);
+    }
+});
+
+test('Changing to a customer without Credit blocks validation of an existing pending balance', async () => {
+    const { screen, order } = fixture();
+    await screen.setDeferredPayment('ppd_partial');
+    order.getPartner = () => ({ id: 8, is_credit: false });
+    assert.equal(await screen.validateOrder(), false);
+    assert.equal(screen.validated, undefined);
 });
 
 test('Authorized credit can finance the entire sale without cash', async () => {

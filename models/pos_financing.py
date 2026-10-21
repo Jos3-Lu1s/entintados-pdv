@@ -77,6 +77,10 @@ class PosOrder(models.Model):
             received = sum(real.mapped('amount'))
             if not order.partner_id or not order.to_invoice:
                 raise UserError(_('Los saldos pendientes y el crédito requieren cliente identificado y factura.'))
+            partner = order.partner_id.commercial_partner_id.sudo().with_company(order.company_id).with_context(
+                allowed_company_ids=order.company_id.ids)
+            if not partner.is_credit:
+                raise UserError(_('Las opciones de pago diferido requieren un contacto con la condición Crédito habilitada.'))
             if order.amount_total <= 0 or amount <= 0 or any(payment.amount < 0 for payment in order.payment_ids):
                 raise UserError(_('Esta modalidad requiere una venta positiva, sin devoluciones, con saldo pendiente positivo.'))
             if order.invoice_split_count > 1 or order.config_id.cash_rounding:
@@ -88,13 +92,10 @@ class PosOrder(models.Model):
             if order.pos_payment_flow == 'ppd_partial':
                 if received <= 0:
                     raise UserError(_('Registra primero un pago inicial real. Para financiar toda la venta utiliza Crédito autorizado.'))
-                # Explicit user policy: a real initial payment permits PPD
-                # without granting or changing the customer's credit limit.
+                # Initial-payment PPD still requires the customer's credit flag.
                 continue
             if not check_risk:
                 continue
-            partner = order.partner_id.commercial_partner_id.sudo().with_company(order.company_id).with_context(
-                allowed_company_ids=order.company_id.ids)
             self.env.cr.execute('SELECT id FROM res_partner WHERE id = %s FOR UPDATE', [partner.id])
             partner.invalidate_recordset()
             if not partner.is_credit or partner.credit_limit <= 0:

@@ -7,6 +7,10 @@ import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_p
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 
 patch(PaymentScreen.prototype, {
+    get isCreditCustomer() {
+        const partner = this.currentOrder.getPartner();
+        return Boolean(partner?.commercial_partner_id?.is_credit ?? partner?.is_credit);
+    },
     get appliedCustomerAdvance() {
         return -this.currentOrder.lines.filter((line) => line.advance_source_ref)
             .reduce((sum, line) => sum + line.prices.total_included_currency, 0);
@@ -14,10 +18,14 @@ patch(PaymentScreen.prototype, {
     get isCollectingCustomerAdvance() {
         return this.currentOrder.lines.some((line) => line.price_unit * line.qty > 0 &&
             (line.product_id?.product_tmpl_id?.is_accounting_advance ||
-                (this.pos.config.advance_risk_enabled && line.sale_order_origin_id &&
+                (this.pos.config.advance_risk_enabled &&
                     line.product_id?.id === this.pos.config.down_payment_product_id?.id)));
     },
     async addNewPaymentLine(paymentMethod) {
+        if (paymentMethod.type === "pay_later" && !this.isCreditCustomer && !this.currentOrder.is_settling_account) {
+            this.notification.add(_t("Las opciones de pago diferido requieren un contacto con la condición Crédito habilitada."), { type: "warning" });
+            return false;
+        }
         if (this.isCollectingCustomerAdvance && paymentMethod.type === "pay_later") {
             this.notification.add(_t("Recibe el anticipo con efectivo o tarjeta. Cuenta de cliente generaría una deuda, no un saldo a favor."), { type: "warning" });
             return false;
@@ -27,11 +35,11 @@ patch(PaymentScreen.prototype, {
     get requiresAdvanceInvoice() {
         return this.currentOrder.lines.some((line) =>
             line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref ||
-            (this.pos.config.advance_risk_enabled && line.sale_order_origin_id &&
+            (this.pos.config.advance_risk_enabled &&
                 line.product_id?.id === this.pos.config.down_payment_product_id?.id));
     },
     onMounted() {
-        if (this.isCollectingCustomerAdvance) {
+        if (this.isCollectingCustomerAdvance || !this.isCreditCustomer) {
             this.payment_methods_from_config = this.payment_methods_from_config.filter((method) => method.type !== "pay_later");
         }
         super.onMounted(...arguments);
@@ -48,6 +56,11 @@ patch(PaymentScreen.prototype, {
         return await super.toggleIsToInvoice(...arguments);
     },
     async validateOrder() {
+        if (!this.isCreditCustomer && this.currentOrder.payment_ids.some(
+            (line) => line.amount > 0 && line.payment_method_id.type === "pay_later")) {
+            this.notification.add(_t("El cliente debe tener la condición Crédito habilitada para dejar saldo pendiente."), { type: "warning" });
+            return false;
+        }
         // Also repair existing draft tickets created before invoice enforcement.
         if (this.requiresAdvanceInvoice) {
             this.currentOrder.setToInvoice(true);
@@ -56,7 +69,7 @@ patch(PaymentScreen.prototype, {
     },
     get canOfferDeferredPayment() {
         const order = this.currentOrder;
-        return !order.isRefund && !order.is_settling_account && order.priceIncl > 0 &&
+        return this.isCreditCustomer && !order.isRefund && !order.is_settling_account && order.priceIncl > 0 &&
             !order.lines.some((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.() ||
                 (line.price_unit * line.qty > 0 &&
                     (line.product_id?.product_tmpl_id?.is_accounting_advance ||
@@ -67,7 +80,6 @@ patch(PaymentScreen.prototype, {
             title: _t("Forma de pago de la venta"),
             list: [
                 { id: "standard", label: _t("Pago completo"), item: "standard" },
-                { id: "ppd_partial", label: _t("Pago inicial + saldo PPD"), description: _t("Captura primero el pago de hoy. El resto quedará por cobrar."), item: "ppd_partial" },
                 { id: "credit", label: _t("Crédito autorizado"), item: "credit" },
             ],
         });
@@ -88,6 +100,10 @@ patch(PaymentScreen.prototype, {
     async setDeferredPayment(flow) {
         const order = this.currentOrder;
         const partner = order.getPartner();
+        if (!this.isCreditCustomer) {
+            this.notification.add(_t("Las opciones de pago diferido requieren un contacto con la condición Crédito habilitada."), { type: "warning" });
+            return;
+        }
         if (!partner || !order.lines.length || order.priceIncl <= 0 || order.is_settling_account ||
             order.lines.some((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.())) {
             this.notification.add(_t("Selecciona un cliente y agrega los productos de una venta. Esta opción no se usa para cobrar una deuda anterior."), { type: "warning" });
@@ -113,8 +129,12 @@ patch(PaymentScreen.prototype, {
             return;
         }
         try {
+            const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
+            if (!info.credit_authorized) {
+                this.notification.add(_t("El contacto ya no tiene la condición Crédito habilitada."), { type: "warning" });
+                return;
+            }
             if (flow === "credit") {
-                const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
                 const applied = -order.lines.filter((line) => line.advance_source_ref ||
                     (line.sale_order_line_id?.is_downpayment && line.price_unit * line.qty < 0))
                     .reduce((total, line) => total + line.prices.total_included_currency, 0);

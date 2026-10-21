@@ -291,6 +291,24 @@ class TestAdvanceAccounting(TransactionCase):
         product_line = next(command[2] for command in values if command[2].get('product_id'))
         self.assertEqual(product_line['account_id'], self.accounts['customer'].id)
 
+    def test_standalone_advance_uses_product_selected_in_pos_sales_settings(self):
+        product = self.env['product.product'].create({
+            'name': 'POS configured advance', 'type': 'service',
+            'property_account_income_id': self.accounts['income'].id,
+            'taxes_id': [Command.clear()],
+        })
+        order = self._pos_order(100)
+        order.config_id.down_payment_product_id = product
+        order.lines.product_id = product
+        self.assertFalse(product.is_accounting_advance)
+        self.assertFalse(order.lines.sale_order_origin_id)
+        self.assertTrue(order.lines._is_accounting_advance_line())
+        order._check_pos_advances()
+        values = order._prepare_invoice_lines('out_invoice')
+        line = next(command[2] for command in values if command[2].get('product_id'))
+        self.assertEqual(line['product_id'], product.id)
+        self.assertEqual(line['account_id'], self.accounts['customer'].id)
+
     def test_pos_draft_sync_restores_required_advance_invoice(self):
         order = self._financed_pos_order(paid=100, pending=0, flow='standard')
         order.lines.product_id = self.advance_product
@@ -545,8 +563,8 @@ class TestAdvanceAccounting(TransactionCase):
                             Command.create({'payment_method_id': deferred.id, 'amount': pending})],
         })
 
-    def test_ppd_partial_permits_unapproved_customer_and_keeps_real_residual(self):
-        self.partner.write({'is_credit': False, 'credit_limit': 0})
+    def test_ppd_partial_requires_credit_condition_and_keeps_real_residual(self):
+        self.partner.write({'is_credit': True, 'credit_limit': 0})
         order = self._financed_pos_order()
         order._check_pos_deferred_payments(check_risk=True)
         values = order._prepare_invoice_vals()
@@ -582,6 +600,13 @@ class TestAdvanceAccounting(TransactionCase):
         order = self._financed_pos_order(paid=0, pending=1000)
         with self.assertRaises(UserError):
             order._check_pos_deferred_payments(check_risk=True)
+
+    def test_ppd_and_credit_reject_customers_without_credit_condition(self):
+        self.partner.is_credit = False
+        for flow in ('ppd_partial', 'credit'):
+            order = self._financed_pos_order(flow=flow)
+            with self.assertRaises(UserError):
+                order._check_pos_deferred_payments()
 
     def test_native_pos_unset_payment_flow_is_normalized(self):
         order = self._financed_pos_order(paid=1000, pending=0, flow=False)
