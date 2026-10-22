@@ -100,6 +100,10 @@ Catálogo de entintado
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
+            # Desglose del reparto del precio de un combo en las líneas de venta
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.js",
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.xml",
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_columns_patch.js",
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",

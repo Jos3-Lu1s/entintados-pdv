@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.ComboBreakdownPopover">
+        <t t-set="b" t-value="props.breakdown"/>
+        <div class="o_combo_breakdown_popover p-2 small" style="max-width: 380px;">
+            <div class="fw-bold mb-1">Desglose del combo</div>
+            <div t-if="b.empty" class="text-muted">
+                Sin desglose. Usa “Actualizar precios” para calcularlo.
+            </div>
+            <t t-else="">
+                <div class="d-flex justify-content-between">
+                    <span>Precio del paquete</span>
+                    <span class="fw-bold" t-esc="b.packagePrice"/>
+                </div>
+                <div class="text-muted" t-esc="b.packagePriceOrigin"/>
+                <div class="d-flex justify-content-between mt-1">
+                    <span>Suma de referencias</span>
+                    <span t-esc="b.referenceSum"/>
+                </div>
+                <div class="text-muted">Cada grupo recibe una parte del paquete en proporción a su referencia.</div>
+                <div t-foreach="b.groups" t-as="group" t-key="group_index" class="border-top mt-2 pt-1">
+                    <div class="fw-bold" t-esc="group.name"/>
+                    <div class="text-muted">
+                        Referencia: <t t-esc="group.referenceProduct"/> (la opción más barata)
+                    </div>
+                    <div t-if="group.missing" class="text-muted">Sin desglose para este grupo.</div>
+                    <t t-else="">
+                        <div t-esc="group.formula"/>
+                        <div t-if="group.adjustment">
+                            Ajuste por redondeo: <t t-esc="group.adjustment"/>
+                        </div>
+                        <div>Elegido: <t t-esc="group.chosenProduct"/></div>
+                        <div t-if="group.extraPrice">+ Cargo extra: <t t-esc="group.extraPrice"/></div>
+                        <div t-if="group.attributesExtra">+ Extras de atributos: <t t-esc="group.attributesExtra"/></div>
+                        <div class="d-flex justify-content-between">
+                            <span>Precio por unidad</span>
+                            <span class="fw-bold" t-esc="group.unitPrice"/>
+                        </div>
+                        <div t-if="group.manualPrice" class="text-warning">
+                            Modificado a mano: <t t-esc="group.manualPrice"/>
+                        </div>
+                    </t>
+                </div>
+                <div class="border-top mt-2 pt-1 d-flex justify-content-between">
+                    <span>Total por paquete</span>
+                    <span class="fw-bold" t-esc="b.packageTotal"/>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>× <t t-esc="b.quantity"/> paquetes</span>
+                    <span class="fw-bold" t-esc="b.quantityTotal"/>
+                </div>
+                <div t-if="b.hasDiscount" class="text-muted mt-1">
+                    Los descuentos se aplican después, sobre cada producto.
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>

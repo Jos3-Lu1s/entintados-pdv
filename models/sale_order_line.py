@@ -52,6 +52,7 @@ class SaleOrderLine(models.Model):
             ('pricelist', 'Tarifa'),
             ('fixed_price', 'Precio fijo de acuerdo'),
             ('manual', 'Manual'),
+            ('combo', 'Parte de combo'),
         ],
         string='Origen del precio',
         compute='_compute_price_unit',
@@ -67,6 +68,16 @@ class SaleOrderLine(models.Model):
         precompute=True,
         readonly=False,
         copy=False,
+    )
+    # Números con los que se calculó el precio de un producto del combo: los del catálogo
+    # pueden cambiar después y el desglose dejaría de cuadrar con `price_unit`.
+    combo_price_snapshot = fields.Json(
+        string='Desglose del precio del combo',
+        compute='_compute_price_unit',
+        store=True,
+        precompute=True,
+        readonly=True,
+        copy=True,
     )
     # Último descuento asignado por el cálculo. El onchange de `discount` también se dispara
     # cuando lo cambia el cálculo: solo es manual si difiere de este valor.
@@ -160,9 +171,16 @@ class SaleOrderLine(models.Model):
             if line.product_id and pricelist:
                 item = item.browse(pricelist._get_product_rule(
                     product=line.product_id, **line._get_pricelist_kwargs()))
+            combo_line = line.combo_item_id and line._get_linked_line()
             if not line.product_id or line.display_type:
                 line.price_origin = False
                 line.price_origin_label = False
+            elif combo_line:
+                # La tarifa se aplica al paquete, no a este producto.
+                line.price_origin = 'combo'
+                line.price_origin_label = (
+                    f"Parte del combo «{combo_line.product_id.name}»: {line.combo_item_id.combo_id.name}"
+                )
             elif item:
                 line.price_origin = 'pricelist'
                 line.price_origin_label = f"Tarifa: {pricelist.name} — {item.name}: {item.price}"
@@ -456,7 +474,10 @@ class SaleOrderLine(models.Model):
         # depende de ella) puede ser la de la tarifa anterior: como `_recompute_prices` del core.
         self.invalidate_recordset(['pricelist_item_id'])
         # Líneas que el core no recalcula: conservan su origen tal cual.
-        previous = {line: (line.price_origin, line.price_origin_label) for line in self}
+        previous = {
+            line: (line.price_origin, line.price_origin_label, line.combo_price_snapshot)
+            for line in self
+        }
         core_skipped = {
             line for line in self
             if not line.order_id
@@ -469,7 +490,7 @@ class SaleOrderLine(models.Model):
         super()._compute_price_unit()
         for line in self:
             if line in core_skipped:
-                line.price_origin, line.price_origin_label = previous[line]
+                line.price_origin, line.price_origin_label, line.combo_price_snapshot = previous[line]
                 continue
             if not force_recompute and (line._keeps_saved_pricing() or line._keeps_manual_price()):
                 continue
@@ -509,6 +530,79 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         return self._get_pricelist_price()
 
+    def _get_combo_price_breakdown(self):
+        """Foto del reparto del precio del paquete con la fórmula de `_get_combo_item_display_price`.
+
+        Si el core cambia esa fórmula, `unit_price` deja de coincidir con `price_unit`.
+        """
+        self.ensure_one()
+        if not self.combo_item_id:
+            return False
+        combo_line = self._get_linked_line()
+        if not combo_line:
+            return False
+        currency = self.currency_id
+        package_price = combo_line._get_display_price_ignore_combo()
+
+        def to_order_currency(combo, amount):
+            return combo.currency_id._convert(
+                from_amount=amount,
+                to_currency=currency,
+                company=self.company_id,
+                date=self.order_id.date_order,
+            )
+
+        groups = []
+        for combo in combo_line.product_template_id.sudo().combo_ids:
+            reference_item = min(
+                combo.combo_item_ids,
+                key=lambda item: item.currency_id._convert(
+                    from_amount=item.lst_price,
+                    to_currency=combo.currency_id,
+                    company=combo.company_id or self.env.company,
+                    date=self.env.cr.now(),
+                ),
+                default=combo.combo_item_ids,
+            )
+            groups.append({
+                'combo_id': combo.id,
+                'name': combo.name,
+                'reference': to_order_currency(combo, combo.base_price),
+                'reference_product': reference_item.product_id.display_name or '',
+            })
+        total_reference = sum(group['reference'] for group in groups)
+        # Divisor 1 con referencias en 0: el reparto sale mal y el ajuste lo corrige, como el core.
+        shares = {
+            group['combo_id']: group['reference'] * package_price / (total_reference or 1)
+            for group in groups
+        }
+        rounded = {combo_id: currency.round(share) for combo_id, share in shares.items()}
+        delta = package_price - sum(rounded.values())
+        own_combo = self.combo_item_id.combo_id
+        adjustment = delta if delta and groups and groups[-1]['combo_id'] == own_combo.id else 0.0
+        extra_price = self.combo_item_id.extra_price
+        attributes_extra = self.product_id._get_no_variant_attributes_price_extra(
+            self.product_no_variant_attribute_value_ids
+        )
+        share_rounded = rounded.get(own_combo.id, 0.0)
+        return {
+            'package_price': package_price,
+            'package_price_origin': (
+                f"Tarifa: {combo_line.order_id.pricelist_id.name}"
+                if combo_line.pricelist_item_id else 'Precio de venta'
+            ),
+            'currency_id': currency.id,
+            'total_reference': total_reference,
+            'groups': groups,
+            'combo_id': own_combo.id,
+            'share_raw': shares.get(own_combo.id, 0.0),
+            'share_rounded': share_rounded,
+            'rounding_adjustment': currency.round(adjustment),
+            'extra_price': extra_price,
+            'attributes_extra': attributes_extra,
+            'unit_price': share_rounded + adjustment + extra_price + attributes_extra,
+        }
+
     def _reset_price_unit(self):
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self.with_context(sale_write_from_compute=True):
@@ -526,6 +620,7 @@ class SaleOrderLine(models.Model):
                 if line._origin.currency_id != line.currency_id:
                     frozen_price = line._convert_price_currency(frozen_price, line._origin.currency_id)
                 super(SaleOrderLine, line)._reset_price_unit()
+                line.combo_price_snapshot = line._get_combo_price_breakdown()
                 if frozen_type == 'fixed_price':
                     line.price_unit = frozen_price
                     line.technical_price_unit = frozen_price
@@ -535,6 +630,7 @@ class SaleOrderLine(models.Model):
                     line._set_price_origin()
                 continue
             super(SaleOrderLine, line)._reset_price_unit()
+            line.combo_price_snapshot = line._get_combo_price_breakdown()
             rule = {}
             if line._admits_partner_agreement():
                 rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
