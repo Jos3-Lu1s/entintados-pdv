@@ -328,6 +328,15 @@ class SaleOrderLine(models.Model):
                     ))
             # El core escribe el importe del anticipo al publicar su factura: no es un precio tecleado.
             manual_price_lines = self - fixed_lines - self.filtered('is_downpayment')
+        if (
+            'discount' in vals
+            and 'pricing_rule_type' not in vals
+            and any(line.pricing_rule_type == 'fixed_price' for line in recompute_lines)
+        ):
+            # El producto nuevo no tiene precio fijo: sin esto la restricción vería el precio fijo
+            # del producto anterior junto al `discount` recibido. El recálculo o el descuento manual
+            # de después ponen el badge definitivo.
+            vals['pricing_rule_type'] = 'none'
         res = super().write(vals)
         for line, base_price in fixed_price_by_line.items():
             price = line.product_id.uom_id._compute_price(base_price, line.product_uom_id)
@@ -352,10 +361,11 @@ class SaleOrderLine(models.Model):
             agreement_discount_lines.with_context(
                 force_price_recomputation=True, reset_manual_pricing=True,
             )._compute_discount()
+        # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
+        # marcarlo manual desbloquearía el descuento de esa línea.
+        manual_discount_lines = manual_discount_lines.filtered(lambda line: line._is_manual_discount_allowed())
         if manual_discount_lines:
-            # Un `discount = 0` importado sobre un precio fijo o un anticipo pasa la restricción:
-            # marcarlo manual desbloquearía el descuento de esa línea.
-            manual_discount_lines.filtered(lambda line: line._is_manual_discount_allowed()).with_context(
+            manual_discount_lines.with_context(
                 skip_manual_discount_breakdown=True,
             ).write(self._manual_discount_values(vals['discount'] or 0.0))
         elif recompute_lines:

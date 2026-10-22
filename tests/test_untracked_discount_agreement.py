@@ -177,6 +177,51 @@ class TestUntrackedDiscountAgreement(TransactionCase):
         self.assertFalse(global_discount.pricing_rule_id)
         self.assertEqual(global_discount.price_unit, -20.0)
 
+    def test_fixed_price_line_product_change_with_discount(self):
+        """Cambio de una línea de precio fijo a un producto con acuerdo de descuento, con `discount`
+        en el mismo write: el descuento es del producto nuevo."""
+        self._discount_rule(10.0)
+        fixed_product = self.env['product.product'].create({
+            'name': 'Pintura Sin Origen Fija',
+            'list_price': 100.0,
+            'taxes_id': [(5, 0, 0)],
+        })
+        self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': fixed_product.id,
+            'fixed_price': 70.0,
+        })
+        expected = {
+            4.0: ('manual', 'Desc. Manual (4.0%)'),
+            10.0: ('product', 'Desc. Producto (10.0%)'),
+            0.0: ('manual', 'Desc. Manual (0.0%)'),
+        }
+        for via in ('write', 'load'):
+            for discount, badge in expected.items():
+                with self.subTest(via=via, discount=discount):
+                    line = self.env['sale.order'].create({
+                        'partner_id': self.partner.id,
+                        'pricelist_id': self.pricelist.id,
+                        'order_line': [(0, 0, {'product_id': fixed_product.id})],
+                    }).order_line
+                    self._assert_fixed_price(line)
+                    if via == 'write':
+                        line.write({'product_id': self.product.id, 'discount': discount})
+                    else:
+                        result = self.lines.load(
+                            ['.id', 'product_id/.id', 'discount'],
+                            [[str(line.id), str(self.product.id), str(discount)]],
+                        )
+                        self.assertFalse(result['messages'])
+                        line.invalidate_recordset()
+
+                    self.assertEqual(line.product_id, self.product)
+                    self.assertEqual(round(line.discount, 2), discount)
+                    self.assertEqual(self._badge(line), badge)
+                    self.assertEqual(line.price_unit, 95.0)
+
     def test_removed_agreement_clears_badge(self):
         rule = self._discount_rule(10.0)
         line = self._create_line()
