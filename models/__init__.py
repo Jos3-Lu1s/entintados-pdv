@@ -51,3 +51,4 @@ from . import advance_accounting
 from . import advance_pos
 from . import pos_financing
 from . import material_chatter
+from . import stock_return_credit

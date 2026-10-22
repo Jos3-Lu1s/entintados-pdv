@@ -160,6 +160,7 @@ Catálogo de entintado
         'views/crm_menu_views.xml',
         'views/crm_stages_view.xml',
         'views/stock_picking_view.xml',
+        'views/stock_return_credit_views.xml',
         'views/approval_request_views.xml',
         'views/res_users_views.xml',
         'views/account_financial_risk_view.xml',
