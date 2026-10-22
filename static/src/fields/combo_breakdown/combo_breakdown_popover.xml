@@ -9,11 +9,22 @@
                 Sin desglose. Usa “Actualizar precios” para calcularlo.
             </div>
             <t t-else="">
+                <div class="fw-bold">Precio del paquete</div>
                 <div class="d-flex justify-content-between">
-                    <span>Precio del paquete</span>
-                    <span class="fw-bold" t-esc="b.packagePrice"/>
+                    <span t-esc="b.packagePriceOrigin"/>
+                    <span t-esc="b.pricelistPrice"/>
                 </div>
-                <div class="text-muted" t-esc="b.packagePriceOrigin"/>
+                <div t-if="b.agreement" class="d-flex justify-content-between">
+                    <span>Acuerdo: <t t-esc="b.agreement.label"/></span>
+                    <span t-esc="b.agreement.price"/>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Se reparte</span>
+                    <span class="fw-bold" t-esc="b.distributedPrice"/>
+                </div>
+                <div t-if="b.discountOrigin">
+                    Descuento: <t t-esc="b.discountOrigin"/>, en cada producto
+                </div>
                 <div class="d-flex justify-content-between mt-1">
                     <span>Suma de referencias</span>
                     <span t-esc="b.referenceSum"/>
@@ -40,18 +51,25 @@
                         <div t-if="group.manualPrice" class="text-warning">
                             Modificado a mano: <t t-esc="group.manualPrice"/>
                         </div>
+                        <div t-if="group.discount" class="d-flex justify-content-between">
+                            <span>Con descuento</span>
+                            <span class="fw-bold" t-esc="group.discount"/>
+                        </div>
                     </t>
                 </div>
                 <div class="border-top mt-2 pt-1 d-flex justify-content-between">
-                    <span>Total por paquete</span>
+                    <span>Total por paquete<t t-if="b.packageTotalDiscounted"> antes del descuento</t></span>
                     <span class="fw-bold" t-esc="b.packageTotal"/>
                 </div>
+                <t t-if="b.packageTotalDiscounted">
+                    <div class="d-flex justify-content-between">
+                        <span>Total por paquete con descuento</span>
+                        <span class="fw-bold" t-esc="b.packageTotalDiscounted"/>
+                    </div>
+                </t>
                 <div class="d-flex justify-content-between">
                     <span>× <t t-esc="b.quantity"/> paquetes</span>
                     <span class="fw-bold" t-esc="b.quantityTotal"/>
-                </div>
-                <div t-if="b.hasDiscount" class="text-muted mt-1">
-                    Los descuentos se aplican después, sobre cada producto.
                 </div>
             </t>
         </div>

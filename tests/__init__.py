@@ -30,3 +30,4 @@ from . import test_service_agreements
 from . import test_sale_line_mobile_form
 from . import test_untracked_discount_agreement
 from . import test_combo_price_breakdown
+from . import test_combo_agreements

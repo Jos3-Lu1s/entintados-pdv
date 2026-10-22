@@ -101,6 +101,8 @@ export const priceOriginField = {
         { name: "price_unit", type: "float" },
         { name: "product_uom_qty", type: "float" },
         { name: "discount", type: "float" },
+        { name: "price_subtotal", type: "monetary" },
+        { name: "pricing_rule_origin", type: "char" },
     ],
 };
 

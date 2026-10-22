@@ -43,6 +43,7 @@
                 <field name="price_origin_label" invisible="1" force_save="1"/>
                 <field name="manual_discount_allowed" invisible="1"/>
                 <field name="combo_price_snapshot" invisible="1"/>
+                <field name="combo_item_id" invisible="1"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="before">
                 <label for="price_unit"/>
@@ -72,14 +73,14 @@
             </xpath>
             <!-- Mismos readonly que la lista. -->
             <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="attributes">
-                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or parent.price_unit_edit_locked</attribute>
+                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or combo_item_id or parent.price_unit_edit_locked</attribute>
             </xpath>
             <xpath expr="//field[@name='order_line']/form//field[@name='discount']" position="attributes">
                 <attribute name="readonly">not manual_discount_allowed or parent.discount_edit_locked</attribute>
             </xpath>
 
             <xpath expr="//list/field[@name='price_unit']" position="attributes">
-                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or parent.price_unit_edit_locked</attribute>
+                <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or combo_item_id or parent.price_unit_edit_locked</attribute>
             </xpath>
             <!-- force_save: el servidor no recalcula el origen si `price_unit` viene en los valores. -->
             <xpath expr="//list/field[@name='price_unit']" position="after">

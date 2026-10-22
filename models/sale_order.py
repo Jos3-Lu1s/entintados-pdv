@@ -110,11 +110,21 @@ class SaleOrder(models.Model):
             order._recompute_pricing_rules()
             order.show_update_pricelist = False
 
+    @api.onchange('order_line')
+    def _onchange_order_line(self):
+        # El core copia el `discount` del paquete a sus productos; el badge del acuerdo también.
+        res = super()._onchange_order_line()
+        self.order_line.filtered('combo_item_id')._sync_combo_package_agreement()
+        return res
+
     def _recompute_prices(self):
         # "Actualizar precios": el core pone discount = 0 y llama a _compute_discount() sin forzar;
         # forzado, se reaplica el acuerdo vigente en vez de releer ese 0 como acuerdo congelado.
         # Ese discount = 0 tampoco es un descuento manual, y el manual previo se restaura después.
-        manual_lines = self.order_line.filtered(lambda line: line.pricing_rule_type == 'manual')
+        # Los productos de un combo no: copian el descuento de su paquete al restaurarlo.
+        manual_lines = self.order_line.filtered(
+            lambda line: line.pricing_rule_type == 'manual' and not line.combo_item_id
+        )
         manual_discounts = {line: line.discount for line in manual_lines}
         res = super(SaleOrder, self.with_context(
             force_price_recomputation=True, skip_manual_discount_breakdown=True,
@@ -300,7 +310,7 @@ class SaleOrder(models.Model):
                 return []
             else:
                 existing_line.product_uom_qty -= 1.0
-                taxes = existing_line.tax_ids or existing_line.tax_id
+                taxes = existing_line.tax_ids
                 return [{
                     'product_id': product.id,
                     'product_uom_qty': 1.0,

@@ -21,11 +21,14 @@ function getComboItemRecords(packageRecord) {
     return items;
 }
 
-function formatQuantity(value) {
+function formatTrimmed(value) {
     return Number.isInteger(value) ? String(value) : formatFloat(value, { digits: [16, 2] });
 }
 
-/** Desglose del reparto nativo del precio del paquete, armado con la foto de cada producto. */
+/**
+ * Desglose del precio del paquete hasta el Importe: precio que se reparte (tarifa o precio fijo
+ * de acuerdo), reparto con la foto de cada producto y descuento heredado del paquete.
+ */
 export function buildComboBreakdown(packageRecord) {
     const items = getComboItemRecords(packageRecord);
     const snapshot = items.find((item) => item.data.combo_price_snapshot)?.data
@@ -35,6 +38,7 @@ export function buildComboBreakdown(packageRecord) {
     }
     const currencyId = snapshot.currency_id;
     const money = (value) => formatMonetary(value, { currencyId });
+    const discounted = (item) => item.data.price_unit * (1 - (item.data.discount || 0) / 100);
     const number = (value) => formatFloat(value, { digits: [16, 2] });
 
     const groups = snapshot.groups.map((group) => {
@@ -62,25 +66,35 @@ export function buildComboBreakdown(packageRecord) {
             attributesExtra: own.attributes_extra ? money(own.attributes_extra) : false,
             unitPrice: money(own.unit_price),
             manualPrice: item.data.price_origin === "manual" ? money(item.data.price_unit) : false,
+            discount: item.data.discount
+                ? `${money(item.data.price_unit)} − ${formatTrimmed(item.data.discount)} % = ${money(
+                      discounted(item)
+                  )}`
+                : false,
         };
     });
     const packageTotal = items.reduce((total, item) => total + item.data.price_unit, 0);
-    const quantityTotal = items.reduce(
-        (total, item) => total + item.data.price_unit * item.data.product_uom_qty,
-        0
-    );
+    const hasDiscount = items.some((item) => item.data.discount);
     return {
         empty: false,
-        packagePrice: money(snapshot.package_price),
+        pricelistPrice: money(snapshot.pricelist_price ?? snapshot.package_price),
         packagePriceOrigin: snapshot.package_price_origin,
+        agreement: snapshot.agreement
+            ? { label: snapshot.agreement.label, price: money(snapshot.agreement.price) }
+            : false,
+        distributedPrice: money(snapshot.package_price),
         referenceSum: `${snapshot.groups
             .map((group) => number(group.reference))
             .join(" + ")} = ${number(snapshot.total_reference)}`,
         groups,
         packageTotal: money(packageTotal),
-        quantity: formatQuantity(packageRecord.data.product_uom_qty),
-        quantityTotal: money(quantityTotal),
-        hasDiscount: items.some((item) => item.data.discount),
+        discountOrigin: hasDiscount ? packageRecord.data.pricing_rule_origin || "" : false,
+        packageTotalDiscounted: hasDiscount
+            ? money(items.reduce((total, item) => total + discounted(item), 0))
+            : false,
+        quantity: formatTrimmed(packageRecord.data.product_uom_qty),
+        // Suma de los importes de los productos: cuadra con la columna Importe.
+        quantityTotal: money(items.reduce((total, item) => total + item.data.price_subtotal, 0)),
     };
 }
 
