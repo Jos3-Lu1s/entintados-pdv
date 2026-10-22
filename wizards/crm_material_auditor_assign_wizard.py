@@ -33,11 +33,19 @@ class CrmMaterialAuditorAssignWizard(models.TransientModel):
 
     def action_confirm(self):
         self.ensure_one()
-        if not self.employee_ids:
+        auditors = self.employee_ids
+        if not auditors:
+            department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
+            if not department:
+                raise UserError(_('No está configurado el departamento de Auditoría.'))
+            auditors = self.env['hr.employee'].sudo().search([
+                ('department_id', '=', department.id), ('active', '=', True),
+                ('user_id.active', '=', True), ('user_id.share', '=', False),
+            ])
+        if not auditors:
             raise UserError(_(
-                "Debes seleccionar al menos un auditor para poder aprobar "
-                "esta solicitud."
+                "No hay auditores activos con usuario interno asignado en el departamento de Auditoría."
             ))
-        self.approval_request_id.material_auditor_ids = [(6, 0, self.employee_ids.ids)]
+        self.approval_request_id.material_auditor_ids = [(6, 0, auditors.ids)]
         # Ahora sí ejecuta la aprobación real, ya con auditores asignados.
         return self.approval_request_id.action_approve()

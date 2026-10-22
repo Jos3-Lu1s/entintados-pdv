@@ -94,6 +94,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/fields/opportunity_relations/opportunity_relations.js",
+            "entintados_pdv/static/src/fields/opportunity_relations/opportunity_relations.xml",
             "entintados_pdv/static/src/fields/stock_availability/stock_availability_field.js",
             "entintados_pdv/static/src/fields/stock_availability/stock_availability_field.xml",
             # Widget de campo del backend (usado en la vista de res.partner)
@@ -126,6 +128,7 @@ Catálogo de entintado
         'data/approval_request_data.xml',
         'data/code_tint.xml',
         'data/note_seq.xml',
+        'data/crm_opportunity_sequence.xml',
         'data/account_payment_cfdi_cron.xml',
         'views/tint_size_views.xml',
         'views/tint_base_type_views.xml',
@@ -152,6 +155,7 @@ Catálogo de entintado
         'views/vendor_credit_wizard_views.xml',
         'views/account_payment_views.xml',
         'views/crm_lead_views.xml',
+        'views/crm_opportunity_list_views.xml',
         'views/crm_lead_to_opportunity_views.xml',
         'views/crm_menu_views.xml',
         'views/crm_stages_view.xml',

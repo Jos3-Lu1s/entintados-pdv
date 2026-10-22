@@ -1,5 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
+from odoo.tools.float_utils import float_compare
 
 class CrmMaterialLine(models.Model):
     _name = 'crm.material.line'
@@ -44,14 +45,22 @@ class CrmMaterialLine(models.Model):
 
     standard_price = fields.Float(
         string="Costo unitario",
-        related="product_id.standard_price",
+        compute='_compute_material_unit_cost',
         readonly=True,
     )
+
+    cost_currency_id = fields.Many2one(related='lead_id.company_id.currency_id', string='Moneda de costo')
+
+    @api.depends('product_id.standard_price', 'product_id.uom_id', 'uom_id', 'lead_id.company_id')
+    def _compute_material_unit_cost(self):
+        for line in self:
+            product = line.product_id.with_company(line.lead_id.company_id or self.env.company)
+            line.standard_price = product.uom_id._compute_price(
+                product.standard_price, line.uom_id or product.uom_id) if product else 0.0
 
     subtotal = fields.Float(
         string="Costo",
         compute="_compute_subtotal",
-        store=True,
     )
 
     stock_move_id = fields.Many2one(
@@ -128,7 +137,7 @@ class CrmMaterialLine(models.Model):
             line.qty_available_branch = line._get_free_qty(branch_locs)
             line.qty_available_company = line._get_free_qty(company_locs)
 
-    @api.depends("product_id", "quantity")
+    @api.depends("standard_price", "quantity")
     def _compute_subtotal(self):
         for line in self:
             line.subtotal = (
@@ -142,6 +151,28 @@ class CrmMaterialLine(models.Model):
                 line.uom_id = line.product_id.uom_id
             else:
                 line.uom_id = False
+
+    def _material_stock_warning(self):
+        self.ensure_one()
+        product = self.product_id
+        location = self.lead_id.wharehouse_id
+        if not product or not product.is_storable or not location or self.quantity <= 0:
+            return False
+        product = product.with_company(self.lead_id.company_id or self.env.company).with_context(
+            location=location.id)
+        if float_compare(product.free_qty, 0, precision_rounding=product.uom_id.rounding) <= 0:
+            return _(
+                'El producto «%(product)s» no tiene existencias disponibles en «%(location)s». '
+                'Selecciona otro producto o repón el inventario antes de solicitar el material.',
+                product=product.display_name, location=location.display_name)
+        return False
+
+    def _check_material_stock(self):
+        """Se invoca únicamente al solicitar la salida de demostración."""
+        for line in self:
+            message = line._material_stock_warning()
+            if message:
+                raise ValidationError(message)
                 
     def write(self, vals):
         for line in self:

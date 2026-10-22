@@ -4,5 +4,11 @@
         <record id="hr_department_auditoria" model="hr.department">
             <field name="name">Auditoria</field>
         </record>
+        <record id="hr_department_direccion_comercial" model="hr.department">
+            <field name="name">Dirección Comercial</field>
+        </record>
+        <record id="hr_department_inteligencia_comercial" model="hr.department">
+            <field name="name">Inteligencia Comercial</field>
+        </record>
     </data>
 </odoo>

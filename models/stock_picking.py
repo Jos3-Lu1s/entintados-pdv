@@ -7,6 +7,26 @@ AUDIT_DEPARTMENT_XMLID = 'entintados_pdv.hr_department_auditoria'
 APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
 DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
 
+class StockMove(models.Model):
+    _inherit = 'stock.move'
+
+    material_cost_currency_id = fields.Many2one(related='company_id.currency_id')
+    material_unit_cost = fields.Monetary(
+        string='Costo unitario', currency_field='material_cost_currency_id', compute='_compute_material_cost')
+    material_total_cost = fields.Monetary(
+        string='Costo total', currency_field='material_cost_currency_id', compute='_compute_material_cost')
+
+    @api.depends('product_id.standard_price', 'product_id.uom_id', 'product_uom',
+                 'product_uom_qty', 'quantity', 'state', 'company_id')
+    def _compute_material_cost(self):
+        for move in self:
+            product = move.product_id.with_company(move.company_id or self.env.company)
+            move.material_unit_cost = product.uom_id._compute_price(
+                product.standard_price, move.product_uom or product.uom_id) if product else 0.0
+            quantity = move.quantity if move.state == 'done' else move.product_uom_qty
+            move.material_total_cost = move.material_unit_cost * quantity
+
+
 class StockPicking(models.Model):
     _inherit = "stock.picking"
 

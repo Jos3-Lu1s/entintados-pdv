@@ -15,12 +15,13 @@
                     <p class="text-muted mb-3">
                         Antes de aprobar esta solicitud, selecciona uno o más
                         auditores del departamento de Auditoría responsables de
-                        validar la salida de material.
+                        validar la salida de material. Si dejas la selección en blanco,
+                        se asignarán todos los auditores activos con usuario interno.
                     </p>
                     <group>
                         <field name="employee_ids"
                                widget="many2many_tags"
-                               domain="[('department_id', '=', auditor_department_id)]"
+                               domain="[('department_id', '=', auditor_department_id), ('user_id.active', '=', True), ('user_id.share', '=', False)]"
                                placeholder="Selecciona auditores..."
                                nolabel="1"
                                colspan="2"/>
