@@ -9,6 +9,8 @@ APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
 class CrmLead(models.Model):
     _inherit = 'crm.lead'
 
+    user_id = fields.Many2one(readonly=True)
+
     can_cancel_demo = fields.Boolean(compute='_compute_can_cancel_demo')
 
     def _can_cancel_demo(self):

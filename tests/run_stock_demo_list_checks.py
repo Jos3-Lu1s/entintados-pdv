@@ -40,7 +40,7 @@ def checks(env):
     arch = etree.fromstring(view['arch'])
     assert [node.get('name') for node in arch.xpath('./field')] == [
         'name', 'location_id', 'location_dest_id', 'partner_id', 'origin', 'state',
-        'demo_auditor_ids', 'demo_salesperson_id', 'demo_relations']
+        'demo_auditor_ids', 'demo_salesperson_id', 'demo_crm_relation', 'demo_approval_relation']
     assert not arch.xpath('.//field[@name="scheduled_date"]')
     return 'PASS: menú, lista exclusiva de demostraciones, columnas, auditores, relaciones y uso solo en Hecho.'
 

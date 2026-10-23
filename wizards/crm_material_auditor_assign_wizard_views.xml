@@ -8,20 +8,21 @@
             <form string="Asignar auditor(es)">
                 <field name="approval_request_id" invisible="1"/>
                 <field name="auditor_department_id" invisible="1"/>
+                <field name="auditor_department_ids" invisible="1"/>
                 <sheet>
                     <div class="text-center mb-3">
                         <h4>Asignar auditor(es)</h4>
                     </div>
                     <p class="text-muted mb-3">
                         Antes de aprobar esta solicitud, selecciona uno o más
-                        auditores del departamento de Auditoría responsables de
+                        auditores de Auditoría o Auditor Auxiliar responsables de
                         validar la salida de material. Si dejas la selección en blanco,
                         se asignarán todos los auditores activos con usuario interno.
                     </p>
                     <group>
                         <field name="employee_ids"
                                widget="many2many_tags"
-                               domain="[('department_id', '=', auditor_department_id), ('user_id.active', '=', True), ('user_id.share', '=', False)]"
+                               domain="[('department_id', 'in', auditor_department_ids), ('user_id.active', '=', True), ('user_id.share', '=', False)]"
                                placeholder="Selecciona auditores..."
                                nolabel="1"
                                colspan="2"/>

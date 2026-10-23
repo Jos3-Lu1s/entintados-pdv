@@ -10,6 +10,8 @@ class ApprovalDemoList(models.Model):
     demo_salesperson_id = fields.Many2one(
         related='crm_lead_id.user_id', string='Vendedor CRM', readonly=True)
     demo_relations = fields.Json(string='Relaciones', compute='_compute_demo_relations')
+    demo_crm_relation = fields.Json(string='CRM', compute='_compute_demo_relations')
+    demo_pickings_relation = fields.Json(string='Salidas', compute='_compute_demo_relations')
 
     @api.depends('approver_ids.user_id')
     def _compute_demo_assigned_users(self):
@@ -41,6 +43,8 @@ class ApprovalDemoList(models.Model):
                 key: len(request._demo_related_records(key))
                 for key in ('opportunity', 'pickings')
             }
+            request.demo_crm_relation = {'opportunity': request.demo_relations['opportunity']}
+            request.demo_pickings_relation = {'pickings': request.demo_relations['pickings']}
 
     def action_open_approval_demo_relation(self, relation):
         self.ensure_one()

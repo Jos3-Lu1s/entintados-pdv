@@ -129,6 +129,7 @@ Catálogo de entintado
         'data/tint_base_capacity_data.xml',
         'data/tint_gallery_data.xml',
         'data/mail_activity_type_data.xml',
+        'data/demo_activity_mail_template.xml',
         'data/type_operations_data.xml',
         'data/hr_departament_data.xml',
         'data/crm_approval_sequence.xml',

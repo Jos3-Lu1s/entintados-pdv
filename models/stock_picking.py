@@ -172,7 +172,7 @@ class StockPicking(models.Model):
                 'NFKD', department.name or '') if not unicodedata.combining(char)).strip().casefold()
             if department and (department == audit_department or normalized in {
                     'auditoria', 'auxiliar de auditoria', 'auxiliar auditoria',
-                    'auxiliares de auditoria'}):
+                    'auxiliares de auditoria', 'auditor auxiliar'}):
                 allowed_companies.add(employee.company_id.id)
         for picking in self:
             picking.can_validate_material_evidence = picking.company_id.id in allowed_companies

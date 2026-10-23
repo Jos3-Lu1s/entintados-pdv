@@ -19,6 +19,8 @@ class CrmMaterialAuditorAssignWizard(models.TransientModel):
         'hr.department',
         compute='_compute_auditor_department_id',
     )
+    auditor_department_ids = fields.Many2many(
+        'hr.department', compute='_compute_auditor_department_id')
 
     employee_ids = fields.Many2many(
         'hr.employee',
@@ -28,18 +30,25 @@ class CrmMaterialAuditorAssignWizard(models.TransientModel):
     @api.depends_context('uid')
     def _compute_auditor_department_id(self):
         department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
+        auxiliary = self.env.ref('entintados_pdv.hr_department_auditor_auxiliar', raise_if_not_found=False)
+        departments = self.env['hr.department'].browse()
+        if department:
+            departments |= department
+        if auxiliary:
+            departments |= auxiliary
         for record in self:
             record.auditor_department_id = department.id if department else False
+            record.auditor_department_ids = departments
 
     def action_confirm(self):
         self.ensure_one()
         auditors = self.employee_ids
         if not auditors:
-            department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
-            if not department:
+            departments = self.auditor_department_ids
+            if not departments:
                 raise UserError(_('No está configurado el departamento de Auditoría.'))
             auditors = self.env['hr.employee'].sudo().search([
-                ('department_id', '=', department.id), ('active', '=', True),
+                ('department_id', 'in', departments.ids), ('active', '=', True),
                 ('user_id.active', '=', True), ('user_id.share', '=', False),
             ])
         if not auditors:

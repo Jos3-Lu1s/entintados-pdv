@@ -13,13 +13,13 @@
                 <field name="date" string="Fecha" readonly="1"/>
                 <field name="warehouse_id" string="Almacén de origen" readonly="1"/>
                 <field name="demo_assigned_user_ids" widget="many2many_tags" readonly="1"/>
-                <field name="demo_salesperson_id" widget="many2one_avatar_user" readonly="1"/>
                 <field name="request_status" string="Estado" widget="badge"
                        decoration-success="request_status == 'approved'"
                        decoration-danger="request_status == 'refused'"
                        decoration-muted="request_status in ('new', 'cancel')"
                        decoration-warning="request_status == 'pending'"/>
-                <field name="demo_relations" widget="approval_demo_relation_badges" readonly="1"/>
+                <field name="demo_crm_relation" string="CRM" widget="approval_demo_relation_badges" readonly="1"/>
+                <field name="demo_pickings_relation" string="Salidas" widget="approval_demo_relation_badges" readonly="1"/>
             </list>
         </field>
     </record>
@@ -31,7 +31,6 @@
             <search string="Aprobaciones de demostración">
                 <field name="name" string="Referencia"/>
                 <field name="partner_id" string="Contacto"/>
-                <field name="demo_salesperson_id" string="Vendedor CRM"/>
                 <filter name="my_demo_approvals" string="Mis aprobaciones"
                         domain="[('approver_ids.user_id', '=', uid)]"/>
             </search>

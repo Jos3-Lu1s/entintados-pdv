@@ -17,7 +17,8 @@
                        decoration-warning="state in ('waiting', 'confirmed')"/>
                 <field name="demo_auditor_ids" widget="many2many_tags" readonly="1"/>
                 <field name="demo_salesperson_id" widget="many2one_avatar_user" readonly="1"/>
-                <field name="demo_relations" widget="stock_demo_relation_badges" readonly="1"/>
+                <field name="demo_crm_relation" string="CRM" widget="stock_demo_relation_badges" readonly="1"/>
+                <field name="demo_approval_relation" string="Aprobaciones" widget="stock_demo_relation_badges" readonly="1"/>
             </list>
         </field>
     </record>

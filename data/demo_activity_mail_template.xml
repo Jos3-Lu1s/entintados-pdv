@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="mail_template_demo_activity" model="mail.template">
+        <field name="name">Demo: actividad pendiente de aprobación o validación</field>
+        <field name="model_id" ref="mail.model_mail_activity"/>
+        <field name="subject">Demo pendiente de {{ object._demo_notification_values().get('stage', '') }}: {{ object._demo_notification_values().get('folio', '') }}</field>
+        <field name="email_from">{{ object._demo_notification_values().get('email_from') or user.email_formatted }}</field>
+        <field name="partner_to">{{ object.user_id.partner_id.id }}</field>
+        <field name="auto_delete" eval="False"/>
+        <field name="body_html" type="html">
+            <div>
+                <t t-set="demo" t-value="object._demo_notification_values()"/>
+                <p><t t-out="object.user_id.name"/> tienes Demo pendiente de <t t-out="demo.get('stage', '')"/>:</p>
+                <p><strong>Folio:</strong> <t t-out="demo.get('folio', '')"/><br/>
+                   <strong>Vendedor:</strong> <t t-out="demo.get('salesperson', '')"/><br/>
+                   <strong>Contacto u Oportunidad:</strong> <t t-out="demo.get('contact', '')"/></p>
+            </div>
+        </field>
+    </record>
+</odoo>

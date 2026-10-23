@@ -4,6 +4,9 @@
         <record id="hr_department_auditoria" model="hr.department">
             <field name="name">Auditoria</field>
         </record>
+        <record id="hr_department_auditor_auxiliar" model="hr.department">
+            <field name="name">Auditor Auxiliar</field>
+        </record>
         <record id="hr_department_direccion_comercial" model="hr.department">
             <field name="name">Dirección Comercial</field>
         </record>

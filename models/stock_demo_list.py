@@ -8,6 +8,8 @@ class StockPickingDemoList(models.Model):
     demo_auditor_ids = fields.Many2many(
         related='approval_request_id.material_auditor_ids', string='Auditores asignados', readonly=True)
     demo_relations = fields.Json(string='Relaciones', compute='_compute_demo_relations')
+    demo_crm_relation = fields.Json(string='CRM', compute='_compute_demo_relations')
+    demo_approval_relation = fields.Json(string='Aprobaciones', compute='_compute_demo_relations')
     demo_salesperson_id = fields.Many2one(
         'res.users', string='Vendedor CRM', compute='_compute_demo_salesperson')
 
@@ -39,6 +41,8 @@ class StockPickingDemoList(models.Model):
                 except AccessError:
                     counts[key] = 0
             picking.demo_relations = counts
+            picking.demo_crm_relation = {'opportunity': counts['opportunity']}
+            picking.demo_approval_relation = {'approval': counts['approval']}
 
     def action_open_demo_relation(self, relation):
         self.ensure_one()

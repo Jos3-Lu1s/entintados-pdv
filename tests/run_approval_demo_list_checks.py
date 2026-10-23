@@ -33,8 +33,9 @@ def checks(env):
     arch = etree.fromstring(env['approval.request'].get_view(
         view_id=action.view_id.id, view_type='list')['arch'])
     names = [node.get('name') for node in arch.xpath('./field')]
-    assert 'demo_assigned_user_ids' in names and 'demo_salesperson_id' in names and 'demo_relations' in names
-    return 'PASS: lista de Gerente, asignados, vendedor CRM en ambas listas, relaciones y filtro Mis aprobaciones.'
+    assert 'demo_assigned_user_ids' in names and 'demo_salesperson_id' not in names
+    assert 'demo_crm_relation' in names and 'demo_pickings_relation' in names
+    return 'PASS: lista de Gerente, asignados, columnas separadas de relaciones y filtro Mis aprobaciones.'
 
 
 if __name__ == '__main__':
