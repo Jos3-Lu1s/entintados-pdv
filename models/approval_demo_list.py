@@ -8,7 +8,7 @@ class ApprovalDemoList(models.Model):
     demo_assigned_user_ids = fields.Many2many(
         'res.users', string='Asignado a', compute='_compute_demo_assigned_users')
     demo_salesperson_id = fields.Many2one(
-        related='crm_lead_id.user_id', string='Vendedor CRM', readonly=True)
+        related='crm_lead_id.user_id', string='Vendedor CRM', readonly=True, store=True)
     demo_relations = fields.Json(string='Relaciones', compute='_compute_demo_relations')
     demo_crm_relation = fields.Json(string='CRM', compute='_compute_demo_relations')
     demo_pickings_relation = fields.Json(string='Salidas', compute='_compute_demo_relations')

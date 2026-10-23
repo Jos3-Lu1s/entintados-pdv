@@ -31,9 +31,17 @@
                 <field name="name" string="Referencia"/>
                 <field name="partner_id" string="Contacto"/>
                 <field name="origin" string="Documento de origen"/>
+                <field name="demo_salesperson_id" string="Vendedor CRM"/>
+                <filter name="my_demo_sales" string="Soy el vendedor"
+                        domain="[('demo_salesperson_id', '=', uid)]"/>
+                <separator/>
                 <filter name="my_demo_outputs" string="Mis salidas de demostración"
                         domain="[('approval_request_id.material_auditor_ids.user_id', '=', uid)]"
                         help="Salidas en las que apareces como auditor asignado."/>
+                <group>
+                    <filter name="group_by_demo_salesperson" string="Vendedor CRM"
+                            context="{'group_by': 'demo_salesperson_id'}"/>
+                </group>
             </search>
         </field>
     </record>
@@ -44,7 +52,7 @@
         <field name="view_id" ref="stock_demo_output_list"/>
         <field name="search_view_id" ref="stock_demo_output_search"/>
         <field name="domain" eval="[('picking_type_id', '=', ref('entintados_pdv.picking_type_material_output'))]"/>
-        <field name="context">{'create': False, 'search_default_my_demo_outputs': 1}</field>
+        <field name="context">{'create': False, 'search_default_my_demo_outputs': 1, 'search_default_group_by_demo_salesperson': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No hay salidas de demostración.</p>
             <p>Las salidas se generan desde la solicitud de aprobación de la oportunidad.</p>

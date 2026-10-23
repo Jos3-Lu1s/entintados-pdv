@@ -33,6 +33,10 @@
                 <field name="partner_id" string="Contacto"/>
                 <filter name="my_demo_approvals" string="Mis aprobaciones"
                         domain="[('approver_ids.user_id', '=', uid)]"/>
+                <group>
+                    <filter name="group_by_demo_salesperson" string="Vendedor CRM"
+                            context="{'group_by': 'demo_salesperson_id'}"/>
+                </group>
             </search>
         </field>
     </record>
@@ -43,7 +47,7 @@
         <field name="view_id" ref="approval_demo_list"/>
         <field name="search_view_id" ref="approval_demo_search"/>
         <field name="domain" eval="[('crm_lead_id', '!=', False), ('category_id', '=', ref('entintados_pdv.approval_category_salida_material'))]"/>
-        <field name="context">{'create': False, 'search_default_my_demo_approvals': 1}</field>
+        <field name="context">{'create': False, 'search_default_my_demo_approvals': 1, 'search_default_group_by_demo_salesperson': 1}</field>
     </record>
     <menuitem id="menu_approval_demo_list" name="Aprobaciones de demostración"
               parent="approvals.approvals_menu_manager" action="action_approval_demo_list" sequence="30"/>

@@ -105,12 +105,21 @@
                     <button string="Validar entrega" type="object" name="action_validate_delivery" class="btn-primary" confirm="¿Está seguro de que desea validar la entrega? Esta acción no se puede deshacer."
                             invisible="not can_validate_material_evidence or validate_delivery or state not in ('confirmed', 'assigned', 'done')"/>
 
-                    <group string="Evidencia de uso de material">
-                        <field name="evidence_use_attachment_ids"
-                           widget="many2many_binary" readonly="validate_material_use == True"/>
-                    </group>
-                    <button string="Validar uso de material" type="object" name="action_validate_material_use" class="btn-primary" confirm="¿Está seguro de que desea validar el uso de material? Esta acción no se puede deshacer."
+                    
+                    <div name="material_use_evidence_section" class="d-flex flex-column gap-3 mt-4 w-100">
+                        <separator string="Evidencia de uso de material"/>
+                        <div class="alert alert-warning mb-0" role="alert" invisible="validate_delivery">
+                            Primero debes validar y confirmar la entrega del material.
+                            Hasta entonces no podrás cargar ni validar evidencias de uso.
+                        </div>
+                        <div class="clearfix w-100">
+                            <field name="evidence_use_attachment_ids"
+                               widget="many2many_binary" nolabel="1" class="d-block w-100"
+                               readonly="not validate_delivery or validate_material_use"/>
+                        </div>
+                        <button string="Validar uso de material" type="object" name="action_validate_material_use" class="btn-primary align-self-start" confirm="¿Está seguro de que desea validar el uso de material? Esta acción no se puede deshacer."
                             invisible="not can_validate_material_evidence or validate_material_use or not validate_delivery"/>
+                    </div>
                 </page>
             </xpath>
         </field>

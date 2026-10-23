@@ -11,7 +11,7 @@ class StockPickingDemoList(models.Model):
     demo_crm_relation = fields.Json(string='CRM', compute='_compute_demo_relations')
     demo_approval_relation = fields.Json(string='Aprobaciones', compute='_compute_demo_relations')
     demo_salesperson_id = fields.Many2one(
-        'res.users', string='Vendedor CRM', compute='_compute_demo_salesperson')
+        'res.users', string='Vendedor CRM', compute='_compute_demo_salesperson', store=True)
 
     @api.depends('crm_lead_id.user_id', 'approval_request_id.crm_lead_id.user_id')
     def _compute_demo_salesperson(self):

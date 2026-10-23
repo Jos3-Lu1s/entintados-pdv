@@ -55,3 +55,4 @@ from . import stock_return_credit
 from . import stock_demo_list
 from . import approval_demo_list
 from . import demo_activity_mail
+from . import approval_assigned_access

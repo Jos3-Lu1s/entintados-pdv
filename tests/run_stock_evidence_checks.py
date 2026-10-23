@@ -60,6 +60,8 @@ def checks(env):
     picking.evidence_attachment_ids = [Command.link(attachment.id)]
     rejected(outsider.action_validate_delivery)
     rejected(lambda: outsider.write({'validate_delivery': True}))
+    rejected(lambda: picking.write({'evidence_use_attachment_ids': [Command.link(attachment.id)]}))
+    assert not picking.evidence_use_attachment_ids
     helper.action_validate_delivery()
     assert picking.validate_delivery and picking.state == 'assigned'
     rejected(lambda: picking.write({'document_file': b'b3Rybw=='}))

@@ -182,10 +182,10 @@ class StockPicking(models.Model):
             if not picking.can_validate_material_evidence:
                 raise UserError(_('Solo personal de Auditoría o Auxiliar de Auditoría puede validar las evidencias.'))
             if use:
-                if picking.state != 'done':
-                    raise UserError(_("Solo se puede validar el uso de material de salidas que estén en estado 'Hecho'."))
                 if not picking.validate_delivery:
                     raise UserError(_('Debe validar la entrega antes de validar el uso de material.'))
+                if picking.state != 'done':
+                    raise UserError(_("Solo se puede validar el uso de material de salidas que estén en estado 'Hecho'."))
                 if not picking.evidence_use_attachment_ids:
                     raise UserError(_('Debe adjuntar al menos una evidencia de uso de material antes de validar el uso.'))
             else:
@@ -193,6 +193,14 @@ class StockPicking(models.Model):
                     raise UserError(_("Solo se puede validar la entrega de salidas en estado 'Listo' o 'Hecho'."))
                 if not picking.evidence_attachment_ids:
                     raise UserError(_('Debe adjuntar al menos una evidencia de entrega antes de validar la entrega.'))
+
+    @api.constrains('evidence_use_attachment_ids', 'validate_delivery')
+    def _check_use_evidence_requires_delivery(self):
+        for picking in self:
+            if picking.evidence_use_attachment_ids and not picking.validate_delivery:
+                raise ValidationError(_(
+                    'Primero debes validar y confirmar la entrega del material. '
+                    'No puedes cargar evidencias de uso antes de validar la entrega.'))
 
     def write(self, vals):
         if {'document_file', 'document_filename'}.intersection(vals) and self.filtered('validate_delivery'):
