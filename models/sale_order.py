@@ -52,12 +52,23 @@ class SaleOrder(models.Model):
         # también, salvo con recálculo forzado (cambio de cliente), que reaplica la regla vigente.
         force = self.env.context.get('force_price_recomputation')
         previous_prices = {}
+        previous_packages = {}
         if 'pricelist_id' in vals or 'partner_id' in vals:
+            frozen = self.order_line.filtered(
+                lambda line: not force and line.pricing_rule_type == 'fixed_price' and not line.qty_invoiced
+            )
+            # Un combo de precio fijo congela su precio en el paquete (`combo_package_price`) y sus
+            # productos lo reparten: se convierte el paquete y se reparte otra vez, no producto a producto.
+            packages = frozen.filtered(lambda line: line.product_type == 'combo')
             previous_prices = {
                 line: (line.currency_id, line.product_uom_id, line.price_unit, line.technical_price_unit)
                 for line in self.order_line
                 if line._keeps_price_on_currency_change()
-                or (not force and line.pricing_rule_type == 'fixed_price' and not line.qty_invoiced)
+                or (line in frozen and line not in packages and not line.combo_item_id)
+            }
+            previous_packages = {
+                line: (line.currency_id, line.product_uom_id, line.combo_package_price)
+                for line in packages
             }
         res = super().write(vals)
         for order in self:
@@ -98,6 +109,17 @@ class SaleOrder(models.Model):
                 ),
                 'technical_price_unit': technical,
             })
+        for package, (old_currency, old_uom, old_price) in previous_packages.items():
+            if not package.exists() or package.currency_id == old_currency:
+                continue
+            if old_uom and old_uom != package.product_uom_id:
+                old_price = old_uom._compute_price(old_price, package.product_uom_id)
+            if old_currency.compare_amounts(package.combo_package_price, old_price):
+                continue
+            package.combo_package_price = package._convert_price_currency(old_price, old_currency)
+            package.order_id.order_line.filtered(
+                lambda line: line.combo_item_id and line._get_linked_line() == package
+            )._reset_price_unit()
         return res
 
     @api.onchange('partner_id')

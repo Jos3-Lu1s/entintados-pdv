@@ -86,9 +86,9 @@ class SaleOrderLine(models.Model):
     )
     # Línea del paquete: precio que se reparte entre sus productos (tarifa o precio fijo de acuerdo),
     # en la UdM y la moneda de la línea. Guardado para congelar el precio fijo como en el resto.
+    # Sin redondear, como `technical_price_unit`: un cambio de moneda de ida y vuelta vuelve exacto.
     combo_package_price = fields.Float(
         string='Precio repartido del combo',
-        digits='Product Price',
         compute='_compute_price_unit',
         store=True,
         precompute=True,
@@ -592,14 +592,17 @@ class SaleOrderLine(models.Model):
         # La tarifa siempre va dentro de `price_unit`, también las reglas de porcentaje: `discount`
         # queda para el acuerdo o el descuento manual.
         self.ensure_one()
-        if self.env.context.get('combo_package_price'):
-            return self._get_combo_package_price()
+        if self.env.context.get('combo_package_price') is not None:
+            return self.env.context['combo_package_price']
         return self._get_pricelist_price()
 
     def _get_combo_item_display_price(self):
-        # El core reparte `_get_display_price_ignore_combo()` del paquete: aquí, el precio repartido.
+        # El core reparte `_get_display_price_ignore_combo()` del paquete guardado: aquí, el precio
+        # repartido del paquete del pedido, que en el onchange ya trae la tarifa y la moneda nuevas.
+        self.ensure_one()
+        package_price = self._get_combo_package_line()._get_combo_package_price()
         return super(
-            SaleOrderLine, self.with_context(combo_package_price=True)
+            SaleOrderLine, self.with_context(combo_package_price=package_price)
         )._get_combo_item_display_price()
 
     def _get_combo_package_price(self):
@@ -645,7 +648,7 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         if not self.combo_item_id:
             return False
-        combo_line = self._get_linked_line()
+        combo_line = self._get_combo_package_line()
         if not combo_line:
             return False
         currency = self.currency_id
@@ -847,12 +850,15 @@ class SaleOrderLine(models.Model):
         """Paquete de esta línea tal como está en el pedido.
 
         En el onchange del pedido, `linked_line_id` apunta al paquete guardado y no a la copia que
-        se está editando: su descuento sería el anterior.
+        se está editando: su descuento sería el anterior. Un paquete sin guardar ya es esa copia, y
+        compararlo por `_origin` (vacío en todas las líneas nuevas) daría la primera del pedido.
         """
         self.ensure_one()
         package = self._get_linked_line()
+        if not package._origin.id:
+            return package
         return self.order_id.order_line.filtered(
-            lambda line: package and line._origin == package._origin
+            lambda line: line._origin == package._origin
         )[:1] or package
 
     def _sync_combo_package_agreement(self):

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from datetime import timedelta
+
 from lxml import etree
 
-from odoo import Command
+from odoo import Command, fields
 from odoo.exceptions import ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
@@ -371,3 +373,120 @@ class TestComboAgreements(TransactionCase):
         self.assertEqual([round(price, 2) for price in new_items.sorted('id').mapped('price_unit')],
                          [142.86, 42.86, 14.28])
         self.assertAlmostEqual(copy.amount_untaxed, 600.0, places=2)
+
+    def _setup_other_currency(self, rate=17.0):
+        """Moneda O distinta de la de la compañía, con `1 C = rate O`. Devuelve la tarifa en O."""
+        company = self.env.company
+        company_currency = company.currency_id
+        usd, mxn = self.env.ref('base.USD'), self.env.ref('base.MXN')
+        other = mxn if company_currency == usd else usd
+        other.active = True
+        self.env['res.currency.rate'].search([
+            ('currency_id', 'in', (company_currency | other).ids),
+            ('company_id', 'in', (company.id, False)),
+        ]).unlink()
+        self.env['res.currency.rate'].create({
+            'name': fields.Date.today() - timedelta(days=30),
+            'currency_id': other.id,
+            'company_id': company.id,
+            'rate': rate,
+        })
+        return self.env['product.pricelist'].create({'name': 'T-O Combo', 'currency_id': other.id})
+
+    def _switch_pricelist_in_form(self, order, pricelist):
+        """Cambia la tarifa en el formulario y devuelve los precios de los productos del combo
+        antes de guardar."""
+        with Form(order) as order_form:
+            order_form.pricelist_id = pricelist
+            screen = []
+            for index in range(1, 4):
+                with order_form.order_line.edit(index) as item_form:
+                    screen.append(round(item_form.price_unit, 2))
+        return screen
+
+    def test_fixed_price_combo_currency_change_form(self):
+        self._fixed_price_rule(self.package, 200.0)
+        pricelist_o = self._setup_other_currency()
+        order, package_line, items = self._quote()
+
+        screen = self._switch_pricelist_in_form(order, pricelist_o)
+
+        self.assertEqual(screen, [2428.57, 728.57, 242.86])
+        self.assertAlmostEqual(package_line.combo_package_price, 3400.0, places=2)
+        self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [2428.57, 728.57, 242.86])
+        self.assertAlmostEqual(order.amount_untaxed, 10200.0, places=2)
+
+    def test_fixed_price_combo_currency_change_write(self):
+        self._fixed_price_rule(self.package, 200.0)
+        pricelist_o = self._setup_other_currency()
+        order, package_line, items = self._quote()
+
+        order.write({'pricelist_id': pricelist_o.id})
+
+        self.assertAlmostEqual(package_line.combo_package_price, 3400.0, places=2)
+        self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [2428.57, 728.57, 242.86])
+        self.assertAlmostEqual(order.amount_untaxed, 10200.0, places=2)
+
+    def test_fixed_price_combo_qty_after_currency_change(self):
+        self._fixed_price_rule(self.package, 200.0)
+        pricelist_o = self._setup_other_currency()
+        order, package_line, items = self._quote()
+        order.write({'pricelist_id': pricelist_o.id})
+
+        order.order_line.write({'product_uom_qty': 5.0})
+
+        self.assertAlmostEqual(package_line.combo_package_price, 3400.0, places=2)
+        self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [2428.57, 728.57, 242.86])
+        self.assertAlmostEqual(order.amount_untaxed, 17000.0, places=2)
+
+    def test_fixed_price_combo_currency_round_trip(self):
+        """Con una tasa de muchos decimales, el precio repartido redondeado no volvería a 200."""
+        self._fixed_price_rule(self.package, 200.0)
+        pricelist_o = self._setup_other_currency(rate=0.0536409)
+        order, package_line, items = self._quote()
+
+        self._switch_pricelist_in_form(order, pricelist_o)
+        self.assertAlmostEqual(package_line.combo_package_price, 200.0 * 0.0536409, places=6)
+        self._switch_pricelist_in_form(order, self.pricelist)
+
+        self.assertAlmostEqual(package_line.combo_package_price, 200.0, places=6)
+        self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [142.86, 42.86, 14.28])
+        self.assertAlmostEqual(order.amount_untaxed, 600.0, places=2)
+
+    def test_combo_without_agreement_currency_change_form(self):
+        pricelist_o = self._setup_other_currency()
+        order, _package_line, items = self._quote()
+
+        screen = self._switch_pricelist_in_form(order, pricelist_o)
+
+        saved = [round(price, 2) for price in items.mapped('price_unit')]
+        self.assertEqual(screen, saved)
+        self.assertAlmostEqual(sum(saved), 17000.0, places=2)
+        self.assertAlmostEqual(order.amount_untaxed, 51000.0, places=2)
+
+    def test_new_combo_after_loose_line_uses_own_package(self):
+        """Pedido sin guardar, como en el formulario: ninguna línea tiene `_origin`, y los
+        productos del combo deben leer su propio paquete y no la primera línea del pedido."""
+        self._fixed_price_rule(self.esmalte, 300.0)
+        choices = [self.vinilica, self.rodillo_grande, self.brocha_2]
+        order = self.env['sale.order'].new({
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+            'order_line': [
+                Command.create({'product_id': self.esmalte.id, 'sequence': 1}),
+                Command.create({'product_id': self.package.id, 'virtual_id': 'combo-1', 'sequence': 10}),
+                *[Command.create({
+                    'product_id': product.id,
+                    'combo_item_id': self._item(combo, product).id,
+                    'linked_virtual_id': 'combo-1',
+                    'sequence': 11 + index,
+                }) for index, (combo, product) in enumerate(zip(self.combos, choices))],
+            ],
+        })
+        loose, package_line, *items = order.order_line.sorted('sequence')
+        self.assertEqual(loose.pricing_rule_type, 'fixed_price')
+
+        for item in items:
+            self.assertEqual(item._get_combo_package_line(), package_line, item.product_id.name)
+            self.assertEqual((item.pricing_rule_type, item.pricing_rule_origin), ('none', ''), item.product_id.name)
+        self.assertEqual([round(item.price_unit, 2) for item in items], [714.29, 214.29, 71.42])
