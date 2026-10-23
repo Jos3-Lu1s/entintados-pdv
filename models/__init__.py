@@ -18,6 +18,7 @@ from . import pos_session
 from . import pos_config
 from . import res_partner
 from . import crm_lead
+from . import crm_opportunity_list
 from . import calendar_event
 from . import sale_order
 from . import sale_order_line
@@ -49,3 +50,7 @@ from . import account_move
 from . import advance_accounting
 from . import advance_pos
 from . import pos_financing
+from . import material_chatter
+from . import stock_return_credit
+from . import stock_demo_list
+from . import approval_demo_list

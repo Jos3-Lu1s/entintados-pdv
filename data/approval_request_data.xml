@@ -30,4 +30,6 @@
         </record>
 
     </data>
+    <!-- Aplicar también en bases donde la categoría ya estaba instalada. -->
+    <function model="approval.category" name="_configure_material_approval_policy"/>
 </odoo>

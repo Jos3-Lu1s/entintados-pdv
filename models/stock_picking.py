@@ -1,4 +1,5 @@
 import base64
+import unicodedata
 from odoo import fields, models, api, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -6,6 +7,26 @@ MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
 AUDIT_DEPARTMENT_XMLID = 'entintados_pdv.hr_department_auditoria'
 APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
 DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
+
+class StockMove(models.Model):
+    _inherit = 'stock.move'
+
+    material_cost_currency_id = fields.Many2one(related='company_id.currency_id')
+    material_unit_cost = fields.Monetary(
+        string='Costo unitario', currency_field='material_cost_currency_id', compute='_compute_material_cost')
+    material_total_cost = fields.Monetary(
+        string='Costo total', currency_field='material_cost_currency_id', compute='_compute_material_cost')
+
+    @api.depends('product_id.standard_price', 'product_id.uom_id', 'product_uom',
+                 'product_uom_qty', 'quantity', 'state', 'company_id')
+    def _compute_material_cost(self):
+        for move in self:
+            product = move.product_id.with_company(move.company_id or self.env.company)
+            move.material_unit_cost = product.uom_id._compute_price(
+                product.standard_price, move.product_uom or product.uom_id) if product else 0.0
+            quantity = move.quantity if move.state == 'done' else move.product_uom_qty
+            move.material_total_cost = move.material_unit_cost * quantity
+
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -132,6 +153,55 @@ class StockPicking(models.Model):
     validate_material_use = fields.Boolean(
         string="Uso de material validado",
     )
+
+    can_validate_material_evidence = fields.Boolean(
+        string='Puede validar evidencias', compute='_compute_can_validate_material_evidence')
+
+    @api.depends_context('uid', 'company')
+    @api.depends('company_id')
+    def _compute_can_validate_material_evidence(self):
+        employees = self.env['hr.employee'].sudo().search([
+            ('user_id', '=', self.env.uid), ('active', '=', True),
+            ('company_id', 'in', self.company_id.ids),
+        ])
+        audit_department = self.env.ref(AUDIT_DEPARTMENT_XMLID, raise_if_not_found=False)
+        allowed_companies = set()
+        for employee in employees:
+            department = employee.department_id
+            normalized = ''.join(char for char in unicodedata.normalize(
+                'NFKD', department.name or '') if not unicodedata.combining(char)).strip().casefold()
+            if department and (department == audit_department or normalized in {
+                    'auditoria', 'auxiliar de auditoria', 'auxiliar auditoria',
+                    'auxiliares de auditoria'}):
+                allowed_companies.add(employee.company_id.id)
+        for picking in self:
+            picking.can_validate_material_evidence = picking.company_id.id in allowed_companies
+
+    def _check_material_evidence_validation(self, use=False):
+        for picking in self:
+            if not picking.can_validate_material_evidence:
+                raise UserError(_('Solo personal de Auditoría o Auxiliar de Auditoría puede validar las evidencias.'))
+            if use:
+                if picking.state != 'done':
+                    raise UserError(_("Solo se puede validar el uso de material de salidas que estén en estado 'Hecho'."))
+                if not picking.validate_delivery:
+                    raise UserError(_('Debe validar la entrega antes de validar el uso de material.'))
+                if not picking.evidence_use_attachment_ids:
+                    raise UserError(_('Debe adjuntar al menos una evidencia de uso de material antes de validar el uso.'))
+            else:
+                if picking.state not in ('assigned', 'done'):
+                    raise UserError(_("Solo se puede validar la entrega de salidas en estado 'Listo' o 'Hecho'."))
+                if not picking.evidence_attachment_ids:
+                    raise UserError(_('Debe adjuntar al menos una evidencia de entrega antes de validar la entrega.'))
+
+    def write(self, vals):
+        if {'document_file', 'document_filename'}.intersection(vals) and self.filtered('validate_delivery'):
+            raise UserError(_('No se puede modificar el documento después de validar la entrega.'))
+        if vals.get('validate_delivery'):
+            self._check_material_evidence_validation()
+        if vals.get('validate_material_use'):
+            self._check_material_evidence_validation(use=True)
+        return super().write(vals)
 
     def _action_done(self):
             res = super()._action_done()
@@ -319,16 +389,14 @@ class StockPicking(models.Model):
                 ))
                 
     def action_validate_delivery(self):
+        self._check_material_evidence_validation()
         for picking in self:
-            if picking.state != 'done':
-                raise UserError(_("Solo se puede validar la entrega de salidas que estén en estado 'Hecho'."))
-            if not picking.evidence_attachment_ids:
-                raise UserError(_("Debe adjuntar al menos una evidencia de entrega antes de validar la entrega."))
             picking.write({
                 'validate_delivery': True,
             })
     
     def action_validate_material_use(self):
+        self._check_material_evidence_validation(use=True)
         demo_activity_type = self.env.ref(DEMO_ACTIVITY_XMLID, raise_if_not_found=False)
 
         

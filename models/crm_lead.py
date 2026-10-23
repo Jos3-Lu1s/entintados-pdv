@@ -482,6 +482,8 @@ class CrmLead(models.Model):
         if not self.wharehouse_id:
             raise UserError(_("Debes seleccionar un almacén de origen para la salida de material."))
 
+        # Revisar de nuevo: el inventario puede cambiar después de capturar las líneas.
+        self.material_line_ids._check_material_stock()
 
         category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
         if not category:
@@ -496,6 +498,8 @@ class CrmLead(models.Model):
                 "Verifica el organigrama en Empleados."
             ))
 
+        approvers = self._get_material_approvers()
+
         approval_request = self.env['approval.request'].create({
             'category_id': category.id,
             'request_owner_id': self.user_id.id or self.env.uid,
@@ -507,7 +511,7 @@ class CrmLead(models.Model):
                 '%s x %s %s' % (line.quantity, line.uom_id.name or '', line.product_id.display_name)
                 for line in self.material_line_ids
             ),
-            'approver_ids': [(0, 0, {'user_id': approver.id})],
+            'approver_ids': [(0, 0, {'user_id': user.id, 'required': False}) for user in approvers],
             'product_line_ids': [
                 (0, 0, {
                     'product_id': line.product_id.id,
@@ -608,10 +612,31 @@ class CrmLead(models.Model):
         self.ensure_one()
         if not self.user_id:
             return self.env['res.users']
-        employee = self.env['hr.employee'].search([('user_id', '=', self.user_id.id)], limit=1)
+        employee = self.env['hr.employee'].sudo().search([
+            ('user_id', '=', self.user_id.id),
+            ('company_id', '=', (self.company_id or self.env.company).id),
+        ], limit=1)
         if employee and employee.parent_id and employee.parent_id.user_id:
             return employee.parent_id.user_id
         return self.env['res.users']
+
+    def _get_material_approvers(self):
+        """Jefe del vendedor y usuarios de los dos departamentos comerciales, sin duplicados."""
+        self.ensure_one()
+        department_ids = []
+        for xmlid in ('entintados_pdv.hr_department_direccion_comercial',
+                      'entintados_pdv.hr_department_inteligencia_comercial'):
+            department = self.env.ref(xmlid, raise_if_not_found=False)
+            if department:
+                department_ids.append(department.id)
+        company = self.company_id or self.env.company
+        employees = self.env['hr.employee'].sudo().search([
+            ('department_id', 'in', department_ids), ('active', '=', True),
+            ('user_id.active', '=', True), ('user_id.share', '=', False),
+            ('user_id.company_ids', 'in', [company.id]),
+        ])
+        return (self._get_material_approver() | employees.user_id).filtered(
+            lambda user: user.active and not user.share)
     
     def action_view_approval_request(self):
         self.ensure_one()

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="stock_demo_output_list" model="ir.ui.view">
+        <field name="name">stock.picking.demo.output.list</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="Salida de demostración" create="0" default_order="id desc">
+                <field name="name" string="Referencia" decoration-bf="1"/>
+                <field name="location_id" string="Desde" readonly="1"/>
+                <field name="location_dest_id" string="A" readonly="1"/>
+                <field name="partner_id" string="Contacto" readonly="1"/>
+                <field name="origin" string="Documento de origen" readonly="1"/>
+                <field name="state" string="Estado" widget="badge"
+                       decoration-danger="state == 'cancel'" decoration-info="state == 'assigned'"
+                       decoration-muted="state == 'draft'" decoration-success="state == 'done'"
+                       decoration-warning="state in ('waiting', 'confirmed')"/>
+                <field name="demo_auditor_ids" widget="many2many_tags" readonly="1"/>
+                <field name="demo_salesperson_id" widget="many2one_avatar_user" readonly="1"/>
+                <field name="demo_relations" widget="stock_demo_relation_badges" readonly="1"/>
+            </list>
+        </field>
+    </record>
+    <record id="stock_demo_output_search" model="ir.ui.view">
+        <field name="name">stock.picking.demo.output.search</field>
+        <field name="model">stock.picking</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <search string="Salidas de demostración">
+                <field name="name" string="Referencia"/>
+                <field name="partner_id" string="Contacto"/>
+                <field name="origin" string="Documento de origen"/>
+                <filter name="my_demo_outputs" string="Mis salidas de demostración"
+                        domain="[('approval_request_id.material_auditor_ids.user_id', '=', uid)]"
+                        help="Salidas en las que apareces como auditor asignado."/>
+            </search>
+        </field>
+    </record>
+    <record id="action_stock_demo_outputs" model="ir.actions.act_window">
+        <field name="name">Salida de demostración</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="stock_demo_output_list"/>
+        <field name="search_view_id" ref="stock_demo_output_search"/>
+        <field name="domain" eval="[('picking_type_id', '=', ref('entintados_pdv.picking_type_material_output'))]"/>
+        <field name="context">{'create': False, 'search_default_my_demo_outputs': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No hay salidas de demostración.</p>
+            <p>Las salidas se generan desde la solicitud de aprobación de la oportunidad.</p>
+        </field>
+    </record>
+    <menuitem id="menu_stock_demo_outputs" name="Salida de demostración"
+              parent="stock.menu_stock_transfers" action="action_stock_demo_outputs"
+              sequence="25" groups="stock.group_stock_user"/>
+</odoo>

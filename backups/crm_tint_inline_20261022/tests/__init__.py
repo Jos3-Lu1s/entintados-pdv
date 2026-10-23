@@ -1,0 +1,36 @@
+# -*- coding: utf-8 -*-
+
+from . import test_res_partner_phone
+from . import test_res_partner_vat
+from . import test_tint_points
+from . import test_tint_capacity
+from . import test_tint_base_type_code
+from . import test_tint_size_code
+from . import test_tint_product
+from . import test_tint_color
+from . import test_tint_gallery
+from . import test_crm_stage_validation
+from . import test_crm_demo_cancellation
+from . import test_crm_material_report
+from . import test_crm_opportunity_list
+from . import test_crm_material_stock
+from . import test_crm_material_approvers
+from . import test_material_chatter
+from . import test_stock_return_credit
+from . import test_tint_pricing
+from . import test_tint_schema_lines_views
+from . import test_tint_pos_config
+from . import test_pos_stock
+from . import test_partner_discount_hierarchy
+from . import test_sale_line_edit_lock
+from . import test_product_default_code
+from . import test_colorant_not_sold_alone
+
+from . import test_vendor_credit_group
+from . import test_payment_register_percentages
+from . import test_advance_accounting
+from . import test_commercial_agreements_access
+from . import test_partner_merge_agreements
+from . import test_service_agreements
+from . import test_sale_line_mobile_form
+from . import test_untracked_discount_agreement

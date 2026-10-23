@@ -12,6 +12,11 @@ from . import test_tint_gallery
 from . import test_crm_stage_validation
 from . import test_crm_demo_cancellation
 from . import test_crm_material_report
+from . import test_crm_opportunity_list
+from . import test_crm_material_stock
+from . import test_crm_material_approvers
+from . import test_material_chatter
+from . import test_stock_return_credit
 from . import test_tint_pricing
 from . import test_tint_schema_lines_views
 from . import test_tint_pos_config

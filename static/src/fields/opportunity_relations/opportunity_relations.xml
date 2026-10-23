@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.OpportunityRelationBadges">
+        <div class="d-flex align-items-center gap-1 text-nowrap">
+            <button t-foreach="badges" t-as="badge" t-key="badge.key" type="button"
+                    class="btn border-0 rounded-pill py-0 px-2 d-inline-flex align-items-center gap-1"
+                    t-att-class="badge.color" t-att-title="badge.label + ': ' + badge.count"
+                    t-att-aria-label="badge.label + ': ' + badge.count"
+                    t-on-click.stop="() => this.openRelation(badge.key)">
+                <i class="fa" t-att-class="badge.icon" aria-hidden="true"/>
+                <span t-esc="badge.count"/>
+            </button>
+        </div>
+    </t>
+</templates>

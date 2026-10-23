@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="sequence_crm_opportunity_reference" model="ir.sequence">
+            <field name="name">Folio de oportunidad</field>
+            <field name="code">entintados.crm.opportunity</field>
+            <field name="prefix">OP-</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+    <function model="crm.lead" name="_backfill_opportunity_references"/>
+</odoo>

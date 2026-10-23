@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="crm_opportunity_list_references" model="ir.ui.view">
+        <field name="name">crm.opportunity.list.references</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_tree_view_oppor"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='name']" position="before">
+                <field name="opportunity_reference" readonly="1" optional="show"/>
+            </xpath>
+            <xpath expr="//list/field[@name='name']" position="after">
+                <field name="opportunity_relations" string="Aprobaciones" widget="opportunity_relation_badges" readonly="1" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="crm_opportunity_form_reference" model="ir.ui.view">
+        <field name="name">crm.opportunity.form.reference</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('oe_title')]" position="inside">
+                <field name="opportunity_reference" readonly="1" invisible="not opportunity_reference"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

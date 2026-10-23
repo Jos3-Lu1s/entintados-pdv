@@ -1,27 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="approval_request_view_form_crm_cancellation" model="ir.ui.view">
-        <field name="name">approval.request.form.crm.cancellation</field>
-        <field name="model">approval.request</field>
-        <field name="inherit_id" ref="approvals.approval_request_view_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//header" position="inside">
-                <field name="crm_lead_id" invisible="1"/>
-                <field name="can_cancel_demo" invisible="1"/>
-                <field name="can_reject_demo" invisible="1"/>
-                <button name="action_reject_demo" type="object" string="Rechazar y devolver a CRM" invisible="not crm_lead_id or not can_reject_demo or request_status != 'pending'" confirm="La solicitud regresará a CRM para corregir los productos. La oportunidad seguirá activa."/>
-                <button name="action_cancel" type="object" string="Cancelar demostración"
-                        invisible="not crm_lead_id or not can_cancel_demo or request_status in ['cancel', 'refused']"
-                        confirm="Cancelar esta aprobación cancelará la demostración y marcará automáticamente la oportunidad de CRM como perdida. ¿Deseas continuar?"/>
-            </xpath>
-            <xpath expr="//button[@name='action_refuse' and @data-hotkey='z']" position="attributes">
-                <attribute name="invisible">crm_lead_id or request_status in ['approved', 'refused', 'cancel'] or user_status != 'pending'</attribute>
-            </xpath>
-            <xpath expr="//button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
-                <attribute name="invisible">crm_lead_id or request_status in ['new', 'cancel'] or request_owner_id != uid</attribute>
-            </xpath>
-        </field>
-    </record>
     <record id="approval_product_line_list_inherit_availability" model="ir.ui.view">
         <field name="name">approval.product.line.list.inherit.availability</field>
         <field name="model">approval.product.line</field>
@@ -45,6 +23,31 @@
             </xpath>
         </field>
     </record>
+    <record id="approval_request_view_form_crm_cancellation" model="ir.ui.view">
+        <field name="name">approval.request.form.crm.cancellation</field>
+        <field name="model">approval.request</field>
+        <field name="inherit_id" ref="approvals.approval_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="crm_lead_id" invisible="1"/>
+                <field name="can_cancel_demo" invisible="1"/>
+                <field name="can_reject_demo" invisible="1"/>
+                <button name="action_reject_demo" type="object" string="Rechazar y devolver a CRM" invisible="not crm_lead_id or not can_reject_demo or request_status != 'pending'" confirm="La solicitud regresará a CRM para corregir los productos. La oportunidad seguirá activa."/>
+                <button name="action_cancel" type="object" string="Cancelar demostración"
+                        invisible="not crm_lead_id or not can_cancel_demo or request_status in ['cancel', 'refused']"
+                        confirm="Cancelar esta aprobación cancelará la demostración y marcará automáticamente la oportunidad de CRM como perdida. ¿Deseas continuar?"/>
+            </xpath>
+            <xpath expr="//button[@name='action_refuse' and @data-hotkey='z']" position="attributes">
+                <attribute name="invisible">crm_lead_id or request_status in ['approved', 'refused', 'cancel'] or user_status != 'pending'</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
+                <attribute name="invisible">crm_lead_id or request_status in ['new', 'cancel'] or request_owner_id != uid</attribute>
+            </xpath>
+        </field>
+    </record>
+
+
+
 
     <record id="approval_request_view_form_inherit_stock" model="ir.ui.view">
         <field name="name">approval.request.view.form.inherit.stock</field>

@@ -13,6 +13,16 @@ APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_ou
 class Approval(models.Model):
     _inherit = 'approval.category'
 
+    @api.model
+    def _configure_material_approval_policy(self):
+        category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+        if category:
+            category.sudo().write({
+                'approval_minimum': 1,
+                'approver_sequence': False,
+                'manager_approval': False,
+            })
+
     approval_type = fields.Selection(
         selection_add=[
             ("stock_out", "Crear salida de almacén"),
@@ -210,7 +220,7 @@ class ApprovalRequest(models.Model):
                 and category_salida
                 and request.category_id == category_salida
             ):
-                request._create_material_picking()
+                request.sudo()._create_material_picking()
 
     _material_output_trigger = fields.Boolean(
         compute='_compute_check_material_output',
@@ -245,7 +255,9 @@ class ApprovalRequest(models.Model):
                 and category_salida
                 and request.category_id == category_salida
             ):
-                request._create_material_picking()
+                # La aprobación la valida el flujo nativo. La salida es una
+                # operación automática: no exige permisos de almacén al aprobador.
+                request.sudo()._create_material_picking()
         return res
 
     def _create_material_picking(self):

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="stock_picking_return_credit_view" model="ir.ui.view">
+        <field name="name">stock.picking.return.credit</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_return_credit_notes" type="object" class="oe_stat_button"
+                        icon="fa-file-text-o" groups="account.group_account_invoice"
+                        invisible="return_credit_note_count == 0">
+                    <field name="return_credit_note_count" widget="statinfo" string="Notas de crédito"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="is_sale_customer_return" invisible="1"/>
+                <field name="return_invoice_candidate_ids" invisible="1"/>
+                <field name="return_invoice_id" invisible="not is_sale_customer_return"
+                       readonly="state in ('done', 'cancel')" options="{'no_create': True}"
+                       domain="[('id', 'in', return_invoice_candidate_ids)]"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="account_move_stock_return_view" model="ir.ui.view">
+        <field name="name">account.move.stock.return.reference</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_origin']" position="after">
+                <field name="stock_return_picking_id" invisible="not stock_return_picking_id" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
