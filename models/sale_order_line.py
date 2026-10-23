@@ -453,6 +453,15 @@ class SaleOrderLine(models.Model):
         """
         vals_list = super().copy_data(default=default)
         default = default or {}
+        # `linked_line_id` no se copia y el core solo pone `linked_virtual_id` en productos de un
+        # combo nuevo: los de un combo reconfigurado en la orden guardada quedarían sin paquete.
+        vals_by_id = {line.id: vals for line, vals in zip(self, vals_list)}
+        for line, vals in zip(self, vals_list):
+            package_id = line.linked_line_id.id
+            if line.combo_item_id and package_id in vals_by_id:
+                package_vals = vals_by_id[package_id]
+                package_vals['virtual_id'] = package_vals.get('virtual_id') or f'copy-{package_id}'
+                vals['linked_virtual_id'] = package_vals['virtual_id']
         for line, vals in zip(self, vals_list):
             if not line._admits_partner_agreement():
                 continue

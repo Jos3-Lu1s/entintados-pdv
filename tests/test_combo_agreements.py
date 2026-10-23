@@ -354,3 +354,20 @@ class TestComboAgreements(TransactionCase):
         self.assertEqual([round(price, 2) for price in items.sorted('sequence').mapped('price_unit')],
                          [714.29, 214.29, 71.42])
         self.assertAlmostEqual(order.amount_untaxed, 3000.0, places=2)
+
+    def test_copy_relinks_combo_lines_without_virtual_ids(self):
+        """Al reconfigurar el combo de una orden guardada, el core liga sus productos solo por
+        `linked_line_id`, que no se copia: duplicar la orden debe volver a ligarlos."""
+        self._fixed_price_rule(self.package, 200.0)
+        order, package_line, items = self._quote()
+        self.assertFalse(package_line.virtual_id or any(items.mapped('linked_virtual_id')))
+
+        copy = order.copy()
+
+        new_package = copy.order_line.filtered(lambda line: line.product_id == self.package)
+        new_items = copy.order_line - new_package
+        self.assertEqual(new_items.linked_line_id, new_package)
+        self.assertEqual(new_items.combo_item_id, items.combo_item_id)
+        self.assertEqual([round(price, 2) for price in new_items.sorted('id').mapped('price_unit')],
+                         [142.86, 42.86, 14.28])
+        self.assertAlmostEqual(copy.amount_untaxed, 600.0, places=2)
