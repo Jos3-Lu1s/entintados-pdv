@@ -14,11 +14,8 @@
     </t>
     <t t-name="entintados_pdv.AdvanceControls" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
         <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
-            <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="() => this.onClickSaleAdvance()">
-                <i class="fa fa-percent me-1"/>Anticipo de pedido
-            </button>
             <button t-if="pos.config.advance_risk_enabled" t-att-class="buttonClass" t-on-click="() => this.onClickAdvances()">
-                <i class="fa fa-money me-1"/>Saldo a favor
+                <i class="fa fa-money me-1"/>Anticipo
             </button>
         </xpath>
     </t>

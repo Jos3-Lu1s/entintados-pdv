@@ -45,6 +45,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/advance_controls.js",
             "entintados_pdv/static/src/app/overrides/advance_controls.xml",
             "entintados_pdv/static/src/app/overrides/advance_sale_pos.js",
+            "entintados_pdv/static/src/app/overrides/advance_line_lock.js",
             "entintados_pdv/static/src/app/overrides/pos_financing.js",
             "entintados_pdv/static/src/app/overrides/pos_financing.xml",
             # Estilos del POS
@@ -103,6 +104,10 @@ Catálogo de entintado
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
+            # Desglose del reparto del precio de un combo en las líneas de venta
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.js",
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.xml",
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_columns_patch.js",
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",

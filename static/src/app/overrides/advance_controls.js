@@ -6,25 +6,21 @@ import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_p
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 
 patch(ControlButtons.prototype, {
-    onClickSaleAdvance() {
-        const order = this.pos.getOrder();
-        if (order?.lines.length || order?.payment_ids.length) {
-            this.notification.add(_t("Abre un pedido vacío para cobrar el anticipo de una cotización o pedido de Ventas."), { type: "warning" });
-            return;
-        }
-        this.onClickQuotation();
-    },
-    async onClickAdvances() {
+    async onClickAdvances(requestedAction = null) {
         const order = this.pos.getOrder();
         const partner = order?.getPartner();
         if (!partner) {
             this.notification.add(_t("Selecciona el cliente para consultar o cobrar anticipos."), { type: "warning" });
             return;
         }
+        if (!this.pos.config.advance_risk_enabled) {
+            this.notification.add(_t("Los anticipos no están configurados para esta caja. Un administrador contable debe preparar las cuentas y el producto genérico de anticipo en Ajustes."), { type: "warning" });
+            return;
+        }
         try {
             const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
             const format = (value) => this.pos.env.utils.formatCurrency(value);
-            const action = await makeAwaitable(this.dialog, SelectionPopup, {
+            const action = requestedAction || await makeAwaitable(this.dialog, SelectionPopup, {
                 title: _t("Saldo a favor del cliente: %s", format(info.advance_available)),
                 list: [
                     { id: "collect", label: _t("Recibir dinero del cliente"), description: _t("El importe pagado quedará a su favor para próximas compras."), item: "collect" },
@@ -34,10 +30,10 @@ patch(ControlButtons.prototype, {
             if (!action) {
                 return;
             }
-            const product = this.pos.config.advance_product_id;
+            const product = this.pos.config.down_payment_product_id;
             const template = product?.product_tmpl_id;
             if (!template) {
-                this.notification.add(_t("El producto de anticipos no está disponible en este POS. Revisa su configuración y vuelve a cargar la caja."), { type: "warning" });
+                this.notification.add(_t("Selecciona el producto de anticipo en los ajustes del Punto de Venta, sección Ventas, y vuelve a cargar la caja."), { type: "warning" });
                 return;
             }
             if (action === "collect") {

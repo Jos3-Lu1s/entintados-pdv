@@ -29,7 +29,7 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
                 setToInvoice(value) { this.to_invoice = value; } };
             return currentOrder;
         },
-        config: { id: 4, advance_product_id: { id: 7, product_tmpl_id: template } },
+        config: { id: 4, advance_risk_enabled: true, advance_product_id: { id: 99, product_tmpl_id: {} }, down_payment_product_id: { id: 7, product_tmpl_id: template } },
         env: { utils: { formatCurrency: String } }, models: { 'account.tax': { get: (id) => tax && tax.id === id ? tax : undefined } },
         data: { async call(model, method, args) {
             requests++;
@@ -71,6 +71,37 @@ test('Collecting an advance creates an invoice line and no second cash payment',
     assert.equal(f.order.lines[0].price_unit, 300);
     assert.equal(f.order.to_invoice, true);
     assert.equal(f.order.payment_ids.length, 0);
+});
+
+test('Receiving an advance from the menu uses the generic product without merchandise', async () => {
+    const f = fixture({ cart: 0, replies: ['collect', '250'] });
+    await f.controls.onClickAdvances();
+    assert.equal(f.order.lines.length, 1);
+    assert.equal(f.order.lines[0].product_id.id, 7);
+    assert.equal(f.order.lines[0].qty, 1);
+    assert.equal(f.order.lines[0].price_unit, 250);
+    assert.equal(f.order.to_invoice, true);
+    assert.equal(f.notices.length, 0);
+});
+
+test('Unconfigured advances explain the missing setup instead of opening a sales order', async () => {
+    const f = fixture({ cart: 0, replies: ['250'] });
+    f.controls.pos.config.advance_risk_enabled = false;
+    await f.controls.onClickAdvances();
+    assert.equal(f.requests(), 0);
+    assert.equal(f.order.lines.length, 0);
+    assert.match(f.notices[0][0], /no están configurados/);
+});
+
+test('Direct advance sale preserves merchandise and reuses the same generic product', async () => {
+    const f = fixture({ cart: 500, replies: ['250'] });
+    await f.controls.onClickAdvances('collect');
+    assert.equal(f.order.lines.length, 1);
+    assert.equal(f.order.priceIncl, 500);
+    assert.notEqual(f.currentOrder(), f.order);
+    assert.equal(f.currentOrder().lines[0].product_id.id, 7);
+    assert.equal(f.currentOrder().lines[0].price_unit, 250);
+    assert.equal(f.currentOrder().partner.id, 8);
 });
 
 test('Applying an advance reduces the sale amount without inventing a payment', async () => {

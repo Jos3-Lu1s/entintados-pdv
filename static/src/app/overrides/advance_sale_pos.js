@@ -18,7 +18,8 @@ patch(PosStore.prototype, {
         if (this._applyingCustomerAdvance) {
             return;
         }
-        if (!this.config.advance_risk_enabled || !order?.getPartner() || order.priceIncl <= 0 ||
+        if (!this.config.advance_risk_enabled || order?.uiState?.skipAutomaticCustomerAdvance ||
+            !order?.getPartner() || order.priceIncl <= 0 ||
             order.payment_ids.length || order.isRefund || order.is_settling_account ||
             order.lines.some((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.() ||
                 (line.price_unit * line.qty > 0 && (line.product_id?.product_tmpl_id?.is_accounting_advance ||
@@ -32,8 +33,12 @@ patch(PosStore.prototype, {
             if (this.getOrder() !== order || order.getPartner() !== partner) {
                 return;
             }
+            // The cashier may remove an advance while the balance RPC is pending.
+            if (order.uiState?.skipAutomaticCustomerAdvance) {
+                return await super.pay(...arguments);
+            }
             let remaining = order.priceIncl;
-            const product = this.config.advance_product_id;
+            const product = this.config.down_payment_product_id;
             const planned = [];
             for (const source of info.sources) {
                 if (source.fiscal_kind === "fiscal" || remaining <= 0) {
@@ -89,7 +94,7 @@ patch(PosStore.prototype, {
     },
     async addLineToCurrentOrder(values, options = {}, configure = true) {
         const line = await super.addLineToCurrentOrder(...arguments);
-        if (line && this.config.advance_risk_enabled && values.sale_order_origin_id &&
+        if (line && this.config.advance_risk_enabled &&
             values.product_id?.id === this.config.down_payment_product_id?.id) {
             line.order_id.setToInvoice(true);
         }

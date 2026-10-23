@@ -56,7 +56,7 @@ test('Keeps native final settlement deductions and requires an invoice for the d
 function autoFixture(balance, total) {
     const store = fixture();
     const partner = { id: 8 };
-    Object.assign(store.config, { id: 1, advance_product_id: { id: 9, product_tmpl_id: {} } });
+    Object.assign(store.config, { id: 1, advance_product_id: { id: 99 }, down_payment_product_id: { id: 9, product_tmpl_id: {} } });
     Object.assign(store.order, { lines: [{ price_unit: total, qty: 1 }], payment_ids: [], getPartner: () => partner });
     Object.defineProperty(store.order, 'priceIncl', { get() {
         return this.lines.reduce((sum, line) => sum + line.price_unit * line.qty, 0);
@@ -93,6 +93,40 @@ test('Receiving new funds and paying existing invoices do not spend advances aut
     store.order.lines[0].product_id = { product_tmpl_id: { is_accounting_advance: true } };
     await store.pay();
     assert.equal(store.order.lines.length, 1);
+    assert.equal(store.payCalls, 1);
+});
+
+test('Removing an applied advance keeps the full sale due on repeated payment visits', async () => {
+    for (const balance of [500, 5000]) {
+        const store = autoFixture(balance, 1500);
+        await store.pay();
+        assert.equal(store.order.lines.length, 2);
+        store.order.lines.splice(1, 1);
+        store.order.uiState = { skipAutomaticCustomerAdvance: true };
+        assert.equal(store.order.priceIncl, 1500);
+        for (let visit = 0; visit < 3; visit++) {
+            await store.pay();
+            assert.equal(store.order.lines.length, 1);
+            assert.equal(store.order.priceIncl, 1500);
+        }
+        assert.equal(store.payCalls, 4);
+        const another = autoFixture(balance, 1500);
+        await another.pay();
+        assert.equal(another.order.lines.length, 2);
+    }
+});
+
+test('Removing an advance during balance lookup also prevents automatic reinsertion', async () => {
+    const store = autoFixture(500, 1500);
+    let finish;
+    store.data.call = () => new Promise((resolve) => { finish = resolve; });
+    const paying = store.pay();
+    store.order.uiState = { skipAutomaticCustomerAdvance: true };
+    finish({ sources: [{ id: 42, total: 500, available: 500, fiscal_kind: 'on_account',
+        lines: [{ price_unit: 500, quantity: 1, discount: 0, tax_ids: [] }] }] });
+    await paying;
+    assert.equal(store.order.lines.length, 1);
+    assert.equal(store.order.priceIncl, 1500);
     assert.equal(store.payCalls, 1);
 });
 
