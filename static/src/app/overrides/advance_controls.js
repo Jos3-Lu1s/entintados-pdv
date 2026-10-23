@@ -63,8 +63,17 @@ patch(ControlButtons.prototype, {
                 this.notification.add(_t("No hay anticipos disponibles para aplicar en caja. Los anticipos fiscales se aplican desde Contabilidad."), { type: "warning" });
                 return;
             }
-            if (!order.lines.length || order.payment_ids.length) {
-                this.notification.add(_t("Agrega los productos de la venta y aplica el anticipo antes de registrar los pagos."), { type: "warning" });
+            if (!order.lines.length) {
+                this.notification.add(_t("Agrega los productos de la venta antes de aplicar el anticipo."), { type: "warning" });
+                return;
+            }
+            if (order.electronicPaymentInProgress?.()) {
+                this.notification.add(_t("Finaliza o cancela el pago electrónico en curso antes de aplicar el anticipo."), { type: "warning" });
+                return;
+            }
+            if (order.payment_ids.some((payment) => payment.amount < 0 ||
+                (payment.payment_method_id?.type === "pay_later" && payment.amount > 0))) {
+                this.notification.add(_t("Retira el saldo pendiente o la devolución del ticket antes de aplicar el anticipo."), { type: "warning" });
                 return;
             }
             const source = await makeAwaitable(this.dialog, SelectionPopup, {
@@ -76,13 +85,23 @@ patch(ControlButtons.prototype, {
             }
             const cartReserved = -order.lines.filter((line) => line.advance_source_ref === source.id)
                 .reduce((total, line) => total + line.prices.total_included_currency, 0);
-            const maximum = Math.min(source.available - cartReserved, order.priceIncl);
+            const paid = order.payment_ids.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+            const maximum = Math.min(source.available - cartReserved, order.priceIncl - paid);
+            if (!(maximum > 0)) {
+                this.notification.add(_t("No queda importe pendiente en esta venta o saldo disponible en el anticipo seleccionado."), { type: "warning" });
+                return;
+            }
             const value = await makeAwaitable(this.dialog, NumberPopup, { title: _t("Importe a aplicar con impuestos"), startingValue: String(maximum) });
             if (value === undefined) {
                 return;
             }
             const amount = Number(value);
-            if (!Number.isFinite(amount) || amount <= 0 || amount > maximum) {
+            const currentPaid = order.payment_ids.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+            if (this.pos.getOrder() !== order || order.getPartner()?.id !== partner.id) {
+                this.notification.add(_t("La venta o el cliente cambió. Vuelve a seleccionar el anticipo."), { type: "warning" });
+                return;
+            }
+            if (!Number.isFinite(amount) || amount <= 0 || amount > maximum || amount > order.priceIncl - currentPaid) {
                 this.notification.add(_t("El importe supera el saldo disponible o el total de la venta."), { type: "warning" });
                 return;
             }
@@ -101,9 +120,9 @@ patch(ControlButtons.prototype, {
             });
             for (const { original, taxes } of prepared) {
                 const line = await this.pos.addLineToCurrentOrder({
-                    product_tmpl_id: template, price_unit: -original.price_unit * amount / source.total,
+                    product_id: product, product_tmpl_id: template, price_unit: -original.price_unit * amount / source.total,
                     qty: original.quantity, tax_ids: taxes.map((tax) => ["link", tax]), advance_source_ref: source.id,
-                }, { merge: false });
+                }, { merge: false }, false);
                 line.advance_source_ref = source.id;
                 line.price_type = "manual";
             }

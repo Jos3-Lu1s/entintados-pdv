@@ -564,7 +564,7 @@ class TestAdvanceAccounting(TransactionCase):
         })
 
     def test_ppd_partial_requires_credit_condition_and_keeps_real_residual(self):
-        self.partner.write({'is_credit': True, 'credit_limit': 0})
+        self.partner.write({'is_credit': True, 'credit_limit': 1000})
         order = self._financed_pos_order()
         order._check_pos_deferred_payments(check_risk=True)
         values = order._prepare_invoice_vals()

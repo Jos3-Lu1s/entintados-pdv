@@ -97,7 +97,6 @@ test('Ticket allows deleting advances but blocks all edits and long press', asyn
     assert.equal(summary.updated, undefined);
     assert.equal(summary.edited, undefined);
     assert.equal(order.removed, line);
-    assert.equal(order.uiState.skipAutomaticCustomerAdvance, true);
     assert.ok(screen.getNumpadButtons().every((button) => button.disabled === (button.value !== 'Backspace')));
 });
 
@@ -105,7 +104,6 @@ test('Backspace removes the entire advance without changing its quantity or pric
     const { line, order, summary } = fixture();
     await summary.updateSelectedOrderline({ buffer: '25', key: 'Backspace' });
     assert.equal(order.removed, line);
-    assert.equal(order.uiState.skipAutomaticCustomerAdvance, true);
     assert.equal(line.qty, 1);
     assert.equal(line.price_unit, 250);
     assert.equal(summary.updated, undefined);
@@ -136,6 +134,5 @@ test('Ordinary products retain all native editing and deletion', async () => {
     assert.equal(summary.updated, true);
     assert.equal(summary.edited, true);
     assert.equal(order.removed, line);
-    assert.equal(order.uiState.skipAutomaticCustomerAdvance, undefined);
     assert.ok(screen.getNumpadButtons().every((button) => !button.disabled));
 });

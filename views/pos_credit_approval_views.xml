@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="native_credit_approval_visibility_rule" model="ir.rule">
+        <field name="name">Crédito PPD: solicitante o responsable asignado</field>
+        <field name="model_id" ref="approvals.model_approval_request"/>
+        <field name="domain_force">['|', ('pos_credit_approval_id', '=', False), '|', ('request_owner_id', '=', user.id), ('approver_ids.user_id', '=', user.id)]</field>
+    </record>
+    <record id="pos_credit_approval_company_rule" model="ir.rule">
+        <field name="name">Autorizaciones de crédito propias o asignadas por compañía</field>
+        <field name="model_id" ref="model_pos_credit_approval"/>
+        <field name="domain_force">[('company_id', 'in', company_ids), '|', ('requester_id', '=', user.id), ('approver_user_ids', 'in', [user.id])]</field>
+    </record>
+    <record id="pos_credit_approval_list" model="ir.ui.view">
+        <field name="name">pos.credit.approval.list</field>
+        <field name="model">pos.credit.approval</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0" decoration-warning="state == 'pending'" decoration-success="state == 'approved'">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="credit_amount"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="requester_id"/>
+                <field name="state" string="Estado" widget="badge"/>
+                <field name="decided_by"/>
+            </list>
+        </field>
+    </record>
+    <record id="pos_credit_approval_form" model="ir.ui.view">
+        <field name="name">pos.credit.approval.form</field>
+        <field name="model">pos.credit.approval</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <header>
+                    <field name="can_decide" invisible="1"/>
+                    <button name="action_open_approval" type="object" string="Abrir en Aprobaciones" class="oe_highlight"/>
+                    <field name="state" string="Estado" widget="badge"/>
+                </header>
+                <sheet>
+                    <h1><field name="name"/></h1>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="config_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="requester_id"/>
+                            <field name="order_uuid"/>
+                            <field name="used_order_id"/>
+                        </group>
+                        <group>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="risk_currency_id"/>
+                            <field name="total_amount"/>
+                            <field name="credit_amount"/>
+                            <field name="applied_amount"/>
+                            <field name="credit_limit"/>
+                            <field name="current_credit"/>
+                            <field name="projected_risk"/>
+                            <field name="decided_by"/>
+                            <field name="decided_on"/>
+                        </group>
+                    </group>
+                    <field name="approver_user_ids" widget="many2many_tags"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="action_pos_credit_approval" model="ir.actions.act_window">
+        <field name="name">Autorizaciones de crédito</field>
+        <field name="res_model">approval.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('pos_credit_approval_id', '!=', False)]</field>
+    </record>
+    <menuitem id="menu_pos_credit_approval" name="Autorizaciones de crédito"
+              parent="account.menu_finance_receivables" action="action_pos_credit_approval" sequence="40"/>
+    <record id="approval_request_form_pos_credit" model="ir.ui.view">
+        <field name="name">approval.request.form.pos.credit</field>
+        <field name="model">approval.request</field>
+        <field name="inherit_id" ref="approvals.approval_request_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
+                <attribute name="invisible" add="pos_credit_approval_id" separator=" or "/>
+            </xpath>
+            <xpath expr="//header" position="inside">
+                <field name="can_cancel_pos_credit" invisible="1"/>
+                <button name="action_cancel" type="object" string="Anular autorización"
+                        invisible="not can_cancel_pos_credit"
+                        confirm="Esta autorización dejará de permitir la venta a crédito. ¿Deseas anularla?"/>
+            </xpath>
+            <xpath expr="//header/field[@name='request_status']" position="attributes">
+                <attribute name="string">Estado</attribute>
+                <attribute name="invisible">pos_credit_approval_id</attribute>
+            </xpath>
+            <xpath expr="//header/field[@name='request_status']" position="after">
+                <field name="request_status" string="Estado" widget="badge"
+                       invisible="not pos_credit_approval_id" readonly="1"
+                       decoration-info="request_status == 'new'"
+                       decoration-warning="request_status == 'pending'"
+                       decoration-success="request_status == 'approved'"
+                       decoration-danger="request_status == 'refused'"/>
+            </xpath>
+            <xpath expr="//field[@name='reference']" position="attributes">
+                <attribute name="readonly">pos_credit_approval_id</attribute>
+            </xpath>
+            <xpath expr="//sheet" position="inside">
+                <field name="pos_credit_approval_id" invisible="1"/>
+                <group string="Autorización de crédito PPD" invisible="not pos_credit_approval_id">
+                    <field name="pos_credit_branch_id"/>
+                    <field name="pos_credit_order_id"/>
+                    <field name="pos_credit_currency_id" invisible="1"/>
+                    <field name="pos_risk_currency_id" invisible="1"/>
+                    <field name="pos_credit_total"/>
+                    <field name="pos_credit_amount"/>
+                    <field name="pos_credit_limit"/>
+                    <field name="pos_current_credit"/>
+                    <field name="pos_projected_risk"/>
+                    <field name="pos_credit_state" string="Estado" widget="badge"
+                           decoration-warning="pos_credit_state == 'pending'"
+                           decoration-success="pos_credit_state in ['approved', 'used']"
+                           decoration-danger="pos_credit_state == 'refused'"/>
+                    <field name="pos_credit_cancel_reason" invisible="not pos_credit_cancel_reason"/>
+                    <field name="pos_credit_cancelled_by" invisible="not pos_credit_cancelled_by"/>
+                    <field name="pos_credit_cancelled_on" invisible="not pos_credit_cancelled_on"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+    <record id="approval_request_list_pos_credit" model="ir.ui.view">
+        <field name="name">approval.request.list.pos.credit</field>
+        <field name="model">approval.request</field>
+        <field name="inherit_id" ref="approvals.approval_request_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='request_status']" position="attributes">
+                <attribute name="string">Estado</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='name']" position="after">
+                <field name="partner_id" string="Cliente" optional="show"/>
+                <field name="pos_credit_order_id" optional="show"/>
+                <field name="pos_credit_branch_id" optional="show"/>
+                <field name="pos_credit_currency_id" column_invisible="True"/>
+                <field name="pos_credit_amount" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+    <function model="pos.credit.approval" name="_setup_native_approvals"/>
+</odoo>

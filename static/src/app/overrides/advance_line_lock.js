@@ -1,7 +1,6 @@
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
-import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { OrderSummary } from "@point_of_sale/app/screens/product_screen/order_summary/order_summary";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 
@@ -43,18 +42,6 @@ patch(PosOrderline.prototype, {
     canBeMergedWith(line) {
         if (this.isAdvanceLocked || line?.isAdvanceLocked) return false;
         return super.canBeMergedWith(line);
-    },
-});
-
-patch(PosOrder.prototype, {
-    removeOrderline(line) {
-        const advance = line?.isAdvanceLocked;
-        const result = super.removeOrderline(line);
-        if (advance && !this.lines.includes(line)) {
-            // Preserve the user's choice on this ticket when revisiting payment.
-            this.uiState.skipAutomaticCustomerAdvance = true;
-        }
-        return result;
     },
 });
 

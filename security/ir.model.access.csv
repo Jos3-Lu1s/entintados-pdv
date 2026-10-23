@@ -34,3 +34,4 @@ access_vendor_credit_wizard_line,vendor.credit.group.line,model_vendor_credit_gr
 access_pos_order_split_invoice_wizard_user,pos.order.split.invoice.wizard.user,model_pos_order_split_invoice_wizard,point_of_sale.group_pos_user,1,1,1,1
 access_purchase_advance_invoice,purchase.advance.invoice,model_purchase_advance_invoice,account.group_account_invoice,1,1,1,1
 access_account_advance_apply,account.advance.apply,model_account_advance_apply,account.group_account_invoice,1,1,1,1
+access_pos_credit_approval_internal,pos.credit.approval.read,model_pos_credit_approval,base.group_user,1,0,0,0

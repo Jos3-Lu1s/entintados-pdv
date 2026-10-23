@@ -73,70 +73,36 @@ function autoFixture(balance, total) {
     return store;
 }
 
-test('Pay automatically uses customer funds and leaves only the difference due', async () => {
-    for (const [balance, total, due] of [[5000, 1500, 0], [500, 1500, 1000]]) {
-        const store = autoFixture(balance, total);
-        await store.pay();
-        assert.equal(store.order.priceIncl, due);
-        assert.equal(store.order.lines[1].advance_source_ref, 42);
-        assert.equal(store.order.to_invoice, true);
-        assert.equal(store.order.payment_ids.length, 0);
-        assert.equal(store.payCalls, 1);
-        await store.pay();
-        assert.equal(store.order.priceIncl, due);
-        assert.equal(store.order.lines.length, 2);
-    }
-});
-
-test('Receiving new funds and paying existing invoices do not spend advances automatically', async () => {
+test('Pay never adds available advances or consumes unselected balances', async () => {
     const store = autoFixture(5000, 1500);
-    store.order.lines[0].product_id = { product_tmpl_id: { is_accounting_advance: true } };
-    await store.pay();
-    assert.equal(store.order.lines.length, 1);
-    assert.equal(store.payCalls, 1);
-});
-
-test('Removing an applied advance keeps the full sale due on repeated payment visits', async () => {
-    for (const balance of [500, 5000]) {
-        const store = autoFixture(balance, 1500);
-        await store.pay();
-        assert.equal(store.order.lines.length, 2);
-        store.order.lines.splice(1, 1);
-        store.order.uiState = { skipAutomaticCustomerAdvance: true };
-        assert.equal(store.order.priceIncl, 1500);
-        for (let visit = 0; visit < 3; visit++) {
-            await store.pay();
-            assert.equal(store.order.lines.length, 1);
-            assert.equal(store.order.priceIncl, 1500);
-        }
-        assert.equal(store.payCalls, 4);
-        const another = autoFixture(balance, 1500);
-        await another.pay();
-        assert.equal(another.order.lines.length, 2);
-    }
-});
-
-test('Removing an advance during balance lookup also prevents automatic reinsertion', async () => {
-    const store = autoFixture(500, 1500);
-    let finish;
-    store.data.call = () => new Promise((resolve) => { finish = resolve; });
-    const paying = store.pay();
-    store.order.uiState = { skipAutomaticCustomerAdvance: true };
-    finish({ sources: [{ id: 42, total: 500, available: 500, fiscal_kind: 'on_account',
-        lines: [{ price_unit: 500, quantity: 1, discount: 0, tax_ids: [] }] }] });
-    await paying;
-    assert.equal(store.order.lines.length, 1);
+    store.data.call = async () => { throw new Error('Pay must not look up unselected advances'); };
+    for (let visit = 0; visit < 3; visit++) await store.pay();
     assert.equal(store.order.priceIncl, 1500);
-    assert.equal(store.payCalls, 1);
+    assert.equal(store.order.lines.length, 1);
+    assert.equal(store.payCalls, 3);
 });
 
-test('Offline balance lookup prevents collecting the full sale without checking customer funds', async () => {
+test('Pay preserves the selected source and partial amount even when other advances exist', async () => {
     const store = autoFixture(5000, 1500);
-    store.data.call = async () => { throw new Error('Offline'); };
-    await store.pay();
-    assert.equal(store.payCalls, undefined);
+    store.order.lines.push({ price_unit: -200, qty: 1, advance_source_ref: 77,
+        product_id: store.config.down_payment_product_id });
+    store.data.call = async () => { throw new Error('Other advances must not be selected automatically'); };
+    for (let visit = 0; visit < 3; visit++) await store.pay();
+    assert.equal(store.order.lines.length, 2);
+    assert.equal(store.order.lines[1].advance_source_ref, 77);
+    assert.equal(store.order.lines[1].price_unit, -200);
+    assert.equal(store.order.priceIncl, 1300);
+    assert.equal(store.payCalls, 3);
+});
+
+test('Removing a selected advance keeps it removed on repeated payment visits', async () => {
+    const store = autoFixture(5000, 1500);
+    store.order.lines.push({ price_unit: -200, qty: 1, advance_source_ref: 77 });
+    store.order.lines.splice(1, 1);
+    for (let visit = 0; visit < 3; visit++) await store.pay();
+    assert.equal(store.order.priceIncl, 1500);
     assert.equal(store.order.lines.length, 1);
-    assert.equal(store.notices.length, 1);
+    assert.equal(store.payCalls, 3);
 });
 
 test('Customer refresh replaces the displayed advance balance after purchase', async () => {

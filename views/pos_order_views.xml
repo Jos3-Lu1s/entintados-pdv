@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_pos_order_form_credit_waiting" model="ir.ui.view">
+        <field name="name">pos.order.form.credit.waiting</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/field[@name='state']" position="attributes">
+                <attribute name="invisible" add="credit_waiting_state" separator=" or "/>
+            </xpath>
+            <xpath expr="//header/field[@name='state']" position="after">
+                <field name="credit_waiting_state" widget="statusbar" readonly="1"
+                       invisible="not credit_waiting_state" statusbar_visible="waiting"/>
+            </xpath>
+        </field>
+    </record>
     <record id="view_pos_order_form_entintados_invoices" model="ir.ui.view">
         <field name="name">pos.order.form.entintados.invoices</field>
         <field name="model">pos.order</field>

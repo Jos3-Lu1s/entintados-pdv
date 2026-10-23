@@ -113,6 +113,50 @@ test('Applying an advance reduces the sale amount without inventing a payment', 
     assert.equal(f.order.payment_ids.length, 0);
 });
 
+test('Zero payment placeholders do not block applying an advance to existing products', async () => {
+    const f = fixture({ replies: ['apply', 'source', '100'] });
+    f.order.payment_ids.push({ amount: 0, payment_method_id: { type: 'cash' } });
+    await f.controls.onClickAdvances();
+    assert.equal(f.order.priceIncl, 400);
+    assert.equal(f.order.lines.at(-1).advance_source_ref, 10);
+    assert.equal(f.order.payment_ids.length, 1);
+    assert.equal(f.notices.length, 0);
+});
+
+test('Partial receipts are preserved and an advance can cover only the remainder', async () => {
+    for (const amount of [100, 201]) {
+        const f = fixture({ replies: ['apply', 'source', String(amount)] });
+        f.order.payment_ids.push({ amount: 300, payment_method_id: { type: 'cash' } });
+        await f.controls.onClickAdvances();
+        assert.equal(f.order.payment_ids[0].amount, 300);
+        assert.equal(f.order.lines.length, amount === 100 ? 2 : 1);
+        assert.equal(f.order.priceIncl, amount === 100 ? 400 : 500);
+        assert.equal(f.notices.length, amount === 100 ? 0 : 1);
+    }
+});
+
+test('An empty ticket and a fully paid sale report distinct causes', async () => {
+    const empty = fixture({ cart: 0, replies: ['apply'] });
+    await empty.controls.onClickAdvances();
+    assert.match(empty.notices[0][0], /Agrega los productos/);
+    const paid = fixture({ replies: ['apply', 'source'] });
+    paid.order.payment_ids.push({ amount: 500 });
+    await paid.controls.onClickAdvances();
+    assert.match(paid.notices[0][0], /No queda importe pendiente/);
+    assert.equal(paid.order.lines.length, 1);
+});
+
+test('Existing deferred debt and active electronic payments cannot be mixed with a new advance', async () => {
+    const financed = fixture({ replies: ['apply'] });
+    financed.order.payment_ids.push({ amount: 100, payment_method_id: { type: 'pay_later' } });
+    await financed.controls.onClickAdvances();
+    assert.match(financed.notices[0][0], /saldo pendiente/);
+    const terminal = fixture({ replies: ['apply'] });
+    terminal.order.electronicPaymentInProgress = () => true;
+    await terminal.controls.onClickAdvances();
+    assert.match(terminal.notices[0][0], /pago electrónico/);
+});
+
 test('Collecting credit preserves an existing sale or an empty ticket with payments', async () => {
     for (const cart of [0, 500]) {
         const f = fixture({ cart, replies: ['collect', '300'] });

@@ -54,8 +54,32 @@
                             <field name="advance_available"/>
                         </group>
                     </group>
-                    <field name="advance_source_ids" readonly="1"/>
-                    <field name="advance_final_ids" readonly="1"/>
+                    <div class="d-flex flex-column gap-3" style="min-width: 0;">
+                        <div class="w-100 overflow-auto" invisible="not advance_source_ids">
+                            <separator string="Anticipos aplicados"/>
+                            <field name="advance_source_ids" readonly="1" nolabel="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="name" string="Factura de anticipo"/>
+                                    <field name="invoice_date"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="amount_total"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </div>
+                        <div class="w-100 overflow-auto" invisible="not advance_final_ids">
+                            <separator string="Documentos de aplicación"/>
+                            <field name="advance_final_ids" readonly="1" nolabel="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="name" string="Documento de aplicación"/>
+                                    <field name="invoice_date"/>
+                                    <field name="currency_id" column_invisible="True"/>
+                                    <field name="amount_total"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </div>
+                    </div>
                 </page>
             </xpath>
         </field>

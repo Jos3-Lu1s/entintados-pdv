@@ -5,8 +5,37 @@ import { ControlButtons } from "@point_of_sale/app/screens/product_screen/contro
 import { CustomSelectCreateDialog } from "@pos_settle_due/app/views/view_dialogs/select_create_dialog";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
+import { useEffect } from "@odoo/owl";
 
 patch(PaymentScreen.prototype, {
+    setup() {
+        super.setup(...arguments);
+        useEffect(() => {
+            this.restoreCreditApproval();
+        }, () => [this.currentOrder?.id, this.currentOrder?.getPartner()?.id]);
+    },
+    async restoreCreditApproval() {
+        const order = this.currentOrder;
+        if (!Number.isInteger(order?.id)) {
+            return;
+        }
+        const partnerId = order.getPartner()?.id;
+        const previousApproval = order.uiState.creditApproval;
+        try {
+            const request = await this.pos.data.call("pos.config", "get_order_credit_approval", [
+                [this.pos.config.id], order.id,
+            ]);
+            if (this.currentOrder === order && order.getPartner()?.id === partnerId &&
+                order.uiState.creditApproval === previousApproval) {
+                order.uiState.creditApproval = request || undefined;
+            }
+        } catch {
+            // Credit validation always checks the live server state again before payment.
+            if (this.currentOrder === order && order.uiState.creditApproval === previousApproval) {
+                order.uiState.creditApproval = undefined;
+            }
+        }
+    },
     get isCreditCustomer() {
         const partner = this.currentOrder.getPartner();
         return Boolean(partner?.commercial_partner_id?.is_credit ?? partner?.is_credit);
@@ -29,6 +58,11 @@ patch(PaymentScreen.prototype, {
         if (this.isCollectingCustomerAdvance && paymentMethod.type === "pay_later") {
             this.notification.add(_t("Recibe el anticipo con efectivo o tarjeta. Cuenta de cliente generaría una deuda, no un saldo a favor."), { type: "warning" });
             return false;
+        }
+        const order = this.currentOrder;
+        if (paymentMethod.type === "pay_later" && !order.is_settling_account && !order.isRefund &&
+            !order.lines.some((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.())) {
+            return (await this.setDeferredPayment("credit")) === true;
         }
         return await super.addNewPaymentLine(...arguments);
     },
@@ -134,12 +168,27 @@ patch(PaymentScreen.prototype, {
                 this.notification.add(_t("El contacto ya no tiene la condición Crédito habilitada."), { type: "warning" });
                 return;
             }
-            if (flow === "credit") {
-                const applied = -order.lines.filter((line) => line.advance_source_ref ||
-                    (line.sale_order_line_id?.is_downpayment && line.price_unit * line.qty < 0))
-                    .reduce((total, line) => total + line.prices.total_included_currency, 0);
-                if (!info.credit_authorized || !info.credit_limited || info.risk_exception || pending > info.purchase_power - applied) {
-                    this.notification.add(_t("El cliente no tiene crédito autorizado suficiente. Revisa su límite o registra un pago."), { type: "warning" });
+            const applied = -order.lines.filter((line) => line.advance_source_ref ||
+                (line.sale_order_line_id?.is_downpayment && line.price_unit * line.qty < 0))
+                .reduce((total, line) => total + line.prices.total_included_currency, 0);
+            if (!info.credit_limited || info.risk_exception || pending > info.purchase_power - applied) {
+                order.setToInvoice(true);
+                await this.pos.syncAllOrders({ orders: [order], force: true, throw: true });
+                if (!Number.isInteger(order.id)) {
+                    throw new Error(_t("No se pudo guardar el ticket en borrador. Revisa la conexión y vuelve a solicitar crédito."));
+                }
+                if (this.currentOrder !== order || order.getPartner()?.id !== partner.id) {
+                    return false;
+                }
+                const request = await this.pos.data.call("pos.config", "request_credit_approval", [
+                    [this.pos.config.id], partner.id, order.uuid, order.priceIncl, pending, applied, order.id,
+                ]);
+                order.uiState.creditApproval = request;
+                if (request.state !== "approved") {
+                    this.notification.add(request.state === "refused"
+                        ? _t("La autorización de crédito fue rechazada. Registra un pago o revisa la venta.")
+                        : _t("Autorización solicitada a Administración, Créditos y Tesorería. Cuando la aprueben, pulsa Revisar autorización."),
+                    { type: "warning" });
                     return;
                 }
             }
@@ -159,6 +208,10 @@ patch(PaymentScreen.prototype, {
             line.setAmount(pending);
             order.update({ pos_payment_flow: flow });
             order.setToInvoice(true);
+            if (Number.isInteger(order.id) && order.uiState.creditApproval?.state === "approved") {
+                await this.pos.syncAllOrders({ orders: [order], force: true, throw: true });
+            }
+            return true;
         } catch (error) {
             this.notification.add(error.message || _t("No se pudo consultar el crédito. Revisa la conexión."), { type: "danger" });
         }

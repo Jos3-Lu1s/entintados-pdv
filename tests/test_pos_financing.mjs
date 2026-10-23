@@ -6,7 +6,7 @@ import fs from 'node:fs';
 const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_financing.js', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
 
-function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
+function fixture({ paid = 300, authorized = true, limit = 1000, approvalState = 'pending' } = {}) {
     class Screen {
         onMounted() { this.nativeMounted = true; }
         async toggleIsToInvoice() { this.currentOrder.setToInvoice(!this.currentOrder.to_invoice); }
@@ -22,6 +22,7 @@ function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
     const cash = { id: 1, type: 'cash' };
     const deferred = { id: 2, type: 'pay_later' };
     const order = {
+        uuid: 'test-ticket-uuid', uiState: {},
         lines: [{ qty: 1, price_unit: 1000, product_id: { id: 10, product_tmpl_id: {} } }],
         priceIncl: 1000, payment_ids: [], to_invoice: false, pos_payment_flow: 'standard',
         getPartner: () => ({ id: 7, is_credit: authorized }), setToInvoice(value) { this.to_invoice = value; },
@@ -41,8 +42,11 @@ function fixture({ paid = 300, authorized = true, limit = 1000 } = {}) {
     Object.assign(screen, { currentOrder: order, payment_methods_from_config: [cash, deferred],
         notification: { add: (value) => notices.push(value) },
         pos: { config: { id: 1, payment_method_ids: [cash, deferred] }, currency: { round: (value) => value },
-            data: { call: async () => ({ credit_authorized: authorized, credit_limited: true,
-                purchase_power: limit, risk_exception: false }) } },
+            syncAllOrders: async () => { order.id = 42; order.state = 'draft'; },
+            data: { call: async (model, method) => method === 'request_credit_approval'
+                ? { id: 1, name: 'Autorización de prueba', state: approvalState }
+                : { credit_authorized: authorized, credit_limited: true,
+                    purchase_power: limit, risk_exception: false } } },
     });
     return { screen, order, notices, deferred, makePayment };
 }
@@ -93,6 +97,78 @@ test('Authorized credit can finance the entire sale without cash', async () => {
     assert.equal(order.pos_payment_flow, 'credit');
 });
 
+test('Customer account button applies authorized credit to the unpaid balance without duplicate debt', async () => {
+    const { screen, order, deferred } = fixture();
+    assert.equal(await screen.addNewPaymentLine(deferred), true);
+    assert.equal(order.pos_payment_flow, 'credit');
+    assert.equal(order.to_invoice, true);
+    assert.equal(order.payment_ids[0].amount, 300);
+    assert.equal(order.payment_ids[1].amount, 700);
+    assert.equal(await screen.addNewPaymentLine(deferred), true);
+    assert.equal(order.payment_ids.length, 2);
+    assert.equal(screen.addedMethod, undefined);
+});
+
+test('Customer account button requests approval and adds debt only after approval', async () => {
+    for (const approvalState of ['pending', 'refused', 'approved']) {
+        const { screen, order, deferred } = fixture({ limit: 100, approvalState });
+        assert.equal(await screen.addNewPaymentLine(deferred), approvalState === 'approved');
+        assert.equal(order.uiState.creditApproval.state, approvalState);
+        assert.equal(order.payment_ids.length, approvalState === 'approved' ? 2 : 1);
+        assert.equal(screen.addedMethod, undefined);
+    }
+});
+
+test('Native debt settlement keeps its account-payment behavior', async () => {
+    const { screen, order, deferred } = fixture();
+    order.is_settling_account = true;
+    assert.equal(await screen.addNewPaymentLine(deferred), true);
+    assert.equal(screen.addedMethod, deferred);
+    assert.equal(order.pos_payment_flow, 'standard');
+});
+
+test('Approval waits for draft synchronization and is linked to the database order id', async () => {
+    const { screen, order, deferred } = fixture({ limit: 100 });
+    const events = [];
+    screen.pos.syncAllOrders = async (options) => {
+        assert.equal(options.orders[0], order);
+        assert.equal(options.throw, true);
+        events.push('saved');
+        order.id = 123;
+    };
+    const call = screen.pos.data.call;
+    screen.pos.data.call = async (model, method, args) => {
+        if (method === 'request_credit_approval') {
+            events.push('requested');
+            assert.equal(args.at(-1), 123);
+        }
+        return call(model, method, args);
+    };
+    await screen.addNewPaymentLine(deferred);
+    assert.deepEqual(events, ['saved', 'requested']);
+});
+
+test('A failed draft save never creates an approval or deferred debt', async () => {
+    const { screen, order, deferred } = fixture({ limit: 100 });
+    screen.pos.syncAllOrders = async () => { throw new Error('Offline'); };
+    assert.equal(await screen.addNewPaymentLine(deferred), false);
+    assert.equal(order.uiState.creditApproval, undefined);
+    assert.equal(order.payment_ids.length, 1);
+});
+
+test('Reloading the payment screen restores approval from the persisted order', async () => {
+    const { screen, order } = fixture();
+    order.id = 123;
+    screen.pos.data.call = async (model, method, args) => {
+        assert.equal(method, 'get_order_credit_approval');
+        assert.equal(args[1], 123);
+        return { id: 5, name: 'ACRED-0005', state: 'approved' };
+    };
+    await screen.restoreCreditApproval();
+    assert.equal(order.uiState.creditApproval.name, 'ACRED-0005');
+    assert.equal(order.uiState.creditApproval.state, 'approved');
+});
+
 test('Credit refuses missing authorization and insufficient available credit', async () => {
     for (const options of [{ authorized: false }, { limit: 600 }]) {
         const { screen, order, notices } = fixture(options);
@@ -100,6 +176,24 @@ test('Credit refuses missing authorization and insufficient available credit', a
         assert.equal(order.payment_ids.length, 1);
         assert.equal(notices.length, 1);
     }
+});
+
+test('Over-limit credit requests approval and leaves the sale unpaid while pending or refused', async () => {
+    for (const approvalState of ['pending', 'refused']) {
+        const { screen, order } = fixture({ limit: 100, approvalState });
+        await screen.setDeferredPayment('credit');
+        assert.equal(order.uiState.creditApproval.state, approvalState);
+        assert.equal(order.payment_ids.length, 1);
+        assert.equal(order.pos_payment_flow, 'standard');
+    }
+});
+
+test('Department approval enables the requested over-limit financing', async () => {
+    const { screen, order } = fixture({ limit: 100, approvalState: 'approved' });
+    await screen.setDeferredPayment('credit');
+    assert.equal(order.payment_ids.length, 2);
+    assert.equal(order.payment_ids[1].amount, 700);
+    assert.equal(order.pos_payment_flow, 'credit');
 });
 
 test('Repeated selection does not duplicate deferred debt; full payment preserves real receipts', async () => {

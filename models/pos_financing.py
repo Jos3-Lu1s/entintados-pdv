@@ -92,20 +92,15 @@ class PosOrder(models.Model):
             if order.pos_payment_flow == 'ppd_partial':
                 if received <= 0:
                     raise UserError(_('Registra primero un pago inicial real. Para financiar toda la venta utiliza Crédito autorizado.'))
-                # Initial-payment PPD still requires the customer's credit flag.
-                continue
             if not check_risk:
                 continue
             self.env.cr.execute('SELECT id FROM res_partner WHERE id = %s FOR UPDATE', [partner.id])
             partner.invalidate_recordset()
-            if not partner.is_credit or partner.credit_limit <= 0:
-                raise UserError(_('El cliente necesita crédito autorizado y un límite positivo antes de financiar la venta.'))
             applied = -sum(order.lines.filtered(lambda line: line._accounting_advance_source()).mapped('price_subtotal_incl'))
-            remaining = max(partner.customer_advance_available - order.currency_id._convert(
-                applied, partner.risk_currency_id, order.company_id, fields.Date.context_today(order)), 0)
-            extra = order.currency_id._convert(amount, partner.risk_currency_id, order.company_id, fields.Date.context_today(order))
-            if partner.risk_exception or max(partner._pos_credit_exposure() + extra - remaining, 0) > partner.credit_limit:
-                raise UserError(_('La venta supera el crédito disponible. Registra un pago o revisa la autorización del cliente.'))
+            projected = order.config_id._credit_projection(partner, amount, applied, order=order)
+            if (partner.credit_limit <= 0 or partner.risk_exception
+                    or partner.risk_currency_id.compare_amounts(projected, partner.credit_limit) > 0):
+                order._require_credit_approval(partner, amount, applied)
 
     def _prepare_invoice_vals(self):
         self._check_pos_deferred_payments()
@@ -121,7 +116,10 @@ class PosOrder(models.Model):
 
     def _get_invoice_post_context(self):
         context = super()._get_invoice_post_context()
-        if self.pos_payment_flow == 'ppd_partial':
+        approved = self.env['pos.credit.approval'].sudo().search_count([
+            ('used_order_id', '=', self.id), ('state', '=', 'used'),
+        ]) if isinstance(self.id, int) else 0
+        if self.pos_payment_flow == 'ppd_partial' or approved:
             context = dict(context, bypass_risk=True)
         return context
 
@@ -135,7 +133,7 @@ class AccountMove(models.Model):
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    def _pos_credit_exposure(self):
+    def _pos_credit_exposure(self, exclude_order=None):
         """Keep a debt floor even when optional OCA accounting categories are off."""
         self.ensure_one()
         total, = self.env['account.move.line'].sudo()._read_group([
@@ -145,4 +143,11 @@ class ResPartner(models.Model):
         ], [], ['amount_residual:sum'])[0]
         ledger = self.env.company.currency_id._convert(
             total or 0, self.risk_currency_id, self.env.company, fields.Date.context_today(self))
-        return max(self.risk_gross_total, ledger, 0)
+        gross = self.risk_gross_total
+        if (exclude_order and exclude_order.state in ('paid', 'done') and not exclude_order.account_move
+                and self.env.company.advance_risk_enabled and exclude_order.session_id.state != 'closed'):
+            own = sum(exclude_order.payment_ids.filtered(
+                lambda payment: payment.payment_method_id.type == 'pay_later').mapped('amount'))
+            gross -= exclude_order.currency_id._convert(
+                max(own, 0), self.risk_currency_id, self.env.company, fields.Date.context_today(self))
+        return max(gross, ledger, 0)

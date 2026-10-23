@@ -10,9 +10,30 @@
                 <div>El dinero cobrado quedará como saldo a su favor para próximas compras.</div>
             </div>
             <div class="d-flex flex-column gap-2 mt-2" t-if="canOfferDeferredPayment">
-                <button class="btn btn-secondary btn-lg py-2 text-wrap" t-on-click="() => this.selectDeferredPayment()">
-                    <i class="fa fa-credit-card me-2"/>Opciones de pago
-                </button>
+                <t t-set="creditApproval" t-value="currentOrder.uiState.creditApproval"/>
+                <t t-set="creditApproved" t-value="creditApproval and ['approved', 'used'].includes(creditApproval.state)"/>
+                <t t-set="creditRefused" t-value="creditApproval and creditApproval.state === 'refused'"/>
+                <div t-if="creditApproval" class="alert mb-0" t-att-class="creditApproved ? 'alert-success' : (creditRefused ? 'alert-danger' : 'alert-warning')" role="status">
+                    <div>
+                        <t t-if="creditApproved">
+                            <i class="fa fa-check-circle me-2" aria-hidden="true"/>
+                            <strong>Aprobada</strong> ·
+                            <span t-esc="creditApproval.name"/>
+                        </t>
+                        <t t-elif="creditRefused">
+                            <i class="fa fa-times-circle me-2" aria-hidden="true"/>
+                            <strong>Rechazada</strong> ·
+                            <span t-esc="creditApproval.name"/>
+                        </t>
+                        <t t-else="">
+                            El cliente <strong t-esc="currentOrder.getPartner()?.name || currentOrder.getPartner()?.display_name || ''"/>
+                            excede el límite de crédito permitido. El departamento correspondiente debe autorizar la solicitud
+                            <strong t-esc="creditApproval.name"/>.
+                        </t>
+                    </div>
+                    <button t-if="currentOrder.uiState.creditApproval.state === 'pending'" class="btn btn-secondary mt-2"
+                            t-on-click="() => this.setDeferredPayment('credit')">Revisar autorización</button>
+                </div>
                 <div t-if="currentOrder.pos_payment_flow === 'ppd_partial' or currentOrder.pos_payment_flow === 'credit'" class="alert alert-info mb-0" role="status">
                     <t t-esc="deferredPaymentSummary"/>
                 </div>

@@ -13,5 +13,11 @@
         <record id="hr_department_inteligencia_comercial" model="hr.department">
             <field name="name">Inteligencia Comercial</field>
         </record>
+        <record id="hr_department_tesoreria" model="hr.department">
+            <field name="name">Tesorería</field>
+        </record>
+        <record id="hr_department_creditos" model="hr.department">
+            <field name="name">Créditos</field>
+        </record>
     </data>
 </odoo>

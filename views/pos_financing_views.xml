@@ -9,7 +9,7 @@
                 <group string="Pagos parciales y crédito">
                     <field name="ppd_payment_term_id"/>
                     <button name="action_prepare_deferred_payments" type="object" string="Preparar saldo pendiente y crédito" class="btn-link" groups="point_of_sale.group_pos_manager"/>
-                    <div class="text-muted">PPD permite un pago inicial sin autorización de crédito. La venta a crédito exige autorización y límite disponible. El saldo pendiente no es dinero recibido en caja.</div>
+                    <div class="text-muted">PPD y crédito requieren la condición Crédito del cliente. Si el riesgo excede el límite, Administración, Créditos o Tesorería deben autorizar el ticket antes de validarlo.</div>
                 </group>
             </xpath>
         </field>
