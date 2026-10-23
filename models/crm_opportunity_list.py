@@ -8,7 +8,7 @@ class CrmLead(models.Model):
     opportunity_reference = fields.Char(
         string='Folio', readonly=True, copy=False, index=True)
     opportunity_relations = fields.Json(
-        string='Relaciones', compute='_compute_opportunity_relations')
+        string='Aprobaciones', compute='_compute_opportunity_relations')
 
     @api.model
     def _next_opportunity_reference(self):

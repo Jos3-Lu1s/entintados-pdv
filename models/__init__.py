@@ -52,3 +52,5 @@ from . import advance_pos
 from . import pos_financing
 from . import material_chatter
 from . import stock_return_credit
+from . import stock_demo_list
+from . import approval_demo_list

@@ -16,7 +16,7 @@ export class OpportunityRelationBadges extends Component {
     get badges() {
         const counts = this.props.record.data[this.props.name] || {};
         return [
-            { key: "approvals", label: _t("Aprobaciones"), icon: "fa-check-square-o", color: "text-success bg-success-subtle" },
+            { key: "approvals", label: _t("Aprobaciones"), icon: "fa-user", color: "text-success bg-success-subtle" },
             { key: "quotations", label: _t("Cotizaciones"), icon: "fa-file-text-o", color: "text-primary bg-primary-subtle" },
             { key: "pickings", label: _t("Salidas de material"), icon: "fa-truck", color: "text-info bg-info-subtle" },
         ].map((badge) => ({ ...badge, count: counts[badge.key] || 0 }))

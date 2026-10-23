@@ -17,6 +17,39 @@ TECHNICAL_PREFIXES = ('message_', 'activity_', 'access_', 'website_', 'rating_')
 NATIVE_STOCK_LOGS = ContextVar('entintados_native_stock_logs', default=())
 
 
+def chatter_language(record):
+    """Preferir español mexicano sin cambiar el idioma del usuario."""
+    languages = record.env['res.lang'].sudo().search([
+        ('active', '=', True), ('code', 'in', ['es_MX', 'es_419', 'es_ES'])])
+    for code in ('es_MX', 'es_419', 'es_ES'):
+        if code in languages.mapped('code'):
+            return code
+    return record.env.lang
+
+
+SPANISH_LABELS = {
+    'product_id': 'Producto', 'quantity': 'Cantidad', 'uom_id': 'Unidad de medida',
+    'description': 'Descripción', 'stock_move_id': 'Movimiento generado',
+    'product_uom_id': 'Unidad de medida', 'user_id': 'Responsable',
+    'required': 'Obligatorio', 'sequence': 'Secuencia', 'status': 'Estado',
+    'product_uom_qty': 'Cantidad solicitada', 'product_uom': 'Unidad de medida',
+    'description_picking': 'Descripción', 'location_id': 'Ubicación de origen',
+    'location_dest_id': 'Ubicación de destino', 'picking_id': 'Transferencia',
+    'lot_id': 'Lote / número de serie', 'lot_name': 'Lote / número de serie',
+    'package_id': 'Paquete de origen', 'result_package_id': 'Paquete de destino',
+    'owner_id': 'Propietario', 'name': 'Nombre', 'start': 'Inicio', 'stop': 'Fin',
+    'allday': 'Todo el día', 'active': 'Activo', 'partner_ids': 'Participantes',
+    'crm_activity_type_id': 'Tipo de actividad',
+}
+
+
+def field_label(record, name):
+    if name in SPANISH_LABELS:
+        return SPANISH_LABELS[name]
+    return record.with_context(lang=chatter_language(record)).fields_get(
+        [name], attributes=['string'])[name]['string']
+
+
 def extra_tracking(record, native):
     """Usar mail.thread también para los campos editables sin tracking previo."""
     extra = {
@@ -75,13 +108,17 @@ def write_special(records, vals, write):
             if initial != current:
                 if record._fields[name].type == 'binary' and initial_label == current_label:
                     current_label = _('Archivo reemplazado')
-                changes.append((record._fields[name].string, initial_label, current_label))
+                changes.append((field_label(record, name), initial_label, current_label))
         post_note(record, _('Documento actualizado'), changes)
     return result
 
 
 class CrmLeadChatter(models.Model):
     _inherit = 'crm.lead'
+
+    def _message_track(self, fields_iter, initial_values_dict):
+        localized = self.with_context(lang=chatter_language(self))
+        return super(CrmLeadChatter, localized)._message_track(fields_iter, initial_values_dict)
 
     def _track_get_fields(self):
         return extra_tracking(self, super()._track_get_fields())
@@ -97,6 +134,10 @@ class CrmLeadChatter(models.Model):
 class ApprovalRequestChatter(models.Model):
     _inherit = 'approval.request'
 
+    def _message_track(self, fields_iter, initial_values_dict):
+        localized = self.with_context(lang=chatter_language(self))
+        return super(ApprovalRequestChatter, localized)._message_track(fields_iter, initial_values_dict)
+
     def _track_get_fields(self):
         return extra_tracking(self, super()._track_get_fields())
 
@@ -110,6 +151,10 @@ class ApprovalRequestChatter(models.Model):
 
 class StockPickingChatter(models.Model):
     _inherit = 'stock.picking'
+
+    def _message_track(self, fields_iter, initial_values_dict):
+        localized = self.with_context(lang=chatter_language(self))
+        return super(StockPickingChatter, localized)._message_track(fields_iter, initial_values_dict)
 
     def _track_get_fields(self):
         return extra_tracking(self, super()._track_get_fields())
@@ -136,6 +181,7 @@ LINE_CONFIG = {
 
 
 def line_values(record, names):
+    record = record.with_context(lang=chatter_language(record))
     result = {}
     for name in names:
         field = record._fields.get(name)
@@ -145,7 +191,12 @@ def line_values(record, names):
         if field.type in ('many2one', 'many2many', 'one2many'):
             result[name] = (tuple(sorted(value.ids)), ', '.join(value.mapped('display_name')) or '—')
         elif field.type == 'selection':
-            result[name] = (value, dict(field._description_selection(record.env)).get(value, '—'))
+            label = dict(field._description_selection(record.env)).get(value, '—')
+            if record._name == 'approval.approver' and name == 'status':
+                label = {'new': 'Nuevo', 'pending': 'Pendiente', 'approved': 'Aprobado',
+                         'refused': 'Rechazado', 'cancel': 'Cancelado',
+                         'waiting': 'En espera'}.get(value, label)
+            result[name] = (value, label)
         elif field.type == 'boolean':
             result[name] = (value, _('Sí') if value else _('No'))
         else:
@@ -154,6 +205,7 @@ def line_values(record, names):
 
 
 def line_snapshot(record, names=None):
+    record = record.with_context(lang=chatter_language(record))
     parent_field, business_fields = LINE_CONFIG[record._name]
     writing = names is not None
     names = set(business_fields if names is None else names).intersection(business_fields)
@@ -170,7 +222,7 @@ def log_created(records):
         return records
     for record in records:
         parent, label, values = line_snapshot(record)
-        changes = [(record._fields[name].string, '—', value[1]) for name, value in values.items()]
+        changes = [(field_label(record, name), '—', value[1]) for name, value in values.items()]
         post_note(parent, _('Línea agregada: %s', label), changes)
     return records
 
@@ -197,7 +249,7 @@ def write_lines(records, vals, write):
         if record.id in approval_status and approval_status[record.id] != new_parent.request_status:
             old.pop('status', None)
         new = line_values(record, old)
-        changes = [(record._fields[name].string, value[1], new[name][1])
+        changes = [(field_label(record, name), value[1], new[name][1])
                    for name, value in old.items() if value[0] != new[name][0]]
         if new_parent != old_parent and not changes:
             changes = [(_('Documento'), old_parent.display_name or '—', new_parent.display_name or '—')]
@@ -211,7 +263,7 @@ def unlink_lines(records, unlink):
     before = [(r._description, line_snapshot(r)) for r in records] if enabled(records) else []
     result = unlink()
     for description, (parent, label, values) in before:
-        changes = [(records._fields[name].string, value[1], '—') for name, value in values.items()]
+        changes = [(field_label(records, name), value[1], '—') for name, value in values.items()]
         post_note(parent, _('Línea eliminada: %s', label), changes or [(description, label, '—')])
     return result
 
@@ -277,7 +329,8 @@ class StockMoveLineChatter(models.Model):
 
     @api.model
     def _log_message(self, *args, **kwargs):
-        result = super()._log_message(*args, **kwargs)
+        localized = self.with_context(lang=chatter_language(self))
+        result = super(StockMoveLineChatter, localized)._log_message(*args, **kwargs)
         move = args[1] if len(args) > 1 else kwargs.get('move')
         values = args[3] if len(args) > 3 else kwargs.get('vals')
         template = args[2] if len(args) > 2 else kwargs.get('template')

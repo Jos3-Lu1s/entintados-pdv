@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="approval_demo_list" model="ir.ui.view">
+        <field name="name">approval.request.demo.list</field>
+        <field name="model">approval.request</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="Aprobaciones de demostración" create="0" default_order="id desc">
+                <field name="name" string="Referencia" decoration-bf="1"/>
+                <field name="category_id" string="Tipo de aprobación" readonly="1"/>
+                <field name="request_owner_id" string="Solicitante" widget="many2one_avatar_user" readonly="1"/>
+                <field name="partner_id" string="Contacto" readonly="1"/>
+                <field name="date" string="Fecha" readonly="1"/>
+                <field name="warehouse_id" string="Almacén de origen" readonly="1"/>
+                <field name="demo_assigned_user_ids" widget="many2many_tags" readonly="1"/>
+                <field name="demo_salesperson_id" widget="many2one_avatar_user" readonly="1"/>
+                <field name="request_status" string="Estado" widget="badge"
+                       decoration-success="request_status == 'approved'"
+                       decoration-danger="request_status == 'refused'"
+                       decoration-muted="request_status in ('new', 'cancel')"
+                       decoration-warning="request_status == 'pending'"/>
+                <field name="demo_relations" widget="approval_demo_relation_badges" readonly="1"/>
+            </list>
+        </field>
+    </record>
+    <record id="approval_demo_search" model="ir.ui.view">
+        <field name="name">approval.request.demo.search</field>
+        <field name="model">approval.request</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <search string="Aprobaciones de demostración">
+                <field name="name" string="Referencia"/>
+                <field name="partner_id" string="Contacto"/>
+                <field name="demo_salesperson_id" string="Vendedor CRM"/>
+                <filter name="my_demo_approvals" string="Mis aprobaciones"
+                        domain="[('approver_ids.user_id', '=', uid)]"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_approval_demo_list" model="ir.actions.act_window">
+        <field name="name">Aprobaciones de demostración</field>
+        <field name="res_model">approval.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="approval_demo_list"/>
+        <field name="search_view_id" ref="approval_demo_search"/>
+        <field name="domain" eval="[('crm_lead_id', '!=', False), ('category_id', '=', ref('entintados_pdv.approval_category_salida_material'))]"/>
+        <field name="context">{'create': False, 'search_default_my_demo_approvals': 1}</field>
+    </record>
+    <menuitem id="menu_approval_demo_list" name="Aprobaciones de demostración"
+              parent="approvals.approvals_menu_manager" action="action_approval_demo_list" sequence="30"/>
+</odoo>

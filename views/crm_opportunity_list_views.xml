@@ -9,7 +9,7 @@
                 <field name="opportunity_reference" readonly="1" optional="show"/>
             </xpath>
             <xpath expr="//list/field[@name='name']" position="after">
-                <field name="opportunity_relations" widget="opportunity_relation_badges" readonly="1" optional="show"/>
+                <field name="opportunity_relations" string="Aprobaciones" widget="opportunity_relation_badges" readonly="1" optional="show"/>
             </xpath>
         </field>
     </record>
