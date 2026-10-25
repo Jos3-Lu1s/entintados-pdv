@@ -88,14 +88,16 @@
                                        options="{'no_create': True}"
                                        invisible="applied_on != '0_product'"
                                        required="applied_on == '0_product'"/>
+                                <field name="scheme_id"
+                                       options="{'no_create': True}"
+                                       invisible="applied_on not in ('1_line', '2_scheme')"
+                                       required="applied_on == '2_scheme'"/>
                                 <field name="line_id"
+                                       domain="[('scheme', '=', scheme_id)] if scheme_id else []"
+                                       context="{'lines_product_short_name': bool(scheme_id)}"
                                        options="{'no_create': True}"
                                        invisible="applied_on != '1_line'"
                                        required="applied_on == '1_line'"/>
-                                <field name="scheme_id"
-                                       options="{'no_create': True}"
-                                       invisible="applied_on != '2_scheme'"
-                                       required="applied_on == '2_scheme'"/>
                                 <field name="discount"
                                        string="Descuento (%)"
                                        invisible="rule_type != 'discount'"

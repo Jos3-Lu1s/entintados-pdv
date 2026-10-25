@@ -60,6 +60,30 @@ class ProductTemplate(models.Model):
         store=True,
         readonly=True,
     )
+    # Solo filtra las líneas en el formulario; el esquema guardado es el de la línea.
+    scheme_filter_id = fields.Many2one(
+        comodel_name='tint.schema',
+        string='Esquema',
+        compute='_compute_scheme_filter_id',
+        readonly=False,
+    )
+
+    # Sin dependencias: si dependiera de la línea, borrarla vaciaría el esquema elegido.
+    @api.depends()
+    def _compute_scheme_filter_id(self):
+        for product in self:
+            product.scheme_filter_id = product.lines_product_id.scheme
+
+    @api.onchange('lines_product_id')
+    def _onchange_lines_product_id(self):
+        for product in self.filtered('lines_product_id'):
+            product.scheme_filter_id = product.lines_product_id.scheme
+
+    @api.onchange('scheme_filter_id')
+    def _onchange_scheme_filter_id(self):
+        for product in self:
+            if product.lines_product_id and product.lines_product_id.scheme != product.scheme_filter_id:
+                product.lines_product_id = False
 
     # --- Referencia interna ---------------------------------------------
 
@@ -229,6 +253,7 @@ class ProductTemplate(models.Model):
                     product.tint_base_type_id = False
                     product.tint_size_id = False
                     product.lines_product_id = False
+                    product.scheme_filter_id = False
 
     @api.onchange('tint_role')
     def _onchange_tint_role(self):
@@ -245,10 +270,12 @@ class ProductTemplate(models.Model):
                 product.tint_base_type_id = False
                 product.tint_size_id = False
                 product.lines_product_id = False
+                product.scheme_filter_id = False
             elif product.tint_role != 'base':
                 product.tint_base_type_id = False
                 product.tint_size_id = False
                 product.lines_product_id = False
+                product.scheme_filter_id = False
 
     @api.onchange('tint_base_type_id')
     def _onchange_tint_base_type_id(self):
@@ -302,11 +329,6 @@ class ProductTemplate(models.Model):
             read += self._load_pos_data_read(missing, config)
         return read
 
-    @api.onchange('lines_product_id')
-    def _onchange_lines_product_id(self):
-        if self.lines_product_id:
-            self.scheme_id = self.lines_product_id.scheme
-            
     """ @api.constrains('standard_price', 'list_price')
     def cost_checkout(self):
         for product in self:

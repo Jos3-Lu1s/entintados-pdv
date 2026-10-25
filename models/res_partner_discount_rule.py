@@ -48,6 +48,8 @@ class ResPartnerDiscountRule(models.Model):
         index=True,
         ondelete='cascade',
     )
+    # En las reglas por línea guarda el esquema de la línea y solo sirve para filtrarla:
+    # los acuerdos por esquema se buscan siempre con applied_on == '2_scheme'.
     scheme_id = fields.Many2one(
         comodel_name='tint.schema',
         string='Esquema',
@@ -120,14 +122,25 @@ class ResPartnerDiscountRule(models.Model):
             else:
                 rule.name = f"{target}: {rule.discount:.2f}%"
 
+    @api.onchange('line_id')
+    def _onchange_line_id(self):
+        for rule in self.filtered('line_id'):
+            rule.scheme_id = rule.line_id.scheme
+
+    @api.onchange('scheme_id')
+    def _onchange_scheme_id(self):
+        for rule in self:
+            if rule.line_id and rule.line_id.scheme != rule.scheme_id:
+                rule.line_id = False
+
     @api.onchange('applied_on')
     def _onchange_applied_on(self):
         if self.applied_on == '0_product':
             self.line_id = False
             self.scheme_id = False
         elif self.applied_on == '1_line':
+            # El esquema se conserva para filtrar las líneas.
             self.product_id = False
-            self.scheme_id = False
             if self.rule_type == 'fixed_price':
                 self.rule_type = 'discount'
         elif self.applied_on == '2_scheme':
@@ -196,7 +209,9 @@ class ResPartnerDiscountRule(models.Model):
             target_field = self._TARGET_FIELDS.get(applied_on)
             candidates.append((vals.get('partner_id'), applied_on, target_field and vals.get(target_field), []))
         self._check_unique_rule_values(candidates)
-        return super().create(vals_list)
+        rules = super().create(vals_list)
+        rules._sync_line_scheme()
+        return rules
 
     def write(self, vals):
         if {'partner_id', 'applied_on', *self._TARGET_FIELDS.values()} & vals.keys():
@@ -211,7 +226,15 @@ class ResPartnerDiscountRule(models.Model):
                     self.ids,
                 ))
             self._check_unique_rule_values(candidates)
-        return super().write(vals)
+        result = super().write(vals)
+        if {'applied_on', 'line_id', 'scheme_id'} & vals.keys():
+            self._sync_line_scheme()
+        return result
+
+    def _sync_line_scheme(self):
+        # La línea manda: una regla por línea siempre guarda el esquema de su línea.
+        for rule in self.filtered(lambda r: r.applied_on == '1_line' and r.scheme_id != r.line_id.scheme):
+            super(ResPartnerDiscountRule, rule).write({'scheme_id': rule.line_id.scheme.id})
 
     @api.constrains('partner_id', 'applied_on', 'product_id', 'line_id', 'scheme_id')
     def _check_unique_rules(self):

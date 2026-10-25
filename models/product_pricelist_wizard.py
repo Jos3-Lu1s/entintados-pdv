@@ -46,12 +46,16 @@ class PricelistProductWizard(models.TransientModel):
         string='Línea',
     )
 
+    # En modo línea el esquema se conserva: filtra las líneas, pero los productos los decide la línea.
     @api.onchange('apply_by')
     def _onchange_apply_by(self):
         if self.apply_by == 'esquema':
             self.linea_id = False
-        elif self.apply_by == 'linea':
-            self.esquema_id = False
+
+    @api.onchange('esquema_id')
+    def _onchange_esquema_id(self):
+        if self.linea_id and self.linea_id.scheme != self.esquema_id:
+            self.linea_id = False
 
 
 

@@ -9,8 +9,12 @@
                 <field name="esquema_id"
                     invisible="display_applied_on != '3_esquema'"
                     required="display_applied_on == '3_esquema'"
+                    options="{'no_create': True}"
                     placeholder="Elige una opción"/>
                 <field name="linea_id"
+                    domain="[('scheme', '=', esquema_id)]"
+                    context="{'lines_product_short_name': True}"
+                    options="{'no_create': True}"
                     invisible="not esquema_id" placeholder="Todas"/>
             </xpath>
         </field>

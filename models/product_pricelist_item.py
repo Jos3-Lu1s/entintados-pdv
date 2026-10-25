@@ -25,6 +25,12 @@ class ProductPricelistItem(models.Model):
             self.esquema_id = False
             self.linea_id = False
 
+    @api.onchange('esquema_id')
+    def _onchange_esquema_id(self):
+        for record in self:
+            if record.linea_id and record.linea_id.scheme != record.esquema_id:
+                record.linea_id = False
+
     @api.onchange('display_applied_on', 'esquema_id', 'linea_id')
     def _compute_name(self):
         super()._compute_name()

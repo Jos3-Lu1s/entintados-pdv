@@ -49,10 +49,13 @@
 
                 <group>
                     <field name="esquema_id"
-                        invisible="apply_by != 'esquema'"
+                        options="{'no_create': True}"
                         required="apply_by == 'esquema'"/>
 
                     <field name="linea_id"
+                        domain="[('scheme', '=', esquema_id)] if esquema_id else []"
+                        context="{'lines_product_short_name': bool(esquema_id)}"
+                        options="{'no_create': True}"
                         invisible="apply_by != 'linea'"
                         required="apply_by == 'linea'"/>
                 </group>

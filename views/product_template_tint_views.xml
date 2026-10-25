@@ -17,8 +17,13 @@
                             <field name="tint_role" />
                         </group>
                         <group name="tint_prices" string="Esquemas" invisible="tint_role != 'base'">
-                            <field name="lines_product_id" />
-                            <field name="scheme_id" readonly="1"/>
+                            <field name="scheme_filter_id" options="{'no_create': True}" />
+                            <field
+                                name="lines_product_id"
+                                domain="[('scheme', '=', scheme_filter_id)] if scheme_filter_id else []"
+                                context="{'lines_product_short_name': bool(scheme_filter_id)}"
+                                options="{'no_create': True}"
+                            />
                         </group>
                     </group>
                     <group invisible="tint_role != 'base'">

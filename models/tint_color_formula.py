@@ -87,6 +87,13 @@ class TintColorFormula(models.Model):
         store=True,
         readonly=True,
     )
+    # Solo filtra las líneas en el formulario; el esquema guardado es el de la línea.
+    scheme_filter_id = fields.Many2one(
+        comodel_name='tint.schema',
+        string='Esquema',
+        compute='_compute_scheme_filter_id',
+        readonly=False,
+    )
 
     # Permite recetas distintas para un mismo color, base y presentación según la galería.
     _gallery_color_base_size_uniq = models.Constraint(
@@ -96,6 +103,23 @@ class TintColorFormula(models.Model):
     )
 
     # --- Cálculos -------------------------------------------------------
+
+    # Sin dependencias: si dependiera de la línea, borrarla vaciaría el esquema elegido.
+    @api.depends()
+    def _compute_scheme_filter_id(self):
+        for formula in self:
+            formula.scheme_filter_id = formula.line_scheme_id.scheme
+
+    @api.onchange('line_scheme_id')
+    def _onchange_line_scheme_id(self):
+        for formula in self.filtered('line_scheme_id'):
+            formula.scheme_filter_id = formula.line_scheme_id.scheme
+
+    @api.onchange('scheme_filter_id')
+    def _onchange_scheme_filter_id(self):
+        for formula in self:
+            if formula.line_scheme_id and formula.line_scheme_id.scheme != formula.scheme_filter_id:
+                formula.line_scheme_id = False
 
     @api.depends('line_ids.points')
     def _compute_total_points(self):

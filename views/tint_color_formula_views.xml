@@ -95,8 +95,13 @@
                             <field name="cost_max" readonly="1" />
                         </group>
                         <group string="Esquemas">
-                            <field name="scheme_id" />
-                            <field name="line_scheme_id" />
+                            <field name="scheme_filter_id" options="{'no_create': True}" />
+                            <field
+                                name="line_scheme_id"
+                                domain="[('scheme', '=', scheme_filter_id)] if scheme_filter_id else []"
+                                context="{'lines_product_short_name': bool(scheme_filter_id)}"
+                                options="{'no_create': True}"
+                            />
                         </group>
                     </group>
                     <div

@@ -45,6 +45,15 @@ class LinesProduct(models.Model):
             line.presentation_count = len(line.presentation_line_ids)
             line.product_count = len(line.product_ids)
 
+    def write(self, vals):
+        result = super().write(vals)
+        if 'scheme' in vals:
+            self.env['res.partner.discount.rule'].sudo().search([
+                ('applied_on', '=', '1_line'),
+                ('line_id', 'in', self.ids),
+            ])._sync_line_scheme()
+        return result
+
     def action_view_products(self):
         self.ensure_one()
         action = self.env['ir.actions.act_window']._for_xml_id('entintados_pdv.product_template_action_tint')
@@ -55,10 +64,13 @@ class LinesProduct(models.Model):
         }
         return action
     
+    @api.depends_context('lines_product_short_name')
     @api.depends('name', 'scheme', 'scheme.name')
     def _compute_display_name(self):
+        # Donde el esquema ya está a la vista, basta el nombre de la línea.
+        short_name = self.env.context.get('lines_product_short_name')
         for line in self:
-            if line.scheme:
+            if line.scheme and not short_name:
                 line.display_name = f'{line.name} - {line.scheme.name}'
             else:
                 line.display_name = line.name

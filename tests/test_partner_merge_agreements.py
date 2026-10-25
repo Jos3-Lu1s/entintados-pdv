@@ -110,7 +110,7 @@ class TestPartnerMergeAgreements(TransactionCase):
                 ('0_product', p2, self.env['lines.product'], self.env['tint.schema'], 'discount', 5.0, 0.0),
                 ('0_product', p3, self.env['lines.product'], self.env['tint.schema'], 'discount', 15.0, 0.0),
                 ('0_product', p4, self.env['lines.product'], self.env['tint.schema'], 'fixed_price', 0.0, 50.0),
-                ('1_line', self.env['product.product'], line, self.env['tint.schema'], 'discount', 8.0, 0.0),
+                ('1_line', self.env['product.product'], line, scheme, 'discount', 8.0, 0.0),
                 ('2_scheme', self.env['product.product'], self.env['lines.product'], scheme, 'discount', 12.0, 0.0),
             },
         )
