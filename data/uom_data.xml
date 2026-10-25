@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
     <!--
-      Unidades de medida del colorante.
+      Unidades de medida del catálogo de entintado.
 
-      El punto es la unidad de referencia y la onza se define como unidad
-      derivada con factor 48, de modo que la conversión y la presentación
-      son nativas de Odoo y no requieren código propio.
+      1. Dispensado de colorante:
+         El punto es la unidad de referencia y la onza se define como unidad
+         derivada con factor 48, de modo que la conversión y la presentación
+         son nativas de Odoo y no requieren código propio.
+
+      2. Envases y presentaciones de base:
+         Se definen como unidades discretas de envase (relativas a `uom.product_uom_unit`
+         con factor 1.0) para que en inventario se gestionen y cuenten como botes/piezas
+         selladas individuales, pero vinculadas a las claves UNSPSC del SAT que utiliza
+         el cliente para su facturación CFDI:
+         - Litro:  LTR (Liter)
+         - Galón:  A76 (Gallon)
+         - Cubeta: XBJ (Cubeta)
 
       Se cargan con noupdate="1" de forma deliberada: Odoo advierte de
       forma explícita que modificar unidades de medida en una base en
@@ -24,6 +34,21 @@
             <field name="name">Onza de colorante</field>
             <field name="relative_uom_id" ref="uom_tint_point" />
             <field name="relative_factor">48.0</field>
+        </record>
+
+        <record id="uom_tint_liter" model="uom.uom">
+            <field name="name">Bote 1 L</field>
+            <field name="unspsc_code_id" ref="product_unspsc.unspsc_code_LTR"/>
+        </record>
+
+        <record id="uom_tint_gallon" model="uom.uom">
+            <field name="name">Bote Galón</field>
+            <field name="unspsc_code_id" ref="product_unspsc.unspsc_code_A76"/>
+        </record>
+
+        <record id="uom_tint_bucket" model="uom.uom">
+            <field name="name">Cubeta</field>
+            <field name="unspsc_code_id" ref="product_unspsc.unspsc_code_XBJ"/>
         </record>
 
     </data>
