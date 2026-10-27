@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="pos_sale_details_invoices" inherit_id="point_of_sale.pos_session_sales_details">
+        <xpath expr="//div[@id='invoices']" position="replace"/>
+        <xpath expr="//div[@id='payments']" position="after">
+            <div t-if="invoice_payment_groups" id="invoice_payments_detail">
+                <t t-foreach="invoice_payment_groups" t-as="group">
+                    <h6 class="mt-3 bg-light border-bottom p-2 fw-bold" style="page-break-after: avoid; font-weight: 700;">
+                        <span t-out="group['name']"/>
+                        <span t-if="group['credit']"> — Crédito otorgado (pendiente de cobro)</span>
+                    </h6>
+                    <table class="table table-sm">
+                        <thead style="display: table-header-group;">
+                            <tr><th>Factura / recibo</th><th>Orden de venta</th><th>Cliente</th><th class="text-end"><t t-if="group['credit']">Importe a crédito</t><t t-else="">Importe cobrado</t></th></tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="group['rows']" t-as="row" style="page-break-inside: avoid;">
+                                <td><span t-out="row['invoice'] + (' — ' + row['invoice_part'] if row.get('invoice_part') else '')"/></td>
+                                <td t-out="row.get('order_reference', '—')"/>
+                                <td t-out="row['customer']"/>
+                                <td class="text-end"><span t-out="row['amount']" t-options="{'widget': 'monetary', 'display_currency': group['currency']}"/></td>
+                            </tr>
+                            <tr class="fw-bold"><td colspan="3">Total</td><td class="text-end"><span t-out="group['total']" t-options="{'widget': 'monetary', 'display_currency': group['currency']}"/></td></tr>
+                        </tbody>
+                    </table>
+                </t>
+                <p class="small text-muted">Cuando un mismo ticket cubre varias facturas, su pago se distribuye proporcionalmente entre ellas. Los importes corresponden a los movimientos de la caja seleccionada; las devoluciones y el cambio se descuentan.</p>
+            </div>
+        </xpath>
+    </template>
+</odoo>

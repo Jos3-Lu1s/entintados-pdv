@@ -355,7 +355,7 @@ class ResPartner(models.Model):
         string='Anticipos a proveedor disponibles', compute_sudo=True,
     )
     risk_gross_total = fields.Monetary(
-        compute='_compute_risk_exception', currency_field='risk_currency_id', string='Riesgo antes de anticipos',
+        compute='_compute_risk_exception', currency_field='risk_currency_id', string='Riesgo crediticio',
     )
     risk_pos_open = fields.Monetary(compute='_compute_advance_risk', currency_field='risk_currency_id',
                                     string='Crédito POS pendiente de contabilizar', compute_sudo=True)
@@ -363,8 +363,8 @@ class ResPartner(models.Model):
     risk_pos_open_limit = fields.Monetary(currency_field='risk_currency_id')
     advance_purchase_power = fields.Monetary(
         compute='_compute_advance_purchase_power', currency_field='risk_currency_id',
-        string='Disponible para comprar',
-        help='Límite de crédito menos riesgo bruto, más anticipos disponibles. No cambia el límite autorizado.',
+        string='Crédito disponible',
+        help='Límite de crédito menos deuda crediticia. Los anticipos disponibles se controlan por separado.',
     )
 
     @api.depends('move_line_ids.move_id.amount_residual', 'move_line_ids.move_id.state',
@@ -423,23 +423,12 @@ class ResPartner(models.Model):
         for partner in self:
             gross = partner.risk_total
             partner.risk_gross_total = gross
-            net = max(gross - partner.customer_advance_available, 0)
-            if partner.customer_advance_available:
-                specific_exceeded = any(
-                    getattr(partner, limit) and getattr(partner, value) > getattr(partner, limit)
-                    for value, limit, _include in partner._risk_field_list()
-                )
-                limit = partner.sudo().credit_limit
-                partner.risk_total = net
-                partner.risk_exception = bool(specific_exceeded or limit and net > limit)
-                if not specific_exceeded:
-                    partner.risk_amount_exceeded = max(net - limit, 0) if limit else 0
 
-    @api.depends('risk_gross_total', 'customer_advance_available', 'credit_limit')
+    @api.depends('risk_gross_total', 'credit_limit')
     def _compute_advance_purchase_power(self):
         for partner in self:
             partner.advance_purchase_power = max(
-                partner.sudo().credit_limit - partner.risk_gross_total + partner.customer_advance_available, 0,
+                partner.sudo().credit_limit - partner.risk_gross_total, 0,
             )
 
     def action_view_available_advances(self):
@@ -474,7 +463,7 @@ class ResPartner(models.Model):
             'advance_available': sum(sources.mapped('advance_available')), 'credit_limited': bool(partner.credit_limit),
             'credit_limit': convert(partner.credit_limit), 'risk': convert(partner.risk_total),
             'credit_authorized': bool(partner.is_credit), 'risk_exception': bool(partner.risk_exception),
-            'purchase_power': convert(max(partner.credit_limit - partner._pos_credit_exposure() + partner.customer_advance_available, 0)),
+            'purchase_power': convert(max(partner.credit_limit - partner._pos_credit_exposure(), 0)),
             'sources': [{'id': source.id, 'name': source.name, 'available': source.advance_available,
                          'fiscal_kind': source.advance_fiscal_kind, 'total': source.amount_total,
                          'lines': [{'quantity': line.quantity, 'price_unit': line.price_unit,

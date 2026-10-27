@@ -7,7 +7,9 @@ const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_financin
     .replace(/^import .*;\r?\n/gm, '');
 
 function fixture({ paid = 300, authorized = true, limit = 1000, approvalState = 'pending' } = {}) {
+    const effects = [], timers = [], intervals = [], clearedIntervals = [];
     class Screen {
+        setup() {}
         onMounted() { this.nativeMounted = true; }
         async toggleIsToInvoice() { this.currentOrder.setToInvoice(!this.currentOrder.to_invoice); }
         async validateOrder(force) { this.validated = { invoice: this.currentOrder.to_invoice, force }; }
@@ -18,7 +20,11 @@ function fixture({ paid = 300, authorized = true, limit = 1000, approvalState = 
         Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));
         Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
     }, PaymentScreen: Screen, ControlButtons: Controls,
-        CustomSelectCreateDialog: class {}, _t: (value) => value });
+        CustomSelectCreateDialog: class {}, _t: (value) => value,
+        useEffect: (fn, dependencies) => effects.push({ fn, dependencies }),
+        setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+        setInterval: (fn, delay) => { intervals.push({ fn, delay }); return intervals.length; },
+        clearInterval: (id) => clearedIntervals.push(id) });
     const cash = { id: 1, type: 'cash' };
     const deferred = { id: 2, type: 'pay_later' };
     const order = {
@@ -48,7 +54,7 @@ function fixture({ paid = 300, authorized = true, limit = 1000, approvalState = 
                 : { credit_authorized: authorized, credit_limited: true,
                     purchase_power: limit, risk_exception: false } } },
     });
-    return { screen, order, notices, deferred, makePayment };
+    return { screen, order, notices, deferred, makePayment, effects, timers, intervals, clearedIntervals };
 }
 
 test('PPD keeps the actual receipt and puts only the remainder on account', async () => {
@@ -97,9 +103,24 @@ test('Authorized credit can finance the entire sale without cash', async () => {
     assert.equal(order.pos_payment_flow, 'credit');
 });
 
+test('Explicit advance application reduces financing without subtracting it again from available credit', async () => {
+    const { screen, order } = fixture({ limit: 600 });
+    order.priceIncl = 800;
+    order.lines.push({ price_unit: -200, qty: 1, advance_source_ref: 'invoice,10',
+        product_id: { product_tmpl_id: {} }, prices: { total_included_currency: -200 } });
+    await screen.setDeferredPayment('credit');
+    assert.equal(order.payment_ids.at(-1).amount, 500);
+    assert.equal(order.pos_payment_flow, 'credit');
+    assert.equal(order.uiState.creditApproval, undefined);
+});
+
 test('Customer account button applies authorized credit to the unpaid balance without duplicate debt', async () => {
     const { screen, order, deferred } = fixture();
+    order.invoice_split_count = 3;
+    order.uiState.invoice_split_count = 3;
     assert.equal(await screen.addNewPaymentLine(deferred), true);
+    assert.equal(order.invoice_split_count, 1);
+    assert.equal(order.uiState.invoice_split_count, 1);
     assert.equal(order.pos_payment_flow, 'credit');
     assert.equal(order.to_invoice, true);
     assert.equal(order.payment_ids[0].amount, 300);
@@ -109,12 +130,44 @@ test('Customer account button applies authorized credit to the unpaid balance wi
     assert.equal(screen.addedMethod, undefined);
 });
 
+test('Customer account opens CFDI options before configuring PPD financing', async () => {
+    const { screen, order, deferred } = fixture();
+    screen.pos.company = { country_id: { code: 'MX' } };
+    let opened = 0;
+    screen.pos.addL10nMxEdiFields = async (ticket) => {
+        opened++;
+        assert.equal(ticket, order);
+        assert.equal(ticket.uiState.creditInvoiceSetup, true);
+        assert.equal(ticket.pos_payment_flow, 'standard');
+        ticket.l10n_mx_edi_usage = 'G03';
+        return true;
+    };
+    assert.equal(await screen.addNewPaymentLine(deferred), true);
+    assert.equal(opened, 1);
+    assert.equal(order.l10n_mx_edi_usage, 'G03');
+    assert.equal(order.pos_payment_flow, 'credit');
+    assert.equal(order.to_invoice, true);
+    assert.equal(order.uiState.creditInvoiceSetup, undefined);
+});
+
+test('Cancelling CFDI options leaves credit and authorization unrequested', async () => {
+    const { screen, order, deferred } = fixture({ limit: 100 });
+    screen.pos.company = { country_id: { code: 'MX' } };
+    screen.pos.addL10nMxEdiFields = async () => false;
+    screen.pos.data.call = async () => { assert.fail('Credit must not be requested after cancelling the popup'); };
+    assert.equal(await screen.addNewPaymentLine(deferred), false);
+    assert.equal(order.payment_ids.length, 1);
+    assert.equal(order.pos_payment_flow, 'standard');
+    assert.equal(order.uiState.creditInvoiceSetup, undefined);
+    assert.equal(screen.isMxEdiPopupOpen, false);
+});
+
 test('Customer account button requests approval and adds debt only after approval', async () => {
     for (const approvalState of ['pending', 'refused', 'approved']) {
         const { screen, order, deferred } = fixture({ limit: 100, approvalState });
         assert.equal(await screen.addNewPaymentLine(deferred), approvalState === 'approved');
         assert.equal(order.uiState.creditApproval.state, approvalState);
-        assert.equal(order.payment_ids.length, approvalState === 'approved' ? 2 : 1);
+        assert.equal(order.payment_ids.length, approvalState === 'approved' ? 2 : approvalState === 'refused' ? 0 : 1);
         assert.equal(screen.addedMethod, undefined);
     }
 });
@@ -140,7 +193,7 @@ test('Approval waits for draft synchronization and is linked to the database ord
     screen.pos.data.call = async (model, method, args) => {
         if (method === 'request_credit_approval') {
             events.push('requested');
-            assert.equal(args.at(-1), 123);
+            assert.equal(args[6], 123);
         }
         return call(model, method, args);
     };
@@ -156,6 +209,36 @@ test('A failed draft save never creates an approval or deferred debt', async () 
     assert.equal(order.payment_ids.length, 1);
 });
 
+test('Removing the cash payment automatically updates the same authorization and removes outdated financed debt', async () => {
+    const { screen, order, effects, timers } = fixture({ paid: 5000 });
+    order.priceIncl = 9488.58;
+    let requests = 0;
+    screen.pos.data.call = async (model, method, args) => {
+        if (method !== 'request_credit_approval') {
+            return { credit_authorized: true, credit_limited: true, purchase_power: 100 };
+        }
+        requests++;
+        return { id: 17, name: 'ACRED-0017', state: requests === 1 ? 'approved' : 'pending',
+            credit_amount: args[4], total_amount: args[3], applied_amount: args[5],
+            previous_credit_amount: 4488.58, revised: requests > 1 };
+    };
+    await screen.setDeferredPayment('credit');
+    assert.equal(order.uiState.creditApproval.credit_amount, 4488.58);
+    order.payment_ids[0].delete();
+    assert.equal(screen.creditApprovalAmountsChanged, true);
+    assert.equal(await screen.validateOrder(), false);
+    screen.setup();
+    effects[1].fn();
+    await timers[0]();
+    assert.equal(requests, 2);
+    assert.equal(order.uiState.creditApproval.id, 17);
+    assert.equal(order.uiState.creditApproval.credit_amount, 9488.58);
+    assert.equal(order.uiState.creditApproval.state, 'pending');
+    assert.equal(order.uiState.creditApproval.revised, true);
+    assert.equal(order.payment_ids.length, 0);
+    assert.equal(screen.creditApprovalAmountsChanged, false);
+});
+
 test('Reloading the payment screen restores approval from the persisted order', async () => {
     const { screen, order } = fixture();
     order.id = 123;
@@ -167,6 +250,128 @@ test('Reloading the payment screen restores approval from the persisted order', 
     await screen.restoreCreditApproval();
     assert.equal(order.uiState.creditApproval.name, 'ACRED-0005');
     assert.equal(order.uiState.creditApproval.state, 'approved');
+});
+
+test('Approval polling automatically adds only the authorized remainder and never duplicates the payment', async () => {
+    const { screen, order, effects, intervals, clearedIntervals } = fixture({ limit: 100 });
+    order.id = 42;
+    order.state = 'draft';
+    order.uiState.creditApproval = { id: 17, state: 'pending', credit_amount: 700, total_amount: 1000 };
+    let approvalsChecked = 0;
+    screen.pos.data.call = async (model, method) => {
+        if (method === 'get_advance_pos_info') {
+            return { credit_authorized: true, credit_limited: true, purchase_power: 100 };
+        }
+        if (method === 'request_credit_approval') {
+            approvalsChecked++;
+        }
+        return { id: 17, name: 'ACRED-0017', state: 'approved', credit_amount: 700, total_amount: 1000, applied_amount: 0 };
+    };
+    screen.setup();
+    const cleanup = effects[2].fn();
+    assert.equal(intervals[0].delay, 5000);
+    await intervals[0].fn();
+    assert.equal(order.pos_payment_flow, 'credit');
+    assert.equal(order.payment_ids[0].amount, 300);
+    assert.equal(order.payment_ids[1].amount, 700);
+    assert.equal(order.to_invoice, true);
+    assert.equal(screen.validated, undefined);
+    await intervals[0].fn();
+    assert.equal(order.payment_ids.length, 2);
+    assert.equal(approvalsChecked, 1);
+    cleanup();
+    assert.deepEqual(clearedIntervals, [1]);
+});
+
+test('A temporary status lookup failure keeps the request available for the next automatic check', async () => {
+    const { screen, order } = fixture();
+    order.id = 42;
+    const request = { id: 17, state: 'pending', credit_amount: 700 };
+    order.uiState.creditApproval = request;
+    screen.pos.data.call = async () => { throw new Error('Offline'); };
+    await screen.restoreCreditApproval();
+    assert.equal(order.uiState.creditApproval, request);
+    assert.equal(order.payment_ids.length, 1);
+});
+
+test('Refreshing a rejected authorization automatically clears all entered payments', async () => {
+    const { screen, order, deferred, makePayment } = fixture();
+    order.id = 42;
+    order.state = 'draft';
+    order.pos_payment_flow = 'credit';
+    order.uiState.creditApproval = { id: 17, state: 'pending', credit_amount: 700 };
+    makePayment(deferred, 700);
+    screen.pos.data.call = async () => ({ id: 17, name: 'ACRED-0017', state: 'refused', credit_amount: 700 });
+    await screen.restoreCreditApproval();
+    assert.equal(order.uiState.creditApproval.state, 'refused');
+    assert.equal(order.payment_ids.length, 0);
+    assert.equal(order.pos_payment_flow, 'standard');
+});
+
+test('Subsequent status checks do not erase new cash payments entered after the rejection was handled', async () => {
+    const { screen, order } = fixture();
+    order.id = 42;
+    order.uiState.creditApproval = { id: 17, state: 'refused', credit_amount: 700 };
+    screen.pos.data.call = async () => ({ id: 17, state: 'refused', credit_amount: 700 });
+    await screen.restoreCreditApproval();
+    assert.equal(order.payment_ids.length, 1);
+    assert.equal(order.payment_ids[0].amount, 300);
+});
+
+test('Approval with an outdated amount is not automatically applied', async () => {
+    const { screen, order } = fixture();
+    order.uiState.creditApproval = { id: 17, state: 'approved', credit_amount: 500 };
+    assert.equal(await screen.applyApprovedCredit(), false);
+    assert.equal(order.payment_ids.length, 1);
+});
+
+test('Rejected credit lets the cashier clear every payment and return to standard payment', async () => {
+    const { screen, order, deferred, makePayment } = fixture();
+    order.id = 123;
+    order.state = 'draft';
+    order.pos_payment_flow = 'credit';
+    order.uiState.creditApproval = { id: 17, name: 'ACRED-0017', state: 'refused', credit_amount: 700 };
+    makePayment(deferred, 700);
+    assert.equal(await screen.clearRejectedPayments(), true);
+    assert.equal(order.payment_ids.length, 0);
+    assert.equal(order.pos_payment_flow, 'standard');
+    assert.equal(order.uiState.creditApproval.id, 17);
+    assert.equal(order.uiState.creditApproval.state, 'refused');
+    assert.equal(screen.creditApprovalAmountsChanged, false);
+});
+
+test('Clearing rejected credit does not silently erase a processed terminal payment', async () => {
+    const { screen, order } = fixture();
+    order.uiState.creditApproval = { state: 'refused' };
+    order.payment_ids[0].payment_status = 'done';
+    assert.equal(await screen.clearRejectedPayments(), false);
+    assert.equal(order.payment_ids.length, 1);
+});
+
+test('Editing payments after refusal does not automatically reopen the rejected request', () => {
+    const { screen, order, effects, timers } = fixture();
+    order.uiState.creditApproval = { id: 17, state: 'refused', credit_amount: 700 };
+    order.payment_ids[0].setAmount(0);
+    screen.setup();
+    effects[1].fn();
+    assert.equal(screen.creditApprovalAmountsChanged, false);
+    assert.equal(timers.length, 0);
+});
+
+test('Clicking customer account explicitly requests a new attempt after refusal', async () => {
+    const { screen, order, deferred } = fixture({ limit: 100 });
+    order.uiState.creditApproval = { id: 17, state: 'refused', credit_amount: 700 };
+    const call = screen.pos.data.call;
+    screen.pos.data.call = async (model, method, args) => {
+        if (method === 'request_credit_approval') {
+            assert.equal(args[7], true);
+            return { id: 18, name: 'ACRED-0018', state: 'pending', credit_amount: 700 };
+        }
+        return call(model, method, args);
+    };
+    assert.equal(await screen.addNewPaymentLine(deferred), false);
+    assert.equal(order.uiState.creditApproval.id, 18);
+    assert.equal(order.uiState.creditApproval.state, 'pending');
 });
 
 test('Credit refuses missing authorization and insufficient available credit', async () => {
@@ -183,7 +388,7 @@ test('Over-limit credit requests approval and leaves the sale unpaid while pendi
         const { screen, order } = fixture({ limit: 100, approvalState });
         await screen.setDeferredPayment('credit');
         assert.equal(order.uiState.creditApproval.state, approvalState);
-        assert.equal(order.payment_ids.length, 1);
+        assert.equal(order.payment_ids.length, approvalState === 'refused' ? 0 : 1);
         assert.equal(order.pos_payment_flow, 'standard');
     }
 });

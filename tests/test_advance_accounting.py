@@ -26,6 +26,7 @@ class TestAdvanceAccounting(TransactionCase):
                 'company_ids': [Command.set(cls.company.ids)],
             })
         cls.company.write({
+            'advance_product_id': False,
             'downpayment_account_id': cls.accounts['customer'].id,
             'supplier_advance_account_id': cls.accounts['supplier'].id,
             'advance_risk_enabled': True,
@@ -114,11 +115,11 @@ class TestAdvanceAccounting(TransactionCase):
         self.assertEqual(source.advance_reserved, 0)
         self.assertEqual(target.amount_residual, 780)
 
-    def test_customer_advance_reduces_risk_once(self):
+    def test_customer_advance_only_reduces_debt_when_explicitly_applied(self):
         source = self._invoice(300, advance=True)
         self._pay(source)
         self.assertEqual(self.partner.customer_advance_available, 300)
-        self.assertEqual(self.partner.advance_purchase_power, 1300)
+        self.assertEqual(self.partner.advance_purchase_power, 1000)
         target = self._invoice(600)
         self._apply(source, target, 300)
         self.assertEqual(source.advance_available, 0)
@@ -137,6 +138,22 @@ class TestAdvanceAccounting(TransactionCase):
         self.assertEqual(self.partner.supplier_advance_available, 400)
         self.assertEqual(self.partner.customer_advance_available, 0)
         self.assertEqual(self.partner.advance_purchase_power, 1000)
+
+    def test_unused_advance_does_not_offset_credit_debt_or_financing(self):
+        source = self._invoice(300, advance=True)
+        self._pay(source)
+        debt = self._invoice(600)
+        debt.action_post()
+        self.assertEqual(source.advance_available, 300)
+        self.assertEqual(self.partner.risk_total, 600)
+        self.assertEqual(self.partner.advance_purchase_power, 400)
+        order = self._financed_pos_order(paid=0, pending=200, flow='credit')
+        info = self.partner.get_advance_pos_info(order.config_id.id)
+        self.assertEqual(info['advance_available'], 300)
+        self.assertEqual(info['purchase_power'], 400)
+        self.assertEqual(order.config_id._credit_projection(self.partner, 200, 0), 800)
+        # An explicitly applied amount already reduces what is financed.
+        self.assertEqual(order.config_id._credit_projection(self.partner, 100, 100), 700)
 
     def test_cancellation_releases_balance_without_cash_movement(self):
         source = self._invoice(300, advance=True)

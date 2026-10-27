@@ -11,8 +11,8 @@
             </div>
             <div class="d-flex flex-column gap-2 mt-2" t-if="canOfferDeferredPayment">
                 <t t-set="creditApproval" t-value="currentOrder.uiState.creditApproval"/>
-                <t t-set="creditApproved" t-value="creditApproval and ['approved', 'used'].includes(creditApproval.state)"/>
-                <t t-set="creditRefused" t-value="creditApproval and creditApproval.state === 'refused'"/>
+                <t t-set="creditApproved" t-value="creditApproval and !creditApprovalAmountsChanged and ['approved', 'used'].includes(creditApproval.state)"/>
+                <t t-set="creditRefused" t-value="creditApproval and !creditApprovalAmountsChanged and creditApproval.state === 'refused'"/>
                 <div t-if="creditApproval" class="alert mb-0" t-att-class="creditApproved ? 'alert-success' : (creditRefused ? 'alert-danger' : 'alert-warning')" role="status">
                     <div>
                         <t t-if="creditApproved">
@@ -26,12 +26,18 @@
                             <span t-esc="creditApproval.name"/>
                         </t>
                         <t t-else="">
+                            <div t-if="creditApprovalAmountsChanged"><strong>Monto modificado. Actualiza la autorización.</strong></div>
+                            <div t-elif="creditApproval.revised">
+                                Monto actualizado de <strong t-esc="env.utils.formatCurrency(creditApproval.previous_credit_amount)"/>
+                                a <strong t-esc="env.utils.formatCurrency(creditApproval.credit_amount)"/>.
+                            </div>
                             El cliente <strong t-esc="currentOrder.getPartner()?.name || currentOrder.getPartner()?.display_name || ''"/>
                             excede el límite de crédito permitido. El departamento correspondiente debe autorizar la solicitud
-                            <strong t-esc="creditApproval.name"/>.
+                            <strong t-esc="creditApproval.name"/> con un monto de
+                            <strong t-esc="env.utils.formatCurrency(creditApproval.credit_amount)"/>.
                         </t>
                     </div>
-                    <button t-if="currentOrder.uiState.creditApproval.state === 'pending'" class="btn btn-secondary mt-2"
+                    <button t-if="currentOrder.uiState.creditApproval.state === 'pending' or creditApprovalAmountsChanged" class="btn btn-secondary mt-2"
                             t-on-click="() => this.setDeferredPayment('credit')">Revisar autorización</button>
                 </div>
                 <div t-if="currentOrder.pos_payment_flow === 'ppd_partial' or currentOrder.pos_payment_flow === 'credit'" class="alert alert-info mb-0" role="status">

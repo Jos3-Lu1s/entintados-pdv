@@ -41,7 +41,7 @@ def run():
             session = pos.current_session_id or env['pos.session'].create({'config_id': pos.id})
             product = env['product.product'].create({'name': 'Approval test goods', 'type': 'service'})
 
-            def request_for(uuid, total, credit, config=pos):
+            def request_for(uuid, total, credit, config=pos, new_attempt=False):
                 saved = env['pos.order'].search([('uuid', '=', uuid)], limit=1)
                 values = {
                     'partner_id': partner.id, 'amount_total': total, 'amount_tax': 0,
@@ -53,7 +53,7 @@ def run():
                     saved.write(values)
                 else:
                     saved = env['pos.order'].create(dict(values, session_id=session.id, uuid=uuid))
-                return config.request_credit_approval(partner.id, uuid, total, credit, 0, saved.id)
+                return config.request_credit_approval(partner.id, uuid, total, credit, 0, saved.id, new_attempt)
 
             uuid = str(uuid4())
             rejects(lambda: pos.request_credit_approval(partner.id, str(uuid4()), 200, 200))
@@ -146,9 +146,33 @@ def run():
             assert legacy.order_id and migrated.reference == legacy.order_id.pos_reference
             changed_uuid = str(uuid4())
             old = Approval.browse(request_for(changed_uuid, 400, 400)['id'])
+            native_id = old.approval_request_id.id
+            old.with_user(user).action_approve()
             new = Approval.browse(request_for(changed_uuid, 450, 450)['id'])
-            assert old.state == 'cancelled' and new != old
-            assert old.approval_request_id.request_status == 'cancel'
+            assert new == old and new.approval_request_id.id == native_id
+            assert new.state == 'pending' and new.approval_request_id.request_status == 'pending'
+            assert not new.decided_by and new.previous_credit_amount == 400
+            assert new.credit_amount == 450 and new.approval_request_id.amount == 450
+            assert new.revised_by == env.user and new.revised_on
+            assert new._pos_payload()['previous_credit_amount'] == 400
+            assert new._pos_payload()['revised']
+            note = new.approval_request_id.message_ids.filtered(
+                lambda message: 'Solicitud actualizada por' in str(message.body)
+                and '400.00' in str(message.body) and '450.00' in str(message.body))
+            assert note and note[0].author_id == env.user.partner_id and note[0].date
+            assert user.display_name in str(note[0].body)  # Prior approver is retained in the history.
+            rejects(lambda: new.order_id._require_credit_approval(partner, 450, 0))
+            new.with_user(user).action_refuse()
+            assert request_for(changed_uuid, 350, 350)['id'] == new.id
+            assert new.state == 'refused' and new.credit_amount == 450
+            fresh = Approval.browse(request_for(changed_uuid, 350, 350, new_attempt=True)['id'])
+            assert fresh != new and fresh.name != new.name
+            assert fresh.approval_request_id != new.approval_request_id
+            assert fresh.state == 'pending' and fresh.credit_amount == 350
+            assert new.approval_request_id.request_status == 'refused'
+            assert request_for(changed_uuid, 350, 350)['id'] == fresh.id
+            assert len(fresh.approval_request_id.activity_ids.filtered(lambda activity: activity.user_id == user)) == 1
+            assert any(new.name in str(message.body) for message in fresh.approval_request_id.message_ids)
             for approved in (False, True):
                 cancel_test = Approval.browse(request_for(str(uuid4()), 500, 500)['id'])
                 if approved:
