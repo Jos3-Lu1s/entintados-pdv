@@ -45,15 +45,22 @@
 
                             <div class="col-md-5">
                                 <label class="form-label small fw-bold text-dark mb-1">
-                                    Código del Color <span class="text-danger">*</span>
+                                    Número del Color <span class="text-secondary-emphasis fw-normal">(opcional)</span>
                                 </label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-light text-secondary-emphasis border-end-0">
                                         <i class="fa fa-barcode"/>
                                     </span>
-                                    <input type="text" class="form-control ps-2"
-                                           t-model="state.newColorCode"
-                                           placeholder="p. ej. D-0001, CL-102…"/>
+                                    <span t-if="codePrefix" class="input-group-text bg-light fw-semibold font-monospace">
+                                        <t t-esc="codePrefix"/>
+                                    </span>
+                                    <input type="text" inputmode="numeric"
+                                           t-attf-class="form-control ps-2 {{ isColorNumberValid ? '' : 'is-invalid' }}"
+                                           t-model="state.newColorNumber"
+                                           placeholder="Vacío: siguiente de la galería"/>
+                                </div>
+                                <div t-if="!isColorNumberValid" class="text-danger text-xxs mt-1">
+                                    Solo dígitos, sin el prefijo de la galería.
                                 </div>
                             </div>
 

@@ -29,20 +29,18 @@ class TestTintGallery(TransactionCase):
         cls.gallery_a = cls.galleries.create({'name': 'Galería A', 'code': 'GALA'})
         cls.gallery_b = cls.galleries.create({'name': 'Galería B', 'code': 'GALB'})
 
-        cls.color_1 = cls.colors.create({'name': 'Color 1', 'code': 'COL-001'})
-        cls.color_2 = cls.colors.create({'name': 'Color 2', 'code': 'COL-002'})
-        cls.color_3 = cls.colors.create({'name': 'Color 3', 'code': 'COL-003'})
+        cls.color_1 = cls.colors.create({'name': 'Color 1', 'code': 'COL-001', 'gallery_id': cls.gallery_a.id})
+        cls.color_2 = cls.colors.create({'name': 'Color 2', 'code': 'COL-002', 'gallery_id': cls.gallery_a.id})
+        cls.color_3 = cls.colors.create({'name': 'Color 3', 'code': 'COL-003', 'gallery_id': cls.gallery_b.id})
 
         # Color 1 tiene 2 fórmulas en Galería A (litro y galón)
         cls.formulas.create({
-            'gallery_id': cls.gallery_a.id,
             'color_id': cls.color_1.id,
             'base_type_id': cls.deep.id,
             'size_id': cls.liter.id,
             'line_ids': [(0, 0, {'colorant_id': cls.colorant_a.id, 'points': 10})],
         })
         cls.formulas.create({
-            'gallery_id': cls.gallery_a.id,
             'color_id': cls.color_1.id,
             'base_type_id': cls.deep.id,
             'size_id': cls.gallon.id,
@@ -51,7 +49,6 @@ class TestTintGallery(TransactionCase):
 
         # Color 2 tiene 1 fórmula en Galería A
         cls.formulas.create({
-            'gallery_id': cls.gallery_a.id,
             'color_id': cls.color_2.id,
             'base_type_id': cls.white.id,
             'size_id': cls.liter.id,
@@ -60,7 +57,6 @@ class TestTintGallery(TransactionCase):
 
         # Color 3 solo tiene fórmula en Galería B
         cls.formulas.create({
-            'gallery_id': cls.gallery_b.id,
             'color_id': cls.color_3.id,
             'base_type_id': cls.white.id,
             'size_id': cls.liter.id,
@@ -81,7 +77,7 @@ class TestTintGallery(TransactionCase):
         self.assertEqual(action.get('type'), 'ir.actions.act_window')
         self.assertEqual(action.get('res_model'), 'tint.color.formula')
         self.assertEqual(action.get('domain'), [('gallery_id', '=', self.gallery_a.id)])
-        self.assertEqual(action.get('context', {}).get('default_gallery_id'), self.gallery_a.id)
+        self.assertNotIn('default_gallery_id', action.get('context', {}))
 
         formulas = self.formulas.search(action['domain'])
         self.assertEqual(len(formulas), 3)
@@ -90,7 +86,7 @@ class TestTintGallery(TransactionCase):
         action = self.gallery_a.action_open_colors()
         self.assertEqual(action.get('type'), 'ir.actions.act_window')
         self.assertEqual(action.get('res_model'), 'tint.color')
-        self.assertEqual(action.get('domain'), [('formula_ids.gallery_id', '=', self.gallery_a.id)])
+        self.assertEqual(action.get('domain'), [('gallery_id', '=', self.gallery_a.id)])
 
         colors = self.colors.search(action['domain'])
         self.assertEqual(len(colors), 2)

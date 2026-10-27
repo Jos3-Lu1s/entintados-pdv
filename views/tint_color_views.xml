@@ -10,6 +10,7 @@
             <list string="Colores">
                 <field name="code" />
                 <field name="name" />
+                <field name="gallery_id" />
                 <field
                     name="base_type_ids"
                     widget="many2many_tags"
@@ -39,10 +40,34 @@
                             <field name="name" placeholder="p. ej. Rojo Cardenal" />
                         </h1>
                         <h3>
-                            <field name="code" placeholder="p. ej. D-0001" />
+                            <field name="code_matches_gallery" invisible="1" />
+                            <!-- Prefijo y número juntos, en el lugar del código. -->
+                            <div
+                                class="d-flex align-items-baseline font-monospace"
+                                invisible="not code_matches_gallery"
+                            >
+                                <field
+                                    name="gallery_code_prefix"
+                                    class="oe_inline"
+                                    invisible="not gallery_code_prefix"
+                                />
+                                <field
+                                    name="code_number"
+                                    class="oe_inline"
+                                    placeholder="Automático"
+                                />
+                            </div>
+                            <field
+                                name="code"
+                                readonly="1"
+                                invisible="code_matches_gallery"
+                            />
                         </h3>
                     </div>
                     <group>
+                        <group name="gallery">
+                            <field name="gallery_id" options="{'no_create': True}" />
+                        </group>
                         <group>
                             <field
                                 name="base_type_ids"
@@ -82,6 +107,7 @@
             <search string="Buscar color">
                 <field name="name" />
                 <field name="code" />
+                <field name="gallery_id" />
                 <field name="base_type_ids" string="Tipo de base" />
                 <separator />
                 <filter
@@ -95,6 +121,13 @@
                     string="Archivados"
                     domain="[('active', '=', False)]"
                 />
+                <group>
+                    <filter
+                        name="group_by_gallery"
+                        string="Galería"
+                        context="{'group_by': 'gallery_id'}"
+                    />
+                </group>
             </search>
         </field>
     </record>
@@ -107,8 +140,10 @@
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Registre un color</p>
             <p>
-                Un color se captura una sola vez y puede tener varias fórmulas,
-                una por cada combinación de tipo de base y presentación.
+                Un color pertenece a una galería y puede tener varias fórmulas,
+                una por cada combinación de tipo de base y presentación. Su
+                código es el prefijo de la galería más un número: si no se
+                captura, se asigna el siguiente de la galería.
             </p>
         </field>
     </record>

@@ -135,7 +135,6 @@ Catálogo de entintado
         'data/crm_approval_sequence.xml',
         'data/pos_credit_approval_sequence.xml',
         'data/approval_request_data.xml',
-        'data/code_tint.xml',
         'data/note_seq.xml',
         'data/crm_opportunity_sequence.xml',
         'data/account_payment_cfdi_cron.xml',

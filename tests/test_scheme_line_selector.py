@@ -98,8 +98,9 @@ class TestSchemeLineSelector(TransactionCase):
 
     def test_formula_scheme_first(self):
         form = Form(self.env['tint.color.formula'])
-        form.gallery_id = self.env['tint.gallery'].create({'name': 'Galería SPEC 25', 'code': 'S25-GAL'})
-        form.color_id = self.env['tint.color'].create({'name': 'Color SPEC 25', 'code': 'S25-COL'})
+        gallery = self.env['tint.gallery'].create({'name': 'Galería SPEC 25', 'code': 'S25-GAL'})
+        form.color_id = self.env['tint.color'].create({
+            'name': 'Color SPEC 25', 'code': 'S25-COL', 'gallery_id': gallery.id})
         form.base_type_id = self.white
         form.size_id = self.gallon
 

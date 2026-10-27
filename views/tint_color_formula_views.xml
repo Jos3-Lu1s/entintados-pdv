@@ -45,7 +45,7 @@
                     <group>
                         <group string="Combinación">
                             <field name="color_id" options="{'no_create': True}" />
-                            <field name="gallery_id" options="{'no_create': True}" />
+                            <field name="gallery_id" readonly="1" />
                             <field
                                 name="base_type_id"
                                 options="{'no_create': True}"
