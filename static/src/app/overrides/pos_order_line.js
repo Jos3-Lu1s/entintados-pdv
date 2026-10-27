@@ -1,7 +1,10 @@
+import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
+import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
+import { isTintColorant, isTintedBase, tintDose } from "@entintados_pdv/app/utils/tint_order";
 
 /**
  * Parche para PosOrderline para:
@@ -11,7 +14,7 @@ import { _t } from "@web/core/l10n/translation";
  */
 patch(PosOrderline.prototype, {
     setQuantity(quantity, keep_price = false) {
-        if (this.is_tint_colorant) {
+        if (isTintColorant(this) && !this._entintadosSyncingQuantity) {
             const notification =
                 this.models?.env?.services?.notification ||
                 this.env?.services?.notification ||
@@ -27,9 +30,7 @@ patch(PosOrderline.prototype, {
             return false;
         }
 
-        const isTinted =
-            this.is_tinted_base ||
-            (this.combo_line_ids?.length && this.combo_line_ids.some((cl) => cl.is_tint_colorant));
+        const isTinted = isTintedBase(this);
 
         if (isTinted) {
             const numQty =
@@ -59,14 +60,28 @@ patch(PosOrderline.prototype, {
             }
         }
 
-        const res = super.setQuantity(quantity, keep_price);
+        const children = isTinted ? [...(this.combo_line_ids || [])] : [];
+        for (const child of children) {
+            child.unit_points ??= tintDose(child, this);
+            child._entintadosSyncingQuantity = true;
+        }
+        let res;
+        try {
+            res = super.setQuantity(quantity, keep_price);
+        } finally {
+            for (const child of children) {
+                delete child._entintadosSyncingQuantity;
+            }
+        }
+        if (res !== true) {
+            return res;
+        }
 
         if (isTinted && this.combo_line_ids?.length) {
             const parentQty = Number(this.qty) || 0;
             for (const child of this.combo_line_ids) {
-                if (child.is_tint_colorant || child.unit_points !== undefined) {
-                    const unitPoints =
-                        child.unit_points ?? (parentQty ? child.qty / parentQty : child.qty || 0);
+                if (isTintColorant(child) || child.unit_points !== undefined) {
+                    const unitPoints = tintDose(child, this);
                     if (child.unit_points === undefined || child.unit_points === null) {
                         child.unit_points = unitPoints;
                     }
@@ -84,14 +99,14 @@ patch(PosOrderline.prototype, {
     },
 
     setUnitPrice(unitPrice) {
-        if (this.is_tint_colorant) {
+        if (isTintColorant(this)) {
             return false;
         }
         return super.setUnitPrice(unitPrice);
     },
 
     setDiscount(discount) {
-        if (this.is_tint_colorant) {
+        if (isTintColorant(this)) {
             return false;
         }
         return super.setDiscount(discount);
@@ -99,10 +114,8 @@ patch(PosOrderline.prototype, {
 
     canBeMergedWith(orderline) {
         if (
-            this.is_tint_colorant ||
-            this.is_tinted_base ||
-            orderline?.is_tint_colorant ||
-            orderline?.is_tinted_base
+            isTintColorant(this) || isTintedBase(this) ||
+            isTintColorant(orderline) || isTintedBase(orderline)
         ) {
             return false;
         }
@@ -111,7 +124,7 @@ patch(PosOrderline.prototype, {
 
     delete() {
         if (
-            this.is_tint_colorant &&
+            isTintColorant(this) &&
             this.combo_parent_id &&
             !this.combo_parent_id._is_deleting &&
             (this.order_id?.lines?.includes?.(this.combo_parent_id) ||
@@ -132,9 +145,7 @@ patch(PosOrderline.prototype, {
             return false;
         }
 
-        const isTinted =
-            this.is_tinted_base ||
-            (this.combo_line_ids?.length && this.combo_line_ids.some((cl) => cl.is_tint_colorant));
+        const isTinted = isTintedBase(this);
 
         if (isTinted && this.combo_line_ids?.length && !this._is_deleting) {
             this._is_deleting = true;
@@ -216,7 +227,7 @@ patch(PosOrderline.prototype, {
  */
 patch(PosOrder.prototype, {
     selectOrderline(orderline) {
-        if (orderline?.is_tint_colorant && orderline?.combo_parent_id) {
+        if (isTintColorant(orderline) && orderline?.combo_parent_id) {
             return super.selectOrderline(orderline.combo_parent_id);
         }
         return super.selectOrderline(orderline);
@@ -244,5 +255,18 @@ patch(PosOrder.prototype, {
             data.invoice_split_count = n;
         }
         return data;
+    },
+});
+
+patch(TicketScreen.prototype, {
+    async onClickRefund() {
+        this.dialog.add(AlertDialog, {
+            title: _t("Reembolsos deshabilitados"),
+            body: _t("La opción de reembolso está bloqueada en el punto de venta."),
+        });
+        return false;
+    },
+    async onDoRefund() {
+        return this.onClickRefund();
     },
 });

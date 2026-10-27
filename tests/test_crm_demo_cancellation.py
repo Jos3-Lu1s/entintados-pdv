@@ -1,4 +1,6 @@
-from odoo import Command
+from datetime import timedelta
+
+from odoo import Command, fields
 from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase, tagged
 
@@ -41,6 +43,28 @@ class TestCrmDemoCancellation(TransactionCase):
         with self.assertRaises(UserError):
             self.env['sale.order'].with_context(default_opportunity_id=lead.id).create({'partner_id': partner.id})
         lead.write({'active': True})
+        lead._check_can_create_quotation()
+
+    def test_scheduled_demo_blocks_quotation_until_finished(self):
+        lead = self._lead()
+        partner = self.env['res.partner'].create({'name': 'Scheduled demo customer'})
+        lead._check_can_create_quotation()
+        start = fields.Datetime.now() + timedelta(days=1)
+        self.env['calendar.event'].create({
+            'name': 'Scheduled demonstration',
+            'start': start, 'stop': start + timedelta(hours=1), 'allday': False,
+            'crm_lead_id': lead.id,
+            'crm_activity_type_id': self.env.ref('entintados_pdv.mail_activity_type_demo').id,
+        })
+        self.assertTrue(lead.demo_meeting_scheduled)
+        self.assertFalse(lead.approval_request_id)
+        with self.assertRaises(UserError):
+            lead.action_sale_quotations_new()
+        with self.assertRaises(UserError):
+            self.env['sale.order'].create({'partner_id': partner.id, 'opportunity_id': lead.id})
+        with self.assertRaises(UserError):
+            self.env['sale.order'].with_context(default_opportunity_id=lead.id).create({'partner_id': partner.id})
+        lead.demo_end = True
         lead._check_can_create_quotation()
 
     def test_rejected_output_allows_adding_and_editing_material(self):

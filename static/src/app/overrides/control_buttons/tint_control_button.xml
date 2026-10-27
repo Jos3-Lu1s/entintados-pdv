@@ -28,4 +28,14 @@
 
     </t>
 
+    <t t-name="entintados_pdv.DisableRefundControl" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//button[contains(@t-on-click, 'clickRefund')]" position="attributes">
+            <attribute name="t-if">false</attribute>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.DisableTicketRefund" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+        <xpath expr="//ActionpadWidget[@actionToTrigger.bind='onClickRefund']" position="attributes">
+            <attribute name="t-if">false</attribute>
+        </xpath>
+    </t>
 </templates>

@@ -35,3 +35,20 @@ access_pos_order_split_invoice_wizard_user,pos.order.split.invoice.wizard.user,m
 access_purchase_advance_invoice,purchase.advance.invoice,model_purchase_advance_invoice,account.group_account_invoice,1,1,1,1
 access_account_advance_apply,account.advance.apply,model_account_advance_apply,account.group_account_invoice,1,1,1,1
 access_pos_credit_approval_internal,pos.credit.approval.read,model_pos_credit_approval,base.group_user,1,0,0,0
+access_demo_crm_read,Demo related CRM,crm.model_crm_lead,entintados_pdv.group_demo_user,1,0,0,0
+access_demo_picking_read,Demo related picking,stock.model_stock_picking,entintados_pdv.group_demo_user,1,0,0,0
+access_demo_move_read,Demo related move,stock.model_stock_move,entintados_pdv.group_demo_user,1,0,0,0
+access_demo_move_line_read,Demo related move line,stock.model_stock_move_line,entintados_pdv.group_demo_user,1,0,0,0
+access_demo_location_read,Demo locations,stock.model_stock_location,entintados_pdv.group_demo_user,1,0,0,0
+access_demo_warehouse_read,Demo warehouses,stock.model_stock_warehouse,entintados_pdv.group_demo_user,1,0,0,0
+access_demo_picking_type_read,Demo picking types,stock.model_stock_picking_type,entintados_pdv.group_demo_user,1,0,0,0
+access_customer_account_adjustment,Customer account adjustment,model_customer_account_adjustment,account.group_account_invoice,1,1,1,1
+access_customer_account_adjustment_line,Customer account adjustment line,model_customer_account_adjustment_line,account.group_account_invoice,1,1,1,1
+access_pos_accounting_return,Accounting ticket return,model_pos_accounting_return,account.group_account_invoice,1,1,1,1
+access_pos_accounting_return_line,Accounting ticket return line,model_pos_accounting_return_line,account.group_account_invoice,1,1,1,1
+access_pos_return_order_read,Accounting ticket read,point_of_sale.model_pos_order,account.group_account_invoice,1,0,0,0
+access_pos_return_line_read,Accounting ticket line read,point_of_sale.model_pos_order_line,account.group_account_invoice,1,0,0,0
+access_pos_return_payment_read,Accounting ticket payment read,point_of_sale.model_pos_payment,account.group_account_invoice,1,0,0,0
+access_pos_return_session_read,Accounting ticket session read,point_of_sale.model_pos_session,account.group_account_invoice,1,0,0,0
+access_pos_return_config_read,Accounting ticket config read,point_of_sale.model_pos_config,account.group_account_invoice,1,0,0,0
+access_pos_return_payment_method_read,Accounting ticket payment method read,point_of_sale.model_pos_payment_method,account.group_account_invoice,1,0,0,0

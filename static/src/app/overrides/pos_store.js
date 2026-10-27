@@ -79,6 +79,11 @@ patch(PosOrder.prototype, {
         const nativeAdvanceProduct = (this.config || this.config_id || posStoreInstance?.config)?.down_payment_product_id;
 
         for (const line of this.lines || []) {
+            // A refund keeps the price and discount actually paid, even if
+            // the customer's commercial agreement has changed since the sale.
+            if (line.refunded_orderline_id) {
+                continue;
+            }
             if (line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref ||
                 (line.sale_order_origin_id && line.product_id?.id === nativeAdvanceProduct?.id)) {
                 line.pricing_rule_type = "none";

@@ -21,11 +21,32 @@ class PosOrder(models.Model):
 
     @api.model
     def _process_order(self, order, existing_order):
+        if order.get('is_refund') or order.get('refunded_order_id') or any(
+                command[2].get('refunded_orderline_id')
+                for command in order.get('lines', [])
+                if len(command) > 2 and isinstance(command[2], dict)):
+            raise UserError(_('La opción de reembolso está bloqueada en el punto de venta.'))
+        for command in order.get('lines', []):
+            if len(command) < 3 or not isinstance(command[2], dict):
+                continue
+            values = command[2]
+            if float(values.get('qty') or 0) < 0:
+                product = self.env['product.product'].browse(values.get('product_id'))
+                sale_line = self.env['sale.order.line'].browse(values.get('sale_order_line_id'))
+                if not (product.is_accounting_advance or values.get('advance_source_ref') or sale_line.is_downpayment):
+                    raise UserError(_('La opción de reembolso está bloqueada en el punto de venta.'))
         # combo_parent_id se enlaza al final del super(); antes de eso todo
         # colorante hijo parece suelto. Las devoluciones (qty <= 0) no se tocan.
         order_id = super()._process_order(order, existing_order)
+        self.browse(order_id)._check_pos_refunds_disabled()
         self.browse(order_id)._check_colorant_lines()
         return order_id
+
+    def _check_pos_refunds_disabled(self):
+        for order in self:
+            if order.is_refund or order.amount_total < 0 or order.lines.filtered(
+                    lambda line: line.refunded_orderline_id or (line.qty < 0 and not line._is_accounting_advance_line())):
+                raise UserError(_('La opción de reembolso está bloqueada en el punto de venta.'))
 
     def _check_colorant_lines(self):
         loose = self.lines.filtered(
@@ -127,7 +148,7 @@ class PosOrder(models.Model):
         return res
 
     """ def _entintados_adjust_rounding(self, invoices):
-       
+
         _logger.warning("[ENTINTADOS] AJUSTE LLAMADO orden=%s facturas=%s",
                         self.name, invoices.mapped("name"))
         currency = self.currency_id
@@ -170,7 +191,7 @@ class PosOrder(models.Model):
         last.message_post(body="Redondeo de división: objetivo %s, total de esta factura %s. Resultado: %s"
                           % (target, last.amount_total, result))
         return True """
-    
+
     def _entintados_create_balanced_invoice(self, AccountMove, vals, target, max_diff):
         """Crea la última factura y, si su total no coincide con el objetivo,
         la recrea con el precio unitario de una línea ajustado en centavos."""
@@ -229,7 +250,7 @@ class PosOrder(models.Model):
         invoice.unlink()
         invoice = AccountMove.create(vals)
         return invoice, _("no se pudo cuadrar (diferencia %s)", diff)
-    
+
     @api.depends("account_move", "split_invoice_ids")
     def _compute_entintados_invoice_count(self):
         for order in self:

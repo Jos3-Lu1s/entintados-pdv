@@ -71,10 +71,16 @@ def post_note(parent, title, changes):
         return
     body = Markup('<p><strong>%s</strong></p><ul>%s</ul>') % (
         title, Markup('').join(Markup('<li>%s: %s → %s</li>') % change for change in changes))
+    author_id = parent.env.user.partner_id.id
+    if parent._name == 'stock.picking':
+        from .business_chatter import metadata, provenance_html
+        info = metadata(parent)
+        body += provenance_html(info)
+        author_id = info[2]
     # El usuario que puede editar una línea puede carecer de permiso para
     # publicar en el documento padre. Elevar solo la escritura de la bitácora.
     parent.sudo().message_post(
-        body=body, subtype_xmlid='mail.mt_note', author_id=parent.env.user.partner_id.id)
+        body=body, subtype_xmlid='mail.mt_note', author_id=author_id)
 
 
 def special_values(record, names):

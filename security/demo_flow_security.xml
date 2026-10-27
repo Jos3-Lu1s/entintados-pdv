@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_demo_flow" model="ir.module.category">
+        <field name="name">Demostraciones CRM</field>
+        <field name="sequence">22</field>
+    </record>
+    <record id="group_demo_user" model="res.groups">
+        <field name="name">Acceso relacionado a demostraciones</field>
+        <field name="implied_ids" eval="[Command.link(ref('base.group_user'))]"/>
+    </record>
+    <record id="privilege_demo_crm" model="res.groups.privilege">
+        <field name="name">CRM: propias oportunidades</field>
+        <field name="category_id" ref="module_category_demo_flow"/>
+    </record>
+    <record id="group_demo_crm" model="res.groups">
+        <field name="name">CRM: propias oportunidades</field>
+        <field name="privilege_id" ref="privilege_demo_crm"/>
+        <field name="implied_ids" eval="[Command.link(ref('group_demo_user')), Command.link(ref('sales_team.group_sale_salesman'))]"/>
+        <field name="comment">Restringe el flujo de demostraciones a los documentos propios o asignados. Los demás documentos conservan las reglas nativas. Los roles se pueden combinar.</field>
+    </record>
+    <record id="privilege_demo_approval" model="res.groups.privilege">
+        <field name="name">Aprobaciones: solicitudes asignadas</field>
+        <field name="category_id" ref="module_category_demo_flow"/>
+    </record>
+    <record id="group_demo_approval" model="res.groups">
+        <field name="name">Aprobaciones: solicitudes asignadas</field>
+        <field name="privilege_id" ref="privilege_demo_approval"/>
+        <field name="implied_ids" eval="[Command.link(ref('group_demo_user')), Command.link(ref('approvals.group_approval_user'))]"/>
+        <field name="comment">Restringe el flujo de demostraciones a los documentos propios o asignados. Los demás documentos conservan las reglas nativas. Los roles se pueden combinar.</field>
+    </record>
+    <record id="privilege_demo_audit" model="res.groups.privilege">
+        <field name="name">Auditoría: salidas asignadas</field>
+        <field name="category_id" ref="module_category_demo_flow"/>
+    </record>
+    <record id="group_demo_audit" model="res.groups">
+        <field name="name">Auditoría: salidas asignadas</field>
+        <field name="privilege_id" ref="privilege_demo_audit"/>
+        <field name="implied_ids" eval="[Command.link(ref('group_demo_user')), Command.link(ref('stock.group_stock_user'))]"/>
+        <field name="comment">Restringe el flujo de demostraciones a los documentos propios o asignados. Los demás documentos conservan las reglas nativas. Los roles se pueden combinar.</field>
+    </record>
+    <record id="demo_rule_crm_lead_read" model="ir.rule">
+        <field name="name">Demostraciones: crm.lead / read</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.lead', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_lead_write" model="ir.rule">
+        <field name="name">Demostraciones: crm.lead / write</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.lead', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_lead_create" model="ir.rule">
+        <field name="name">Demostraciones: crm.lead / create</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.lead', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_lead_unlink" model="ir.rule">
+        <field name="name">Demostraciones: crm.lead / unlink</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.lead', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_crm_lead" model="ir.rule">
+        <field name="name">Demostraciones: consultar crm.lead relacionado</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.lead', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_material_line_read" model="ir.rule">
+        <field name="name">Demostraciones: crm.material.line / read</field>
+        <field name="model_id" ref="model_crm_material_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.material.line', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_material_line_write" model="ir.rule">
+        <field name="name">Demostraciones: crm.material.line / write</field>
+        <field name="model_id" ref="model_crm_material_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.material.line', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_material_line_create" model="ir.rule">
+        <field name="name">Demostraciones: crm.material.line / create</field>
+        <field name="model_id" ref="model_crm_material_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.material.line', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_crm_material_line_unlink" model="ir.rule">
+        <field name="name">Demostraciones: crm.material.line / unlink</field>
+        <field name="model_id" ref="model_crm_material_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.material.line', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_crm_material_line" model="ir.rule">
+        <field name="name">Demostraciones: consultar crm.material.line relacionado</field>
+        <field name="model_id" ref="model_crm_material_line"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('crm.material.line', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_calendar_event_read" model="ir.rule">
+        <field name="name">Demostraciones: calendar.event / read</field>
+        <field name="model_id" ref="calendar.model_calendar_event"/>
+        <field name="domain_force">user._demo_flow_rule_domain('calendar.event', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_calendar_event_write" model="ir.rule">
+        <field name="name">Demostraciones: calendar.event / write</field>
+        <field name="model_id" ref="calendar.model_calendar_event"/>
+        <field name="domain_force">user._demo_flow_rule_domain('calendar.event', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_calendar_event_create" model="ir.rule">
+        <field name="name">Demostraciones: calendar.event / create</field>
+        <field name="model_id" ref="calendar.model_calendar_event"/>
+        <field name="domain_force">user._demo_flow_rule_domain('calendar.event', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_calendar_event_unlink" model="ir.rule">
+        <field name="name">Demostraciones: calendar.event / unlink</field>
+        <field name="model_id" ref="calendar.model_calendar_event"/>
+        <field name="domain_force">user._demo_flow_rule_domain('calendar.event', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_calendar_event" model="ir.rule">
+        <field name="name">Demostraciones: consultar calendar.event relacionado</field>
+        <field name="model_id" ref="calendar.model_calendar_event"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('calendar.event', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_request_read" model="ir.rule">
+        <field name="name">Demostraciones: approval.request / read</field>
+        <field name="model_id" ref="approvals.model_approval_request"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.request', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_request_write" model="ir.rule">
+        <field name="name">Demostraciones: approval.request / write</field>
+        <field name="model_id" ref="approvals.model_approval_request"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.request', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_request_create" model="ir.rule">
+        <field name="name">Demostraciones: approval.request / create</field>
+        <field name="model_id" ref="approvals.model_approval_request"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.request', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_request_unlink" model="ir.rule">
+        <field name="name">Demostraciones: approval.request / unlink</field>
+        <field name="model_id" ref="approvals.model_approval_request"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.request', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_approval_request" model="ir.rule">
+        <field name="name">Demostraciones: consultar approval.request relacionado</field>
+        <field name="model_id" ref="approvals.model_approval_request"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.request', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_approver_read" model="ir.rule">
+        <field name="name">Demostraciones: approval.approver / read</field>
+        <field name="model_id" ref="approvals.model_approval_approver"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.approver', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_approver_write" model="ir.rule">
+        <field name="name">Demostraciones: approval.approver / write</field>
+        <field name="model_id" ref="approvals.model_approval_approver"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.approver', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_approver_create" model="ir.rule">
+        <field name="name">Demostraciones: approval.approver / create</field>
+        <field name="model_id" ref="approvals.model_approval_approver"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.approver', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_approver_unlink" model="ir.rule">
+        <field name="name">Demostraciones: approval.approver / unlink</field>
+        <field name="model_id" ref="approvals.model_approval_approver"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.approver', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_approval_approver" model="ir.rule">
+        <field name="name">Demostraciones: consultar approval.approver relacionado</field>
+        <field name="model_id" ref="approvals.model_approval_approver"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.approver', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_product_line_read" model="ir.rule">
+        <field name="name">Demostraciones: approval.product.line / read</field>
+        <field name="model_id" ref="approvals.model_approval_product_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.product.line', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_product_line_write" model="ir.rule">
+        <field name="name">Demostraciones: approval.product.line / write</field>
+        <field name="model_id" ref="approvals.model_approval_product_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.product.line', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_product_line_create" model="ir.rule">
+        <field name="name">Demostraciones: approval.product.line / create</field>
+        <field name="model_id" ref="approvals.model_approval_product_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.product.line', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_approval_product_line_unlink" model="ir.rule">
+        <field name="name">Demostraciones: approval.product.line / unlink</field>
+        <field name="model_id" ref="approvals.model_approval_product_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.product.line', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_approval_product_line" model="ir.rule">
+        <field name="name">Demostraciones: consultar approval.product.line relacionado</field>
+        <field name="model_id" ref="approvals.model_approval_product_line"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('approval.product.line', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_picking_read" model="ir.rule">
+        <field name="name">Demostraciones: stock.picking / read</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.picking', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_picking_write" model="ir.rule">
+        <field name="name">Demostraciones: stock.picking / write</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.picking', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_picking_create" model="ir.rule">
+        <field name="name">Demostraciones: stock.picking / create</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.picking', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_picking_unlink" model="ir.rule">
+        <field name="name">Demostraciones: stock.picking / unlink</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.picking', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_stock_picking" model="ir.rule">
+        <field name="name">Demostraciones: consultar stock.picking relacionado</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.picking', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_read" model="ir.rule">
+        <field name="name">Demostraciones: stock.move / read</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_write" model="ir.rule">
+        <field name="name">Demostraciones: stock.move / write</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_create" model="ir.rule">
+        <field name="name">Demostraciones: stock.move / create</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_unlink" model="ir.rule">
+        <field name="name">Demostraciones: stock.move / unlink</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_stock_move" model="ir.rule">
+        <field name="name">Demostraciones: consultar stock.move relacionado</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_line_read" model="ir.rule">
+        <field name="name">Demostraciones: stock.move.line / read</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move.line', 'read')</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_line_write" model="ir.rule">
+        <field name="name">Demostraciones: stock.move.line / write</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move.line', 'write')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_line_create" model="ir.rule">
+        <field name="name">Demostraciones: stock.move.line / create</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move.line', 'create')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="demo_rule_stock_move_line_unlink" model="ir.rule">
+        <field name="name">Demostraciones: stock.move.line / unlink</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move.line', 'unlink')</field>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="demo_related_read_stock_move_line" model="ir.rule">
+        <field name="name">Demostraciones: consultar stock.move.line relacionado</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="groups" eval="[Command.link(ref('group_demo_user'))]"/>
+        <field name="domain_force">user._demo_flow_rule_domain('stock.move.line', 'read', grant=True)</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+</odoo>

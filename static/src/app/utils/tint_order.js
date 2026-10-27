@@ -313,3 +313,24 @@ export async function addTintedBaseToOrder(
     }
     return parent;
 }
+
+export function isTintColorant(line) {
+    return Boolean(line?.is_tint_colorant || line?.product_id?.tint_role === "colorant" ||
+        line?.product_id?.product_tmpl_id?.tint_role === "colorant");
+}
+
+export function isTintedBase(line) {
+    return Boolean(line && !isTintColorant(line) && (line.is_tinted_base || line.tint_color_code ||
+        line.combo_line_ids?.some(isTintColorant)));
+}
+
+export function tintParent(line) {
+    const parent = line?.combo_parent_id || line;
+    return isTintedBase(parent) ? parent : null;
+}
+
+export function tintDose(child, parent) {
+    const source = child.refunded_orderline_id || child;
+    const sourceParent = source.combo_parent_id || parent.refunded_orderline_id || parent;
+    return Number(child.unit_points ?? (sourceParent.qty ? source.qty / sourceParent.qty : 0));
+}

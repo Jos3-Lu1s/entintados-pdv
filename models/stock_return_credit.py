@@ -32,14 +32,23 @@ class AccountMoveReturnCredit(models.Model):
             ('state', 'in', ('draft', 'posted')),
         ]).invoice_line_ids.filtered(lambda line: line.display_type == 'product' and line.quantity > 0)
         for credit in credits.sorted(lambda line: (not bool(line.stock_return_source_line_id), line.id)):
-            product = credit.product_id
+            product = credit.stock_return_source_line_id.product_id or credit.product_id
             candidates = lines.filtered(lambda line: line.product_id == product)
             if credit.stock_return_source_line_id:
                 candidates &= credit.stock_return_source_line_id
             elif credit.sale_line_ids:
                 candidates = candidates.filtered(lambda line: bool(line.sale_line_ids & credit.sale_line_ids))
-            remaining = (credit.product_uom_id or product.uom_id)._compute_quantity(
-                credit.quantity, product.uom_id, round=False) if product else 0
+            remaining = ((credit.stock_return_source_line_id.product_uom_id or product.uom_id)._compute_quantity(
+                credit.return_source_quantity, product.uom_id, round=False)
+                if credit.return_source_quantity else (credit.product_uom_id or product.uom_id)._compute_quantity(
+                    credit.quantity, product.uom_id, round=False)) if product else 0
+            if product and credit.move_id.customer_adjustment_id and credit.stock_return_source_line_id:
+                # A financial adjustment scales price rather than returned units.
+                # Reserve only its proportional quantity for future returns.
+                source = credit.stock_return_source_line_id
+                remaining = ((source.product_uom_id or product.uom_id)._compute_quantity(
+                    source.quantity, product.uom_id, round=False) * credit.price_subtotal / source.price_subtotal
+                    if source.price_subtotal else 0)
             for line in candidates.sorted('id'):
                 allocated = min(max(capacities[line.id], 0), remaining)
                 capacities[line.id] -= allocated
@@ -173,9 +182,10 @@ class StockPickingReturnCredit(models.Model):
                     quantities[line.id], line.product_uom_id or line.product_id.uom_id, round=False)
                 line_commands.append(Command.create({
                     'display_type': 'product', 'sequence': line.sequence,
-                    'product_id': line.product_id.id, 'name': line.name,
+                    'product_id': invoice._reajuste_product().id, 'name': 'Reajuste',
                     'account_id': line.account_id.id, 'product_uom_id': line.product_uom_id.id,
-                    'quantity': quantity, 'price_unit': line.price_unit, 'discount': line.discount,
+                    'quantity': quantity, 'return_source_quantity': quantity,
+                    'price_unit': line.price_unit, 'discount': line.discount,
                     'tax_ids': [Command.set(line.tax_ids.ids)],
                     'analytic_distribution': line.analytic_distribution,
                     'sale_line_ids': [Command.set(line.sale_line_ids.ids)],

@@ -57,3 +57,10 @@ from . import approval_demo_list
 from . import demo_activity_mail
 from . import approval_assigned_access
 from . import pos_credit_approval
+from . import demo_flow_access
+from . import customer_account_adjustment
+from . import purchase_price_warning
+from . import product_audit
+from . import business_chatter
+from . import pos_accounting_return
+from . import return_credit_navigation

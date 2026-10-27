@@ -5,6 +5,15 @@
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning" role="alert" invisible="not sale_cost_warning">
+                    <strong>Costo de compra mayor al precio de venta</strong>
+                    <field name="sale_cost_warning" readonly="1" nolabel="1" class="d-block"/>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_unit']" position="after">
+                <field name="sale_cost_warning" optional="hide" readonly="1"/>
+            </xpath>
             <xpath expr="//field[@name='partner_id']" position="attributes">
                 <attribute name="domain">[('is_purchase_contact', '=', True)]</attribute>
                 <attribute name="context">{'default_is_supplier': True, 'entintados_partner_scope': 'supplier'}</attribute>

@@ -65,6 +65,8 @@ class CrmLead(models.Model):
     def _check_can_create_quotation(self):
         if self.filtered(lambda lead: not lead.active and lead.probability == 0):
             raise UserError(_('No puedes generar una cotización para una oportunidad perdida. Reactiva la oportunidad antes de continuar.'))
+        if self.filtered(lambda lead: (lead.demo_meeting_scheduled or lead.approval_request_id) and not lead.demo_end):
+            raise UserError(_('No puedes generar una cotización mientras la demostración esté en curso. Marca "Demostración finalizada" antes de continuar.'))
 
     def action_sale_quotations_new(self):
         self._check_can_create_quotation()
@@ -98,7 +100,10 @@ class CrmLead(models.Model):
 
     def _get_demo_approvals(self):
         self.ensure_one()
-        return self.demo_approval_ids | self.approval_request_id
+        requests = self.demo_approval_ids | self.approval_request_id
+        if not self.env.su and self.env.user.has_group('entintados_pdv.group_demo_user'):
+            return requests.search([('id', 'in', requests.ids)])
+        return requests
 
     @api.depends('demo_approval_ids', 'approval_request_id')
     def _compute_demo_approval_count(self):
@@ -502,7 +507,10 @@ class CrmLead(models.Model):
 
         approvers = self._get_material_approvers()
 
-        approval_request = self.env['approval.request'].create({
+        # The seller can request a demonstration without editing approvals.
+        # All input comes from this writable opportunity and the organigram.
+        self.check_access('write')
+        approval_request = self.env['approval.request'].sudo().create({
             'category_id': category.id,
             'request_owner_id': self.user_id.id or self.env.uid,
             'partner_id': self.partner_id.id,
@@ -529,9 +537,10 @@ class CrmLead(models.Model):
 
         return {
             'type': 'ir.actions.act_window',
-            'res_model': 'approval.request',
+            'res_model': 'crm.lead',
             'view_mode': 'form',
-            'res_id': approval_request.id,
+            'res_id': self.id,
+            'target': 'current',
         }   
         
     picking_ids = fields.One2many(

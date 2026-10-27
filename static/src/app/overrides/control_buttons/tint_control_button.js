@@ -4,6 +4,10 @@ import { ControlButtons } from "@point_of_sale/app/screens/product_screen/contro
 import { runTintFlow } from "@entintados_pdv/app/utils/tint_flow";
 
 patch(ControlButtons.prototype, {
+    clickRefund() {
+        this.notification.add(_t("La opción de reembolso está bloqueada en el punto de venta."), { type: "warning" });
+        return false;
+    },
     get isTintEnabled() {
         return !this.pos.config.module_pos_restaurant;
     },

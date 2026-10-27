@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="account_move_return_navigation_form" model="ir.ui.view">
+        <field name="name">account.move.return.navigation</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_return_invoices" type="object" class="oe_stat_button" icon="fa-files-o" invisible="return_invoice_count == 0" groups="account.group_account_invoice">
+                    <field name="return_invoice_count" widget="statinfo" string="Facturas relacionadas"/>
+                </button>
+                <button name="action_return_pickings" type="object" class="oe_stat_button" icon="fa-truck" invisible="return_picking_count == 0" groups="account.group_account_invoice,stock.group_stock_user">
+                    <field name="return_picking_count" widget="statinfo" string="Devoluciones"/>
+                </button>
+                <button name="action_return_payments" type="object" class="oe_stat_button" icon="fa-money" invisible="return_payment_count == 0" groups="account.group_account_invoice">
+                    <field name="return_payment_count" widget="statinfo" string="Pagos de devolución"/>
+                </button>
+                <button name="action_return_credits" type="object" class="oe_stat_button" icon="fa-file-text-o" invisible="return_credit_count == 0" groups="account.group_account_invoice">
+                    <field name="return_credit_count" widget="statinfo" string="Notas vigentes"/>
+                </button>
+                <button name="action_return_request" type="object" class="oe_stat_button" icon="fa-exchange" invisible="not customer_adjustment_id and not pos_accounting_return_id" groups="account.group_account_invoice">
+                    <div class="o_stat_info"><span class="o_stat_text">Ajuste de origen</span></div>
+                </button>
+                <button name="action_return_ticket" type="object" class="oe_stat_button" icon="fa-ticket" invisible="not pos_accounting_return_id" groups="account.group_account_invoice">
+                    <div class="o_stat_info"><span class="o_stat_text">Ticket original</span></div>
+                </button>
+                <button name="action_return_source_entry" type="object" class="oe_stat_button" icon="fa-book" invisible="not pos_return_source_move_id" groups="account.group_account_invoice">
+                    <div class="o_stat_info"><span class="o_stat_text">Asiento original</span></div>
+                </button>
+            </xpath>
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-info mb-0" role="alert" invisible="not has_return_credit" groups="account.group_account_invoice">
+                    <field name="has_return_credit" invisible="1"/>
+                    Esta factura tiene notas de crédito vigentes. Revisa sus importes antes de generar otra devolución.
+                    <button name="action_return_credits" type="object" string="Ver notas de crédito" class="btn-link"/>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='invoice_line_ids']/list" position="inside">
+                <field name="stock_return_source_line_id" optional="hide" readonly="1"/>
+                <field name="pos_return_source_line_id" optional="hide" readonly="1"/>
+                <field name="return_source_quantity" optional="hide" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="account_invoice_return_credit_filter" model="ir.ui.view">
+        <field name="name">account.invoice.return.credit.filter</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_account_invoice_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="with_return_credit" string="Con nota de crédito vigente" domain="[('move_type', '=', 'out_invoice'), ('has_return_credit', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

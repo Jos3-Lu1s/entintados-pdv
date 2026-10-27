@@ -121,9 +121,11 @@ Catálogo de entintado
     # always loaded
     'data': [
         'security/security.xml',
+        'security/demo_flow_security.xml',
         'security/ir.model.access.csv',
         # Catálogo de entintado: datos maestros físicos
         'data/uom_data.xml',
+        'data/return_adjustment_product.xml',
         'data/tint_size_data.xml',
         'data/tint_base_type_data.xml',
         'data/tint_base_capacity_data.xml',
@@ -162,6 +164,8 @@ Catálogo de entintado
         'views/account_move_views.xml',
         'views/account_payment_register.xml',
         'views/vendor_credit_wizard_views.xml',
+        'views/customer_account_adjustment_views.xml',
+        'views/pos_accounting_return_views.xml',
         'views/account_payment_views.xml',
         'views/crm_lead_views.xml',
         'views/crm_opportunity_list_views.xml',
@@ -171,8 +175,10 @@ Catálogo de entintado
         'views/stock_picking_view.xml',
         'views/stock_demo_list_views.xml',
         'views/stock_return_credit_views.xml',
+        'views/return_credit_navigation_views.xml',
         'views/approval_request_views.xml',
         'views/approval_demo_list_views.xml',
+        'views/demo_flow_menu_views.xml',
         'views/res_users_views.xml',
         'views/account_financial_risk_view.xml',
         'views/portal_templates.xml',

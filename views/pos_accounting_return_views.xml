@@ -1,0 +1,151 @@
+<odoo>
+    <record id="seq_pos_accounting_return" model="ir.sequence">
+        <field name="name">Devolución de ticket sin factura</field>
+        <field name="code">pos.accounting.return</field>
+        <field name="prefix">DRP-</field>
+        <field name="padding">5</field>
+        <field name="implementation">no_gap</field>
+    </record>
+    <record id="pos_accounting_return_company_rule" model="ir.rule">
+        <field name="name">Devoluciones de tickets: compañías permitidas</field>
+        <field name="model_id" ref="model_pos_accounting_return"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="pos_accounting_return_line_company_rule" model="ir.rule">
+        <field name="name">Productos de devoluciones: compañías permitidas</field>
+        <field name="model_id" ref="model_pos_accounting_return_line"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="pos_accounting_ticket_read_rule" model="ir.rule">
+        <field name="name">Contabilidad: tickets elegibles o con devolución registrada</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order"/>
+        <field name="groups" eval="[(4, ref('account.group_account_invoice'))]"/>
+        <field name="domain_force">['|', ('accounting_return_eligible', '=', True), ('accounting_return_ids', '!=', False)]</field>
+        <field name="perm_write" eval="False"/><field name="perm_create" eval="False"/><field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="pos_accounting_ticket_line_read_rule" model="ir.rule">
+        <field name="name">Contabilidad: líneas de tickets para devolución</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order_line"/>
+        <field name="groups" eval="[(4, ref('account.group_account_invoice'))]"/>
+        <field name="domain_force">['|', ('order_id.accounting_return_eligible', '=', True), ('order_id.accounting_return_ids', '!=', False)]</field>
+        <field name="perm_write" eval="False"/><field name="perm_create" eval="False"/><field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="pos_accounting_payment_read_rule" model="ir.rule">
+        <field name="name">Contabilidad: cobros de tickets para devolución</field>
+        <field name="model_id" ref="point_of_sale.model_pos_payment"/>
+        <field name="groups" eval="[(4, ref('account.group_account_invoice'))]"/>
+        <field name="domain_force">['|', ('pos_order_id.accounting_return_eligible', '=', True), ('pos_order_id.accounting_return_ids', '!=', False)]</field>
+        <field name="perm_write" eval="False"/><field name="perm_create" eval="False"/><field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="pos_accounting_ticket_list" model="ir.ui.view">
+        <field name="name">pos.order.accounting.return.list</field><field name="model">pos.order</field>
+        <field name="arch" type="xml">
+            <list string="Tickets pagados sin factura" create="0" edit="0" delete="0">
+                <field name="name"/><field name="pos_reference"/><field name="date_order"/>
+                <field name="partner_id"/><field name="session_id"/><field name="accounting_source_move_id"/>
+                <field name="currency_id" column_invisible="True"/><field name="amount_total"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <button name="action_new_accounting_return" string="Crear devolución" type="object"/>
+            </list>
+        </field>
+    </record>
+    <record id="pos_accounting_ticket_form" model="ir.ui.view">
+        <field name="name">pos.order.accounting.return.form</field><field name="model">pos.order</field>
+        <field name="arch" type="xml">
+            <form string="Ticket pagado sin factura" create="0" edit="0" delete="0">
+                <header><button name="action_new_accounting_return" string="Crear devolución" type="object" class="btn-primary"/></header>
+                <sheet><group>
+                    <field name="name"/><field name="pos_reference"/><field name="date_order"/><field name="partner_id"/>
+                    <field name="session_id" options="{'no_open': True}"/><field name="accounting_source_move_id"/>
+                    <field name="currency_id" invisible="1"/><field name="amount_total"/>
+                </group><field name="lines" readonly="1"><list create="0" edit="0" delete="0">
+                    <field name="product_id"/><field name="qty"/><field name="refunded_qty"/>
+                    <field name="price_unit"/><field name="discount"/><field name="price_subtotal_incl"/>
+                </list></field></sheet>
+            </form>
+        </field>
+    </record>
+    <record id="pos_accounting_ticket_action" model="ir.actions.act_window">
+        <field name="name">Tickets pagados sin factura</field><field name="res_model">pos.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="pos_accounting_ticket_list"/>
+        <field name="domain">[('accounting_return_eligible', '=', True)]</field>
+    </record>
+    <record id="pos_accounting_ticket_action_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field><field name="view_mode">list</field>
+        <field name="view_id" ref="pos_accounting_ticket_list"/><field name="act_window_id" ref="pos_accounting_ticket_action"/>
+    </record>
+    <record id="pos_accounting_ticket_action_form" model="ir.actions.act_window.view">
+        <field name="sequence">2</field><field name="view_mode">form</field>
+        <field name="view_id" ref="pos_accounting_ticket_form"/><field name="act_window_id" ref="pos_accounting_ticket_action"/>
+    </record>
+    <record id="pos_accounting_return_form" model="ir.ui.view">
+        <field name="name">pos.accounting.return.form</field><field name="model">pos.accounting.return</field>
+        <field name="arch" type="xml">
+            <form string="Devolución de ticket sin factura">
+                <header>
+                    <button name="action_prepare_return" string="Preparar devolución al almacén" type="object" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_create_credit" string="Generar nota y devolver importe" type="object" class="btn-primary" invisible="state not in ['waiting_stock', 'returned'] or not stock_received"/>
+                    <button name="action_open_pickings" string="Ver recepciones" type="object" groups="stock.group_stock_user" invisible="not receipt_names"/>
+                    <button name="action_open_credits" string="Ver notas" type="object" invisible="not credit_ids"/>
+                    <button name="action_cancel" string="Cancelar" type="object" invisible="state not in ['draft', 'waiting_stock'] or stock_received"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,waiting_stock,returned,done"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info" role="status" invisible="state != 'waiting_stock' or stock_received">Almacén debe validar la recepción antes de generar la nota de crédito y devolver el dinero.</div>
+                    <h1><field name="name"/></h1>
+                    <group><group>
+                        <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
+                        <field name="order_id" readonly="state != 'draft'" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="source_move_id"/><field name="partner_id" readonly="state != 'draft'"/>
+                    </group><group>
+                        <field name="date" readonly="state != 'draft'"/><field name="journal_id" readonly="state != 'draft'"/>
+                        <field name="reason" readonly="state != 'draft'"/><field name="receipt_names"/>
+                        <field name="stock_received" invisible="1"/><field name="currency_id" invisible="1"/>
+                    </group></group>
+                    <field name="line_ids" readonly="state != 'draft'">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="selected"/><field name="source_line_id" column_invisible="True"/>
+                            <field name="product_id"/><field name="sold_qty"/><field name="refunded_qty"/>
+                            <field name="quantity" readonly="not selected"/>
+                            <field name="currency_id" column_invisible="True"/><field name="amount"/>
+                        </list>
+                    </field>
+                    <p>Los componentes de entintados y combos se incluyen automáticamente en la misma proporción.</p>
+                    <group class="oe_subtotal_footer oe_right"><field name="amount_total"/></group>
+                    <group string="Historial de notas" invisible="not credit_ids"><field name="credit_ids" readonly="1" nolabel="1"/></group>
+                    <group string="Historial de pagos" invisible="not payment_ids"><field name="payment_ids" readonly="1" nolabel="1"/></group>
+                </sheet><chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="pos_accounting_return_list" model="ir.ui.view">
+        <field name="name">pos.accounting.return.list</field><field name="model">pos.accounting.return</field>
+        <field name="arch" type="xml"><list><field name="name"/><field name="date"/><field name="order_id"/>
+            <field name="partner_id"/><field name="currency_id" column_invisible="True"/><field name="amount_total"/>
+            <field name="receipt_names"/><field name="state" widget="badge"/></list></field>
+    </record>
+    <record id="pos_accounting_return_action" model="ir.actions.act_window">
+        <field name="name">Devoluciones de tickets sin factura</field><field name="res_model">pos.accounting.return</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="pos_accounting_ticket_menu" name="Tickets pagados sin factura" parent="account.menu_finance_receivables"
+              action="pos_accounting_ticket_action" sequence="26" groups="account.group_account_invoice"/>
+    <menuitem id="pos_accounting_return_menu" name="Devoluciones de tickets sin factura" parent="account.menu_finance_receivables"
+              action="pos_accounting_return_action" sequence="27" groups="account.group_account_invoice"/>
+    <record id="account_move_pos_return_view" model="ir.ui.view">
+        <field name="name">account.move.pos.accounting.return</field><field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml"><xpath expr="//field[@name='invoice_origin']" position="after">
+            <field name="pos_accounting_return_id" invisible="not pos_accounting_return_id" groups="account.group_account_invoice"/>
+            <field name="pos_return_source_move_id" invisible="not pos_return_source_move_id"/>
+        </xpath></field>
+    </record>
+    <record id="stock_picking_pos_return_view" model="ir.ui.view">
+        <field name="name">stock.picking.pos.accounting.return</field><field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml"><xpath expr="//field[@name='origin']" position="after">
+            <field name="pos_accounting_return_name" invisible="not pos_accounting_return_name"/>
+        </xpath></field>
+    </record>
+</odoo>

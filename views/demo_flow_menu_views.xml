@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_demo_flow_crm" model="ir.actions.act_window">
+        <field name="name">Oportunidades de demostración</field>
+        <field name="res_model">crm.lead</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_demo_flow', '=', True)]</field>
+    </record>
+    <menuitem id="menu_demo_flow" name="Demostraciones" sequence="25"
+              groups="entintados_pdv.group_demo_user"/>
+    <menuitem id="menu_demo_flow_crm" name="CRM" parent="menu_demo_flow"
+              action="action_demo_flow_crm" sequence="10"/>
+    <menuitem id="menu_demo_flow_approvals" name="Aprobaciones" parent="menu_demo_flow"
+              action="action_approval_demo_list" sequence="20"/>
+    <menuitem id="menu_demo_flow_outputs" name="Salidas" parent="menu_demo_flow"
+              action="action_stock_demo_outputs" sequence="30"/>
+</odoo>

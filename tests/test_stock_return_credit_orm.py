@@ -61,7 +61,9 @@ def run_return_credit_checks(env):
                 'sale_line_ids': [Command.set(line.ids)],
             }) for line in lines],
         })
-        invoice.action_post()
+        # These sale-linked fixtures exercise returns, without sending CFDI.
+        with patch.object(type(invoice), '_l10n_mx_edi_cfdi_invoice_try_send', return_value=None):
+            invoice.action_post()
         return invoice
 
     invoice = invoice_for(sale_lines)
@@ -104,8 +106,8 @@ def run_return_credit_checks(env):
     assert note.reversed_entry_id == invoice and note.stock_return_picking_id == returned
     lines = note.invoice_line_ids.filtered(lambda line: line.display_type == 'product')
     source = invoice.invoice_line_ids.filtered(lambda line: line.product_id == products[0])
-    assert lines.product_id == products[0], 'La nota incluyó productos no devueltos'
-    assert len(lines) == 1 and lines.quantity == 2, 'Debe usar cantidad realizada, no demanda de tres'
+    assert lines.product_id == invoice._reajuste_product()
+    assert len(lines) == 1 and lines.quantity == 2 and lines.return_source_quantity == 2
     assert lines.price_unit == source.price_unit and lines.discount == source.discount
     assert lines.tax_ids == source.tax_ids and lines.stock_return_source_line_id == source
     assert note.currency_id.is_zero(note.amount_total - source.price_total * 2 / source.quantity)
@@ -117,7 +119,7 @@ def run_return_credit_checks(env):
     second.move_ids.picked = True
     second.with_context(skip_backorder=True, skip_sms=True).button_validate()
     assert second.return_credit_note_ids.invoice_line_ids.filtered(
-        lambda line: line.product_id == products[0]).quantity == 1
+        lambda line: line.stock_return_source_line_id == source).return_source_quantity == 1
     assert source.move_id._return_line_capacities()[source.id] == 2
 
     # Las notas previas en borrador también consumen el límite reembolsable.
@@ -156,7 +158,11 @@ def run_return_credit_checks(env):
     # Conversión entre la unidad facturada y la unidad del movimiento físico.
     source_uom = source.product_uom_id
     quantity_in_source = products[0].uom_id._compute_quantity(2, source_uom, round=False)
-    assert quantity_in_source == lines.quantity
+    assert quantity_in_source == lines.return_source_quantity
+    assert invoice.has_return_credit and invoice.return_credit_count == 2
+    assert note.action_return_invoices()['res_id'] == invoice.id
+    assert note.action_return_pickings()['res_id'] == returned.id
+    assert invoice in env['account.move'].search([('has_return_credit', '=', True)])
     return 'PASS: devolución parcial, cantidades realizadas, productos, precio/descuento/impuestos, factura original, borrador, reintentos, notas previas, límite y selección de factura.'
 
 

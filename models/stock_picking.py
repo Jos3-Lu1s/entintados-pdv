@@ -420,10 +420,13 @@ class StockPicking(models.Model):
             })
     
             if picking.crm_lead_id:
-                picking.crm_lead_id.write({
+                # Finishing an assigned output automatically completes CRM;
+                # auditors do not need general CRM write permissions.
+                lead = picking.crm_lead_id.sudo() if picking.is_crm_demo_output else picking.crm_lead_id
+                lead.write({
                     'demo_end': True,
                 })
                 if demo_activity_type:
-                    picking.crm_lead_id.activity_ids.filtered(
+                    lead.activity_ids.filtered(
                         lambda a: a.activity_type_id == demo_activity_type
                     ).action_feedback(feedback=_('Demostración finalizada, uso de material validado.'))

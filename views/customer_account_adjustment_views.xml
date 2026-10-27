@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seq_customer_account_adjustment" model="ir.sequence">
+        <field name="name">Ajuste contable de cliente</field>
+        <field name="code">customer.account.adjustment</field>
+        <field name="prefix">AJC-</field>
+        <field name="padding">5</field>
+        <field name="implementation">no_gap</field>
+    </record>
+    <record id="customer_account_adjustment_company_rule" model="ir.rule">
+        <field name="name">Ajustes de clientes: compañías permitidas</field>
+        <field name="model_id" ref="model_customer_account_adjustment"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="customer_account_adjustment_line_company_rule" model="ir.rule">
+        <field name="name">Facturas de ajustes de clientes: compañías permitidas</field>
+        <field name="model_id" ref="model_customer_account_adjustment_line"/>
+        <field name="domain_force">[('adjustment_id.company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="customer_account_adjustment_form" model="ir.ui.view">
+        <field name="name">customer.account.adjustment.form</field>
+        <field name="model">customer.account.adjustment</field>
+        <field name="arch" type="xml">
+            <form string="Ajuste contable">
+                <header>
+                    <button name="action_create_credits" type="object" string="Generar, pagar y conciliar notas" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_pay_credits" type="object" string="Pagar y conciliar notas pendientes" invisible="state != 'generated' or credit_count == 0"/>
+                    <button name="action_reload_invoices" type="object" string="Actualizar facturas" invisible="state != 'draft'"/>
+                    <button name="action_cancel" type="object" string="Cancelar ajuste" invisible="state == 'cancel'"
+                            confirm="Se cancelarán las notas de crédito y los pagos de devolución relacionados. Los cobros originales de las facturas se conservarán. ¿Continuar?"/>
+                    <button name="action_draft" type="object" string="Restablecer a borrador" invisible="state != 'cancel'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_credits" type="object" class="oe_stat_button" icon="fa-file-text-o" invisible="credit_count == 0">
+                            <field name="credit_count" widget="statinfo" string="Notas de crédito"/>
+                        </button>
+                    </div>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <div class="alert alert-warning" role="status" invisible="state != 'cancel'">Ajuste cancelado. Las notas y pagos cancelados se conservan como historial. Restablece a borrador para corregir y generar nuevas notas.</div>
+                    <group>
+                        <group string="Cliente">
+                            <field name="partner_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="currency_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                        </group>
+                        <group string="Datos del ajuste">
+                            <field name="journal_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="reason" readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+                    <p invisible="state != 'draft'">Se muestran las facturas pagadas del cliente en la compañía y moneda seleccionadas. Las facturas divididas del POS aparecen juntas: la cantidad a revertir se distribuye proporcionalmente entre sus facturas, considerando sus notas anteriores. Las notas se contabilizan y se pagan automáticamente desde los diarios del cobro original, conciliando sus pagos sin modificar el pago de la factura original.</p>
+                    <field name="line_ids" readonly="state != 'draft'">
+                        <list editable="bottom" create="0" delete="0" decoration-muted="not selected">
+                            <field name="currency_id" column_invisible="True"/>
+                            <field name="selected"/>
+                            <field name="invoice_id" readonly="1" force_save="1"/>
+                            <field name="invoice_ids" widget="many2many_tags" readonly="1" optional="show"/>
+                            <field name="invoice_total"/>
+                            <field name="amount" readonly="not selected" force_save="1"/>
+                        </list>
+                    </field>
+                    <group string="Historial de pagos de devolución" invisible="not payment_ids">
+                        <field name="payment_ids" readonly="1" nolabel="1"/>
+                    </group>
+                    <group class="oe_subtotal_footer oe_right">
+                        <field name="invoice_count" string="Facturas seleccionadas"/>
+                        <field name="amount_total"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="customer_account_adjustment_list" model="ir.ui.view">
+        <field name="name">customer.account.adjustment.list</field>
+        <field name="model">customer.account.adjustment</field>
+        <field name="arch" type="xml">
+            <list string="Ajuste contable">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="partner_id"/>
+                <field name="reason"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="currency_id" optional="hide"/>
+                <field name="amount_total"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+    <record id="customer_account_adjustment_action" model="ir.actions.act_window">
+        <field name="name">Ajuste contable</field>
+        <field name="res_model">customer.account.adjustment</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="customer_account_adjustment_menu" name="Ajuste contable" parent="account.menu_finance_receivables"
+              action="customer_account_adjustment_action" sequence="25" groups="account.group_account_invoice"/>
+    <record id="account_move_customer_adjustment_view" model="ir.ui.view">
+        <field name="name">account.move.customer.adjustment</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_origin']" position="after">
+                <field name="customer_adjustment_id" invisible="not customer_adjustment_id" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
