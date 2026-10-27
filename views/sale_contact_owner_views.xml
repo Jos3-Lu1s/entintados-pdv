@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="sale_contact_owner_form" model="ir.ui.view">
+        <field name="name">sale.order.contact.owner.readonly</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="partner_sale_contact_owner_form" model="ir.ui.view">
+        <field name="name">res.partner.sale.owner.readonly</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="pos_sale_contact_owner_form" model="ir.ui.view">
+        <field name="name">pos.order.contact.owner.readonly</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="contact_salesperson_id" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="pos_sale_contact_owner_list" model="ir.ui.view">
+        <field name="name">pos.order.contact.owner.list</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="inside">
+                <field name="contact_salesperson_id" optional="show" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="account_sale_contact_owner_form" model="ir.ui.view">
+        <field name="name">account.move.contact.owner.readonly</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_user_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

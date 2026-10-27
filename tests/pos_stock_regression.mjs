@@ -10,6 +10,8 @@ const product = { id: 1, type: 'consu', is_storable: true, pos_stock_qty: 2,
 assert.equal(requiresPosStock({ ...product, type: 'service' }), false);
 assert.equal(requiresPosStock({ ...product, is_storable: false }), false);
 assert.ok(stockError({ lines: [] }, { ...product, pos_stock_qty: 0 }, 1));
+assert.ok(stockError({ lines: [] }, { ...product, pos_stock_qty: 0 }, 0.01));
+assert.ok(stockError({ lines: [] }, { ...product, pos_stock_qty: -0.01 }, 0.01));
 assert.equal(stockError({ lines: [] }, product, -1), null);
 
 // Simula la fusión: el core mantiene ambas líneas en el ticket mientras suma.

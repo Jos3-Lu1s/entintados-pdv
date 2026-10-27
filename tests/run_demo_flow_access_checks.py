@@ -36,7 +36,7 @@ def checks(env):
     stage = env['crm.stage'].search([('stage_type', '=', 'demo')], limit=1)
     if not stage:
         stage = env['crm.stage'].create({'name': 'Demo access test', 'stage_type': 'demo'})
-    partner = env['res.partner'].create({'name': 'Demo access customer', 'phone': '5551234567'})
+    partner = env['res.partner'].create({'name': 'Demo access customer', 'phone': '5551234567', 'user_id': seller.id})
     location = env['stock.warehouse'].search([('company_id', '=', env.company.id)], limit=1).lot_stock_id
     product = env['product.product'].create({'name': 'Demo access product', 'type': 'consu', 'is_storable': True})
     env['stock.quant']._update_available_quantity(product, location, 100)
@@ -97,7 +97,9 @@ def checks(env):
         'name': 'Delivery evidence.txt', 'datas': base64.b64encode(b'Delivery evidence'),
         'res_model': 'stock.picking', 'res_id': picking.id,
     })
-    picking.with_user(auditor).write({'evidence_attachment_ids': [Command.link(attachment.id)]})
+    picking.with_user(auditor).write({'evidence_attachment_ids': [Command.link(attachment.id)],
+                                    'document_file': base64.b64encode(b'Delivery document'),
+                                    'document_filename': 'entrega.pdf'})
     assert attachment.id in picking.evidence_attachment_ids.ids
     denied(lambda: picking.with_user(seller).write({'evidence_attachment_ids': [Command.clear()]}))
     audited = picking.with_user(auditor).with_context(skip_sms=True, skip_backorder=True)

@@ -1,5 +1,6 @@
 """Devolución de ticket cerrado no facturado; todos los cambios se revierten."""
 import logging
+from unittest.mock import patch
 import test_stock_return_credit_orm as runner
 
 
@@ -72,16 +73,15 @@ def checks(env):
     assert request.amount_total == 100 and request.source_move_id == closing
     rejected(request.action_create_credit)
     request.action_prepare_return()
-    assert request.state == 'waiting_stock'
+    assert request.state == 'returned' and request.stock_received
     assert order.lines.refunded_qty == 1
     picking = request.picking_ids
     assert picking and picking.move_ids.origin_returned_move_id in original.move_ids
-    rejected(request.action_create_credit)
     rejected(lambda: request.write({'reason': 'No editable'}))
     rejected(order._generate_pos_order_invoice)
-    picking.move_ids.quantity = 1
-    picking.move_ids.picked = True
-    picking.with_context(skip_backorder=True, skip_sms=True).button_validate()
+    assert picking.state == 'done' and product.with_context(location=stock.id).qty_available == 9
+    request.action_prepare_return()
+    assert request.picking_ids == picking and picking.move_ids.quantity == 1
     request.action_create_credit()
     credit = request.credit_ids
     assert request.state == 'done' and credit.move_type == 'out_refund'
@@ -111,12 +111,27 @@ def checks(env):
                 'source_line_id': order.lines.id, 'selected': True, 'quantity': qty})]})
 
     rejected(draft_return(2).action_prepare_return)
+    failed = draft_return()
+    previous_stock = product.with_context(location=stock.id).qty_available
+    with patch.object(type(env['stock.picking']), 'button_validate', return_value={'res_model': 'stock.backorder.confirmation'}):
+        rejected(failed.action_prepare_return)
+    assert failed.state == 'draft' and not failed.picking_ids and not failed.credit_ids
+    assert product.with_context(location=stock.id).qty_available == previous_stock
+    failed.action_cancel()
     pending = draft_return()
-    pending.action_prepare_return()
-    assert order.lines.refunded_qty == 2
-    rejected(draft_return().action_prepare_return)
+    class UndoReceipt(Exception):
+        pass
+    try:
+        with env.cr.savepoint():
+            pending.action_prepare_return()
+            assert order.lines.refunded_qty == 2 and pending.picking_ids.state == 'done'
+            rejected(draft_return().action_prepare_return)
+            rejected(pending.action_cancel)
+            raise UndoReceipt()
+    except UndoReceipt:
+        pass
     pending.action_cancel()
-    assert pending.picking_ids.state == 'cancel' and order.lines.refunded_qty == 1
+    assert not pending.picking_ids and order.lines.refunded_qty == 1
 
     def reject_changed_source(values):
         def attempt():
@@ -148,9 +163,7 @@ def checks(env):
     final_return.action_prepare_return()
     warehouse_picking = final_return.sudo().picking_ids.with_user(warehouse_user)
     assert warehouse_picking.read(['pos_accounting_return_name'])[0]['pos_accounting_return_name'] == final_return.name
-    warehouse_picking.move_ids.quantity = 1
-    warehouse_picking.move_ids.picked = True
-    warehouse_picking.with_context(skip_backorder=True, skip_sms=True).button_validate()
+    assert warehouse_picking.state == 'done' and final_return.state == 'returned'
     final_return.action_create_credit()
     assert final_return.state == 'done' and final_return.credit_ids.amount_residual == 0
     assert order.lines.refunded_qty == 2 and product.with_context(location=stock.id).qty_available == 10
@@ -158,10 +171,11 @@ def checks(env):
 
     # Entintado: devolver la base trae sus dosis y sus importes proporcionalmente.
     colorant = env['product.product'].create({'name': 'QA colorante devolución', 'default_code': 'QA-RETURN-TINT',
-        'is_storable': True, 'tint_role': 'colorant', 'uom_id': env.ref('entintados_pdv.uom_tint_point').id,
+        'is_storable': True, 'tracking': 'lot', 'tint_role': 'colorant', 'uom_id': env.ref('entintados_pdv.uom_tint_point').id,
         'property_account_income_id': income.id,
         'taxes_id': [Command.clear()], 'supplier_taxes_id': [Command.clear()]})
-    env['stock.quant']._update_available_quantity(colorant, stock, 100)
+    colorant_lot = env['stock.lot'].create({'name': 'QA-RETURN-TINT-LOT', 'product_id': colorant.id})
+    env['stock.quant']._update_available_quantity(colorant, stock, 100, lot_id=colorant_lot)
     tint_session = env['pos.session'].create({'config_id': config.id, 'user_id': env.uid})
     tint_session.state = 'opened'
     tint_order = env['pos.order'].create({'session_id': tint_session.id, 'partner_id': partner.id,
@@ -172,6 +186,7 @@ def checks(env):
             'price_subtotal': 30, 'price_subtotal_incl': 30, 'tax_ids': [Command.clear()]})]})
     root = tint_order.lines.filtered(lambda l: l.product_id == product)
     child = tint_order.lines.filtered(lambda l: l.product_id == colorant)
+    child.pack_lot_ids = [Command.create({'lot_name': colorant_lot.name})]
     child.combo_parent_id = root
     env['pos.payment'].create({'pos_order_id': tint_order.id, 'payment_method_id': method.id, 'amount': 230})
     tint_original = env['stock.picking']._create_picking_from_pos_order_lines(
@@ -188,27 +203,32 @@ def checks(env):
     assert tint_return.amount_total == 115
     tint_return.action_prepare_return()
     assert root.refunded_qty == 1 and child.refunded_qty == 3
-    first_receipt = tint_return.picking_ids.with_user(warehouse_user)
-    for move in first_receipt.move_ids:
-        move.quantity = 1
-        move.picked = True
-    first_receipt.with_context(skip_backorder=True, skip_sms=True).button_validate()
-    assert len(tint_return.picking_ids) == 2 and tint_return.state == 'waiting_stock'
-    rejected(tint_return.action_create_credit)
-    backorder = (tint_return.picking_ids - first_receipt).with_user(warehouse_user)
-    for move in backorder.move_ids:
-        move.quantity = move.product_uom_qty
-        move.picked = True
-    backorder.with_context(skip_backorder=True, skip_sms=True).button_validate()
+    assert len(tint_return.picking_ids) == 1 and tint_return.picking_ids.state == 'done'
+    assert tint_return.picking_ids.move_line_ids.filtered(lambda l: l.product_id == colorant).lot_id == colorant_lot
     assert tint_return.state == 'returned'
     tint_return.action_create_credit()
     assert tint_return.credit_ids.amount_total == 115 and tint_return.credit_ids.amount_residual == 0
     assert tint_return.credit_ids.invoice_line_ids.filtered(lambda l: l.pos_return_source_line_id == child).return_source_quantity == 3
     assert tint_return.credit_ids.invoice_line_ids.product_id == env['account.move']._reajuste_product()
-    assert tint_return.credit_ids.return_picking_count == 2
+    assert tint_return.credit_ids.return_picking_count == 1
     assert tint_return.credit_ids.action_return_ticket()['res_id'] == tint_order.id
     assert tint_return.credit_ids.return_payment_count == 1
     assert colorant.with_context(location=stock.id).qty_available == 97
+    # Existing pending returns/backorders also finish without a second manual receipt.
+    legacy = env['pos.accounting.return'].create({'order_id': tint_order.id, 'partner_id': partner.id,
+        'journal_id': sales.id, 'reason': 'Recepción anterior pendiente', 'line_ids': [Command.create({
+            'source_line_id': root.id, 'selected': True, 'quantity': 1})]})
+    with patch.object(type(legacy), '_auto_validate_return_pickings', return_value=None):
+        legacy.action_prepare_return()
+    first_receipt = legacy.picking_ids.with_user(warehouse_user)
+    for move in first_receipt.move_ids:
+        move.quantity = 1
+        move.picked = True
+    first_receipt.with_context(skip_backorder=True, skip_sms=True).button_validate()
+    assert len(legacy.picking_ids) == 2 and legacy.state == 'waiting_stock'
+    legacy.action_prepare_return()
+    assert legacy.state == 'returned' and all(p.state == 'done' for p in legacy.picking_ids)
+    assert colorant.with_context(location=stock.id).qty_available == 100
     # Impuestos y descuento: corregir solo las cuentas del ticket dentro del cierre.
     vat = account('PRVAT', 'liability_current')
     tax = env['account.tax'].create({'name': 'QA IVA devolución 16', 'amount': 16, 'type_tax_use': 'sale'})
@@ -236,15 +256,56 @@ def checks(env):
         'journal_id': sales.id, 'reason': 'Devolución con descuento e IVA', 'line_ids': [Command.create({
             'source_line_id': tax_order.lines.id, 'selected': True, 'quantity': 1})]})
     tax_return.action_prepare_return()
-    tax_return.picking_ids.move_ids.quantity = 1
-    tax_return.picking_ids.move_ids.picked = True
-    tax_return.picking_ids.with_context(skip_backorder=True, skip_sms=True).button_validate()
+    assert tax_return.picking_ids.state == 'done' and tax_return.stock_received
     tax_return.action_create_credit()
     assert tax_return.credit_ids.amount_total == 104.4 and tax_return.credit_ids.amount_residual == 0
     assert tax_return.credit_ids.amount_tax == 14.4
     assert tax_return.credit_ids.invoice_line_ids.account_id == income
     assert tax_return.credit_ids.line_ids.filtered('tax_line_id').account_id == vat
-    return 'PASS: pagados sin factura individual/dividida/global, entrega parcial, límites/reservas, permisos contabilidad/almacén/caja, nota/pago conciliado, cancelación/regeneración sin duplicar inventario y entintados proporcionales.'
+    # Partial serial returns identify the sold serial, without validating a receipt manually.
+    serial_product = env['product.product'].create({'name': 'QA producto serial', 'is_storable': True,
+        'tracking': 'serial', 'property_account_income_id': income.id, 'taxes_id': [Command.clear()]})
+    serials = env['stock.lot'].create([{'name': 'QA-RETURN-SERIAL-%s' % i, 'product_id': serial_product.id} for i in (1, 2)])
+    for lot in serials:
+        env['stock.quant']._update_available_quantity(serial_product, stock, 1, lot_id=lot)
+    serial_session = env['pos.session'].create({'config_id': config.id, 'user_id': env.uid})
+    serial_session.state = 'opened'
+    serial_order = env['pos.order'].create({'session_id': serial_session.id, 'partner_id': partner.id,
+        'state': 'paid', 'amount_total': 20, 'amount_tax': 0, 'amount_paid': 20, 'amount_return': 0,
+        'lines': [Command.create({'product_id': serial_product.id, 'qty': 2, 'price_unit': 10,
+            'price_subtotal': 20, 'price_subtotal_incl': 20, 'tax_ids': [Command.clear()],
+            'pack_lot_ids': [Command.create({'lot_name': lot.name}) for lot in serials]})]})
+    env['pos.payment'].create({'pos_order_id': serial_order.id, 'payment_method_id': method.id, 'amount': 20})
+    serial_delivery = env['stock.picking']._create_picking_from_pos_order_lines(
+        partner.property_stock_customer.id, serial_order.lines, config.picking_type_id, partner)
+    serial_delivery.write({'pos_order_id': serial_order.id, 'pos_session_id': serial_session.id})
+    serial_closing = env['account.move'].create({'journal_id': general.id, 'line_ids': [
+        Command.create({'account_id': cash.id, 'debit': 20}), Command.create({'account_id': income.id, 'credit': 20})]})
+    serial_closing.action_post()
+    serial_session.write({'state': 'closed', 'move_id': serial_closing.id})
+    serial_order.state = 'done'
+    serial_return = env['pos.accounting.return'].create({'order_id': serial_order.id, 'partner_id': partner.id,
+        'journal_id': sales.id, 'reason': 'Serie parcial', 'line_ids': [Command.create({
+            'source_line_id': serial_order.lines.id, 'selected': True, 'quantity': 1})]})
+    rejected(serial_return.action_prepare_return)
+    assert serial_return.state == 'draft' and not serial_return.picking_ids
+    serial_return.return_lot_names = 'UNSOLD-SERIAL'
+    rejected(serial_return.action_prepare_return)
+    serial_return.return_lot_names = serials[1].name
+    serial_return.action_prepare_return()
+    assert serial_return.picking_ids.state == 'done'
+    assert serial_return.picking_ids.move_line_ids.lot_id == serials[1]
+    assert not serial_return.credit_ids
+    rejected(lambda: serial_return.write({'return_lot_names': serials[0].name}))
+    serial_return.action_create_credit()
+    assert serial_return.credit_ids.amount_total == 10 and not serial_return.credit_ids.amount_residual
+    remaining_serial = env['pos.accounting.return'].create({'order_id': serial_order.id, 'partner_id': partner.id,
+        'journal_id': sales.id, 'reason': 'Serie restante', 'line_ids': [Command.create({
+            'source_line_id': serial_order.lines.id, 'selected': True, 'quantity': 1})]})
+    remaining_serial.action_prepare_return()
+    assert remaining_serial.picking_ids.move_line_ids.lot_id == serials[0]
+    assert serial_product.with_context(location=stock.id).qty_available == 2
+    return 'PASS: recepciones automáticas, parciales, lotes/series originales, rollback ante errores, pendientes anteriores, permisos contabilidad/almacén/caja, nota/pago conciliado, reintentos y entintados proporcionales.'
 
 
 if __name__ == '__main__':

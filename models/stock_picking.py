@@ -177,7 +177,8 @@ class StockPicking(models.Model):
         for picking in self:
             picking.can_validate_material_evidence = picking.company_id.id in allowed_companies
 
-    def _check_material_evidence_validation(self, use=False):
+    def _check_material_evidence_validation(self, use=False, values=None):
+        values = values or {}
         for picking in self:
             if not picking.can_validate_material_evidence:
                 raise UserError(_('Solo personal de Auditoría o Auxiliar de Auditoría puede validar las evidencias.'))
@@ -191,6 +192,10 @@ class StockPicking(models.Model):
             else:
                 if picking.state not in ('assigned', 'done'):
                     raise UserError(_("Solo se puede validar la entrega de salidas en estado 'Listo' o 'Hecho'."))
+                document = (values['document_file'] if 'document_file' in values
+                            else picking.with_context(bin_size=False).document_file)
+                if not document:
+                    raise UserError(_('Debe subir el Documento de entrega de material antes de validar las evidencias de entrega.'))
                 if not picking.evidence_attachment_ids:
                     raise UserError(_('Debe adjuntar al menos una evidencia de entrega antes de validar la entrega.'))
 
@@ -206,7 +211,7 @@ class StockPicking(models.Model):
         if {'document_file', 'document_filename'}.intersection(vals) and self.filtered('validate_delivery'):
             raise UserError(_('No se puede modificar el documento después de validar la entrega.'))
         if vals.get('validate_delivery'):
-            self._check_material_evidence_validation()
+            self._check_material_evidence_validation(values=vals)
         if vals.get('validate_material_use'):
             self._check_material_evidence_validation(use=True)
         return super().write(vals)

@@ -29,10 +29,15 @@ class PosAccountingReturn(models.Model):
     partner_id = fields.Many2one('res.partner', string='Cliente', required=True, check_company=True, tracking=True)
     date = fields.Date(string='Fecha', default=fields.Date.context_today, required=True, tracking=True)
     reason = fields.Char(string='Motivo', required=True, tracking=True)
+    return_lot_names = fields.Text(
+        string='Lotes o series devueltos', tracking=True,
+        help='Opcional si el lote es único. En devoluciones parciales con varios lotes o series, '
+             'captura los identificadores que regresan, uno por renglón. Para cantidades '
+             'parciales de distintos lotes, registra una devolución por lote.')
     journal_id = fields.Many2one('account.journal', string='Diario de notas de crédito', required=True,
                                 check_company=True, tracking=True, domain="[('type', '=', 'sale'), ('company_id', '=', company_id)]")
-    state = fields.Selection([('draft', 'Borrador'), ('waiting_stock', 'Esperando recepción'),
-                              ('returned', 'Recibido / pendiente de nota'), ('done', 'Completado'), ('cancel', 'Cancelado')],
+    state = fields.Selection([('draft', 'Borrador'), ('waiting_stock', 'Pendiente de recepción automática'),
+                              ('returned', 'Inventario actualizado / pendiente de nota'), ('done', 'Completado'), ('cancel', 'Cancelado')],
                              default='draft', readonly=True, copy=False, required=True, tracking=True)
     line_ids = fields.One2many('pos.accounting.return.line', 'return_id', string='Productos', copy=False)
     picking_ids = fields.One2many('stock.picking', 'pos_accounting_return_id', readonly=True, string='Recepciones')
@@ -77,6 +82,8 @@ class PosAccountingReturn(models.Model):
     def write(self, vals):
         if 'state' in vals:
             raise UserError(_('Usa los botones de la devolución para cambiar su etapa.'))
+        if 'return_lot_names' in vals and any(r.state not in ('draft', 'waiting_stock') for r in self):
+            raise UserError(_('Los lotes o series solo pueden capturarse antes de recibir la devolución.'))
         if set(vals) & {'order_id', 'partner_id', 'company_id', 'date', 'reason', 'journal_id', 'line_ids'}:
             self._check_editable()
         return super().write(vals)
@@ -127,7 +134,21 @@ class PosAccountingReturn(models.Model):
                 raise UserError(_('La cantidad de %s debe ser positiva y no superar lo pendiente de devolver.') % line.product_id.display_name)
         if self.currency_id.compare_amounts(self.amount_total, 0) <= 0:
             raise UserError(_('El importe a devolver debe ser positivo.'))
-        return self._expanded_lines()
+        expanded = self._expanded_lines()
+        names = self._selected_return_lot_names()
+        if names:
+            delivered = self.order_id.sudo().picking_ids.move_ids.filtered(
+                lambda m: m.state == 'done' and m.location_dest_id.usage == 'customer'
+                and m.product_id.id in {line.product_id.id for line, qty in expanded})
+            known = set(delivered.move_line_ids.lot_id.mapped('name'))
+            if names - known:
+                raise UserError(_('Estos lotes o series no pertenecen a los productos entregados en el ticket: %s')
+                                % ', '.join(sorted(names - known)))
+        return expanded
+
+    def _selected_return_lot_names(self):
+        self.ensure_one()
+        return {name.strip() for name in (self.return_lot_names or '').splitlines() if name.strip()}
 
     def _payment_distribution(self):
         weights = defaultdict(float)
@@ -151,6 +172,12 @@ class PosAccountingReturn(models.Model):
         self.ensure_one()
         self.env['res.company']._with_locked_records(self)
         self.invalidate_recordset()
+        if self.state == 'waiting_stock':
+            self.env['res.company']._with_locked_records(self.order_id)
+            self._validate_source(quantities=False)
+            self._payment_distribution()
+            self._auto_validate_return_pickings()
+            return True
         if self.state != 'draft':
             return True
         self.env['res.company']._with_locked_records(self.order_id)
@@ -177,6 +204,19 @@ class PosAccountingReturn(models.Model):
                                 for m in original.returned_move_ids.filtered(lambda m: m.state != 'cancel'))
                     capacity = max(original.quantity - taken, 0)
                     capacity = original.product_uom._compute_quantity(capacity, product.uom_id, round=False)
+                    selected_names = self._selected_return_lot_names()
+                    if selected_names and product.tracking != 'none':
+                        product_lots = moves.filtered(lambda m: m.product_id == product).move_line_ids.lot_id
+                        product_names = selected_names & set(product_lots.mapped('name'))
+                        if product_names:
+                            selected_lines = original.move_line_ids.filtered(lambda l: l.lot_id.name in product_names)
+                            selected_quantity = sum(l.product_uom_id._compute_quantity(
+                                l.quantity, product.uom_id, round=False) for l in selected_lines)
+                            used_lines = original.returned_move_ids.filtered(
+                                lambda m: m.state != 'cancel').move_line_ids.filtered(lambda l: l.lot_id.name in product_names)
+                            selected_quantity -= sum(l.product_uom_id._compute_quantity(
+                                l.quantity, product.uom_id, round=False) for l in used_lines)
+                            capacity = min(capacity, max(selected_quantity, 0))
                     qty = min(requested[product.id], capacity)
                     row.quantity = product.uom_id._compute_quantity(qty, row.uom_id, round=False)
                     requested[product.id] -= qty
@@ -190,12 +230,80 @@ class PosAccountingReturn(models.Model):
             if not self.sudo().picking_ids:
                 raise UserError(_('No hay productos físicos entregados para devolver.'))
             super(PosAccountingReturn, self).write({'state': 'waiting_stock'})
+            self._auto_validate_return_pickings()
         return True
+
+    def _auto_validate_return_pickings(self):
+        """Only this authorized ticket return receives stock automatically."""
+        self.ensure_one()
+        pickings = self.sudo().picking_ids
+        if not pickings or pickings.filtered(lambda p: p.state == 'cancel'):
+            raise UserError(_('No se puede completar la devolución: falta una recepción válida de inventario.'))
+        pending = pickings.filtered(lambda p: p.state != 'done').sorted('id')
+        self.env['res.company']._with_locked_records(pending)
+        for picking in pending:
+            for move in picking.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+                original = move.origin_returned_move_id
+                if (not original or original.picking_id.pos_order_id != self.order_id
+                        or move.location_id.usage != 'customer' or move.location_dest_id.usage != 'internal'):
+                    raise UserError(_('La recepción no corresponde a una entrega original del ticket.'))
+                if move.product_id.tracking != 'none':
+                    self._prepare_return_tracking(move)
+                else:
+                    move.quantity = move.product_uom_qty
+                move.picked = True
+            picking.with_context(skip_stock_return_credit=True, skip_sms=True,
+                                 skip_backorder=True).button_validate()
+        if any(p.state != 'done' for p in pickings):
+            raise UserError(_('No se pudo validar automáticamente toda la devolución de inventario.'))
+        self._check_received_quantities()
+        if self.state == 'waiting_stock':
+            super(PosAccountingReturn, self).write({'state': 'returned'})
+
+    def _prepare_return_tracking(self, move):
+        """Reuse an unambiguous original lot/serial, never invent traceability."""
+        original = move.origin_returned_move_id
+        capacities = defaultdict(float)
+        for line in original.move_line_ids.filtered(lambda l: l.state == 'done' and l.quantity > 0):
+            if not line.lot_id:
+                raise UserError(_('La entrega original de %s no tiene lote o serie.') % move.product_id.display_name)
+            capacities[(line.lot_id.id, line.owner_id.id)] += line.product_uom_id._compute_quantity(
+                line.quantity, move.product_id.uom_id, round=False)
+        previous = original.returned_move_ids.filtered(lambda m: m.state == 'done' and m != move)
+        for line in previous.move_line_ids:
+            capacities[(line.lot_id.id, line.owner_id.id)] -= line.product_uom_id._compute_quantity(
+                line.quantity, move.product_id.uom_id, round=False)
+        available = {key: qty for key, qty in capacities.items() if move.product_id.uom_id.compare(qty, 0) > 0}
+        selected_names = self._selected_return_lot_names()
+        matching = {key: qty for key, qty in available.items()
+                    if self.env['stock.lot'].sudo().browse(key[0]).name in selected_names}
+        original_names = {self.env['stock.lot'].sudo().browse(key[0]).name for key in capacities}
+        if selected_names & original_names:
+            available = matching
+        quantity = move.product_uom._compute_quantity(move.product_uom_qty, move.product_id.uom_id, round=False)
+        if (not available or move.product_id.uom_id.compare(quantity, sum(available.values())) > 0
+                or (len(available) > 1 and move.product_id.uom_id.compare(quantity, sum(available.values())) != 0)):
+            raise UserError(_(
+                'No se puede identificar automáticamente el lote o serie de %(product)s para una devolución parcial. '
+                'Captura los identificadores correspondientes en «Lotes o series devueltos» y vuelve a registrar la devolución.',
+                product=move.product_id.display_name))
+        # Discard customer-location reservations that may belong to a different sale.
+        move.move_line_ids.unlink()
+        for (lot_id, owner_id), available_quantity in available.items():
+            allocated = min(quantity, available_quantity)
+            self.env['stock.move.line'].sudo().create({
+                'move_id': move.id, 'picking_id': move.picking_id.id, 'company_id': move.company_id.id,
+                'product_id': move.product_id.id, 'product_uom_id': move.product_uom.id,
+                'quantity': move.product_id.uom_id._compute_quantity(allocated, move.product_uom, round=False),
+                'lot_id': lot_id, 'owner_id': owner_id,
+                'location_id': move.location_id.id, 'location_dest_id': move.location_dest_id.id,
+            })
+            quantity -= allocated
 
     def _check_received_quantities(self):
         pickings = self.sudo().picking_ids
         if not pickings or any(p.state != 'done' for p in pickings):
-            raise UserError(_('Almacén debe validar primero todas las recepciones de devolución.'))
+            raise UserError(_('Registra primero la devolución para actualizar automáticamente el inventario.'))
         expected, actual = defaultdict(float), defaultdict(float)
         for line, qty in self._expanded_lines():
             if line.product_id.type == 'consu':

@@ -5,6 +5,11 @@
         <field name="arch" type="xml">
             <form string="Seleccionar contacto">
                 <field name="lead_id" invisible="1"/>
+                <field name="uses_generic_rfc" invisible="1"/>
+                <div class="alert alert-warning" role="alert" invisible="action_type != 'create' or not uses_generic_rfc">
+                    Este contacto no se podrá facturar a su nombre hasta que se capture su RFC propio y sus datos fiscales.
+                    Puedes continuar con la demostración. Si dejas el RFC vacío, el contacto se creará con el RFC genérico XAXX010101000.
+                </div>
                 <group>
                     <field name="action_type" widget="radio"/>
                     <field name="partner_name"
@@ -13,6 +18,7 @@
                     <field name="partner_phone"
                            invisible="action_type != 'create'"
                            required="action_type == 'create'"/>
+                    <field name="partner_vat" invisible="action_type != 'create'" placeholder="Opcional: RFC del cliente"/>
                     <field name="partner_id"
                            invisible="action_type != 'existing'"
                            required="action_type == 'existing'"/>

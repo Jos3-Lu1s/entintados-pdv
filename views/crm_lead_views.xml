@@ -42,7 +42,7 @@
                     <group>
                         <field name="material_line_ids" nolabel="1" readonly="approval_request_id">
                             <list string="Solicitudes de materiales" editable="bottom">
-                                <field name="product_id"/>
+                                <field name="product_id" widget="crm_material_product"/>
                                 <field name="code_product"/>
                                 <field name="quantity"/>
                                 <field name="uom_id" readonly="1" force_save="1"/>

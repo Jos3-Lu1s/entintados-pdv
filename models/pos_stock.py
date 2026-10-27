@@ -65,11 +65,12 @@ class PosOrder(models.Model):
             quantities = defaultdict(float)
             for line in order.lines.filtered(
                     lambda l: l.qty > 0 and l.product_id.type == 'consu' and l.product_id.is_storable):
-                quantities[line.product_id] += line.qty
+                quantities[line.product_id] += line.product_uom_id._compute_quantity(
+                    line.qty, line.product_id.uom_id, round=False)
             for product, quantity in quantities.items():
                 stock_product = product.with_company(order.company_id).with_context(
                     location=order.config_id.picking_type_id.default_location_src_id.id)
-                if float_compare(quantity, stock_product.free_qty,
+                if stock_product.free_qty <= 0 or float_compare(quantity, stock_product.free_qty,
                                  precision_rounding=product.uom_id.rounding) > 0:
                     raise UserError(_(
                         'Existencias insuficientes para %(product)s. Disponibles: %(stock)s; solicitadas: %(qty)s.',

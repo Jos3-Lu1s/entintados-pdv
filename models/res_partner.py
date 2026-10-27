@@ -238,7 +238,7 @@ class ResPartner(models.Model):
 
     def _raise_vat_duplicate_error(self, vat, duplicate):
         raise ValidationError(_(
-            'Ya existe un contacto activo con el mismo RFC/VAT (%(vat)s): '
+            'Ya existe un contacto con el mismo RFC/VAT (%(vat)s): '
             '"%(name)s" (ID %(id)s).\n'
             'Verifica si es el mismo cliente o proveedor antes de crear uno '
             'nuevo. Si de verdad son duplicados, usa la herramienta de '
@@ -273,6 +273,7 @@ class ResPartner(models.Model):
         ):
             self._raise_commercial_discount_access()
 
+        seen_vats = set()
         for vals in vals_list:
             # Normalizar y validar RFC/VAT duplicado
             if isinstance(vals.get('vat'), str):
@@ -280,6 +281,9 @@ class ResPartner(models.Model):
                 vals['vat'] = vat
 
                 if vat:
+                    if vat not in GENERIC_RFCS and vat in seen_vats:
+                        raise ValidationError(_('No puedes crear varios contactos con el mismo RFC (%s).') % vat)
+                    seen_vats.add(vat)
                     duplicate = self._find_duplicate_by_vat(vat)
 
                     if duplicate:
@@ -311,7 +315,15 @@ class ResPartner(models.Model):
         if 'vat' in vals and isinstance(vals['vat'], str):
             vat = vals['vat'].strip().upper()
             vals['vat'] = vat
+            if vat and vat not in GENERIC_RFCS and len(self) > 1:
+                raise ValidationError(_('No puedes asignar el mismo RFC (%s) a varios contactos.') % vat)
             for partner in self:
+                duplicate = self._find_duplicate_by_vat(vat, exclude_ids=partner.ids)
+                if duplicate:
+                    self._raise_vat_duplicate_error(vat, duplicate)
+        if vals.get('active'):
+            for partner in self:
+                vat = vals.get('vat', partner.vat)
                 duplicate = self._find_duplicate_by_vat(vat, exclude_ids=partner.ids)
                 if duplicate:
                     self._raise_vat_duplicate_error(vat, duplicate)
@@ -385,10 +397,10 @@ class ResPartner(models.Model):
         vat = (vat or '').strip()
         if not vat or vat.upper() in GENERIC_RFCS:
             return self.browse()
-        domain = [('vat', '=ilike', vat), ('active', '=', True)]
+        domain = [('vat', '=ilike', vat)]
         if exclude_ids:
             domain.append(('id', 'not in', exclude_ids))
-        return self.sudo().search(domain, limit=1)
+        return self.sudo().with_context(active_test=False).search(domain, limit=1)
 
     @api.constrains('discount')
     def _check_discount_range(self):

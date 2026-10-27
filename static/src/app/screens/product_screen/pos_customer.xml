@@ -6,6 +6,9 @@
             <attribute name="class" add="position-relative" separator=" "/>
         </xpath>
         <xpath expr="//div[hasclass('rightpane')]" position="inside">
+            <div t-if="pos.getOrder()?.partner_id" class="px-3 py-1 small text-muted" role="status">
+                Vendedor: <span t-esc="pos.getOrder().partner_id.sale_owner_name || 'Sin vendedor asignado'"/>
+            </div>
             <div t-if="!pos.getOrder()?.partner_id and !pos.scanning"
                  class="o-pos-customer-gate position-absolute bg-view d-flex flex-column align-items-center justify-content-center text-center p-4"
                  role="region"

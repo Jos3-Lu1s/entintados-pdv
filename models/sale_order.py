@@ -380,16 +380,23 @@ class SaleOrder(models.Model):
     def _check_stock_availability(self):
         for order in self:
             insufficient_lines = []
+            quantities = {}
             for line in order.order_lines_for_stock_check():
-                available = line.product_id.with_context(
-                    warehouse=order.warehouse_id.id
-                ).qty_available
-                if line.product_uom_qty > available:
+                if line.product_uom_qty <= 0:
+                    continue
+                product = line.product_id
+                quantities[product] = quantities.get(product, 0) + line.product_uom_id._compute_quantity(
+                    line.product_uom_qty, product.uom_id, round=False)
+            for product, quantity in quantities.items():
+                available = product.with_company(order.company_id).with_context(
+                    warehouse_id=order.warehouse_id.id, warehouse=order.warehouse_id.id
+                ).free_qty
+                if available <= 0 or product.uom_id.compare(quantity, available) > 0:
                     insufficient_lines.append(_(
                         '%(product)s: solicitado %(qty)s, disponible %(available)s'
                     ) % {
-                        'product': line.product_id.display_name,
-                        'qty': line.product_uom_qty,
+                        'product': product.display_name,
+                        'qty': quantity,
                         'available': available,
                     })
             if insufficient_lines:

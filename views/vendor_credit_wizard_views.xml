@@ -80,6 +80,7 @@
                         <field name="invoice_id" readonly="1" force_save="1"/>
                         <field name="residual"/>
                         <field name="amount" readonly="not selected" force_save="1"/>
+                        <field name="invoice_total" readonly="1"/>
                     </list>
                 </field>
                 <group class="oe_subtotal_footer oe_right mt-3">

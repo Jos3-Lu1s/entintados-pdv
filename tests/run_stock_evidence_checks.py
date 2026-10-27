@@ -32,7 +32,7 @@ def checks(env):
     picking = env['stock.picking'].create({
         'picking_type_id': warehouse.out_type_id.id, 'location_id': warehouse.lot_stock_id.id,
         'location_dest_id': env.ref('stock.stock_location_customers').id,
-        'document_file': b'ZG9jdW1lbnRv', 'document_filename': 'entrega.pdf',
+        'document_filename': 'entrega.pdf',
         'move_ids': [Command.create({'product_id': product.id, 'product_uom_qty': 1,
                                      'product_uom': product.uom_id.id})],
     })
@@ -58,6 +58,14 @@ def checks(env):
     attachment = env['ir.attachment'].create({'name': 'Evidencia.pdf', 'datas': b'ZXZpZGVuY2lh',
                                              'res_model': 'stock.picking', 'res_id': picking.id})
     picking.evidence_attachment_ids = [Command.link(attachment.id)]
+    # A filename and delivery attachments do not replace the mandatory binary.
+    rejected(helper.action_validate_delivery)
+    rejected(lambda: helper.write({'validate_delivery': True}))
+    assert not picking.validate_delivery and not picking.document_file
+    picking.document_file = b'ZG9jdW1lbnRv'
+    # Validate the effective new value, not a document being removed in this write.
+    rejected(lambda: helper.write({'document_file': False, 'validate_delivery': True}))
+    assert picking.document_file and not picking.validate_delivery
     rejected(outsider.action_validate_delivery)
     rejected(lambda: outsider.write({'validate_delivery': True}))
     rejected(lambda: picking.write({'evidence_use_attachment_ids': [Command.link(attachment.id)]}))
@@ -75,7 +83,7 @@ def checks(env):
     rejected(outsider.action_validate_material_use)
     auditor.action_validate_material_use()
     assert picking.validate_material_use
-    return 'PASS: vista, departamentos, entrega desde Listo, documento bloqueado, permisos y uso en Hecho.'
+    return 'PASS: documento binario obligatorio, nombre/adjuntos insuficientes, validación por botón/RPC, eliminación simultánea bloqueada, permisos y uso en Hecho.'
 
 
 if __name__ == '__main__':

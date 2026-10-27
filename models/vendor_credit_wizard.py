@@ -247,6 +247,7 @@ class VendorCreditGroupLine(models.Model):
     currency_id = fields.Many2one(related='group_id.currency_id')
     residual = fields.Monetary(related='invoice_id.amount_residual', string='Saldo pendiente', readonly=True)
     amount = fields.Monetary(string='Importe a acreditar (con impuestos)', required=True)
+    invoice_total = fields.Monetary(related='invoice_id.amount_total', string='Importe total de la factura', readonly=True)
 
     def _check_editable_group(self):
         if any(group.state != 'draft' or group.credit_ids for group in self.group_id):

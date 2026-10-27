@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from ..models.res_partner import GENERIC_RFCS
 
 
 class CrmMaterialRequestPartnerWizzard(models.TransientModel):
@@ -13,7 +14,20 @@ class CrmMaterialRequestPartnerWizzard(models.TransientModel):
     ], string='Contacto', default='create', required=True)
     partner_name = fields.Char(string='Nombre del nuevo cliente')
     partner_phone = fields.Char(string='Teléfono del nuevo cliente')
+    partner_vat = fields.Char(string='RFC', help='Opcional. Si no se proporciona, se usará XAXX010101000.')
+    uses_generic_rfc = fields.Boolean(compute='_compute_uses_generic_rfc')
     partner_id = fields.Many2one('res.partner', string='Cliente existente')
+
+    @api.depends('partner_vat')
+    def _compute_uses_generic_rfc(self):
+        for wizard in self:
+            vat = (wizard.partner_vat or '').strip().upper()
+            wizard.uses_generic_rfc = not vat or vat in GENERIC_RFCS
+
+    @api.onchange('partner_vat')
+    def _onchange_partner_vat(self):
+        if self.partner_vat:
+            self.partner_vat = self.partner_vat.strip().upper()
 
     @api.onchange('lead_id')
     def _onchange_lead_id(self):
@@ -37,6 +51,7 @@ class CrmMaterialRequestPartnerWizzard(models.TransientModel):
                 'email': self.lead_id.email_from,
                 'phone': self.partner_phone,
                 'is_customer': True,
+                'vat': (self.partner_vat or '').strip().upper() or 'XAXX010101000',
             })
             self.lead_id.partner_id = partner.id
         else:

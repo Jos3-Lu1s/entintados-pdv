@@ -13,7 +13,7 @@ export function stockError(order, product, quantity, excludedLine = null) {
             ? Math.max(0, Number(line.qty) || 0) : 0), 0);
     const available = Number(product.pos_stock_qty) || 0;
     const rounding = product.uom_id?.rounding || 0.00001;
-    if (Math.round((used + quantity) / rounding) > Math.round(available / rounding)) {
+    if (available <= 0 || Math.round((used + quantity) / rounding) > Math.round(available / rounding)) {
         return `Existencias insuficientes para ${product.display_name || product.name}. ` +
             `Disponibles: ${available}; solicitadas en el ticket: ${used + quantity}.`;
     }

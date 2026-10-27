@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Containers group the existing actions; their access rights stay on each child. -->
+    <menuitem id="account_customer_invoices_section" name="Facturas y pagos"
+              parent="account.menu_finance_receivables" sequence="10"/>
+    <menuitem id="account_customer_credits_section" name="Notas de crédito y ajustes"
+              parent="account.menu_finance_receivables" sequence="20"/>
+    <menuitem id="account_customer_tickets_section" name="Tickets sin factura"
+              parent="account.menu_finance_receivables" sequence="30"/>
+    <menuitem id="account_customer_authorizations_section" name="Autorizaciones de crédito"
+              parent="account.menu_finance_receivables" sequence="40"/>
+    <menuitem id="account_customer_catalogs_section" name="Catálogos"
+              parent="account.menu_finance_receivables" sequence="100"/>
+
+    <menuitem id="account_vendor_invoices_section" name="Facturas y pagos"
+              parent="account.menu_finance_payables" sequence="10"/>
+    <menuitem id="account_vendor_credits_section" name="Notas de crédito"
+              parent="account.menu_finance_payables" sequence="20"/>
+    <menuitem id="account_vendor_catalogs_section" name="Catálogos"
+              parent="account.menu_finance_payables" sequence="100"/>
+
+    <record id="account.menu_action_move_out_invoice_type" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_invoices_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="account.menu_action_account_payments_receivable" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_invoices_section"/>
+        <field name="sequence">20</field>
+    </record>
+    <record id="account.menu_action_move_out_refund_type" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_credits_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="customer_account_adjustment_menu" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_credits_section"/>
+        <field name="sequence">20</field>
+    </record>
+    <record id="pos_accounting_ticket_menu" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_tickets_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="pos_accounting_return_menu" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_tickets_section"/>
+        <field name="sequence">20</field>
+    </record>
+    <record id="menu_pos_credit_approval" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_authorizations_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="account.product_product_menu_sellable" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_catalogs_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="account.menu_account_customer" model="ir.ui.menu">
+        <field name="parent_id" ref="account_customer_catalogs_section"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="account.menu_action_move_in_invoice_type" model="ir.ui.menu">
+        <field name="parent_id" ref="account_vendor_invoices_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="account.menu_action_account_payments_payable" model="ir.ui.menu">
+        <field name="parent_id" ref="account_vendor_invoices_section"/>
+        <field name="sequence">20</field>
+    </record>
+    <record id="account.menu_action_move_in_refund_type" model="ir.ui.menu">
+        <field name="parent_id" ref="account_vendor_credits_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="vendor_credit_wizard_menu" model="ir.ui.menu">
+        <field name="parent_id" ref="account_vendor_credits_section"/>
+        <field name="sequence">20</field>
+    </record>
+    <record id="account.product_product_menu_purchasable" model="ir.ui.menu">
+        <field name="parent_id" ref="account_vendor_catalogs_section"/>
+        <field name="sequence">10</field>
+    </record>
+    <record id="account.menu_account_supplier" model="ir.ui.menu">
+        <field name="parent_id" ref="account_vendor_catalogs_section"/>
+        <field name="sequence">20</field>
+    </record>
+</odoo>

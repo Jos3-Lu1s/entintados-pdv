@@ -84,20 +84,21 @@
         <field name="arch" type="xml">
             <form string="Devolución de ticket sin factura">
                 <header>
-                    <button name="action_prepare_return" string="Preparar devolución al almacén" type="object" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_prepare_return" string="Registrar devolución" type="object" class="btn-primary" invisible="state not in ['draft', 'waiting_stock']"/>
                     <button name="action_create_credit" string="Generar nota y devolver importe" type="object" class="btn-primary" invisible="state not in ['waiting_stock', 'returned'] or not stock_received"/>
                     <button name="action_open_pickings" string="Ver recepciones" type="object" groups="stock.group_stock_user" invisible="not receipt_names"/>
                     <button name="action_open_credits" string="Ver notas" type="object" invisible="not credit_ids"/>
                     <button name="action_cancel" string="Cancelar" type="object" invisible="state not in ['draft', 'waiting_stock'] or stock_received"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,waiting_stock,returned,done"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,returned,done"/>
                 </header>
                 <sheet>
-                    <div class="alert alert-info" role="status" invisible="state != 'waiting_stock' or stock_received">Almacén debe validar la recepción antes de generar la nota de crédito y devolver el dinero.</div>
+                    <div class="alert alert-info" role="status" invisible="state not in ['draft', 'waiting_stock']">Al registrar la devolución, los productos seleccionados se reincorporan automáticamente al inventario. Después puedes generar la nota de crédito y devolver el importe.</div>
                     <h1><field name="name"/></h1>
                     <group><group>
                         <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
                         <field name="order_id" readonly="state != 'draft'" options="{'no_create': True, 'no_open': True}"/>
                         <field name="source_move_id"/><field name="partner_id" readonly="state != 'draft'"/>
+                        <field name="return_lot_names" readonly="state not in ['draft', 'waiting_stock']" placeholder="Solo si es necesario identificar lotes o series: uno por renglón"/>
                     </group><group>
                         <field name="date" readonly="state != 'draft'"/><field name="journal_id" readonly="state != 'draft'"/>
                         <field name="reason" readonly="state != 'draft'"/><field name="receipt_names"/>
