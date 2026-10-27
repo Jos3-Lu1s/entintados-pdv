@@ -5,7 +5,7 @@ import { ControlButtons } from "@point_of_sale/app/screens/product_screen/contro
 import { CustomSelectCreateDialog } from "@pos_settle_due/app/views/view_dialogs/select_create_dialog";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
-import { useEffect } from "@odoo/owl";
+import { useEffect, useState } from "@odoo/owl";
 
 patch(PaymentScreen.prototype, {
     setup() {
@@ -169,7 +169,7 @@ patch(PaymentScreen.prototype, {
                 line.product_id?.id === this.pos.config.down_payment_product_id?.id));
     },
     onMounted() {
-        if (this.isCollectingCustomerAdvance || !this.isCreditCustomer) {
+        if (this.isCollectingCustomerAdvance) {
             this.payment_methods_from_config = this.payment_methods_from_config.filter((method) => method.type !== "pay_later");
         }
         super.onMounted(...arguments);
@@ -178,6 +178,11 @@ patch(PaymentScreen.prototype, {
         }
     },
     async toggleIsToInvoice() {
+        if (this.currentOrder.lines.some((line) => line.settled_invoice_id || line.settled_order_id?.account_move)) {
+            this.currentOrder.setToInvoice(false);
+            this.notification.add(_t("El abono se registra sobre la factura original y genera su complemento de pago."), { type: "info" });
+            return;
+        }
         if (this.requiresAdvanceInvoice) {
             this.currentOrder.setToInvoice(true);
             this.notification.add(_t("Los anticipos y sus aplicaciones requieren factura. Se generará al validar el pago."), { type: "info" });
@@ -186,6 +191,10 @@ patch(PaymentScreen.prototype, {
         return await super.toggleIsToInvoice(...arguments);
     },
     async validateOrder() {
+        if (this.currentOrder.lines.some((line) => line.settled_invoice_id || line.settled_order_id?.account_move)) {
+            this.currentOrder.setToInvoice(false);
+            this.currentOrder.pos_payment_flow = "standard";
+        }
         if (this.creditApprovalAmountsChanged && this.requestedCreditAmount > 0) {
             this.notification.add(_t('El monto cambió. Actualiza la autorización antes de validar la venta a crédito.'), { type: 'warning' });
             return false;
@@ -366,11 +375,45 @@ patch(PaymentScreen.prototype, {
 });
 
 patch(ControlButtons.prototype, {
-    onClickCollectOutstandingInvoice() {
+    setup() {
+        super.setup?.(...arguments);
+        this.customerFunds = useState({ partnerId: false, loaded: false, hasInvoices: false });
+        useEffect(() => { this.refreshCustomerFunds(); }, () => {
+            const order = this.pos.getOrder();
+            const partner = order?.getPartner();
+            return [order?.uuid, partner?.id, partner?.invoices_amount_due, partner?.total_due];
+        });
+    },
+    async refreshCustomerFunds() {
+        const order = this.pos.getOrder();
+        const partnerId = order?.getPartner()?.id;
+        const request = this._customerFundsRequest = (this._customerFundsRequest || 0) + 1;
+        Object.assign(this.customerFunds, { partnerId, loaded: false, hasInvoices: false });
+        if (!partnerId) return false;
+        try {
+            const info = await this.pos.data.call('res.partner', 'get_advance_pos_info', [[partnerId], this.pos.config.id]);
+            if (request !== this._customerFundsRequest || this.pos.getOrder() !== order ||
+                order.getPartner()?.id !== partnerId) return false;
+            Object.assign(this.customerFunds, { loaded: true, hasInvoices: Boolean(info.has_outstanding_invoices) });
+            return this.customerFunds.hasInvoices;
+        } catch {
+            return false;
+        }
+    },
+    get canCollectOutstandingInvoice() {
+        const order = this.pos.getOrder();
+        return Boolean(this.customerFunds?.loaded && this.customerFunds.partnerId === order?.getPartner()?.id &&
+            this.customerFunds.hasInvoices && !order.lines.length && !order.payment_ids.length);
+    },
+    async onClickCollectOutstandingInvoice() {
         const order = this.pos.getOrder();
         const partner = order?.getPartner();
         if (!partner || order.lines.length || order.payment_ids.length) {
             this.notification.add(_t("Selecciona el cliente en un ticket vacío para cobrar sus facturas pendientes."), { type: "warning" });
+            return;
+        }
+        if (!await this.refreshCustomerFunds()) {
+            this.notification.add(_t("El cliente no tiene facturas pendientes disponibles para cobrar, o no fue posible consultar su saldo."), { type: "warning" });
             return;
         }
         const view = this.pos.models["ir.ui.view"].find((value) => value.name === "due_account_move_list_view");
@@ -383,7 +426,8 @@ patch(ControlButtons.prototype, {
             resModel: "account.move", noCreate: true, multiSelect: true, listViewId: view?.id,
             domain: [["commercial_partner_id", "=", commercialId], ["company_id", "=", this.pos.company.id],
                 ["currency_id", "=", this.pos.currency.id], ["state", "=", "posted"],
-                ["move_type", "=", "out_invoice"], ["pos_amount_unsettled", ">", 0]],
+                ["move_type", "=", "out_invoice"], ["pos_amount_unsettled", ">", 0],
+                ["l10n_mx_edi_cfdi_state", "not in", ["cancel", "cancel_requested"]]],
             onSelected: async (ids) => {
                 await this.pos.onClickSettleInvoices(ids, partner.id, commercialId);
             },

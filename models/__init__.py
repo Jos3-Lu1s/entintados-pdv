@@ -68,3 +68,4 @@ from . import pos_accounting_return
 from . import return_credit_navigation
 from . import sale_contact_owner
 from . import product_line_uniqueness
+from . import pos_invoice_collection

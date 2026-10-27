@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_pos_order_collection_payments" model="ir.ui.view">
+        <field name="name">pos.order.collection.payments</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_invoice_collection_payments" type="object" class="oe_stat_button" icon="fa-money"
+                        invisible="not invoice_collection_processed" groups="account.group_account_invoice,account.group_account_readonly">
+                    <div class="o_stat_info"><span class="o_stat_text">Abonos a facturas</span></div>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='pos_reference']" position="after">
+                <field name="invoice_collection_processed" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
     <record id="view_pos_order_form_previous_reference" model="ir.ui.view">
         <field name="name">pos.order.form.previous.reference</field>
         <field name="model">pos.order</field>

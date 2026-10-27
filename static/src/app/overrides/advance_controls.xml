@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
+    <t t-name="entintados_pdv.SelectionPopupDisabledItems" t-inherit="point_of_sale.SelectionPopup" t-inherit-mode="extension">
+        <xpath expr="//button[@t-foreach='props.list']" position="attributes">
+            <attribute name="t-att-disabled">item.disabled</attribute>
+        </xpath>
+    </t>
     <t t-name="entintados_pdv.PartnerAdvanceBalance" t-inherit="point_of_sale.PartnerLine" t-inherit-mode="extension">
         <xpath expr="//td[hasclass('partner-line-balance')]" position="inside">
             <div class="text-success fw-bold" t-if="props.partner.customer_advance_available gt 0">

@@ -19,6 +19,7 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
     const advance = { id: 10, name: 'ADV/001', available, total: 300, fiscal_kind: 'on_account',
         lines: [{ quantity: 1, price_unit: 300, discount: 0, tax_ids: [] }] };
     const notices = [];
+    const popups = [];
     let requests = 0;
     let currentOrder = order;
     const pos = {
@@ -53,7 +54,8 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
         patch: (target, extension) => Object.assign(target, extension),
         ControlButtons: Controls, NumberPopup: class {}, SelectionPopup: class {},
         _t: (value) => value,
-        makeAwaitable: async () => {
+        makeAwaitable: async (_dialog, _component, props) => {
+            popups.push(props);
             const result = replies.shift();
             return result === 'source' ? advance : result;
         },
@@ -61,8 +63,35 @@ function fixture({ partner = true, cart = 500, replies = [], available = 300, ne
     vm.runInContext(source, context);
     const controls = new Controls();
     Object.assign(controls, { pos, dialog: {}, notification: { add: (...args) => notices.push(args) } });
-    return { controls, order, notices, advance, currentOrder: () => currentOrder, requests: () => requests };
+    return { controls, order, notices, advance, popups, currentOrder: () => currentOrder, requests: () => requests };
 }
+
+test('Apply option is disabled without available advance; receiving remains enabled', async () => {
+    const f = fixture({ available: 0 });
+    await f.controls.onClickAdvances();
+    assert.equal(f.popups[0].list[1].disabled, true);
+    assert.equal(Boolean(f.popups[0].list[0].disabled), false);
+});
+
+test('Fiscal-only advances cannot enable the apply option in POS', async () => {
+    const f = fixture();
+    f.advance.fiscal_kind = 'fiscal';
+    await f.controls.onClickAdvances();
+    assert.equal(f.popups[0].list[1].disabled, true);
+});
+
+test('An advance already fully reserved on the ticket leaves apply disabled', async () => {
+    const f = fixture();
+    f.order.lines.push({ advance_source_ref: f.advance.id, prices: { total_included_currency: -300 } });
+    await f.controls.onClickAdvances();
+    assert.equal(f.popups[0].list[1].disabled, true);
+});
+
+test('A usable advance enables applying it', async () => {
+    const f = fixture();
+    await f.controls.onClickAdvances();
+    assert.equal(f.popups[0].list[1].disabled, false);
+});
 
 test('Collecting an advance creates an invoice line and no second cash payment', async () => {
     const f = fixture({ cart: 0, replies: ['collect', '300'] });

@@ -460,6 +460,12 @@ class ResPartner(models.Model):
         def convert(amount):
             return partner.risk_currency_id._convert(amount, config.currency_id, config.company_id, rate_date)
         return {
+            'has_outstanding_invoices': bool(self.env['account.move'].sudo().search_count([
+                ('company_id', '=', config.company_id.id), ('commercial_partner_id', '=', partner.id),
+                ('currency_id', '=', config.currency_id.id), ('move_type', '=', 'out_invoice'),
+                ('state', '=', 'posted'), ('pos_amount_unsettled', '>', 0),
+                ('l10n_mx_edi_cfdi_state', 'not in', ['cancel', 'cancel_requested']),
+            ], limit=1)),
             'advance_available': sum(sources.mapped('advance_available')), 'credit_limited': bool(partner.credit_limit),
             'credit_limit': convert(partner.credit_limit), 'risk': convert(partner.risk_total),
             'credit_authorized': bool(partner.is_credit), 'risk_exception': bool(partner.risk_exception),

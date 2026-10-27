@@ -43,7 +43,7 @@ class PosSaleDetails(models.AbstractModel):
                                | line.settled_order_id.split_invoice_ids)
                 if settled:
                     amounts = allocate_amount(
-                        line.price_subtotal_incl, settled.mapped('amount_total'),
+                        line.price_unit if order.invoice_collection_processed else line.price_subtotal_incl, settled.mapped('amount_total'),
                         order.currency_id.round)
                     for invoice, amount in zip(settled, amounts):
                         targets[invoice] = targets.get(invoice, 0.0) + amount
@@ -51,7 +51,7 @@ class PosSaleDetails(models.AbstractModel):
                 lambda move: move.state == 'posted')
             if not targets:
                 targets = {invoice: invoice.amount_total for invoice in invoices}
-            else:
+            elif not order.invoice_collection_processed:
                 remainder = order.currency_id.round(order.amount_total - sum(targets.values()))
                 if not order.currency_id.is_zero(remainder):
                     targets[False] = remainder
@@ -65,14 +65,20 @@ class PosSaleDetails(models.AbstractModel):
                 for index, invoice in enumerate(numbered_invoices, start=1)
             } if len(numbered_invoices) > 1 else {}
             for payment in order.payment_ids:
+                collection_payments = order.invoice_collection_payment_ids.filtered(
+                    lambda item: item.pos_invoice_collection_payment_id == payment)
+                if order.invoice_collection_processed and not collection_payments:
+                    continue
                 method = payment.payment_method_id
                 key = (method.id, order.currency_id.id)
                 group = groups.setdefault(key, {
                     'name': method.name, 'credit': method.type == 'pay_later',
                     'currency': order.currency_id, 'rows': {}, 'total': 0.0,
                 })
-                group['total'] += payment.amount
-                amounts = allocate_amount(payment.amount, weights, order.currency_id.round)
+                group['total'] += sum(collection_payments.mapped('amount')) if order.invoice_collection_processed else payment.amount
+                amounts = ([sum(collection_payments.filtered(lambda item: invoice in item.reconciled_invoice_ids).mapped('amount'))
+                            if invoice else 0 for invoice in targets] if order.invoice_collection_processed
+                           else allocate_amount(payment.amount, weights, order.currency_id.round))
                 for invoice, amount in zip(targets, amounts):
                     if not amount:
                         continue

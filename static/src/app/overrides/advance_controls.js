@@ -19,12 +19,22 @@ patch(ControlButtons.prototype, {
         }
         try {
             const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
+            if (this.pos.getOrder() !== order || order.getPartner()?.id !== partner.id) {
+                return;
+            }
+            const usable = info.sources.filter((source) => {
+                const reserved = -order.lines.filter((line) => line.advance_source_ref === source.id)
+                    .reduce((total, line) => total + line.prices.total_included_currency, 0);
+                return source.fiscal_kind !== "fiscal" && source.available - reserved > 0;
+            });
             const format = (value) => this.pos.env.utils.formatCurrency(value);
             const action = requestedAction || await makeAwaitable(this.dialog, SelectionPopup, {
                 title: _t("Saldo a favor del cliente: %s", format(info.advance_available)),
                 list: [
                     { id: "collect", label: _t("Recibir dinero del cliente"), description: _t("El importe pagado quedará a su favor para próximas compras."), item: "collect" },
-                    { id: "apply", label: _t("Usar saldo a favor en esta venta"), description: _t("Descuenta el anticipo recibido del importe que el cliente debe pagar."), item: "apply" },
+                    { id: "apply", label: _t("Usar saldo a favor en esta venta"), disabled: !usable.length,
+                        description: usable.length ? _t("Descuenta el anticipo recibido del importe que el cliente debe pagar.")
+                            : _t("El cliente no tiene anticipo disponible para aplicar en caja."), item: "apply" },
                 ],
             });
             if (!action) {
@@ -58,7 +68,6 @@ patch(ControlButtons.prototype, {
                 advanceOrder.setToInvoice(true);
                 return;
             }
-            const usable = info.sources.filter((source) => source.fiscal_kind !== "fiscal");
             if (!usable.length) {
                 this.notification.add(_t("No hay anticipos disponibles para aplicar en caja. Los anticipos fiscales se aplican desde Contabilidad."), { type: "warning" });
                 return;
@@ -130,5 +139,14 @@ patch(ControlButtons.prototype, {
         } catch (error) {
             this.notification.add(error.message || _t("No se pudo consultar el anticipo. Se requiere conexión con el servidor."), { type: "danger" });
         }
+    },
+});
+
+patch(SelectionPopup.prototype, {
+    selectItem(itemId) {
+        if (this.props.list.find((item) => item.id === itemId)?.disabled) {
+            return;
+        }
+        return super.selectItem(...arguments);
     },
 });
