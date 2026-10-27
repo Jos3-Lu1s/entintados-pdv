@@ -27,7 +27,7 @@ class ApprovalRequestCredit(models.Model):
     pos_risk_currency_id = fields.Many2one(related='pos_credit_approval_id.risk_currency_id')
     pos_credit_limit = fields.Monetary(related='pos_credit_approval_id.credit_limit', currency_field='pos_risk_currency_id')
     pos_current_credit = fields.Monetary(
-        related='pos_credit_approval_id.current_credit', currency_field='pos_risk_currency_id', string='Crédito actual')
+        related='pos_credit_approval_id.current_credit', currency_field='pos_risk_currency_id', string='Crédito a deber')
     pos_projected_risk = fields.Monetary(related='pos_credit_approval_id.projected_risk', currency_field='pos_risk_currency_id')
     pos_credit_state = fields.Selection(related='pos_credit_approval_id.state')
     pos_credit_branch_id = fields.Many2one(
@@ -163,13 +163,16 @@ class PosCreditApproval(models.Model):
     cancelled_by = fields.Many2one('res.users', string='Cancelada por', readonly=True)
     cancelled_on = fields.Datetime(string='Fecha de anulación', readonly=True)
     cancel_reason = fields.Char(string='Motivo de anulación', readonly=True)
+    previous_credit_amount = fields.Monetary(string='Monto solicitado anterior', readonly=True)
+    revised_on = fields.Datetime(string='Última actualización del monto', readonly=True)
+    revised_by = fields.Many2one('res.users', string='Monto actualizado por', readonly=True)
     total_amount = fields.Monetary(string='Total del ticket', required=True, readonly=True)
     credit_amount = fields.Monetary(string='Saldo por financiar', required=True, readonly=True)
     applied_amount = fields.Monetary(string='Anticipos aplicados', readonly=True)
     risk_currency_id = fields.Many2one('res.currency', required=True, readonly=True)
     credit_limit = fields.Monetary(currency_field='risk_currency_id', string='Límite de crédito', readonly=True)
     current_credit = fields.Monetary(
-        currency_field='risk_currency_id', string='Crédito actual', compute='_compute_current_credit', compute_sudo=True,
+        currency_field='risk_currency_id', string='Crédito a deber', compute='_compute_current_credit', compute_sudo=True,
         help='Deuda actual del cliente en la compañía de esta solicitud. Se actualiza al consultar el formulario.')
     projected_risk = fields.Monetary(currency_field='risk_currency_id', string='Riesgo proyectado autorizado', readonly=True)
     requester_id = fields.Many2one('res.users', required=True, readonly=True)
@@ -217,6 +220,16 @@ class PosCreditApproval(models.Model):
                 request.name = sequence.next_by_id()
             if request.approval_request_id.name != request.name:
                 request.approval_request_id.sudo().write({'name': request.name})
+            if request.state == 'pending' and (not request.order_id or request.order_id.state == 'draft'):
+                partner = request.partner_id.with_company(request.company_id)
+                projected = request.config_id._credit_projection(
+                    partner, request.credit_amount, request.applied_amount, order=request.order_id)
+                projected = partner.risk_currency_id._convert(
+                    projected, request.risk_currency_id, request.company_id, fields.Date.context_today(request))
+                if request.risk_currency_id.compare_amounts(projected, request.projected_risk):
+                    request.projected_risk = projected
+                    request.approval_request_id.message_post(body=_(
+                        'Riesgo pendiente recalculado: los anticipos disponibles se mantienen separados del crédito.'))
         self.env['pos.order'].sudo().search([
             ('id', 'in', self.sudo().search([('order_id', '!=', False)]).order_id.ids),
             ('state', '=', 'cancel')])._cancel_credit_approvals()
@@ -310,6 +323,43 @@ class PosCreditApproval(models.Model):
             (self.total_amount, total), (self.credit_amount, credit), (self.applied_amount, applied),
         ))
 
+    def _pos_payload(self):
+        self.ensure_one()
+        return {'id': self.id, 'name': self.name, 'state': self.state, 'credit_amount': self.credit_amount,
+                'total_amount': self.total_amount, 'applied_amount': self.applied_amount,
+                'previous_credit_amount': self.previous_credit_amount, 'revised': bool(self.revised_on)}
+
+    def _revise_pending_request(self, total, credit, applied, partner, projected, actor):
+        """Keep the folio; discard all prior decisions before requesting approval again."""
+        self.ensure_one()
+        users = self._eligible_users(self.company_id)
+        if not users:
+            raise UserError(_('No hay responsables departamentales activos para revisar la solicitud actualizada.'))
+        old = self.credit_amount
+        prior_state = dict(self._fields['state'].selection).get(self.state, self.state)
+        prior_user = self.decided_by.display_name or _('Sin decisión')
+        amount_changed = not self._matches(total, credit, applied)
+        values = {
+            'state': 'pending', 'total_amount': total, 'credit_amount': credit, 'applied_amount': applied,
+            'risk_currency_id': partner.risk_currency_id.id, 'credit_limit': partner.credit_limit,
+            'projected_risk': projected, 'decided_by': False, 'decided_on': False,
+            'approver_user_ids': [Command.set(users.ids)],
+        }
+        if amount_changed:
+            values.update(previous_credit_amount=old, revised_by=actor.id, revised_on=fields.Datetime.now())
+        self.write(values)
+        native = self.approval_request_id.sudo()
+        native._cancel_activities()
+        native.write({'amount': credit, 'approver_ids': [Command.clear()] + [
+            Command.create({'user_id': user.id, 'required': False}) for user in users]})
+        native.action_confirm()
+        native.message_post(body=_(
+            'Solicitud actualizada por %(user)s. Monto anterior: %(old).2f; monto nuevo: %(new).2f. '
+            'Decisión anterior: %(prior_state)s; responsable: %(prior_user)s. '
+            'Las decisiones anteriores quedan sin efecto y se requiere una nueva autorización.',
+            user=actor.display_name, old=old, new=credit, prior_state=prior_state,
+            prior_user=prior_user), author_id=actor.partner_id.id)
+
 
 class PosConfigCreditApproval(models.Model):
     _inherit = 'pos.config'
@@ -319,12 +369,11 @@ class PosConfigCreditApproval(models.Model):
         partner = partner.sudo().with_company(self.company_id).with_context(allowed_company_ids=self.company_id.ids)
         date = fields.Date.context_today(self)
         extra = self.currency_id._convert(credit, partner.risk_currency_id, self.company_id, date)
-        applied_risk = self.currency_id._convert(applied, partner.risk_currency_id, self.company_id, date)
-        available = max(partner.customer_advance_available - applied_risk, 0)
         exposure = partner._pos_credit_exposure(exclude_order=order)
-        return max(exposure + extra - available, 0)
+        # Explicitly applied advances already reduce the ticket and its financed remainder.
+        return max(exposure + extra, 0)
 
-    def request_credit_approval(self, partner_id, order_uuid, total, credit, applied=0, order_id=None):
+    def request_credit_approval(self, partner_id, order_uuid, total, credit, applied=0, order_id=None, new_attempt=False):
         self.ensure_one()
         self.check_access('read')
         if not self.env.user.has_group('point_of_sale.group_pos_user') or self.company_id not in self.env.companies:
@@ -369,14 +418,22 @@ class PosConfigCreditApproval(models.Model):
             ('config_id', '=', self.id), ('order_id', '=', order.id),
             ('partner_id', '=', partner.id), ('state', 'in', ['pending', 'approved', 'refused']),
         ], limit=1)
+        if request:
+            self.env.cr.execute('SELECT id FROM pos_credit_approval WHERE id = %s FOR UPDATE', [request.id])
+            request.invalidate_recordset()
+            if request.state not in ('pending', 'approved', 'refused') or request.used_order_id:
+                raise UserError(_('Esta autorización ya no puede actualizarse. Recupera el estado de la orden.'))
+        previous_refusal = Approval.browse()
+        if request and request.state == 'refused':
+            if not new_attempt:
+                return request._pos_payload()
+            previous_refusal = request
+            request = Approval.browse()
         if request and (not request._matches(total, credit, applied)
                         or request.risk_currency_id != partner.risk_currency_id
                         or partner.risk_currency_id.compare_amounts(partner.credit_limit, request.credit_limit)
                         or partner.risk_currency_id.compare_amounts(projected, request.projected_risk) > 0):
-            request.write({'state': 'cancelled'})
-            request.approval_request_id.sudo().action_cancel()
-            request.activity_ids.action_feedback(feedback=_('El ticket o el riesgo cambió; se requiere otra autorización.'))
-            request = Approval.browse()
+            request._revise_pending_request(total, credit, applied, partner, projected, self.env.user)
         if not request:
             users = Approval._eligible_users(self.company_id)
             if not users:
@@ -389,7 +446,12 @@ class PosConfigCreditApproval(models.Model):
                 'requester_id': self.env.uid, 'approver_user_ids': [(6, 0, users.ids)],
             })
             request._create_native_request()
-        return {'id': request.id, 'name': request.name, 'state': request.state}
+            if previous_refusal:
+                request.approval_request_id.message_post(body=_(
+                    'Nuevo intento de crédito tras el rechazo de la solicitud %(previous)s.', previous=previous_refusal.name))
+                previous_refusal.approval_request_id.message_post(body=_(
+                    'Se generó la nueva solicitud %(new)s. Este folio conserva su estado Rechazada.', new=request.name))
+        return request._pos_payload()
 
     def get_order_credit_approval(self, order_id):
         self.ensure_one()
@@ -403,7 +465,7 @@ class PosConfigCreditApproval(models.Model):
         request = self.env['pos.credit.approval'].sudo().search([
             ('order_id', '=', order.id), ('partner_id', '=', order.partner_id.commercial_partner_id.id),
         ], limit=1)
-        return {'id': request.id, 'name': request.name, 'state': request.state} if request else False
+        return request._pos_payload() if request else False
 
 
 class PosOrderCreditApproval(models.Model):

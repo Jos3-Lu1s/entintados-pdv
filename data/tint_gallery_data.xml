@@ -8,18 +8,21 @@
         <record id="tint_gallery_berel" model="tint.gallery">
             <field name="name">Berel</field>
             <field name="code">BER</field>
+            <field name="code_prefix">B</field>
             <field name="sequence">10</field>
         </record>
 
         <record id="tint_gallery_comex" model="tint.gallery">
             <field name="name">Comex</field>
             <field name="code">CMX</field>
+            <field name="code_prefix">C</field>
             <field name="sequence">20</field>
         </record>
 
         <record id="tint_gallery_historicos" model="tint.gallery">
             <field name="name">Históricos</field>
             <field name="code">HIS</field>
+            <field name="code_prefix">H</field>
             <field name="sequence">30</field>
             <field
                 name="description"
@@ -29,6 +32,7 @@
         <record id="tint_gallery_kit_generales" model="tint.gallery">
             <field name="name">Kit Generales</field>
             <field name="code">KIT</field>
+            <field name="code_prefix">KIT-</field>
             <field name="sequence">40</field>
         </record>
 
@@ -41,24 +45,28 @@
         <record id="tint_gallery_soi_manual" model="tint.gallery">
             <field name="name">SOI Manual</field>
             <field name="code">SOI</field>
+            <field name="code_prefix">SOI-</field>
             <field name="sequence">60</field>
         </record>
 
         <record id="tint_gallery_tranquility" model="tint.gallery">
             <field name="name">Tranquility</field>
             <field name="code">TRQ</field>
+            <field name="code_prefix">T</field>
             <field name="sequence">70</field>
         </record>
 
         <record id="tint_gallery_transicion" model="tint.gallery">
             <field name="name">Transición</field>
             <field name="code">TRS</field>
+            <field name="code_prefix">R</field>
             <field name="sequence">80</field>
         </record>
 
         <record id="tint_gallery_odoo_manual" model="tint.gallery">
             <field name="name">Odoo Manual</field>
             <field name="code">ODM</field>
+            <field name="code_prefix">ODM-</field>
             <field name="sequence">90</field>
             <field
                 name="description"

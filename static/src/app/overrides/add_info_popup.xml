@@ -5,7 +5,7 @@
        t-inherit-mode="extension">
         <!-- Ancla: el div que contiene el select "Invoice to public" -->
         <xpath expr="//select[@name='l10n_mx_edi_cfdi_to_public']/.." position="after">
-            <div class="mb-3">
+            <div class="mb-3" t-if="canSplitInvoice">
                 <label for="mx_detail_split_count" class="form-label">Número de facturas: </label>
                 <input type="number" min="1" step="1"
                        id="mx_detail_split_count" class="detail form-control"

@@ -57,6 +57,8 @@ from . import approval_demo_list
 from . import demo_activity_mail
 from . import approval_assigned_access
 from . import pos_credit_approval
+from . import pos_sale_details
+from . import pos_order_reference
 from . import demo_flow_access
 from . import customer_account_adjustment
 from . import purchase_price_warning

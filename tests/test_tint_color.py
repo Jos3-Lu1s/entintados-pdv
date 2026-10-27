@@ -37,12 +37,12 @@ class TestTintColor(TransactionCase):
             'tint_role': 'colorant', 'list_price': 3.0,
             'is_storable': True,
         })
-        cls.color = cls.colors.create({'name': 'Color de prueba', 'code': 'TEST-COL-01'})
+        cls.color = cls.colors.create({
+            'name': 'Color de prueba', 'code': 'TEST-COL-01', 'gallery_id': cls.gallery.id})
         cls.pos_config = cls.env['pos.config'].search([], limit=1)
 
-    def _create_formula(self, base_type, size, doses, color=None, gallery=None):
+    def _create_formula(self, base_type, size, doses, color=None):
         return self.formulas.create({
-            'gallery_id': (gallery or self.gallery).id,
             'color_id': (color or self.color).id,
             'base_type_id': base_type.id,
             'size_id': size.id,
@@ -54,20 +54,19 @@ class TestTintColor(TransactionCase):
 
     # --- Color ----------------------------------------------------------
 
-    @mute_logger('odoo.sql_db')
-    def test_color_code_required(self):
-        with self.assertRaises(Exception):
-            self.colors.create({'name': 'Verde Olivo'})
+    def test_color_without_code_gets_gallery_number(self):
+        color = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Verde Olivo'})
+        self.assertEqual(color.code, '0001')
 
     def test_color_code_normalized(self):
-        color = self.colors.create({'name': 'Gris Perla', 'code': '  mio-001  '})
+        color = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Gris Perla', 'code': '  mio-001  '})
         self.assertEqual(color.code, 'MIO-001')
 
     @mute_logger('odoo.sql_db')
     def test_duplicate_color_code_rejected(self):
-        self.colors.create({'name': 'Primero', 'code': 'DUP-1'})
+        self.colors.create({'gallery_id': self.gallery.id, 'name': 'Primero', 'code': 'DUP-1'})
         with self.assertRaises(IntegrityError):
-            self.colors.create({'name': 'Segundo', 'code': 'DUP-1'})
+            self.colors.create({'gallery_id': self.gallery.id, 'name': 'Segundo', 'code': 'DUP-1'})
 
     # --- Total y capacidad ---------------------------------------------
 
@@ -174,7 +173,6 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_without_lines_fails(self):
         formula = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': self.color.id,
             'base_type_id': self.deep.id,
             'size_id': self.liter.id,
@@ -208,11 +206,10 @@ class TestTintColor(TransactionCase):
         self.assertFalse(self.colorant_a.product_tmpl_id.lines_product_id)
         self.assertFalse(self.colorant_b.product_tmpl_id.lines_product_id)
 
-        color_uno = self.colors.create({'name': 'Color Uno', 'code': 'TEST-COL-01-UNI'})
-        color_dos = self.colors.create({'name': 'Color Dos', 'code': 'TEST-COL-02-UNI'})
+        color_uno = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color Uno', 'code': 'TEST-COL-01-UNI'})
+        color_dos = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color Dos', 'code': 'TEST-COL-02-UNI'})
 
         f1 = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_uno.id,
             'base_type_id': self.white.id,
             'size_id': self.liter.id,
@@ -226,7 +223,6 @@ class TestTintColor(TransactionCase):
         self.assertEqual(f1.line_ids[0].colorant_id, self.colorant_a)
 
         f2 = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_dos.id,
             'base_type_id': self.white.id,
             'size_id': self.liter.id,
@@ -249,10 +245,9 @@ class TestTintColor(TransactionCase):
         """Comprobar que las fórmulas derivadas conservan line_scheme_id y su scheme_id."""
         schema = self.env['tint.schema'].create({'name': 'Esquema Propagación'})
         line = self.env['lines.product'].create({'name': 'Línea Propagación', 'scheme': schema.id})
-        color_prop = self.colors.create({'name': 'Color Propagación', 'code': 'TEST-COL-PROP'})
+        color_prop = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color Propagación', 'code': 'TEST-COL-PROP'})
 
         formula = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_prop.id,
             'base_type_id': self.deep.id,
             'size_id': self.liter.id,
@@ -275,10 +270,9 @@ class TestTintColor(TransactionCase):
         """Comprobar que una fórmula archivada previa se reactiva y actualiza sin colisión única."""
         schema = self.env['tint.schema'].create({'name': 'Esquema Reactivación'})
         line = self.env['lines.product'].create({'name': 'Línea Reactivación', 'scheme': schema.id})
-        color_test = self.colors.create({'name': 'Color Reactivación', 'code': 'TEST-REACT-01'})
+        color_test = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color Reactivación', 'code': 'TEST-REACT-01'})
 
         archived_gallon = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_test.id,
             'base_type_id': self.deep.id,
             'size_id': self.gallon.id,
@@ -290,7 +284,6 @@ class TestTintColor(TransactionCase):
         self.assertFalse(archived_gallon.active)
 
         origin = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_test.id,
             'base_type_id': self.deep.id,
             'size_id': self.liter.id,
@@ -311,7 +304,7 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_omits_capacity_exceeded_partially(self):
         """Comprobar que presentaciones que exceden la capacidad son omitidas sin abortar las que caben."""
-        color_test = self.colors.create({'name': 'Color Capacidad Parcial', 'code': 'TEST-CAP-01'})
+        color_test = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color Capacidad Parcial', 'code': 'TEST-CAP-01'})
         base_test = self.base_types.create({
             'name': 'Base Capacidad Test',
             'code': 'BCT',
@@ -324,7 +317,6 @@ class TestTintColor(TransactionCase):
         ])
 
         origin = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_test.id,
             'base_type_id': base_test.id,
             'size_id': self.liter.id,
@@ -353,7 +345,7 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_all_capacity_exceeded_raises_user_error(self):
         """Comprobar la respuesta cuando todas las presentaciones pendientes exceden la capacidad."""
-        color_test = self.colors.create({'name': 'Color Exceso Total', 'code': 'TEST-CAP-02'})
+        color_test = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color Exceso Total', 'code': 'TEST-CAP-02'})
         base_test = self.base_types.create({
             'name': 'Base Capacidad Total',
             'code': 'BTT',
@@ -366,7 +358,6 @@ class TestTintColor(TransactionCase):
         ])
 
         origin = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_test.id,
             'base_type_id': base_test.id,
             'size_id': self.liter.id,
@@ -384,9 +375,8 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_pos_success(self):
         """Comprobar que generate_other_sizes_pos genera fórmulas y retorna estructura para POS."""
-        color_test = self.colors.create({'name': 'Color POS Test', 'code': 'TEST-POS-01'})
+        color_test = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color POS Test', 'code': 'TEST-POS-01'})
         origin = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_test.id,
             'base_type_id': self.white.id,
             'size_id': self.liter.id,
@@ -412,7 +402,7 @@ class TestTintColor(TransactionCase):
 
     def test_generate_other_sizes_pos_omits_capacity(self):
         """Comprobar que generate_other_sizes_pos omite presentaciones que exceden capacidad."""
-        color_test = self.colors.create({'name': 'Color POS Capacidad', 'code': 'TEST-POS-02'})
+        color_test = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Color POS Capacidad', 'code': 'TEST-POS-02'})
         base_test = self.base_types.create({
             'name': 'Base POS Capacidad Test',
             'code': 'BPCT',
@@ -425,7 +415,6 @@ class TestTintColor(TransactionCase):
         ])
 
         origin = self.formulas.create({
-            'gallery_id': self.gallery.id,
             'color_id': color_test.id,
             'base_type_id': base_test.id,
             'size_id': self.liter.id,
@@ -452,7 +441,7 @@ class TestTintColor(TransactionCase):
 
     def test_base_type_summary_and_pos_sync(self):
         """Verifica que base_type_summary se actualice y viaje en la respuesta POS."""
-        color = self.colors.create({'name': 'Azul Cobalto', 'code': 'AZ-COB'})
+        color = self.colors.create({'gallery_id': self.gallery.id, 'name': 'Azul Cobalto', 'code': 'AZ-COB'})
         self.assertFalse(color.base_type_summary)
         self.assertFalse(color.has_formula)
 

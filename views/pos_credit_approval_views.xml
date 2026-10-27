@@ -77,14 +77,18 @@
         <field name="name">approval.request.form.pos.credit</field>
         <field name="model">approval.request</field>
         <field name="inherit_id" ref="approvals.approval_request_view_form"/>
+        <field name="priority">90</field>
         <field name="arch" type="xml">
+            <xpath expr="//header/button[@name='action_draft']" position="attributes">
+                <attribute name="invisible" add="pos_credit_approval_id" separator=" or "/>
+            </xpath>
             <xpath expr="//header/button[@name='action_cancel' and @data-hotkey='x']" position="attributes">
                 <attribute name="invisible" add="pos_credit_approval_id" separator=" or "/>
             </xpath>
             <xpath expr="//header" position="inside">
                 <field name="can_cancel_pos_credit" invisible="1"/>
                 <button name="action_cancel" type="object" string="Anular autorización"
-                        invisible="not can_cancel_pos_credit"
+                        invisible="not can_cancel_pos_credit or request_status != 'approved'"
                         confirm="Esta autorización dejará de permitir la venta a crédito. ¿Deseas anularla?"/>
             </xpath>
             <xpath expr="//header/field[@name='request_status']" position="attributes">

@@ -251,7 +251,7 @@ patch(PosOrder.prototype, {
         const data = super.serializeForORM(...args);
         const n = Number(this.uiState?.invoice_split_count || this.invoice_split_count);
         console.log("[ENTINTADOS] serializeForORM n =", n);
-        if (data && typeof data === "object" && n > 1) {
+        if (data && typeof data === "object" && Number.isInteger(n) && n >= 1) {
             data.invoice_split_count = n;
         }
         return data;

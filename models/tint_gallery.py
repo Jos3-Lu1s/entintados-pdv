@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 
 class TintGallery(models.Model):
@@ -31,6 +32,21 @@ class TintGallery(models.Model):
         string="Activa", default=True,
         help="Si se desmarca, la galería se archiva y deja de ofrecerse.")
 
+    code_prefix = fields.Char(
+        string="Prefijo de código",
+        help="Inicio del código de los colores de esta galería, p. ej. R o ODM-. "
+             "Puede quedar vacío. Cambiarlo solo afecta a los colores que se "
+             "creen después.")
+    color_sequence_id = fields.Many2one(
+        comodel_name='ir.sequence', string="Secuencia de colores",
+        readonly=True, copy=False, ondelete='restrict',
+        help="Numeración automática de los colores de esta galería.")
+    color_number_next = fields.Integer(
+        string="Siguiente número",
+        related='color_sequence_id.number_next_actual', readonly=False,
+        help="Número que se intentará asignar al siguiente color sin número. "
+             "Si su código ya está ocupado, se salta al siguiente libre.")
+
     description = fields.Html(
         string="Descripción", translate=True, sanitize=True,
         help="Nota interna sobre el origen o el uso de esta galería.")
@@ -44,28 +60,76 @@ class TintGallery(models.Model):
         help="Número total de fórmulas registradas en esta galería.")
     color_count = fields.Integer(
         string="Colores", compute='_compute_counts',
-        help="Colores distintos con al menos una fórmula en esta galería.")
+        help="Colores que pertenecen a esta galería.")
 
     _code_uniq = models.Constraint(
         'UNIQUE(code)',
         "Ya existe una galería con ese código.",
     )
 
-    @api.depends('formula_ids', 'formula_ids.color_id')
+    @staticmethod
+    def _normalize_prefix(prefix):
+        return (prefix or '').strip().upper() or False
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if 'code_prefix' in vals:
+                vals['code_prefix'] = self._normalize_prefix(vals['code_prefix'])
+        galleries = super().create(vals_list)
+        for gallery in galleries:
+            gallery.color_sequence_id = self.env['ir.sequence'].sudo().create({
+                'name': _("Colores: %s", gallery.name),
+                'padding': 4,
+                'implementation': 'standard',
+                'number_next': 1,
+                'company_id': False,
+            })
+        return galleries
+
+    def write(self, vals):
+        if 'code_prefix' in vals:
+            vals['code_prefix'] = self._normalize_prefix(vals['code_prefix'])
+        return super().write(vals)
+
+    # --- Código de los colores --------------------------------------------
+
+    def _compose_color_code(self, number):
+        self.ensure_one()
+        return (self.code_prefix or '') + number.zfill(4)
+
+    def _next_color_number(self):
+        """Siguiente número de la secuencia cuyo código no esté ocupado."""
+        self.ensure_one()
+        if not self.color_sequence_id:
+            raise UserError(_(
+                "La galería «%s» no tiene numeración de colores configurada. "
+                "Capture el número del color o configure la galería.",
+                self.name,
+            ))
+        colors = self.env['tint.color'].sudo().with_context(active_test=False)
+        sequence = self.color_sequence_id.sudo()
+        while True:
+            number = sequence.next_by_id()
+            code = self._compose_color_code(number)
+            if not colors.search_count([('code', '=', code)], limit=1):
+                return number
+
+    @api.depends('formula_ids')
     def _compute_counts(self):
-        data = self.env['tint.color.formula']._read_group(
+        formulas = dict(self.env['tint.color.formula']._read_group(
             domain=[('gallery_id', 'in', self.ids)],
             groupby=['gallery_id'],
-            aggregates=['__count', 'color_id:count_distinct'],
-        )
-        counts = {
-            gallery.id: (total, colors)
-            for gallery, total, colors in data
-        }
+            aggregates=['__count'],
+        ))
+        colors = dict(self.env['tint.color']._read_group(
+            domain=[('gallery_id', 'in', self.ids)],
+            groupby=['gallery_id'],
+            aggregates=['__count'],
+        ))
         for gallery in self:
-            total, colors = counts.get(gallery.id, (0, 0))
-            gallery.formula_count = total
-            gallery.color_count = colors
+            gallery.formula_count = formulas.get(gallery, 0)
+            gallery.color_count = colors.get(gallery, 0)
 
     @api.depends('name', 'code')
     def _compute_display_name(self):
@@ -85,7 +149,6 @@ class TintGallery(models.Model):
             'res_model': 'tint.color.formula',
             'view_mode': 'list,form',
             'domain': [('gallery_id', '=', self.id)],
-            'context': {'default_gallery_id': self.id},
         }
 
     def action_open_colors(self):
@@ -95,7 +158,7 @@ class TintGallery(models.Model):
             'name': _("Colores: %s", self.display_name),
             'res_model': 'tint.color',
             'view_mode': 'list,form',
-            'domain': [('formula_ids.gallery_id', '=', self.id)],
+            'domain': [('gallery_id', '=', self.id)],
             'context': self.env.context,
         }
 
@@ -103,7 +166,7 @@ class TintGallery(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return ['id', 'name', 'code', 'sequence']
+        return ['id', 'name', 'code', 'code_prefix', 'sequence']
 
     @api.model
     def _load_pos_data_domain(self, data, config):

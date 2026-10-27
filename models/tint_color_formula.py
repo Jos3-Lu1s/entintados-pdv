@@ -14,9 +14,8 @@ class TintColorFormula(models.Model):
 
     gallery_id = fields.Many2one(
         comodel_name='tint.gallery', string="Galería",
-        required=True, ondelete='restrict', index=True,
-        help="Origen de la receta: catálogo propio, de un fabricante de la "
-             "competencia, histórico o desarrollo interno.")
+        related='color_id.gallery_id', store=True, index=True, readonly=True,
+        help="Origen de la receta. Es la galería del color.")
     color_id = fields.Many2one(
         comodel_name='tint.color', string="Color",
         required=True, ondelete='cascade', index=True,
@@ -95,12 +94,22 @@ class TintColorFormula(models.Model):
         readonly=False,
     )
 
-    # Permite recetas distintas para un mismo color, base y presentación según la galería.
     _gallery_color_base_size_uniq = models.Constraint(
         'UNIQUE(gallery_id, color_id, base_type_id, size_id)',
         "Esa galería ya tiene una fórmula para ese color sobre esa base y "
         "presentación.",
     )
+
+    # La galería sale del color: un valor recibido la contradiría hasta recalcular.
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            vals.pop('gallery_id', None)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        vals.pop('gallery_id', None)
+        return super().write(vals)
 
     # --- Cálculos -------------------------------------------------------
 
@@ -239,7 +248,6 @@ class TintColorFormula(models.Model):
                     procesadas |= existing_formula
                 else:
                     procesadas |= self.create({
-                        'gallery_id': formula.gallery_id.id,
                         'color_id': formula.color_id.id,
                         'base_type_id': formula.base_type_id.id,
                         'size_id': size.id,

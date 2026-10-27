@@ -61,7 +61,7 @@ export class TintCreateColorPopup extends Component {
         this.state = useState({
             // Datos del color
             newColorName: "",
-            newColorCode: "",
+            newColorNumber: "",
             newColorNotes: "",
 
             // Galería por defecto, base y presentación para la fórmula
@@ -112,6 +112,14 @@ export class TintCreateColorPopup extends Component {
         }
         return [...this.pos.models["tint.size"].getAll()]
             .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    }
+
+    get codePrefix() {
+        return this.defaultGallery?.code_prefix || "";
+    }
+
+    get isColorNumberValid() {
+        return /^\d*$/.test(this.state.newColorNumber.trim());
     }
 
     get colorants() {
@@ -239,7 +247,7 @@ export class TintCreateColorPopup extends Component {
         if (this.state.isCreatingColor) {
             return false;
         }
-        if (!this.state.newColorName.trim() || !this.state.newColorCode.trim()) {
+        if (!this.state.newColorName.trim() || !this.isColorNumberValid) {
             return false;
         }
         if (!parseInt(this.state.newGalleryId) || !parseInt(this.state.newBaseTypeId) || !parseInt(this.state.newSizeId)) {
@@ -262,8 +270,10 @@ export class TintCreateColorPopup extends Component {
             this.state.createColorError = _t("El nombre del color es obligatorio.");
             return;
         }
-        if (!this.state.newColorCode.trim()) {
-            this.state.createColorError = _t("El código del color es obligatorio.");
+        if (!this.isColorNumberValid) {
+            this.state.createColorError = _t(
+                "El número del color solo admite dígitos, sin el prefijo de la galería."
+            );
             return;
         }
 
@@ -323,8 +333,12 @@ export class TintCreateColorPopup extends Component {
             // 1. Crear tint.color
             const vals = {
                 name: this.state.newColorName.trim(),
-                code: this.state.newColorCode.trim().toUpperCase(),
+                gallery_id: galleryId,
             };
+            const colorNumber = this.state.newColorNumber.trim();
+            if (colorNumber) {
+                vals.code_number = colorNumber;
+            }
             if (this.state.newColorNotes.trim()) {
                 vals.notes = this.state.newColorNotes.trim();
             }
@@ -344,10 +358,17 @@ export class TintCreateColorPopup extends Component {
                 throw new Error(_t("No se pudo obtener el identificador del color creado."));
             }
 
+            // El código lo arma el servidor con el prefijo de la galería.
+            let assignedCode = colorRecord?.code || "";
+            if (!assignedCode && this.pos.data && typeof this.pos.data.read === "function") {
+                const res = await this.pos.data.read("tint.color", [colorId], ["code"]);
+                assignedCode = (Array.isArray(res) ? res[0] : res)?.code || "";
+            }
+            const colorLabel = assignedCode ? `[${assignedCode}]` : "";
+
             // 2. Crear fórmula y líneas de dosis
             const formulaVals = {
                 color_id: colorId,
-                gallery_id: galleryId,
                 base_type_id: baseTypeId,
                 size_id: sizeId,
             };
@@ -413,28 +434,37 @@ export class TintCreateColorPopup extends Component {
                     if (createdCount > 0 && omittedSizes.length > 0) {
                         this.notification.add(
                             _t(
-                                "Color registrado. Se generaron las presentaciones (%s), pero se omitieron por exceder la capacidad del envase: %s.",
-                                createdNames || createdCount,
-                                omittedSizes.join(", ")
+                                "Color %(color)s registrado. Se generaron las presentaciones (%(created)s), pero se omitieron por exceder la capacidad del envase: %(omitted)s.",
+                                {
+                                    color: colorLabel,
+                                    created: createdNames || createdCount,
+                                    omitted: omittedSizes.join(", "),
+                                }
                             ),
                             { type: "warning" }
                         );
                     } else if (createdCount > 0) {
                         const msg = createdNames
-                            ? _t("¡Color registrado y presentaciones generadas: %s!", createdNames)
-                            : _t("¡Color y %s presentaciones adicionales generados exitosamente!", createdCount);
+                            ? _t("¡Color %(color)s registrado y presentaciones generadas: %(created)s!", {
+                                  color: colorLabel,
+                                  created: createdNames,
+                              })
+                            : _t("¡Color %(color)s y %(count)s presentaciones adicionales generados exitosamente!", {
+                                  color: colorLabel,
+                                  count: createdCount,
+                              });
                         this.notification.add(msg, { type: "success" });
                     } else if (omittedSizes.length > 0) {
                         this.notification.add(
                             _t(
-                                "Color registrado, pero las demás presentaciones no se generaron porque exceden la capacidad máxima del envase: %s.",
-                                omittedSizes.join(", ")
+                                "Color %(color)s registrado, pero las demás presentaciones no se generaron porque exceden la capacidad máxima del envase: %(omitted)s.",
+                                { color: colorLabel, omitted: omittedSizes.join(", ") }
                             ),
                             { type: "warning" }
                         );
                     } else {
                         this.notification.add(
-                            _t("¡Color y fórmula registrados exitosamente!"),
+                            _t("¡Color %s y fórmula registrados exitosamente!", colorLabel),
                             { type: "success" }
                         );
                     }
@@ -448,7 +478,7 @@ export class TintCreateColorPopup extends Component {
                 }
             } else {
                 this.notification.add(
-                    _t("¡Color y fórmula registrados exitosamente!"),
+                    _t("¡Color %s y fórmula registrados exitosamente!", colorLabel),
                     { type: "success" }
                 );
             }
