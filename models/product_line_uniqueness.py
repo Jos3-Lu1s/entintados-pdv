@@ -7,8 +7,11 @@ class SaleOrderLineUniqueProduct(models.Model):
 
     def _is_regular_product_line(self):
         self.ensure_one()
+        # Dos paquetes del mismo combo pueden llevar componentes distintos. Además, si el onchange
+        # vaciara el paquete, el configurador de combos del core se abriría sin plantilla y fallaría.
         return bool(self.product_id and not self.display_type and not self.is_downpayment
                     and not self.is_reward_line and not self.combo_item_id
+                    and self.product_id.type != 'combo'
                     and self.product_id != self.company_id.sale_discount_product_id)
 
     @api.constrains('order_id', 'product_id', 'display_type', 'is_downpayment', 'reward_id', 'combo_item_id')
