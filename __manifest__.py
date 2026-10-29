@@ -207,7 +207,6 @@ Catálogo de entintado
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
         'views/pos_order_views.xml',
-        'data/pos_order_reference.xml',
         'views/accounting_menu_sections.xml',
     ],
     'demo': [],

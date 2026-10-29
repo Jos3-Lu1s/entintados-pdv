@@ -1,13 +1,10 @@
-from odoo import api, fields, models, _
-from odoo.exceptions import AccessError
+from odoo import api, fields, models
 
 
 class PosOrderBranchReference(models.Model):
     _inherit = 'pos.order'
 
     branch_order_number = fields.Integer(copy=False, readonly=True, index=True)
-    previous_order_reference = fields.Char(
-        string='Referencia anterior', copy=False, readonly=True)
 
     @api.model
     def _next_branch_order_reference(self, company):
@@ -38,38 +35,19 @@ class PosOrderBranchReference(models.Model):
                 vals.get('session_id') or self.env.context.get('default_session_id'))
             company = session.company_id or self.env.company
             number, reference = self._next_branch_order_reference(company)
-            vals.update(name=reference, branch_order_number=number,
-                        previous_order_reference=False)
+            vals.update(name=reference, branch_order_number=number)
             values.append(vals)
         return super().create(values)
 
     def write(self, vals):
         # Offline clients may send the old name again when synchronizing a ticket.
-        if {'name', 'branch_order_number', 'previous_order_reference'} & vals.keys():
+        if {'name', 'branch_order_number'} & vals.keys():
             for order in self:
                 values = dict(vals)
                 if order.branch_order_number:
                     values.pop('name', None)
                     values.pop('branch_order_number', None)
-                    values.pop('previous_order_reference', None)
                 super(PosOrderBranchReference, order).write(values)
             return True
         return super().write(vals)
 
-    @api.model
-    def _migrate_branch_order_references(self):
-        if not self.env.su:
-            raise AccessError(_('Solo el administrador puede migrar las referencias del PdV.'))
-        count = 0
-        for company in self.env['res.company'].sudo().search([], order='id'):
-            orders = self.sudo().search([
-                ('company_id', '=', company.id), ('branch_order_number', '=', 0),
-            ], order='date_order, id')
-            for order in orders:
-                number, reference = self._next_branch_order_reference(company)
-                super(PosOrderBranchReference, order).write({
-                    'name': reference, 'branch_order_number': number,
-                    'previous_order_reference': order.name,
-                })
-                count += 1
-        return count
