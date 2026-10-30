@@ -240,6 +240,20 @@ class ProductTemplate(models.Model):
                     product.display_name,
                 ))
 
+    @api.constrains('type', 'uom_ids')
+    def _check_combo_without_extra_uoms(self):
+        # El núcleo no pasa la UdM del paquete a sus productos: un paquete en Docena cobraría 12 y
+        # entregaría 1 de cada producto. Se cuentan también las archivadas: al reactivarlas volverían
+        # a ofrecerse en la venta.
+        for product in self.with_context(active_test=False).filtered(
+            lambda p: p.type == 'combo' and p.uom_ids
+        ):
+            raise ValidationError(_(
+                "El combo «%(product)s» solo se vende en su unidad de medida base: "
+                "no puede tener unidades adicionales.",
+                product=product.display_name,
+            ))
+
     # --- Asistencia en el formulario ------------------------------------
 
     @api.onchange('type', 'is_storable')

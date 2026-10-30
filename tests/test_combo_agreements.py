@@ -490,3 +490,77 @@ class TestComboAgreements(TransactionCase):
             self.assertEqual(item._get_combo_package_line(), package_line, item.product_id.name)
             self.assertEqual((item.pricing_rule_type, item.pricing_rule_origin), ('none', ''), item.product_id.name)
         self.assertEqual([round(item.price_unit, 2) for item in items], [714.29, 214.29, 71.42])
+
+    def test_combo_package_uom_is_readonly(self):
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        order, package_line, _items = self._quote()
+        loose = self.env['sale.order.line'].create({'order_id': order.id, 'product_id': self.esmalte.id})
+
+        self.assertTrue(package_line.product_uom_readonly)
+        self.assertFalse(loose.product_uom_readonly)
+        with Form(order) as order_form, order_form.order_line.edit(0) as package_form:
+            with self.assertRaises(AssertionError):
+                package_form.product_uom_id = self.env.ref('uom.product_uom_dozen')
+
+    def test_combo_package_rejects_other_uom_write(self):
+        order, package_line, _items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            order.write({'order_line': [
+                Command.update(package_line.id, {'product_uom_id': self.env.ref('uom.product_uom_dozen').id}),
+            ]})
+
+    def test_combo_package_rejects_other_uom_with_pricelist_change(self):
+        """Tarifa a otra moneda y UdM del paquete en el mismo guardado."""
+        self._fixed_price_rule(self.package, 200.0)
+        pricelist_o = self._setup_other_currency()
+        order, package_line, _items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            order.write({
+                'pricelist_id': pricelist_o.id,
+                'order_line': [
+                    Command.update(package_line.id, {'product_uom_id': self.env.ref('uom.product_uom_dozen').id}),
+                ],
+            })
+
+        self.env.invalidate_all()
+        self.assertEqual(order.pricelist_id, self.pricelist)
+        self.assertAlmostEqual(order.amount_untaxed, 600.0, places=2)
+
+    def test_combo_package_rejects_other_uom_create(self):
+        order = self.env['sale.order'].create({
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+        })
+
+        with self.assertRaises(ValidationError):
+            self.env['sale.order.line'].create({
+                'order_id': order.id,
+                'product_id': self.package.id,
+                'product_uom_id': self.env.ref('uom.product_uom_dozen').id,
+            })
+
+    def test_combo_product_rejects_extra_uoms(self):
+        dozen = self.env.ref('uom.product_uom_dozen')
+        # Viene archivada: escrita desde `product.product`, el núcleo la descartaría sin guardarla.
+        dozen.active = True
+
+        with self.assertRaisesRegex(ValidationError, 'unidades adicionales'):
+            self.package.write({'uom_ids': [Command.set(dozen.ids)]})
+
+        loose = self.env['product.product'].create({
+            'name': 'Producto con Docena',
+            'uom_ids': [Command.set(dozen.ids)],
+        })
+        with self.assertRaisesRegex(ValidationError, 'unidades adicionales'):
+            loose.product_tmpl_id.write({'type': 'combo', 'combo_ids': [Command.set(self.combos.ids)]})
+
+    def test_combo_package_uom_hidden_in_mobile_views(self):
+        """En escritorio la fila del combo no muestra la UdM; la tarjeta y el formulario móviles tampoco."""
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        arch = self.env['sale.order'].get_views([(False, 'form')])['views']['form']['arch']
+        order_line = etree.fromstring(arch).xpath("//field[@name='order_line']")[0]
+        for subview in ('kanban', 'form'):
+            uom = order_line.xpath(f"./{subview}//field[@name='product_uom_id']")[0]
+            self.assertEqual(uom.get('invisible'), "product_type == 'combo'", subview)

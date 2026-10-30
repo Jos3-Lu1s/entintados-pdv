@@ -115,6 +115,12 @@ class SaleOrderLine(models.Model):
         for line in self:
             line.manual_discount_allowed = line._is_manual_discount_allowed()
 
+    @api.depends('product_id')
+    def _compute_product_uom_readonly(self):
+        # El paquete combo solo se vende en la UdM base de su producto (`_check_combo_package_uom`).
+        super()._compute_product_uom_readonly()
+        self.filtered(lambda line: line.product_type == 'combo').product_uom_readonly = True
+
     def _is_manual_discount_allowed(self):
         """Línea que admite descuento manual: no es precio fijo de acuerdo, recompensa, producto
         de descuento de la compañía, anticipo, producto de combo ni sección/nota.
@@ -159,6 +165,17 @@ class SaleOrderLine(models.Model):
                     "El colorante «%s» no se vende solo: solo puede salir "
                     "como parte de un producto entintado en el Punto de Venta.",
                     line.product_id.display_name,
+                ))
+
+    @api.constrains('product_id', 'product_uom_id')
+    def _check_combo_package_uom(self):
+        # El núcleo solo copia la cantidad del paquete a sus productos, no la UdM.
+        for line in self.filtered(lambda l: l.product_type == 'combo'):
+            if line.product_uom_id != line.product_id.uom_id:
+                raise ValidationError(_(
+                    "El combo «%(product)s» solo se vende en su unidad de medida «%(uom)s».",
+                    product=line.product_id.display_name,
+                    uom=line.product_id.uom_id.display_name,
                 ))
 
     def _manual_discount_values(self, discount):

@@ -44,6 +44,7 @@
                 <field name="manual_discount_allowed" invisible="1"/>
                 <field name="combo_price_snapshot" invisible="1"/>
                 <field name="combo_item_id" invisible="1"/>
+                <field name="product_type" invisible="1"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="before">
                 <label for="price_unit"/>
@@ -62,6 +63,7 @@
                 <field name="price_origin_label"/>
                 <field name="is_downpayment"/>
                 <field name="combo_price_snapshot"/>
+                <field name="product_type"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='price_unit']" position="after">
                 <field name="price_origin" widget="price_origin_icon" invisible="is_downpayment"/>
@@ -70,6 +72,13 @@
                 <div invisible="not pricing_rule_origin">
                     <field name="pricing_rule_origin" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
                 </div>
+            </xpath>
+            <!-- La lista de escritorio no muestra la UdM en la fila del combo: el móvil tampoco. -->
+            <xpath expr="//field[@name='order_line']/kanban//field[@name='product_uom_id']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='product_uom_id']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
             </xpath>
             <!-- Mismos readonly que la lista. -->
             <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="attributes">
