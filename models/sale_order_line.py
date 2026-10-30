@@ -95,6 +95,13 @@ class SaleOrderLine(models.Model):
         readonly=True,
         copy=False,
     )
+    # Línea del paquete: suma de sus productos, el subtotal que la lista de escritorio muestra en
+    # la fila del combo. La tarjeta móvil lo muestra en lugar de `price_subtotal`, que vale 0.
+    combo_subtotal = fields.Monetary(
+        string='Subtotal del combo',
+        compute='_compute_combo_subtotal',
+        currency_field='currency_id',
+    )
     # Último descuento asignado por el cálculo. El onchange de `discount` también se dispara
     # cuando lo cambia el cálculo: solo es manual si difiere de este valor.
     technical_discount = fields.Float(
@@ -114,6 +121,16 @@ class SaleOrderLine(models.Model):
     def _compute_manual_discount_allowed(self):
         for line in self:
             line.manual_discount_allowed = line._is_manual_discount_allowed()
+
+    @api.depends(
+        'product_type', 'virtual_id', 'order_id.order_line.price_subtotal',
+        'order_id.order_line.linked_line_id', 'order_id.order_line.linked_virtual_id',
+    )
+    def _compute_combo_subtotal(self):
+        for line in self:
+            line.combo_subtotal = line.product_type == 'combo' and sum(
+                line._get_linked_lines().filtered('combo_item_id').mapped('price_subtotal')
+            )
 
     @api.depends('product_id')
     def _compute_product_uom_readonly(self):
@@ -176,6 +193,40 @@ class SaleOrderLine(models.Model):
                     "El combo «%(product)s» solo se vende en su unidad de medida «%(uom)s».",
                     product=line.product_id.display_name,
                     uom=line.product_id.uom_id.display_name,
+                ))
+
+    @api.constrains('product_id', 'price_unit')
+    def _check_combo_package_price(self):
+        # El precio del paquete vive en `combo_package_price` y lo reparten sus productos.
+        for line in self.filtered(lambda l: l.product_type == 'combo'):
+            if not line.currency_id.is_zero(line.price_unit):
+                raise ValidationError(_(
+                    "El combo «%(product)s» no lleva precio propio: su precio lo reparten sus productos.",
+                    product=line.product_id.display_name,
+                ))
+
+    @api.constrains('product_id', 'product_uom_id', 'product_uom_qty', 'linked_line_id')
+    def _check_combo_item_line(self):
+        # La lista de escritorio no deja cambiar la UdM ni la cantidad de un producto del combo:
+        # la cantidad es la del paquete, que el núcleo y `write` le copian.
+        precision = self.env['decimal.precision'].precision_get('Product Unit')
+        for line in self.filtered('combo_item_id'):
+            package = line._get_linked_line()
+            if line.product_uom_id != line.product_id.uom_id:
+                raise ValidationError(_(
+                    "«%(product)s» es parte del combo «%(package)s»: solo se vende en su unidad "
+                    "de medida «%(uom)s».",
+                    product=line.product_id.display_name,
+                    package=package.product_id.display_name,
+                    uom=line.product_id.uom_id.display_name,
+                ))
+            if package and float_compare(
+                line.product_uom_qty, package.product_uom_qty, precision_digits=precision,
+            ):
+                raise ValidationError(_(
+                    "«%(product)s» es parte del combo «%(package)s»: su cantidad es la del combo.",
+                    product=line.product_id.display_name,
+                    package=package.product_id.display_name,
                 ))
 
     def _manual_discount_values(self, discount):
@@ -313,7 +364,18 @@ class SaleOrderLine(models.Model):
         return self.browse([created[index].id for index in range(len(vals_list))])
 
     def write(self, vals):
-        update_pricing_rule = 'product_id' in vals and not self.env.context.get('skip_pricing_rule_update')
+        if 'product_id' in vals:
+            # El configurador del núcleo borra y vuelve a crear los productos del combo: un cambio
+            # de producto por `write` los separaría de lo que eligió el configurador.
+            for line in self.filtered('combo_item_id'):
+                if line.product_id.id != vals['product_id']:
+                    raise ValidationError(_(
+                        "«%(product)s» es parte del combo «%(package)s»: para cambiarlo, vuelve "
+                        "a configurar el combo.",
+                        product=line.product_id.display_name,
+                        package=line._get_linked_line().product_id.display_name,
+                    ))
+        update_pricing_rule ='product_id' in vals and not self.env.context.get('skip_pricing_rule_update')
         if update_pricing_rule and len(self) > 1:
             # El acuerdo depende del cliente de cada línea: un solo `vals` llevaría la regla y el
             # precio técnico de la última línea a todas.
@@ -419,6 +481,13 @@ class SaleOrderLine(models.Model):
             # de después ponen el badge definitivo.
             vals['pricing_rule_type'] = 'none'
         res = super().write(vals)
+        if 'product_uom_qty' in vals:
+            # El núcleo solo copia la cantidad del paquete a sus productos en el onchange del
+            # formulario: por código, RPC o el catálogo se quedarían con la anterior.
+            for package in self.filtered(lambda line: line.product_type == 'combo'):
+                package.linked_line_ids.filtered(
+                    lambda line: line.combo_item_id and line.product_uom_qty != package.product_uom_qty
+                ).write({'product_uom_qty': package.product_uom_qty})
         for line, base_price in fixed_price_by_line.items():
             price = line.product_id.uom_id._compute_price(base_price, line.product_uom_id)
             price = line._convert_price_currency(price, line._get_fixed_price_company().currency_id)

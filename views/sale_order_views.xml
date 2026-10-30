@@ -77,8 +77,70 @@
             <xpath expr="//field[@name='order_line']/kanban//field[@name='product_uom_id']" position="attributes">
                 <attribute name="invisible">product_type == 'combo'</attribute>
             </xpath>
+            <!-- Tarjeta del paquete: la suma de sus productos, como la fila de escritorio, en lugar de
+                 su propio subtotal y precio unitario, que valen 0. El icono del desglose se queda. -->
+            <xpath expr="//field[@name='order_line']/kanban//field[@name='price_subtotal']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/kanban//field[@name='price_subtotal']" position="after">
+                <field name="combo_subtotal" class="fw-bolder float-end pe-1" widget="monetary" invisible="product_type != 'combo'"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/kanban//field[@name='price_unit']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
             <xpath expr="//field[@name='order_line']/form//field[@name='product_uom_id']" position="attributes">
                 <attribute name="invisible">product_type == 'combo'</attribute>
+                <attribute name="readonly">product_uom_readonly or combo_item_id</attribute>
+                <attribute name="options">{'no_open': True}</attribute>
+            </xpath>
+            <!-- Formulario móvil de las líneas de combo, igual que sus filas en la lista de escritorio:
+                 el paquete solo muestra producto, cantidad, descuento y descripción, y en sus
+                 productos solo se editan la descripción, los impuestos y lo entregado. El
+                 configurador de combos no está en móvil: no se agregan ni se cambian combos aquí. -->
+            <xpath expr="//field[@name='order_line']/form//field[@name='product_id']" position="attributes">
+                <attribute name="readonly">not product_updatable or product_type == 'combo' or combo_item_id</attribute>
+                <attribute name="options">{'no_open': True}</attribute>
+                <attribute name="domain">[('sale_ok', '=', True), ('type', '!=', 'combo')]</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='product_uom_qty']" position="attributes">
+                <attribute name="readonly">combo_item_id</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//label[@for='price_unit']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='tax_ids']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//label[@for='customer_lead']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//div[@name='lead']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='customer_lead']" position="attributes">
+                <attribute name="readonly">product_type != 'consu' or combo_item_id</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='analytic_distribution']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+                <attribute name="readonly">combo_item_id</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//label[@for='qty_delivered']" position="attributes">
+                <attribute name="invisible">parent.state != 'sale' or product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//div[@name='delivered_qty']" position="attributes">
+                <attribute name="invisible">parent.state != 'sale' or product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//label[@for='qty_invoiced']" position="attributes">
+                <attribute name="invisible">parent.state != 'sale' or product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//div[@name='invoiced_qty']" position="attributes">
+                <attribute name="invisible">parent.state != 'sale' or product_type == 'combo'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//div[@name='invoice_lines']" position="attributes">
+                <attribute name="invisible">display_type or product_type == 'combo'</attribute>
             </xpath>
             <!-- Mismos readonly que la lista. -->
             <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="attributes">
@@ -108,6 +170,24 @@
                 <field name="pricing_rule_type" column_invisible="True"/>
                 <field name="pricing_rule_id" column_invisible="True"/>
                 <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Campos que agrega `sale_stock`, del que este módulo no depende: la prioridad asegura que
+         esta herencia se aplique después de la suya. -->
+    <record id="view_order_form_combo_mobile_stock" model="ir.ui.view">
+        <field name="name">sale.order.view.form.combo.mobile.stock.entintados_pdv</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/form//field[@name='route_ids']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
+                <attribute name="readonly">combo_item_id</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//widget[@name='qty_at_date_widget']" position="attributes">
+                <attribute name="invisible">product_type == 'combo'</attribute>
             </xpath>
         </field>
     </record>
