@@ -949,7 +949,9 @@ class SaleOrderLine(models.Model):
 
     def _sync_combo_package_agreement(self):
         for line in self.with_context(skip_manual_discount_breakdown=True):
-            if not line._get_linked_line():
+            # Al reconfigurar un combo sin guardar, el onchange ya sacó del pedido sus productos
+            # anteriores: sin `order_id`, `_get_linked_line` no encuentra el paquete y lanza.
+            if not line.order_id or not line._get_linked_line():
                 continue
             values = line._get_combo_package_agreement()
             # En una línea guardada cada asignación es un write: hacia precio fijo, `discount`

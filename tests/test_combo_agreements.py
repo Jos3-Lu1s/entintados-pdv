@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 from datetime import timedelta
 
 from lxml import etree
@@ -501,6 +502,36 @@ class TestComboAgreements(TransactionCase):
         with Form(order) as order_form, order_form.order_line.edit(0) as package_form:
             with self.assertRaises(AssertionError):
                 package_form.product_uom_id = self.env.ref('uom.product_uom_dozen')
+
+    def _combo_selection(self, choices):
+        """`selected_combo_items` tal como lo envía el configurador del combo."""
+        return json.dumps([{
+            'combo_item_id': self._item(combo, product).id,
+            'product_id': product.id,
+            'no_variant_attribute_value_ids': [],
+            'product_custom_attribute_values': [],
+        } for combo, product in zip(self.combos, choices)])
+
+    def test_reconfigure_unsaved_combo_in_form(self):
+        """Reconfigurar un combo antes de guardar: los productos anteriores ya salieron del pedido."""
+        self._fixed_price_rule(self.package, 200.0)
+        order_form = Form(self.env['sale.order'])
+        order_form.partner_id = self.partner
+        order_form.pricelist_id = self.pricelist
+        with order_form.order_line.new() as package_form:
+            package_form.product_id = self.package
+            package_form.virtual_id = 'combo-nuevo'
+            package_form.selected_combo_items = self._combo_selection(
+                [self.vinilica, self.rodillo_grande, self.brocha_2])
+        with order_form.order_line.edit(0) as package_form:
+            package_form.selected_combo_items = self._combo_selection(
+                [self.esmalte, self.rodillo_chico, self.brocha_4])
+        order = order_form.save()
+
+        items = order.order_line.filtered('combo_item_id')
+        self.assertEqual(items.product_id, self.esmalte | self.rodillo_chico | self.brocha_4)
+        self.assertEqual(items.mapped('linked_line_id'), order.order_line.filtered(lambda line: not line.combo_item_id))
+        self.assertAlmostEqual(order.amount_untaxed, 200.0, places=2)
 
     def test_combo_package_rejects_other_uom_write(self):
         order, package_line, _items = self._quote()
