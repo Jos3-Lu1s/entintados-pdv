@@ -645,8 +645,13 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertFalse(l3.pricing_rule_id)
         self.assertEqual(l3.discount, 5.0)
 
-        # Reactividad ante cambio de producto en línea 1 (cambia de prod_1 a prod_2)
-        l1.product_id = self.prod_2
+        # prod_2 ya está en l2: la línea 1 cambia a otro producto de la misma línea.
+        prod_2_bis = self.templates.create({
+            'name': 'Pintura Exterior Mate',
+            'list_price': 800.0,
+            'lines_product_id': self.line_2.id,
+        }).product_variant_ids[0]
+        l1.product_id = prod_2_bis
         l1._onchange_product_id()
         self.assertEqual(l1.pricing_rule_type, 'line')
         self.assertEqual(l1.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (12.0%)")
@@ -873,21 +878,22 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
     def test_confirmed_order_new_line_discount_rules(self):
         """Una línea nueva en un pedido confirmado aplica el descuento vigente de cada nivel."""
+        # El pedido se confirma con un producto distinto al de la línea nueva.
         cases = [
             ('product', {'applied_on': '0_product', 'product_id': self.prod_3.id, 'discount': 10.0},
-             self.prod_3, 100.0, 10.0),
+             self.prod_1, self.prod_3, 100.0, 10.0),
             ('line', {'applied_on': '1_line', 'line_id': self.line_1.id, 'discount': 12.0},
-             self.prod_1, 500.0, 12.0),
+             self.prod_3, self.prod_1, 500.0, 12.0),
             ('scheme', {'applied_on': '2_scheme', 'scheme_id': self.schema_a.id, 'discount': 8.0},
-             self.prod_2, 800.0, 8.0),
-            ('global', None, self.prod_3, 100.0, 5.0),
+             self.prod_1, self.prod_2, 800.0, 8.0),
+            ('global', None, self.prod_1, self.prod_3, 100.0, 5.0),
         ]
-        for origin_type, rule_vals, product, price, discount in cases:
+        for origin_type, rule_vals, base_product, product, price, discount in cases:
             with self.subTest(origin_type=origin_type):
                 self.partner.discount_rule_ids.unlink()
                 if rule_vals:
                     self.rules.create(dict(rule_vals, partner_id=self.partner.id, rule_type='discount'))
-                order = self._create_confirmed_order(self.partner, self.prod_1)
+                order = self._create_confirmed_order(self.partner, base_product)
 
                 new_line = self._add_line_with_form(order, product)
 
@@ -906,15 +912,23 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             'product_id': self.prod_1.id,
             'fixed_price': 300.0,
         })
+        rule_new = self.rules.create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': self.prod_3.id,
+            'fixed_price': 70.0,
+        })
         order = self._create_confirmed_order(self.partner, self.prod_1)
         old_line = order.order_line
         self.assertEqual(old_line.price_unit, 300.0)
 
         rule.write({'fixed_price': 420.0})
-        new_line = self._add_line_with_form(order, self.prod_1)
+        rule_new.write({'fixed_price': 90.0})
+        new_line = self._add_line_with_form(order, self.prod_3)
 
         self.assertEqual(old_line.price_unit, 300.0)
-        self.assertEqual(new_line.price_unit, 420.0)
+        self.assertEqual(new_line.price_unit, 90.0)
 
         with Form(order) as order_form:
             with order_form.order_line.edit(0) as line_form:
