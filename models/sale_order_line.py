@@ -174,10 +174,12 @@ class SaleOrderLine(models.Model):
                     line=line.name,
                 ))
 
-    @api.constrains('product_id')
+    # `state` hace que reabrir o confirmar un pedido revise también las líneas
+    # cuyo producto se reclasificó como colorante después de capturarlas.
+    @api.constrains('product_id', 'state')
     def _check_colorant_not_sold_alone(self):
         for line in self:
-            if line.product_id.tint_role == 'colorant':
+            if line.state != 'cancel' and line.product_id.tint_role == 'colorant':
                 raise ValidationError(_(
                     "El colorante «%s» no se vende solo: solo puede salir "
                     "como parte de un producto entintado en el Punto de Venta.",

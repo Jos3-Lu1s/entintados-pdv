@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from unittest.mock import patch
 from uuid import uuid4
 
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import Form
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import TransactionCase, new_test_user, tagged
 
 
 @tagged('post_install', '-at_install')
@@ -164,3 +165,159 @@ class TestColorantNotSoldAlone(TransactionCase):
             ('product_id', '=', self.colorant.product_variant_id.id),
             ('qty', '=', -24),
         ]))
+
+
+@tagged('post_install', '-at_install')
+class TestReclassifyColorantWithSales(TransactionCase):
+    """ Un producto que todavía puede confirmarse o facturarse en Ventas no
+    puede pasar a colorante.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.point = cls.env.ref('entintados_pdv.uom_tint_point')
+        cls.partner = cls.env['res.partner'].create({
+            'name': 'Cliente reclasificación',
+            'is_customer': True,
+            'phone': '1234567890',
+        })
+        cls.product = cls.env['product.template'].create({
+            'name': 'Insumo sin rol',
+            'is_storable': True,
+            'uom_id': cls.point.id,
+            'list_price': 3.0,
+            'invoice_policy': 'order',
+            'sale_ok': True,
+        })
+        cls.variant = cls.product.product_variant_id
+        cls.warehouse = cls.env['stock.warehouse'].search(
+            [('company_id', '=', cls.env.company.id)], limit=1)
+        cls.env['stock.quant']._update_available_quantity(
+            cls.variant, cls.warehouse.lot_stock_id, 10000)
+
+    def _quote(self, qty=100):
+        return self.env['sale.order'].create({
+            'partner_id': self.partner.id,
+            'warehouse_id': self.warehouse.id,
+            'order_line': [(0, 0, {
+                'product_id': self.variant.id,
+                'product_uom_qty': qty,
+            })],
+        })
+
+    def _confirmed(self, qty=100):
+        order = self._quote(qty)
+        order.action_confirm()
+        self.assertEqual(order.state, 'sale')
+        return order
+
+    def _assert_blocked(self, orders, record=None):
+        record = record or self.product
+        with self.assertRaises(ValidationError) as caught:
+            record.write({'tint_role': 'colorant'})
+        message = str(caught.exception)
+        self.assertIn('como colorante', message)
+        for order in orders:
+            self.assertIn(order.name, message)
+        self.assertFalse(self.product.tint_role)
+        self.assertTrue(self.product.sale_ok)
+        return message
+
+    def _assert_reclassified(self):
+        self.product.write({'tint_role': 'colorant'})
+        self.assertEqual(self.product.tint_role, 'colorant')
+        self.assertFalse(self.product.sale_ok)
+        self.assertFalse(self.product.available_in_pos)
+
+    def test_reclassify_blocked_by_quotation(self):
+        self._assert_blocked(self._quote())
+
+    def test_reclassify_blocked_by_sent_quotation(self):
+        order = self._quote()
+        order.write({'state': 'sent'})
+        self._assert_blocked(order)
+
+    def test_reclassify_blocked_by_confirmed_not_invoiced(self):
+        self._assert_blocked(self._confirmed())
+
+    def test_reclassify_blocked_by_partially_invoiced(self):
+        order = self._confirmed()
+        order._create_invoices()
+        line = order.order_line
+        line.product_uom_qty = 150
+        self.assertLess(line.qty_invoiced, line.product_uom_qty)
+        self._assert_blocked(order)
+
+    def test_reclassify_allowed_when_fully_invoiced(self):
+        order = self._confirmed()
+        order._create_invoices()
+        self.assertEqual(order.order_line.qty_invoiced, 100)
+        self._assert_reclassified()
+
+    def test_reclassify_allowed_when_cancelled(self):
+        order = self._quote()
+        order._action_cancel()
+        self.assertEqual(order.state, 'cancel')
+        self._assert_reclassified()
+
+    def test_reclassify_blocked_from_variant(self):
+        self._assert_blocked(self._quote(), record=self.variant)
+
+    def test_reclassify_blocked_by_archived_variant(self):
+        order = self._quote()
+        self.variant.active = False
+        self._assert_blocked(order)
+
+    def test_reclassify_message_lists_orders(self):
+        orders = self.env['sale.order']
+        for _i in range(6):
+            orders |= self._quote()
+        orders = orders.sorted('name')
+        message = self._assert_blocked(orders[:5])
+        self.assertNotIn(orders[5].name, message)
+        self.assertIn('y 1 más', message)
+
+    def test_reclassify_without_sales_rights(self):
+        order = self._quote()
+        user = new_test_user(
+            self.env, login='catalogo_sin_ventas',
+            groups='base.group_user,product.group_product_manager')
+        self.assertFalse(user.has_group('sales_team.group_sale_salesman'))
+        self._assert_blocked(order, record=self.product.with_user(user))
+
+    def test_rewrite_colorant_role_not_checked(self):
+        self._assert_reclassified()
+        sale_line_class = type(self.env['sale.order.line'])
+        with patch.object(sale_line_class, 'search',
+                          side_effect=AssertionError("no debe buscar líneas")):
+            self.product.write({'tint_role': 'colorant'})
+        self.assertEqual(self.product.tint_role, 'colorant')
+
+    def _cancelled_and_reclassified(self):
+        order = self._quote()
+        order._action_cancel()
+        self._assert_reclassified()
+        # Cancelar y reclasificar son peticiones previas ya guardadas.
+        self.env.flush_all()
+        return order
+
+    def _assert_still_cancelled(self, order):
+        self.env.cr.execute("SELECT state FROM sale_order WHERE id = %s", [order.id])
+        self.assertEqual(self.env.cr.fetchone()[0], 'cancel')
+
+    def test_cancelled_order_cannot_be_reopened(self):
+        order = self._cancelled_and_reclassified()
+        with self.assertRaisesRegex(ValidationError, 'no se vende solo'):
+            order.action_draft()
+            # La restricción corre al recalcular el `state` de la línea, al cerrar la petición.
+            self.env.flush_all()
+        self._assert_still_cancelled(order)
+
+    def test_order_state_write_rechecks_colorant(self):
+        order = self._cancelled_and_reclassified()
+        with self.assertRaisesRegex(ValidationError, 'no se vende solo'):
+            order.write({'state': 'draft'})
+            # La restricción corre al recalcular el `state` de la línea, al cerrar la petición.
+            self.env.flush_all()
+        self._assert_still_cancelled(order)
