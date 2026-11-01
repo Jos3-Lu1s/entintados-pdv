@@ -46,7 +46,7 @@ class ResPartnerDiscountRule(models.Model):
         comodel_name='lines.product',
         string='Línea de producto',
         index=True,
-        ondelete='cascade',
+        ondelete='restrict',
     )
     # En las reglas por línea guarda el esquema de la línea y solo sirve para filtrarla:
     # los acuerdos por esquema se buscan siempre con applied_on == '2_scheme'.
@@ -54,7 +54,7 @@ class ResPartnerDiscountRule(models.Model):
         comodel_name='tint.schema',
         string='Esquema',
         index=True,
-        ondelete='cascade',
+        ondelete='restrict',
     )
     discount = fields.Float(
         string='Descuento (%)',

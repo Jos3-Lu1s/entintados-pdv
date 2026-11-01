@@ -12,11 +12,13 @@ class ProductPricelistItem(models.Model):
     esquema_id = fields.Many2one(
         'tint.schema',
         string='Esquema',
+        ondelete='restrict',
     )
 
     linea_id = fields.Many2one(
         'lines.product',
         string='Línea',
+        ondelete='restrict',
     )
 
     @api.onchange('display_applied_on')

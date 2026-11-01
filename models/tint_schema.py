@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from odoo import api, fields, models, _
+from odoo.exceptions import UserError
+
+from ..utils.usage import count_usage, format_usage
 
 
 class TintSchema(models.Model):
@@ -43,6 +46,25 @@ class TintSchema(models.Model):
         for schema in self:
             schema.line_count = len(schema.line_ids)
             schema.product_count = len(schema.product_ids)
+
+    def unlink(self):
+        self._check_not_in_use()
+        return super().unlink()
+
+    def _check_not_in_use(self):
+        # Productos y fórmulas llegan al esquema por su línea: los cubre el conteo de líneas.
+        usage = count_usage(self.env, self, [
+            ('lines.product', 'scheme', self.env._("línea de producto"), self.env._("líneas de producto")),
+            ('res.partner.discount.rule', 'scheme_id', self.env._("acuerdo de cliente"), self.env._("acuerdos de cliente")),
+            ('product.pricelist.item', 'esquema_id', self.env._("regla de tarifa"), self.env._("reglas de tarifa")),
+        ])
+        if usage:
+            raise UserError("\n".join(
+                self.env._("No se puede eliminar el esquema «%(name)s»: lo usan %(usage)s. "
+                           "Archívalo en su lugar.",
+                           name=schema.display_name, usage=format_usage(self.env, usage[schema.id]))
+                for schema in self if schema.id in usage
+            ))
 
     def action_view_lines(self):
         self.ensure_one()
