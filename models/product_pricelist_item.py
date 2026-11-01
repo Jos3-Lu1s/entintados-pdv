@@ -23,9 +23,19 @@ class ProductPricelistItem(models.Model):
 
     @api.onchange('display_applied_on')
     def _onchange_applied_on_esquema(self):
-        if self.display_applied_on != '3_esquema':
-            self.esquema_id = False
-            self.linea_id = False
+        for item in self:
+            if item.display_applied_on != '3_esquema':
+                item.esquema_id = False
+                item.linea_id = False
+                continue
+            # El producto o la categoría de antes quedarían ocultos y la búsqueda
+            # de reglas del core descartaría la regla para el resto del esquema.
+            item.update({
+                'applied_on': '3_global',
+                'product_tmpl_id': False,
+                'product_id': False,
+                'categ_id': False,
+            })
 
     @api.onchange('esquema_id')
     def _onchange_esquema_id(self):
@@ -45,6 +55,30 @@ class ProductPricelistItem(models.Model):
                 record.name = f"Esquema: {record.esquema_id.name}"
             else:
                 record.name = f"Esquema: {record.esquema_id.name} - Linea: {record.linea_id.name}"
+
+    # Con '3_global', el create/write del core vacía producto, variante y categoría.
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('display_applied_on') == '3_esquema':
+                vals['applied_on'] = '3_global'
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if 'display_applied_on' in vals:
+            scheme_items = self if vals['display_applied_on'] == '3_esquema' else self.browse()
+        elif {'applied_on', 'product_tmpl_id', 'product_id', 'categ_id'} & vals.keys():
+            scheme_items = self.filtered(lambda item: item.display_applied_on == '3_esquema')
+        else:
+            scheme_items = self.browse()
+
+        if not scheme_items:
+            return super().write(vals)
+        others = self - scheme_items
+        result = super(ProductPricelistItem, scheme_items).write(dict(vals, applied_on='3_global'))
+        if others:
+            super(ProductPricelistItem, others).write(vals)
+        return result
 
     def _is_applicable_for(self, product, qty_in_product_uom):
         self.ensure_one()

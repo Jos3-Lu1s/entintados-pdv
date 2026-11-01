@@ -39,3 +39,4 @@ from . import test_combo_price_breakdown
 from . import test_combo_agreements
 from . import test_scheme_line_selector
 from . import test_line_scheme_unlink
+from . import test_pricelist_item_esquema
