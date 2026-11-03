@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import Command
+from odoo.exceptions import ValidationError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -225,6 +226,8 @@ class TestComboPriceBreakdown(TransactionCase):
             'Parte del combo «Paquete Pintor»: Brocha',
         ])
 
-        items[0].write({'price_unit': 750.0})
-        self.assertEqual(items[0].price_origin, 'manual')
-        self.assertEqual(items[0].price_unit, 750.0)
+        price = items[0].price_unit
+        with self.assertRaises(ValidationError):
+            items[0].write({'price_unit': 750.0})
+        self.assertEqual(items[0].price_origin, 'combo')
+        self.assertEqual(items[0].price_unit, price)

@@ -136,14 +136,6 @@ def run():
             assert not refused.approval_request_id.with_user(user).can_cancel_pos_credit
             rejects(lambda: refused.approval_request_id.with_user(user).action_cancel(), AccessError)
             rejects(lambda: refused.approval_request_id.with_user(user).action_draft())
-            # Existing decisions survive migration to the native application.
-            legacy = request.copy({'order_uuid': str(uuid4()), 'state': 'approved', 'used_order_id': False})
-            assert not legacy.approval_request_id
-            migrated = legacy._create_native_request()
-            assert migrated.request_status == 'approved' and legacy.state == 'approved'
-            assert legacy._create_native_request() == migrated
-            assert request_for(legacy.order_uuid, 200, 200)['id'] == legacy.id
-            assert legacy.order_id and migrated.reference == legacy.order_id.pos_reference
             changed_uuid = str(uuid4())
             old = Approval.browse(request_for(changed_uuid, 400, 400)['id'])
             native_id = old.approval_request_id.id
@@ -202,7 +194,7 @@ def run():
             assert env.ref('entintados_pdv.menu_pos_credit_approval').parent_id == env.ref('account.menu_finance_receivables')
             partner.is_credit = False
             rejects(lambda: pos.request_credit_approval(partner.id, str(uuid4()), 200, 200))
-            print('PASS: persistent order link, reload lookup, cross-cashier reuse, legacy adoption, cancellation/reuse prevention, preserved approval/cancellation audit, department permissions, amount/risk checks and idempotent consumption. No invoice posted; full rollback.')
+            print('PASS: persistent order link, reload lookup, cross-cashier reuse,cancellation/reuse prevention, preserved approval/cancellation audit, department permissions, amount/risk checks and idempotent consumption. No invoice posted; full rollback.')
         finally:
             cr.rollback()
 

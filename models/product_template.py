@@ -8,6 +8,7 @@ from ..utils.points import format_points
 
 # El colorante es materia prima: solo sale vendido dentro de una base entintada.
 COLORANT_FORCED_VALUES = {'sale_ok': False, 'available_in_pos': False}
+MAX_ORDERS_IN_MESSAGE = 5
 
 
 class ProductTemplate(models.Model):
@@ -103,6 +104,9 @@ class ProductTemplate(models.Model):
 
     def write(self, vals):
         clean_default_code(vals)
+        if vals.get('tint_role') == 'colorant':
+            self.filtered(
+                lambda p: p.tint_role != 'colorant')._check_no_open_sales_for_colorant()
         if not self.env.context.get(REQUIRE_DEFAULT_CODE):
             result = super().write(vals)
         else:
@@ -143,6 +147,31 @@ class ProductTemplate(models.Model):
             and (p.sale_ok or p.available_in_pos))
         if colorants:
             super(ProductTemplate, colorants).write(COLORANT_FORCED_VALUES)
+
+    def _check_no_open_sales_for_colorant(self):
+        # sudo: quien corrige el catálogo puede no tener acceso a Ventas.
+        lines_model = self.env['sale.order.line'].sudo()
+        for template in self:
+            variants = template.with_context(active_test=False).product_variant_ids
+            lines = lines_model.search([
+                ('product_id', 'in', variants.ids),
+                ('state', 'in', ('draft', 'sent', 'sale')),
+            ]).filtered(lambda l: l.state != 'sale' or l.product_uom_id.compare(
+                l.qty_invoiced, l.product_uom_qty) < 0)
+            if not lines:
+                continue
+            names = sorted(set(lines.order_id.mapped('name')))
+            orders = ", ".join(names[:MAX_ORDERS_IN_MESSAGE])
+            if len(names) > MAX_ORDERS_IN_MESSAGE:
+                orders = _("%(orders)s y %(rest)s más",
+                           orders=orders, rest=len(names) - MAX_ORDERS_IN_MESSAGE)
+            raise ValidationError(_(
+                "No se puede marcar «%(product)s» como colorante: está en pedidos "
+                "de venta abiertos o por facturar (%(orders)s). Quítalo de esos "
+                "pedidos o cancélalos primero.",
+                product=template.display_name,
+                orders=orders,
+            ))
 
     def _check_default_code_required(self):
         # Con más de una variante la referencia vive en cada variante y el
@@ -239,6 +268,20 @@ class ProductTemplate(models.Model):
                     "asignado a una línea de producto comercial específica.",
                     product.display_name,
                 ))
+
+    @api.constrains('type', 'uom_ids')
+    def _check_combo_without_extra_uoms(self):
+        # El núcleo no pasa la UdM del paquete a sus productos: un paquete en Docena cobraría 12 y
+        # entregaría 1 de cada producto. Se cuentan también las archivadas: al reactivarlas volverían
+        # a ofrecerse en la venta.
+        for product in self.with_context(active_test=False).filtered(
+            lambda p: p.type == 'combo' and p.uom_ids
+        ):
+            raise ValidationError(_(
+                "El combo «%(product)s» solo se vende en su unidad de medida base: "
+                "no puede tener unidades adicionales.",
+                product=product.display_name,
+            ))
 
     # --- Asistencia en el formulario ------------------------------------
 

@@ -67,7 +67,7 @@ class SaleOrder(models.Model):
                 or (line in frozen and line not in packages and not line.combo_item_id)
             }
             previous_packages = {
-                line: (line.currency_id, line.product_uom_id, line.combo_package_price)
+                line: (line.currency_id, line.combo_package_price)
                 for line in packages
             }
         res = super().write(vals)
@@ -109,11 +109,9 @@ class SaleOrder(models.Model):
                 ),
                 'technical_price_unit': technical,
             })
-        for package, (old_currency, old_uom, old_price) in previous_packages.items():
+        for package, (old_currency, old_price) in previous_packages.items():
             if not package.exists() or package.currency_id == old_currency:
                 continue
-            if old_uom and old_uom != package.product_uom_id:
-                old_price = old_uom._compute_price(old_price, package.product_uom_id)
             if old_currency.compare_amounts(package.combo_package_price, old_price):
                 continue
             package.combo_package_price = package._convert_price_currency(old_price, old_currency)

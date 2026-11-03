@@ -1,5 +1,7 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
+
+from ..utils.usage import count_usage, format_usage
 
 
 class LinesProduct(models.Model):
@@ -53,6 +55,25 @@ class LinesProduct(models.Model):
                 ('line_id', 'in', self.ids),
             ])._sync_line_scheme()
         return result
+
+    def unlink(self):
+        self._check_not_in_use()
+        return super().unlink()
+
+    def _check_not_in_use(self):
+        usage = count_usage(self.env, self, [
+            ('product.template', 'lines_product_id', self.env._("producto"), self.env._("productos")),
+            ('res.partner.discount.rule', 'line_id', self.env._("acuerdo de cliente"), self.env._("acuerdos de cliente")),
+            ('product.pricelist.item', 'linea_id', self.env._("regla de tarifa"), self.env._("reglas de tarifa")),
+            ('tint.color.formula', 'line_scheme_id', self.env._("fórmula"), self.env._("fórmulas")),
+        ])
+        if usage:
+            raise UserError("\n".join(
+                self.env._("No se puede eliminar la línea de producto «%(name)s»: la usan %(usage)s. "
+                           "Archívala en su lugar.",
+                           name=line.display_name, usage=format_usage(self.env, usage[line.id]))
+                for line in self if line.id in usage
+            ))
 
     def action_view_products(self):
         self.ensure_one()

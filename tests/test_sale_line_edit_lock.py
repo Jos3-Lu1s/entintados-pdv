@@ -258,3 +258,33 @@ class TestSaleLineEditLock(TransactionCase):
         self.assertEqual(len(buttons), 2)
         for button in buttons:
             self.assertIn('discount_edit_locked', button.get('invisible') or '')
+
+    def _loose_line_at_150(self):
+        product = self.env['product.product'].create({'name': 'Rodillo Mismo Precio', 'list_price': 150.0})
+        order = self._create_order(self.manager, product=product)
+        minus_10 = self.env['product.pricelist'].create({
+            'name': 'Tarifa -10 %',
+            'item_ids': [(0, 0, {'compute_price': 'percentage', 'percent_price': 10.0, 'applied_on': '3_global'})],
+        })
+        return order, order.order_line, minus_10
+
+    def test_same_price_write_not_manual(self):
+        order, line, minus_10 = self._loose_line_at_150()
+
+        line.write({'price_unit': 150.0})
+        self.assertNotEqual(line.price_origin, 'manual')
+
+        order.write({'pricelist_id': minus_10.id})
+        order.action_update_prices()
+        self.assertAlmostEqual(line.price_unit, 135.0, places=2)
+        self.assertNotEqual(line.price_origin, 'manual')
+
+    def test_different_price_write_is_manual(self):
+        order, line, minus_10 = self._loose_line_at_150()
+
+        line.write({'price_unit': 120.0})
+        self.assertEqual(line.price_origin, 'manual')
+
+        order.write({'pricelist_id': minus_10.id})
+        order.action_update_prices()
+        self.assertAlmostEqual(line.price_unit, 120.0, places=2)

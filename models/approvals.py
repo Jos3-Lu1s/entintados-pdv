@@ -13,16 +13,6 @@ APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_ou
 class Approval(models.Model):
     _inherit = 'approval.category'
 
-    @api.model
-    def _configure_material_approval_policy(self):
-        category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
-        if category:
-            category.sudo().write({
-                'approval_minimum': 1,
-                'approver_sequence': False,
-                'manager_approval': False,
-            })
-
     approval_type = fields.Selection(
         selection_add=[
             ("stock_out", "Crear salida de almacén"),

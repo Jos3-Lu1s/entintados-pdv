@@ -42,7 +42,6 @@ class TestCrmMaterialApprovers(TransactionCase):
         self.assertEqual(approvers.ids.count(self.manager.id), 1)
 
     def test_one_commercial_approval_is_sufficient(self):
-        self.env['approval.category']._configure_material_approval_policy()
         self.assertEqual(self.category.approval_minimum, 1)
         self.assertFalse(self.category.approver_sequence)
         self.assertFalse(self.category.manager_approval)

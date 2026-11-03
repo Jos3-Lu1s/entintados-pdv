@@ -2,6 +2,8 @@
 
 from lxml import etree
 
+from odoo import Command
+from odoo.exceptions import ValidationError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -269,3 +271,245 @@ class TestSaleLineMobileForm(TransactionCase):
         self.assertIs(returned.get('manual_discount_allowed'), False)
         self.assertEqual(line.price_unit, 70.0)
         self.assertEqual(line.pricing_rule_type, 'fixed_price')
+
+
+@tagged('post_install', '-at_install')
+class TestComboMobileParity(TransactionCase):
+    """En pantalla pequeña, las líneas de combo muestran y dejan editar lo mismo que la lista de
+    escritorio, y el servidor rechaza lo que esa lista no deja cambiar."""
+
+    _load_mobile_spec = TestSaleLineMobileForm.__dict__['_load_mobile_spec']
+    _direct_fields = TestSaleLineMobileForm.__dict__['_direct_fields']
+    _to_vals = TestSaleLineMobileForm._to_vals
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.env.user.group_ids |= (
+            cls.env.ref('product.group_product_pricelist')
+            | cls.env.ref('sale.group_discount_per_so_line')
+            | cls.env.ref('uom.group_uom')
+            | cls.env.ref('analytic.group_analytic_accounting')
+            | cls.env.ref('stock.group_adv_location')
+            | cls.env.ref('base.group_no_one')
+        )
+        cls.orders = cls.env['sale.order']
+        cls.lines = cls.env['sale.order.line']
+        products = cls.env['product.product']
+
+        def product(name, price):
+            return products.create({'name': name, 'list_price': price, 'taxes_id': [Command.clear()]})
+
+        cls.vinilica = product('Vinílica Combo Móvil', 500.0)
+        cls.esmalte = product('Esmalte Combo Móvil', 650.0)
+        cls.rodillo = product('Rodillo Combo Móvil', 200.0)
+        cls.brocha = product('Brocha Combo Móvil', 50.0)
+        cls.combos = cls.env['product.combo'].create([{
+            'name': 'Pintura Móvil',
+            'combo_item_ids': [
+                Command.create({'product_id': cls.vinilica.id}),
+                Command.create({'product_id': cls.esmalte.id}),
+            ],
+        }, {
+            'name': 'Rodillo Móvil',
+            'combo_item_ids': [Command.create({'product_id': cls.rodillo.id})],
+        }, {
+            'name': 'Brocha Móvil',
+            'combo_item_ids': [Command.create({'product_id': cls.brocha.id})],
+        }])
+        cls.package = products.create({
+            'name': 'Paquete Combo Móvil',
+            'type': 'combo',
+            'list_price': 1000.0,
+            'taxes_id': [Command.clear()],
+            'combo_ids': [Command.set(cls.combos.ids)],
+        })
+        cls.pricelist = cls.env['product.pricelist'].create({'name': 'Tarifa Combo Móvil'})
+        cls.partner = cls.env['res.partner'].create({
+            'name': 'Cliente Combo Móvil',
+            'is_customer': True,
+            'phone': '1234567890',
+        })
+        cls.partner.property_product_pricelist = cls.pricelist
+        cls.env['res.partner.discount.rule'].create({
+            'partner_id': cls.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'fixed_price',
+            'product_id': cls.package.id,
+            'fixed_price': 200.0,
+        })
+        cls._load_mobile_spec()
+
+    def _quote(self, qty=3.0):
+        order = self.orders.create({'partner_id': self.partner.id, 'pricelist_id': self.pricelist.id})
+        package_line = self.lines.create({
+            'order_id': order.id,
+            'product_id': self.package.id,
+            'product_uom_qty': qty,
+        })
+        items = self.lines.create([{
+            'order_id': order.id,
+            'product_id': product.id,
+            'product_uom_qty': qty,
+            'combo_item_id': combo.combo_item_ids.filtered(lambda item: item.product_id == product).id,
+            'linked_line_id': package_line.id,
+        } for combo, product in zip(self.combos, [self.vinilica, self.rodillo, self.brocha])])
+        return order, package_line, items
+
+    def _form_node(self, xpath):
+        nodes = self.mobile_form.xpath(xpath)
+        self.assertTrue(nodes, xpath)
+        return nodes[0]
+
+    def test_mobile_package_form_hides_desktop_hidden_fields(self):
+        hidden = [
+            ".//field[@name='price_unit']",
+            ".//label[@for='price_unit']",
+            ".//field[@name='tax_ids']",
+            ".//label[@for='customer_lead']",
+            ".//div[@name='lead']",
+            ".//field[@name='analytic_distribution']",
+            ".//field[@name='route_ids']",
+            ".//widget[@name='qty_at_date_widget']",
+            ".//label[@for='qty_delivered']",
+            ".//div[@name='delivered_qty']",
+            ".//label[@for='qty_invoiced']",
+            ".//div[@name='invoiced_qty']",
+            ".//div[@name='invoice_lines']",
+        ]
+        for xpath in hidden:
+            with self.subTest(node=xpath):
+                invisible = self._form_node(xpath).get('invisible') or ''
+                # Las líneas de factura son de `base.group_no_one`: sin modo depuración llegan con
+                # `invisible="1"` para todas las líneas.
+                if invisible != '1':
+                    self.assertIn("product_type == 'combo'", invisible)
+
+        product = self._form_node(".//field[@name='product_id']")
+        self.assertIn("product_type == 'combo'", product.get('readonly') or '')
+        self.assertIn('no_open', product.get('options') or '')
+        for xpath in (".//field[@name='product_uom_qty']", ".//field[@name='discount']",
+                      ".//field[@name='name']", ".//field[@name='price_origin']",
+                      ".//field[@name='pricing_rule_origin']"):
+            with self.subTest(node=xpath):
+                self.assertNotIn("product_type == 'combo'", self._form_node(xpath).get('invisible') or '')
+
+    def test_mobile_item_form_readonly_matches_list(self):
+        for name in ('product_id', 'product_uom_qty', 'product_uom_id', 'customer_lead',
+                     'analytic_distribution', 'route_ids'):
+            with self.subTest(field=name):
+                node = self._form_node(f".//field[@name='{name}']")
+                self.assertIn('combo_item_id', node.get('readonly') or '')
+        for name in ('product_id', 'product_uom_id'):
+            with self.subTest(field=name):
+                self.assertIn('no_open', self._form_node(f".//field[@name='{name}']").get('options') or '')
+        for name in ('name', 'tax_ids'):
+            with self.subTest(field=name):
+                self.assertNotIn('combo_item_id', self._form_node(f".//field[@name='{name}']").get('readonly') or '')
+
+    def test_mobile_form_product_domain_excludes_combos(self):
+        domain = self._form_node(".//field[@name='product_id']").get('domain') or ''
+        self.assertIn("('type', '!=', 'combo')", domain)
+        self.assertIn('sale_ok', domain)
+
+    def test_mobile_package_card_shows_combo_subtotal(self):
+        _order, package_line, items = self._quote()
+
+        self.assertAlmostEqual(package_line.combo_subtotal, 600.0, places=2)
+        self.assertEqual(items.mapped('combo_subtotal'), [0.0, 0.0, 0.0])
+
+        kanban_nodes = self._direct_fields(self.mobile_kanban)
+        self.assertIn('combo_subtotal', kanban_nodes)
+        for name in ('price_subtotal', 'price_unit'):
+            with self.subTest(field=name):
+                self.assertIn("product_type == 'combo'", kanban_nodes[name].get('invisible') or '')
+
+    def test_combo_subtotal_on_unsaved_order(self):
+        order = self.orders.new({
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+            'order_line': [
+                Command.create({
+                    'product_id': self.package.id, 'product_uom_qty': 1.0, 'virtual_id': 'combo-1', 'sequence': 10,
+                }),
+                *[Command.create({
+                    'product_id': product.id,
+                    'product_uom_qty': 1.0,
+                    'combo_item_id': combo.combo_item_ids.filtered(lambda item: item.product_id == product).id,
+                    'linked_virtual_id': 'combo-1',
+                    'sequence': 11 + index,
+                }) for index, (combo, product) in enumerate(
+                    zip(self.combos, [self.vinilica, self.rodillo, self.brocha]))],
+            ],
+        })
+        package_line, *items = order.order_line.sorted('sequence')
+
+        self.assertAlmostEqual(package_line.combo_subtotal, sum(item.price_subtotal for item in items), places=2)
+        self.assertAlmostEqual(package_line.combo_subtotal, 200.0, places=2)
+
+    def test_package_rejects_price_unit(self):
+        # Sin acuerdo: con precio fijo, el bloqueo de precio de la SPEC 10 ya rechazaría el cambio.
+        self.env['res.partner.discount.rule'].search([('partner_id', '=', self.partner.id)]).unlink()
+        _order, package_line, _items = self._quote()
+        self.assertNotEqual(package_line.pricing_rule_type, 'fixed_price')
+
+        with self.assertRaises(ValidationError):
+            package_line.write({'price_unit': 50.0})
+
+    def test_item_rejects_other_qty(self):
+        _order, _package_line, items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            items[0].write({'product_uom_qty': 5.0})
+
+    def test_item_rejects_other_uom(self):
+        _order, _package_line, items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            items[0].write({'product_uom_id': self.env.ref('uom.product_uom_dozen').id})
+
+    def test_item_rejects_product_change(self):
+        _order, _package_line, items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            items[0].write({'product_id': self.esmalte.id})
+
+    def test_package_qty_propagates_to_items(self):
+        order, package_line, items = self._quote()
+
+        package_line.write({'product_uom_qty': 5.0})
+
+        self.assertEqual(items.mapped('product_uom_qty'), [5.0, 5.0, 5.0])
+        self.assertAlmostEqual(order.amount_untaxed, 1000.0, places=2)
+
+    def test_mobile_save_package_qty_change(self):
+        """Diálogo de la línea del paquete, onchange del pedido (copia la cantidad a sus productos)
+        y `web_save` con todas las líneas que cambiaron, como el navegador."""
+        order, package_line, items = self._quote()
+        line_values = package_line.web_read(self.mobile_spec)[0]
+        line_values['product_uom_qty'] = 5.0
+        sent = {
+            key: val['id'] if isinstance(val, dict) and 'id' in val else val
+            for key, val in line_values.items()
+            if not isinstance(val, list)
+        }
+        sent['order_id'] = {'id': order.id}
+        line_values.update(self.lines.browse(package_line.id).onchange(
+            sent, ['product_uom_qty'], self.mobile_spec).get('value', {}))
+        package_vals = self._to_vals({'product_uom_qty': line_values['product_uom_qty']})
+        commands = order.onchange(
+            {'order_line': [Command.update(package_line.id, package_vals)]},
+            ['order_line'],
+            {'order_line': {'fields': self.mobile_spec}},
+        )['value'].get('order_line', [])
+        changed = {package_line.id: dict(package_vals)}
+        for command in commands:
+            if command[0] == Command.UPDATE and command[1] in (package_line | items).ids:
+                changed.setdefault(command[1], {}).update(self._to_vals(command[2]))
+
+        order.web_save(
+            {'order_line': [Command.update(line_id, vals) for line_id, vals in changed.items()]}, {})
+
+        self.assertEqual(package_line.product_uom_qty, 5.0)
+        self.assertEqual(items.mapped('product_uom_qty'), [5.0, 5.0, 5.0])
+        self.assertAlmostEqual(order.amount_untaxed, 1000.0, places=2)

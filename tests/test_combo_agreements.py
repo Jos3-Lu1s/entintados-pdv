@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 from datetime import timedelta
 
 from lxml import etree
@@ -490,3 +491,222 @@ class TestComboAgreements(TransactionCase):
             self.assertEqual(item._get_combo_package_line(), package_line, item.product_id.name)
             self.assertEqual((item.pricing_rule_type, item.pricing_rule_origin), ('none', ''), item.product_id.name)
         self.assertEqual([round(item.price_unit, 2) for item in items], [714.29, 214.29, 71.42])
+
+    def test_combo_package_uom_is_readonly(self):
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        order, package_line, _items = self._quote()
+        loose = self.env['sale.order.line'].create({'order_id': order.id, 'product_id': self.esmalte.id})
+
+        self.assertTrue(package_line.product_uom_readonly)
+        self.assertFalse(loose.product_uom_readonly)
+        with Form(order) as order_form, order_form.order_line.edit(0) as package_form:
+            with self.assertRaises(AssertionError):
+                package_form.product_uom_id = self.env.ref('uom.product_uom_dozen')
+
+    def _combo_selection(self, choices):
+        """`selected_combo_items` tal como lo envía el configurador del combo."""
+        return json.dumps([{
+            'combo_item_id': self._item(combo, product).id,
+            'product_id': product.id,
+            'no_variant_attribute_value_ids': [],
+            'product_custom_attribute_values': [],
+        } for combo, product in zip(self.combos, choices)])
+
+    def test_reconfigure_unsaved_combo_in_form(self):
+        """Reconfigurar un combo antes de guardar: los productos anteriores ya salieron del pedido."""
+        self._fixed_price_rule(self.package, 200.0)
+        order_form = Form(self.env['sale.order'])
+        order_form.partner_id = self.partner
+        order_form.pricelist_id = self.pricelist
+        with order_form.order_line.new() as package_form:
+            package_form.product_id = self.package
+            package_form.virtual_id = 'combo-nuevo'
+            package_form.selected_combo_items = self._combo_selection(
+                [self.vinilica, self.rodillo_grande, self.brocha_2])
+        with order_form.order_line.edit(0) as package_form:
+            package_form.selected_combo_items = self._combo_selection(
+                [self.esmalte, self.rodillo_chico, self.brocha_4])
+        order = order_form.save()
+
+        items = order.order_line.filtered('combo_item_id')
+        self.assertEqual(items.product_id, self.esmalte | self.rodillo_chico | self.brocha_4)
+        self.assertEqual(items.mapped('linked_line_id'), order.order_line.filtered(lambda line: not line.combo_item_id))
+        self.assertAlmostEqual(order.amount_untaxed, 200.0, places=2)
+
+    def test_combo_package_rejects_other_uom_write(self):
+        order, package_line, _items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            order.write({'order_line': [
+                Command.update(package_line.id, {'product_uom_id': self.env.ref('uom.product_uom_dozen').id}),
+            ]})
+
+    def test_combo_package_rejects_other_uom_with_pricelist_change(self):
+        """Tarifa a otra moneda y UdM del paquete en el mismo guardado."""
+        self._fixed_price_rule(self.package, 200.0)
+        pricelist_o = self._setup_other_currency()
+        order, package_line, _items = self._quote()
+
+        with self.assertRaises(ValidationError):
+            order.write({
+                'pricelist_id': pricelist_o.id,
+                'order_line': [
+                    Command.update(package_line.id, {'product_uom_id': self.env.ref('uom.product_uom_dozen').id}),
+                ],
+            })
+
+        self.env.invalidate_all()
+        self.assertEqual(order.pricelist_id, self.pricelist)
+        self.assertAlmostEqual(order.amount_untaxed, 600.0, places=2)
+
+    def test_combo_package_rejects_other_uom_create(self):
+        order = self.env['sale.order'].create({
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+        })
+
+        with self.assertRaises(ValidationError):
+            self.env['sale.order.line'].create({
+                'order_id': order.id,
+                'product_id': self.package.id,
+                'product_uom_id': self.env.ref('uom.product_uom_dozen').id,
+            })
+
+    def test_combo_product_rejects_extra_uoms(self):
+        dozen = self.env.ref('uom.product_uom_dozen')
+        # Viene archivada: escrita desde `product.product`, el núcleo la descartaría sin guardarla.
+        dozen.active = True
+
+        with self.assertRaisesRegex(ValidationError, 'unidades adicionales'):
+            self.package.write({'uom_ids': [Command.set(dozen.ids)]})
+
+        loose = self.env['product.product'].create({
+            'name': 'Producto con Docena',
+            'uom_ids': [Command.set(dozen.ids)],
+        })
+        with self.assertRaisesRegex(ValidationError, 'unidades adicionales'):
+            loose.product_tmpl_id.write({'type': 'combo', 'combo_ids': [Command.set(self.combos.ids)]})
+
+    def test_combo_package_uom_hidden_in_mobile_views(self):
+        """En escritorio la fila del combo no muestra la UdM; la tarjeta y el formulario móviles tampoco."""
+        self.env.user.group_ids |= self.env.ref('uom.group_uom')
+        arch = self.env['sale.order'].get_views([(False, 'form')])['views']['form']['arch']
+        order_line = etree.fromstring(arch).xpath("//field[@name='order_line']")[0]
+        for subview in ('kanban', 'form'):
+            uom = order_line.xpath(f"./{subview}//field[@name='product_uom_id']")[0]
+            self.assertEqual(uom.get('invisible'), "product_type == 'combo'", subview)
+
+    def test_combo_item_same_price_not_manual(self):
+        _order, _package_line, items = self._quote()
+        item = items[0]
+        origin = item.price_origin
+
+        item.write({'price_unit': item.price_unit})
+
+        self.assertEqual(item.price_origin, origin)
+        self.assertNotEqual(item.price_origin, 'manual')
+
+    def test_combo_item_price_change_rejected(self):
+        _order, _package_line, items = self._quote()
+        item = items[0]
+        price = item.price_unit
+
+        with self.assertRaisesRegex(ValidationError, 'Vinílica Acuerdo.*Paquete Pintor Acuerdo'):
+            item.write({'price_unit': 100.0})
+
+        self.assertEqual(item.price_unit, price)
+        self.assertNotEqual(item.price_origin, 'manual')
+
+    def test_combo_item_price_with_product_must_match_split(self):
+        _order, _package_line, items = self._quote()
+        item = items[0]
+
+        with self.assertRaisesRegex(ValidationError, 'Vinílica Acuerdo.*Paquete Pintor Acuerdo'):
+            item.write({'product_id': item.product_id.id, 'price_unit': 100.0})
+        self.assertEqual(round(item.price_unit, 2), 714.29)
+
+        item.write({'product_id': item.product_id.id, 'price_unit': 714.29})
+        self.assertEqual(round(item.price_unit, 2), 714.29)
+        self.assertNotEqual(item.price_origin, 'manual')
+
+    def test_combo_item_discount_rejected(self):
+        _order, _package_line, items = self._quote()
+        item = items[1]
+        rule_type = item.pricing_rule_type
+
+        with self.assertRaisesRegex(ValidationError, 'Rodillo Grande Acuerdo.*Paquete Pintor Acuerdo'):
+            item.write({'discount': 30.0})
+        self.assertEqual(item.discount, 0.0)
+
+        item.write({'discount': item.discount})
+        self.assertEqual(item.pricing_rule_type, rule_type)
+
+    def test_combo_package_price_rejected(self):
+        _order, package_line, _items = self._quote()
+
+        with self.assertRaisesRegex(ValidationError, 'Paquete Pintor Acuerdo'):
+            package_line.write({'price_unit': 50.0})
+        self.assertEqual(package_line.price_unit, 0.0)
+
+        package_line.write({'price_unit': 0.0})
+        self.assertNotEqual(package_line.price_origin, 'manual')
+
+    def _import_line_prices(self, order, prices=None, with_product=False):
+        """Exporta el pedido (compatible con importación), cambia los precios de `prices`
+        ({producto: precio}) y lo vuelve a importar con el asistente. Devuelve los mensajes."""
+        fields_ = ['id', 'order_line/id'] + (['order_line/product_id'] if with_product else []) \
+            + ['order_line/price_unit']
+        rows = order.with_context(import_compat=True).export_data(fields_)['datas']
+        lines_by_xmlid = {
+            line.get_external_id()[line.id]: line for line in order.order_line
+        }
+        prices = prices or {}
+        for row in rows:
+            product = lines_by_xmlid[row[1]].product_id
+            if product in prices:
+                row[-1] = prices[product]
+        csv = '\n'.join(
+            ','.join('"%s"' % ('' if value is False else value) for value in row)
+            for row in [fields_] + rows
+        )
+        wizard = self.env['base_import.import'].create({
+            'res_model': 'sale.order',
+            'file': csv.encode(),
+            'file_type': 'text/csv',
+            'file_name': 'pedido.csv',
+        })
+        result = wizard.execute_import(
+            fields_, fields_, {'quoting': '"', 'separator': ',', 'has_headers': True, 'encoding': 'utf-8'}, dryrun=False)
+        order.order_line.invalidate_recordset()
+        return result['messages']
+
+    def test_combo_import_unchanged_export(self):
+        pricelist_o = self._setup_other_currency(rate=20.0)
+        order, package_line, _items = self._quote(qty=1.0)
+
+        messages = self._import_line_prices(order)
+
+        self.assertFalse(messages)
+        self.assertNotIn('manual', order.order_line.mapped('price_origin'))
+
+        self._fixed_price_rule(self.package, 200.0)
+        order.action_update_prices()
+        self.assertAlmostEqual(order.amount_untaxed, 200.0, places=2)
+        order.write({'pricelist_id': pricelist_o.id})
+        self.assertAlmostEqual(package_line.combo_package_price, 4000.0, places=2)
+        self.assertAlmostEqual(order.amount_untaxed, 4000.0, places=2)
+
+    def test_combo_import_changed_price_rejected(self):
+        order, _package_line, items = self._quote(qty=1.0)
+        prices = items.mapped('price_unit')
+
+        for with_product in (False, True):
+            messages = self._import_line_prices(
+                order, {self.vinilica: 100.0}, with_product=with_product)
+
+            self.assertTrue(messages, with_product)
+            self.assertTrue(any(
+                'Vinílica Acuerdo' in message['message'] for message in messages
+            ), messages)
+            self.assertEqual(items.mapped('price_unit'), prices, with_product)
+            self.assertNotIn('manual', order.order_line.mapped('price_origin'), with_product)

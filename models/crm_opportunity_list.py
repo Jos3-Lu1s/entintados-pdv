@@ -32,12 +32,6 @@ class CrmLead(models.Model):
             self._assign_opportunity_references()
         return result
 
-    @api.model
-    def _backfill_opportunity_references(self):
-        self.with_context(active_test=False).search([
-            ('type', '=', 'opportunity'), ('opportunity_reference', '=', False),
-        ], order='id')._assign_opportunity_references()
-
     def _assign_opportunity_references(self):
         for lead in self.filtered(lambda lead: lead.type == 'opportunity' and not lead.opportunity_reference):
             lead.write({'opportunity_reference': self._next_opportunity_reference()})

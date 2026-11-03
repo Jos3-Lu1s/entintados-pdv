@@ -11,7 +11,7 @@ class TestCrmOpportunityList(TransactionCase):
         self.assertRegex(duplicate.opportunity_reference, r'^OP-\d{4,}$')
         self.assertNotEqual(lead.opportunity_reference, duplicate.opportunity_reference)
 
-    def test_convert_and_backfill_preserve_reference(self):
+    def test_convert_preserves_reference(self):
         lead = self.env['crm.lead'].create({'name': 'Prospecto folio', 'type': 'lead'})
         self.assertFalse(lead.opportunity_reference)
         lead.write({'type': 'opportunity'})

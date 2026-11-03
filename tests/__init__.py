@@ -47,3 +47,5 @@ from . import test_pos_sale_quotation
 from . import test_customer_credit_reasons
 from . import test_pos_bank_payments
 from . import test_distributed_credit_report
+from . import test_line_scheme_unlink
+from . import test_pricelist_item_esquema

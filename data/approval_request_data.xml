@@ -12,6 +12,9 @@
             <field name="has_date">required</field>
             <field name="has_product">required</field>
             <field name="has_quantity">required</field>
+            <field name="approval_minimum">1</field>
+            <field name="approver_sequence" eval="False"/>
+            <field name="manager_approval" eval="False"/>
         </record>
 
         <!-- Solicitud de aprobación -->
@@ -30,6 +33,4 @@
         </record>
 
     </data>
-    <!-- Aplicar también en bases donde la categoría ya estaba instalada. -->
-    <function model="approval.category" name="_configure_material_approval_policy"/>
 </odoo>

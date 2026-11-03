@@ -41,6 +41,16 @@ def checks(env):
     assert len(variants) == 2
     sale_line(variants[0]); sale_line(variants[1])
     rejected(lambda: sale_line(variants[0]))
+    combo = env['product.combo'].create({'name': 'Unique combo choice', 'combo_item_ids': [
+        Command.create({'product_id': product.id}), Command.create({'product_id': other.id})]})
+    package = env['product.product'].create({'name': 'Unique combo package', 'type': 'combo',
+                                             'combo_ids': [Command.set(combo.ids)]})
+    for choice in (product, other):
+        package_line = sale_line(package)
+        sale_line(choice, combo_item_id=combo.combo_item_ids.filtered(lambda i: i.product_id == choice).id,
+                  linked_line_id=package_line.id)
+    draft_package = Line.new({'order_id': order.id, 'product_id': package.id})
+    assert not draft_package._onchange_unique_sale_product() and draft_package.product_template_id
     draft = Line.new({'order_id': order.id, 'product_id': product.id})
     assert draft._onchange_unique_sale_product()['warning']
     assert not draft.product_id

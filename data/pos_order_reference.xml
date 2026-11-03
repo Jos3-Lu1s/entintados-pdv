@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <function model="pos.order" name="_migrate_branch_order_references"/>
-</odoo>

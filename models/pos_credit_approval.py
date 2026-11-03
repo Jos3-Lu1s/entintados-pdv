@@ -1,5 +1,4 @@
 import math
-import re
 
 from odoo import api, Command, fields, models, _
 from odoo.exceptions import UserError, AccessError
@@ -203,36 +202,9 @@ class PosCreditApproval(models.Model):
 
     @api.model
     def _setup_native_approvals(self):
-        """Initialize per-company categories and preserve existing ticket decisions."""
+        """Initialize per-company approval categories."""
         for company in self.env['res.company'].sudo().search([]):
             self._native_category(company)
-        for request in self.sudo().search([('approval_request_id', '=', False)]):
-            request._create_native_request()
-        sequence = self.env.ref('entintados_pdv.seq_pos_credit_approval').sudo()
-        for request in self.sudo().search([], order='id'):
-            if not request.order_id:
-                order = self.env['pos.order'].sudo().search([
-                    ('uuid', '=', request.order_uuid), ('config_id', '=', request.config_id.id),
-                    ('partner_id.commercial_partner_id', '=', request.partner_id.id)], limit=1)
-                if order:
-                    request.order_id = order
-            if not re.fullmatch(r'ACRED-\d{4,}', request.name or ''):
-                request.name = sequence.next_by_id()
-            if request.approval_request_id.name != request.name:
-                request.approval_request_id.sudo().write({'name': request.name})
-            if request.state == 'pending' and (not request.order_id or request.order_id.state == 'draft'):
-                partner = request.partner_id.with_company(request.company_id)
-                projected = request.config_id._credit_projection(
-                    partner, request.credit_amount, request.applied_amount, order=request.order_id)
-                projected = partner.risk_currency_id._convert(
-                    projected, request.risk_currency_id, request.company_id, fields.Date.context_today(request))
-                if request.risk_currency_id.compare_amounts(projected, request.projected_risk):
-                    request.projected_risk = projected
-                    request.approval_request_id.message_post(body=_(
-                        'Riesgo pendiente recalculado: los anticipos disponibles se mantienen separados del crédito.'))
-        self.env['pos.order'].sudo().search([
-            ('id', 'in', self.sudo().search([('order_id', '!=', False)]).order_id.ids),
-            ('state', '=', 'cancel')])._cancel_credit_approvals()
 
     @api.model
     def _native_category(self, company):
@@ -265,12 +237,7 @@ class PosCreditApproval(models.Model):
             'approver_ids': [Command.create({'user_id': user.id, 'required': False}) for user in self.approver_user_ids],
         })
         self.sudo().approval_request_id = native
-        if self.state == 'pending':
-            native.action_confirm()
-        else:
-            status = {'approved': 'approved', 'used': 'approved', 'refused': 'refused', 'cancelled': 'cancel', 'void': 'cancel'}[self.state]
-            native.approver_ids.sudo().write({'status': status})
-        self.sudo().activity_ids.action_feedback(feedback=_('La autorización se gestiona ahora en Aprobaciones.'))
+        native.action_confirm()
         return native
 
     def action_open_approval(self):
@@ -406,14 +373,6 @@ class PosConfigCreditApproval(models.Model):
         partner.invalidate_recordset()
         projected = self._credit_projection(partner, credit, applied)
         Approval = self.env['pos.credit.approval'].sudo()
-        # Adopt a pre-upgrade request only when its exact UUID identifies this saved ticket.
-        legacy = Approval.search([
-            ('config_id', '=', self.id), ('order_uuid', '=', order_uuid), ('order_id', '=', False),
-            ('partner_id', '=', partner.id), ('state', 'in', ['pending', 'approved', 'refused']),
-        ])
-        if legacy:
-            legacy.write({'order_id': order.id})
-            legacy.approval_request_id.write({'reference': order.pos_reference or order.uuid})
         request = Approval.search([
             ('config_id', '=', self.id), ('order_id', '=', order.id),
             ('partner_id', '=', partner.id), ('state', 'in', ['pending', 'approved', 'refused']),
