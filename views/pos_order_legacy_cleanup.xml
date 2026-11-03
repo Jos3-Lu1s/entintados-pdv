@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Update before other POS views: older databases still have this inherited
+         view although previous_order_reference was removed from the model. -->
+    <record id="view_pos_order_form_previous_reference" model="ir.ui.view">
+        <field name="name">pos.order.form.previous.reference.retired</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="active" eval="False"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='pos_reference']" position="after">
+                <span invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -26,7 +26,7 @@ class TestSaleTint(TransactionCase):
             'taxes_id': [Command.clear()], 'is_storable': True, 'invoice_policy': 'order',
         })
         gallery = cls.env['tint.gallery'].search([], limit=1)
-        cls.color = cls.env['tint.color'].create({'name': 'Rojo Sangre prueba', 'gallery_id': gallery.id})
+        cls.color = cls.env['tint.color'].create({'name': 'Rojo Sangre prueba', 'gallery_id': gallery.id, 'code_number': '9876'})
         cls.formula = cls.env['tint.color.formula'].create({
             'color_id': cls.color.id, 'base_type_id': cls.base_type.id, 'size_id': cls.size.id,
             'line_ids': [Command.create({'colorant_id': cls.colorant.id, 'points': 12})],
@@ -45,10 +45,10 @@ class TestSaleTint(TransactionCase):
         self.assertEqual(line.price_unit, 224)
         self.assertEqual(line.price_subtotal, 448)
         self.assertIn('Rojo Sangre prueba', line.name)
-        self.assertIn('12 Pts.', line.name)
-        self.assertTrue(line.name.startswith('Entintado: Rojo Sangre prueba'))
-        self.assertTrue(line.tint_display_name.startswith('Entintado: Rojo Sangre prueba'))
-        self.assertIn(self.base.display_name, line.name)
+        color_description = '+ [%s] %s' % (self.color.code, self.color.name)
+        self.assertEqual(line.name, self.base.display_name + '\n' + color_description)
+        self.assertEqual(line.tint_display_name, self.base.display_name)
+        self.assertEqual(line.tint_color_description, color_description)
         self.assertFalse(self.colorant.sale_ok)
 
     def test_normal_products_and_tints_stay_in_insertion_order(self):
@@ -139,12 +139,13 @@ class TestSaleTint(TransactionCase):
         button = arch.xpath('//button[@name="action_add_tint"]')[0]
         self.assertEqual(button.getnext().get('name'), str(self.env.ref('sale_loyalty.sale_loyalty_coupon_wizard_action').id))
 
-    def test_report_has_recipe_without_automatic_sections(self):
+    def test_report_has_only_color_without_recipe_or_automatic_sections(self):
         order = self._order()
         order._apply_tint(self.formula, self.base, 1)
         html, _ = self.env['ir.actions.report']._render_qweb_html('sale.action_report_saleorder', order.ids)
         self.assertIn('Rojo Sangre prueba', html.decode())
-        self.assertIn('12 Pts.', html.decode())
+        self.assertNotIn('12 Pts.', html.decode())
+        self.assertNotIn('Fórmula por envase:', html.decode())
         self.assertNotIn('Otros productos', html.decode())
         self.assertFalse(order.order_line.filtered('display_type'))
 
@@ -212,6 +213,29 @@ class TestSaleTint(TransactionCase):
         self.assertTrue(manual.exists())
         self.assertEqual(order.order_line.filtered('display_type'), manual)
 
+    def test_description_upgrade_preserves_recipe_price_and_confirmed_documents(self):
+        from ..models.sale_tint import _TINT_OPERATION
+        order = self._order()
+        line = order._apply_tint(self.formula, self.base, 2)
+        line.with_context(_tint_operation=_TINT_OPERATION).write({'name': 'Entintado anterior\nFórmula por envase: 12 Pts.'})
+        snapshot = dict(line.tint_snapshot)
+        self.env['sale.order']._setup_sale_tint_layout()
+        self.assertEqual(line.name, self.base.display_name + '\n+ [%s] %s' % (self.color.code, self.color.name))
+        self.assertEqual(line.tint_snapshot, snapshot)
+        self.assertEqual(line.price_unit, 224)
+        self.assertEqual(line.product_uom_qty, 2)
+        confirmed, _location = self._prepare_delivery()
+        old_name = confirmed.order_line.name
+        self.env['sale.order']._setup_sale_tint_layout()
+        self.assertEqual(confirmed.order_line.name, old_name)
+
+    def test_legacy_color_description_tolerates_missing_fields(self):
+        order = self._order()
+        self.assertEqual(order._tint_color_description({'name': '[OLD-01] Color anterior — Base anterior'}),
+                         '[OLD-01] Color anterior')
+        self.assertEqual(order._tint_color_description({'color_name': 'Solo nombre'}), 'Solo nombre')
+        self.assertEqual(order._tint_color_description({}), '')
+
     def test_flat_base_can_be_reordered_without_changing_recipe(self):
         order = self._order()
         line = order._apply_tint(self.formula, self.base, 1)
@@ -248,6 +272,30 @@ class TestSaleTint(TransactionCase):
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
         picking.move_ids._action_done()
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
+
+    def test_partial_delivery_invoice_and_material_consumption_are_consistent(self):
+        self.base.invoice_policy = 'delivery'
+        order, location = self._prepare_delivery()
+        expected = self.base.display_name + '\n+ [%s] %s' % (self.color.code, self.color.name)
+        picking = order.picking_ids
+        self.assertEqual(picking.move_ids.filtered(lambda move: move.product_id == self.base).description_picking,
+                         '+ [%s] %s' % (self.color.code, self.color.name))
+        self._deliver(picking, 1)
+        first = order._create_invoices()
+        lines = first.invoice_line_ids.filtered(lambda line: line.display_type == 'product')
+        self.assertEqual(lines.product_id, self.base)
+        self.assertEqual(lines.quantity, 1)
+        self.assertEqual(lines.price_unit, 224)
+        self.assertEqual(lines.name, expected)
+        self.assertEqual(self.base.with_context(location=location.id).qty_available, 99)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 88)
+        backorder = order.picking_ids.filtered(lambda item: item.backorder_id == picking)
+        self._deliver(backorder, 1)
+        second = order._create_invoices()
+        self.assertEqual(second.invoice_line_ids.filtered(lambda line: line.display_type == 'product').quantity, 1)
+        self.assertEqual(self.base.with_context(location=location.id).qty_available, 98)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
+        self.assertEqual(sum((first | second).mapped('amount_untaxed')), 448)
 
     def test_partial_delivery_and_backorder_consume_proportionally(self):
         order, location = self._prepare_delivery()

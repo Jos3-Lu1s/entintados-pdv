@@ -1,9 +1,8 @@
 import math
+import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
-
-from ..utils.points import format_points
 
 # An RPC context cannot impersonate an internal recipe operation.
 _TINT_OPERATION = object()
@@ -53,7 +52,7 @@ class SaleOrder(models.Model):
             fiscal_position=self.fiscal_position_id)
 
     def _tint_display_title(self, snapshot):
-        title = _('Entintado: %s') % snapshot.get('color_name', snapshot['name'])
+        title = _('Entintado: %s') % snapshot.get('color_name', snapshot.get('name', ''))
         if snapshot.get('color_code'):
             title += ' [%s]' % snapshot['color_code']
         if snapshot.get('size_name'):
@@ -62,16 +61,28 @@ class SaleOrder(models.Model):
 
     def _tint_base_description(self, snapshot):
         self.ensure_one()
-        base = self.env['product.product'].browse(snapshot['base_id'])
-        description = [self._tint_display_title(snapshot), _('Base: %s') % base.display_name]
-        if snapshot.get('color_code'):
-            description.append(_('Código del color: %s') % snapshot['color_code'])
-        if snapshot.get('size_name'):
-            description.append(_('Presentación: %s') % snapshot['size_name'])
-        description.append(_('Fórmula por envase:'))
-        description.extend('  %s: %s' % (dose['name'], format_points(dose['points']))
-                           for dose in snapshot['doses'])
-        return '\n'.join(description)
+        base = self.env['product.product'].browse(snapshot.get('base_id')).exists()
+        color = self._tint_color_description(snapshot)
+        return '\n'.join(filter(None, [base.display_name if base else '', '+ ' + color if color else '']))
+
+    def _tint_color_description(self, snapshot):
+        """Use frozen color data first; tolerate older snapshots without color fields."""
+        code = (snapshot.get('color_code') or '').strip()
+        name = (snapshot.get('color_name') or '').strip()
+        if (not code or not name) and snapshot.get('formula_id'):
+            formula = self.env['tint.color.formula'].browse(snapshot['formula_id']).exists()
+            if formula:
+                code = code or formula.color_id.code or ''
+                name = name or formula.color_id.name or ''
+        if not name:
+            name = (snapshot.get('name') or '').split(' — ', 1)[0].strip()
+            match = re.match(r'^\[([^\]]+)\]\s*(.*)$', name)
+            if match:
+                code = code or match[1]
+                name = match[2]
+        if code and name.startswith('[%s] ' % code):
+            name = name[len(code) + 3:]
+        return ' '.join(filter(None, ['[%s]' % code if code else '', name]))
 
     @api.model
     def _setup_sale_tint_layout(self):
@@ -119,6 +130,15 @@ class SaleOrder(models.Model):
                 order.order_line.filtered('tint_area').with_context(_tint_operation=_TINT_OPERATION).unlink()
             order.invalidate_recordset(['order_line'])
             order.order_line.invalidate_recordset(['parent_id'])
+            # Update only descriptions of untouched quotations. Confirmed, invoiced
+            # or delivered documents retain their original stored description.
+            if order.state in ('draft', 'sent'):
+                for line in order.order_line.filtered(lambda item: item.tint_snapshot and item.tint_snapshot.get('base_only')):
+                    if line.qty_invoiced or line.qty_delivered or line.move_ids.filtered(lambda move: move.state != 'cancel'):
+                        continue
+                    description = order._tint_base_description(line.tint_snapshot)
+                    if line.name != description:
+                        line.with_context(_tint_operation=_TINT_OPERATION).write({'name': description})
 
     def _check_stock_availability(self):
         result = super()._check_stock_availability()
@@ -135,7 +155,8 @@ class SaleOrder(models.Model):
                 available = product.with_company(order.company_id).with_context(
                     warehouse_id=order.warehouse_id.id, warehouse=order.warehouse_id.id).free_qty
                 if product.uom_id.compare(quantity, available) > 0:
-                    raise UserError(_('No hay suficiente colorante para el entintado: %s.') % product.display_name)
+                    raise UserError(_('No hay suficiente colorante para el entintado:\n%s') %
+                                    order._stock_shortage_details(product, quantity, available))
         return result
 
     def _apply_tint(self, formula, base, quantity, section=None):
@@ -200,13 +221,23 @@ class SaleOrderLine(models.Model):
     tint_snapshot = fields.Json(string='Fórmula cotizada', copy=False, readonly=True)
     tint_container_qty = fields.Float(string='Envases', copy=False, readonly=True)
     tint_display_name = fields.Char(string='Entintado', compute='_compute_tint_display_name')
+    tint_color_description = fields.Char(string='Color del entintado', compute='_compute_tint_display_name')
 
-    @api.depends('tint_snapshot', 'tint_section_id.tint_snapshot', 'product_id')
+    @api.depends('tint_snapshot', 'tint_section_id.tint_snapshot', 'product_id', 'product_id.name', 'product_id.default_code')
     def _compute_tint_display_name(self):
         for line in self:
             recipe = line._tint_recipe()
-            line.tint_display_name = (line.order_id._tint_display_title(recipe)
-                                      if recipe and line.product_id.id == recipe.get('base_id') else False)
+            is_base = recipe and line.product_id.id == recipe.get('base_id')
+            line.tint_display_name = line.product_id.display_name if is_base else False
+            color = line.order_id._tint_color_description(recipe) if is_base else ''
+            line.tint_color_description = '+ ' + color if color else False
+
+    def _prepare_invoice_line(self, **optional_values):
+        values = super()._prepare_invoice_line(**optional_values)
+        recipe = self._tint_recipe()
+        if recipe.get('base_only') and self.product_id.id == recipe.get('base_id'):
+            values['name'] = self.order_id._tint_base_description(recipe)
+        return values
 
     def _tint_recipe(self):
         self.ensure_one()

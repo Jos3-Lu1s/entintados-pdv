@@ -268,7 +268,7 @@ def records(env):
             bill = invoice(env, 'vendor_pending_' + str(idx), supplier, total, supplier=True)
             payment(env, 'vendor_partial_' + str(idx), supplier, total * .8, supplier=True, target=bill)
         pending = remember(env, 'distribution_pending', env['vendor.credit.group'].create({
-            'partner_id': supplier.id, 'reason': 'PRUEBA A Generar notas de 2000 y 4000',
+            'partner_id': supplier.id, 'reason': 'PRUEBA A Generar notas de 2000 y 4000', 'supplier_reference': 'DEMO-DISTRIBUCION-A',
         }))
         pending._populate_lines_from_partner()
         examples = env['account.move']
@@ -277,7 +277,7 @@ def records(env):
             payment(env, 'vendor_paid_' + str(idx), supplier, total * .8, supplier=True, target=bill)
             examples |= bill
         group = remember(env, 'distribution_done', env['vendor.credit.group'].create({
-            'partner_id': supplier.id, 'reason': 'PRUEBA B Ejemplo generado y conciliado',
+            'partner_id': supplier.id, 'reason': 'PRUEBA B Ejemplo generado y conciliado', 'supplier_reference': 'DEMO-DISTRIBUCION-B',
             'line_ids': [Command.create({'invoice_id': bill.id, 'amount': bill.amount_residual}) for bill in examples],
         }))
         group.with_user(get(env, 'user')).action_create_credit()

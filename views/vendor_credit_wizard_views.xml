@@ -42,14 +42,15 @@
                         <field name="company_id" string="Compañía" readonly="state != 'draft'" groups="base.group_multi_company"/>
                         <field name="company_id" invisible="1"/>
                         <field name="currency_id" string="Moneda" readonly="state != 'draft'" options="{'no_create': True}"/>
-                    </group>
-                    <group string="Datos de la nota">
-                        <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
-                        <field name="date" readonly="state != 'draft'"/>
                         <field name="reason_id" required="1" readonly="state != 'draft'" options="{'no_create': True}"
                                domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"/>
+                    </group>
+                    <group string="Datos de la nota">
+                        <field name="supplier_reference" required="1" readonly="state != 'draft' and supplier_reference" placeholder="Folio de la nota del proveedor"/>
+                        <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
+                        <field name="date" readonly="state != 'draft'"/>
                         <field name="reason" readonly="1" invisible="1"/>
-                        <field name="operation_type" readonly="1"/>
+                        <field name="operation_type" invisible="1"/>
                         <field name="return_picking_ids" invisible="1"/>
                     </group>
                 </group>
@@ -111,6 +112,12 @@
                 </group>
                 <group class="oe_subtotal_footer oe_right mt-3">
                     <field name="invoice_count" string="Facturas seleccionadas" readonly="1"/>
+                    <field name="amount_untaxed" widget="monetary"/>
+                    <field name="amount_iva" widget="monetary"/>
+                    <field name="amount_other_taxes" widget="monetary" invisible="amount_other_taxes == 0"/>
+                    <field name="amount_withholding" widget="monetary" invisible="amount_withholding == 0"/>
+                    <field name="amount_tax" widget="monetary" invisible="amount_other_taxes == 0 and amount_withholding == 0"/>
+                    <field name="amount_rounding" widget="monetary" invisible="amount_rounding == 0"/>
                     <field name="amount_total" widget="monetary" class="oe_subtotal_footer_separator" readonly="state != 'draft'"/>
                 </group>
                 </sheet>
@@ -127,6 +134,7 @@
                     <button name="action_preview_all_distributed_credits" type="object" string="Ver reporte general" display="always"/>
                 </header>
                 <field name="date"/>
+                <field name="supplier_reference" optional="show"/>
                 <field name="reason_id"/>
                 <field name="partner_id" domain="[('distributed_notes', '=', True)]"/>
                 <field name="company_id" groups="base.group_multi_company"/>

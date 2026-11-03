@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_pos_order_invoice_status" model="ir.ui.view">
+        <field name="name">pos.order.invoice.status</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='order_fields']" position="inside">
+                <field name="invoice_status" string="Estado de facturación" widget="badge"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_pos_order_list_invoice_status" model="ir.ui.view">
+        <field name="name">pos.order.list.invoice.status</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_status']" position="attributes">
+                <attribute name="invisible">False</attribute>
+            </xpath>
+        </field>
+    </record>
     <record id="view_pos_order_created_quotation" model="ir.ui.view">
         <field name="name">pos.order.created.quotation</field>
         <field name="model">pos.order</field>
@@ -47,6 +67,17 @@
         <field name="arch" type="xml">
             <xpath expr="//button[(@name='action_view_invoice' or @name='action_view_invoice_custom') and hasclass('oe_stat_button')]" position="attributes">
                 <attribute name="name">action_view_invoice</attribute>
+                <attribute name="string">Recibo/Factura</attribute>
+                <attribute name="invisible">entintados_invoice_count == 0</attribute>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_pos_order_invoice" string="Recibo/Factura" type="object"
+                        class="oe_stat_button" icon="fa-pencil-square-o"
+                        invisible="state not in ('paid', 'done') or entintados_invoice_count &gt; 0"/>
+            </xpath>
+            <xpath expr="//header/button[@name='action_pos_order_invoice']" position="attributes">
+                <attribute name="string">Recibo/Factura</attribute>
+                <attribute name="invisible">state not in ('paid', 'done') or entintados_invoice_count &gt; 0</attribute>
             </xpath>
         </field>
     </record>

@@ -39,6 +39,7 @@
     </record>
     <record id="pos_accounting_ticket_list" model="ir.ui.view">
         <field name="name">pos.order.accounting.return.list</field><field name="model">pos.order</field>
+        <field name="priority">90</field>
         <field name="arch" type="xml">
             <list string="Tickets pagados sin factura" create="0" edit="0" delete="0">
                 <field name="name"/><field name="pos_reference"/><field name="date_order"/>
@@ -51,6 +52,7 @@
     </record>
     <record id="pos_accounting_ticket_form" model="ir.ui.view">
         <field name="name">pos.order.accounting.return.form</field><field name="model">pos.order</field>
+        <field name="priority">90</field>
         <field name="arch" type="xml">
             <form string="Ticket pagado sin factura" create="0" edit="0" delete="0">
                 <header><button name="action_new_accounting_return" string="Crear devolución" type="object" class="btn-primary"/></header>

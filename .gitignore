@@ -11,3 +11,4 @@ GEMINI.md
 .claude/
 .tmp_docx/
 backups/
+migrations/
