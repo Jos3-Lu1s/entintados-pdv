@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <delete model="ir.ui.view" id="stock_picking_formula_material_view"/>
     <record id="stock_picking_material_cost_columns" model="ir.ui.view">
         <field name="name">stock.picking.material.cost.columns</field>
         <field name="model">stock.picking</field>

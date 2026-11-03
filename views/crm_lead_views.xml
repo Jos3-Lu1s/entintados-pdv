@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Retirar la vista de la integración CRM revertida antes de validar
-         cualquier vista que herede el formulario de oportunidades. -->
-    <delete model="ir.ui.view" id="crm_lead_material_tint_inline"/>
-
     <!-- Formulario principal de Lead/Oportunidad: tiene DOS campos partner_id
          distintos (uno se usa mientras type == 'lead', el otro mientras
          type == 'opportunity'); se restringen ambos por separado y se asegura

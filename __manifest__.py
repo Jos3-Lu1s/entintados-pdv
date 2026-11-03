@@ -33,7 +33,7 @@ Catálogo de entintado
     # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Sales/Point of Sale',
-    'version': '19.0.1.0.11',
+    'version': '19.0.1.0.0',
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
