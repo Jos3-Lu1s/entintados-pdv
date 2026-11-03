@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="distributed_credit_paperformat" model="report.paperformat">
+        <field name="name">Notas distribuidas A4</field><field name="format">A4</field>
+        <field name="orientation">Landscape</field><field name="margin_top">12</field>
+        <field name="margin_bottom">20</field><field name="margin_left">12</field><field name="margin_right">12</field>
+        <field name="header_spacing">0</field><field name="dpi">90</field>
+    </record>
+    <record id="action_report_distributed_credit" model="ir.actions.report">
+        <field name="name">Reporte de notas distribuidas</field><field name="model">vendor.credit.group</field>
+        <field name="report_type">qweb-pdf</field><field name="report_name">entintados_pdv.distributed_credit_report</field>
+        <field name="report_file">entintados_pdv.distributed_credit_report</field>
+        <field name="binding_model_id" ref="model_vendor_credit_group"/><field name="binding_type">report</field>
+        <field name="paperformat_id" ref="distributed_credit_paperformat"/>
+        <field name="print_report_name">object.name if len(object) == 1 else 'Notas distribuidas - reporte'</field>
+    </record>
+    <template id="distributed_credit_report_styles">
+        <style>
+            .distributed-credit { font-family: Arial, sans-serif; font-size: 12px; color: #243246; }
+            .distributed-credit h2 { font-size: 23px; color: #16324f; margin: 0 0 10px; }
+            .distributed-credit h3 { font-size: 17px; margin: 0 0 16px; }
+            .distributed-credit h4 { font-size: 14px; margin: 20px 0 10px; color: #16324f; }
+            .distributed-credit p { margin: 10px 0; line-height: 1.5; }
+            .distributed-credit .text-muted { color: #65758a; }
+            .distributed-credit .small { font-size: 10px; }
+            .distributed-credit .text-end { text-align: right; }
+            .distributed-credit .fw-bold { font-weight: bold; }
+            .distributed-credit .row { display: table; width: 100%; margin: 0; table-layout: fixed; }
+            .distributed-credit .row &gt; div { display: table-cell; vertical-align: top; line-height: 1.6; padding: 0; float: none; }
+            .distributed-credit .col-7 { width: 60%; padding-right: 14px !important; }
+            .distributed-credit .col-5 { width: 40%; }
+            .distributed-credit .col-6 { width: 50%; }
+            .distributed-credit table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+            .distributed-credit th { background: #edf2f7; color: #16324f; font-weight: bold; text-align: left; }
+            .distributed-credit td, .distributed-credit th { padding: 8px 6px; border-bottom: 1px solid #dbe3ec; vertical-align: top; }
+            .distributed-credit td.text-end { white-space: nowrap; }
+            .distributed-credit tfoot td { background: #edf2f7; font-weight: bold; }
+            .distributed-credit .mt-3 { margin-top: 18px; }
+            .distributed-credit .mb-3 { margin-bottom: 18px; }
+            .distributed-credit .credit-brand { width: 100%; margin: 0 0 22px; border-bottom: 2px solid #16324f; page-break-inside: avoid; }
+            .distributed-credit .credit-brand td { border: 0; padding: 0 0 14px; }
+            .distributed-credit .credit-brand img { max-width: 150px; max-height: 65px; }
+            .distributed-credit .credit-company { text-align: right; line-height: 1.5; font-size: 11px; overflow-wrap: break-word; }
+            .distributed-credit .credit-company strong { font-size: 15px; color: #16324f; }
+            .distributed-credit tfoot { display: table-row-group; }
+        </style>
+    </template>
+    <template id="distributed_credit_layout">
+        <!-- Keep branding in the document flow, independent of the company's external layout. -->
+        <div class="article" t-att-data-oe-model="o._name" t-att-data-oe-id="o.id" t-att-data-oe-lang="o.env.context.get('lang')">
+            <t t-out="0"/>
+        </div>
+        <div class="footer" style="font-family:Arial,sans-serif; font-size:9px; color:#65758a; text-align:right;">
+            <span t-out="company.name"/> · Página <span class="page"/> / <span class="topage"/>
+        </div>
+    </template>
+    <template id="distributed_credit_brand">
+        <table class="credit-brand"><tr>
+            <td style="width:30%;"><img t-if="company.logo" t-att-src="image_data_uri(company.logo)" alt="Logo"/></td>
+            <td class="credit-company" style="width:70%;">
+                <strong t-out="company.name"/>
+                <div t-if="company.partner_id.street" t-out="company.partner_id.street"/>
+                <div t-if="company.partner_id.street2" t-out="company.partner_id.street2"/>
+                <div><span t-if="company.partner_id.zip" t-out="company.partner_id.zip"/> <span t-if="company.partner_id.city" t-out="company.partner_id.city"/> <span t-if="company.partner_id.state_id" t-out="company.partner_id.state_id.name"/></div>
+                <div t-if="company.partner_id.country_id" t-out="company.partner_id.country_id.name"/>
+                <div t-if="company.vat">RFC: <span t-out="company.vat"/></div>
+            </td>
+        </tr></table>
+    </template>
+    <template id="distributed_credit_report">
+        <t t-call="web.html_container">
+            <t t-foreach="sections" t-as="section">
+                <t t-set="company" t-value="section['company']"/>
+                <t t-set="currency" t-value="section['currency']"/>
+                <t t-if="summary_only or len(docs) &gt; 1">
+                    <t t-set="o" t-value="section['items'][0]['doc']"/>
+                    <t t-call="entintados_pdv.distributed_credit_layout">
+                        <div class="page distributed-credit">
+                            <t t-call="entintados_pdv.distributed_credit_report_styles"/>
+                            <t t-call="entintados_pdv.distributed_credit_brand"/>
+                            <h2>Notas de crédito distribuidas</h2>
+                            <p class="text-muted">Reporte general · <span t-out="currency.name"/> · <span t-out="len(section['items'])"/> agrupaciones</p>
+                            <p class="small text-muted">Los importes incluyen impuestos. Contabilizado considera únicamente notas en estado contabilizado; excluye borradores y canceladas. Los totales se separan por compañía y moneda. Este reporte es informativo y no sustituye al comprobante fiscal.</p>
+                            <p><strong t-out="section['count']"/> notas de crédito contabilizadas.</p>
+                            <table class="table table-sm" style="font-size:10px; table-layout:fixed; width:100%;">
+                                <thead style="display:table-header-group"><tr><th style="width:14%">Folio / fecha</th><th style="width:22%">Proveedor</th><th style="width:20%">Motivo</th><th style="width:12%">Estado</th><th class="text-end" style="width:16%">A distribuir</th><th class="text-end" style="width:16%">Contabilizado</th></tr></thead>
+                                <tbody>
+                                    <tr t-foreach="section['items']" t-as="item" style="page-break-inside:avoid;">
+                                        <td><strong t-field="item['doc'].name"/><br/><span t-field="item['doc'].date"/></td>
+                                        <td style="overflow-wrap:break-word"><span t-field="item['doc'].partner_id.name"/></td>
+                                        <td style="overflow-wrap:break-word"><span t-field="item['doc'].reason"/></td>
+                                        <td><span t-field="item['doc'].state"/></td>
+                                        <td class="text-end"><span t-out="item['requested']" t-options="{'widget':'monetary','display_currency':currency}"/></td>
+                                        <td class="text-end"><span t-out="item['posted']" t-options="{'widget':'monetary','display_currency':currency}"/></td>
+                                    </tr>
+                                </tbody>
+                                <tfoot><tr class="fw-bold"><td colspan="4">Total en <span t-out="currency.name"/></td><td class="text-end"><span t-out="section['requested']" t-options="{'widget':'monetary','display_currency':currency}"/></td><td class="text-end"><span t-out="section['posted']" t-options="{'widget':'monetary','display_currency':currency}"/></td></tr></tfoot>
+                            </table>
+                        </div>
+                    </t>
+                </t>
+                <t t-if="not summary_only" t-foreach="section['items']" t-as="item">
+                    <t t-set="o" t-value="item['doc']"/>
+                    <t t-call="entintados_pdv.distributed_credit_layout">
+                        <div class="page distributed-credit">
+                            <t t-call="entintados_pdv.distributed_credit_report_styles"/>
+                            <t t-call="entintados_pdv.distributed_credit_brand"/>
+                            <h2>Nota de crédito distribuida</h2>
+                            <h3 t-field="o.name"/>
+                            <div class="row mb-3"><div class="col-7"><strong>Proveedor: </strong><span t-field="o.partner_id.name"/><br/><strong>RFC: </strong><span t-field="o.partner_id.vat"/><br/><strong>Motivo: </strong><span t-field="o.reason"/></div><div class="col-5"><strong>Fecha: </strong><span t-field="o.date"/><br/><strong>Estado: </strong><span t-field="o.state"/><br/><strong>Moneda: </strong><span t-out="currency.name"/><br/><strong>Diario: </strong><span t-field="o.journal_id.name"/></div></div>
+                            <h4>Distribución por factura</h4>
+                            <table class="table table-sm" style="font-size:11px; width:100%;">
+                                <thead style="display:table-header-group"><tr><th>Factura de origen</th><th class="text-end">Total factura</th><th class="text-end">Importe distribuido</th><th>Nota generada / estado</th></tr></thead>
+                                <tbody><tr t-foreach="item['rows']" t-as="row" style="page-break-inside:avoid;"><td><span t-field="row['line'].invoice_id.name"/></td><td class="text-end"><span t-field="row['line'].invoice_id.amount_total"/></td><td class="text-end"><span t-field="row['line'].amount"/></td><td><t t-foreach="row['credits']" t-as="credit"><div><span t-field="credit.name"/> / <span t-field="credit.state"/></div></t><span t-if="not row['credits']">Sin nota vinculada</span></td></tr></tbody>
+                            </table>
+                            <h4 class="mt-3">Notas de crédito generadas</h4>
+                            <table t-if="item['credits']" class="table table-sm" style="font-size:11px; width:100%;">
+                                <thead style="display:table-header-group"><tr><th>Nota</th><th>Fecha</th><th>Estado</th><th class="text-end">Subtotal</th><th class="text-end">Impuestos</th><th class="text-end">Total</th></tr></thead>
+                                <tbody><tr t-foreach="item['credits']" t-as="credit" style="page-break-inside:avoid;"><td><span t-field="credit.name"/></td><td><span t-field="credit.invoice_date"/></td><td><span t-field="credit.state"/></td><td class="text-end"><span t-field="credit.amount_untaxed"/></td><td class="text-end"><span t-field="credit.amount_tax"/></td><td class="text-end"><span t-field="credit.amount_total"/></td></tr></tbody>
+                            </table>
+                            <p t-else="" class="text-muted">Esta agrupación no tiene notas de crédito vinculadas.</p>
+                            <div class="row mt-3" style="page-break-inside:avoid;"><div class="col-6"/><div class="col-6"><table class="table table-sm"><tr><td>Total a distribuir</td><td class="text-end"><span t-out="item['requested']" t-options="{'widget':'monetary','display_currency':currency}"/></td></tr><tr><td>Subtotal contabilizado</td><td class="text-end"><span t-out="item['untaxed']" t-options="{'widget':'monetary','display_currency':currency}"/></td></tr><tr><td>Impuestos contabilizados</td><td class="text-end"><span t-out="item['tax']" t-options="{'widget':'monetary','display_currency':currency}"/></td></tr><tr class="fw-bold"><td>Total contabilizado</td><td class="text-end"><span t-out="item['posted']" t-options="{'widget':'monetary','display_currency':currency}"/></td></tr></table></div></div>
+                            <p class="small text-muted">Los totales contabilizados excluyen notas en borrador y canceladas. Reporte informativo; no sustituye al comprobante fiscal.</p>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

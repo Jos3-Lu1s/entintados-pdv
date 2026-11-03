@@ -1,4 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_customer_credit_reason_user,customer.credit.reason.read,model_customer_credit_reason,account.group_account_invoice,1,0,0,0
+access_customer_credit_reason_manager,customer.credit.reason.manage,model_customer_credit_reason,account.group_account_manager,1,1,1,1
 access_partner_risk_exceeded_wiz_user,Partner Risk Exceeded Wizard (Internal user),model_partner_risk_exceeded_wiz,base.group_user,1,1,1,1
 access_tint_size_user,tint.size (lectura usuario interno),model_tint_size,base.group_user,1,0,0,0
 access_tint_size_manager,tint.size (administrador de catalogo),model_tint_size,entintados_pdv.group_tint_manager,1,1,1,1
@@ -31,6 +33,11 @@ access_res_partner_discount_rule_agreements,res.partner.discount.rule (acuerdos 
 access_crm_material_auditor_assign_wizard_user,crm.material.auditor.assign.wizard (usuario interno),model_crm_material_auditor_assign_wizard,base.group_user,1,1,1,1
 access_vendor_credit_wizard,vendor.credit.group,model_vendor_credit_group,account.group_account_invoice,1,1,1,1
 access_vendor_credit_wizard_line,vendor.credit.group.line,model_vendor_credit_group_line,account.group_account_invoice,1,1,1,1
+access_vendor_credit_reason_user,vendor.credit.reason.read,model_vendor_credit_reason,account.group_account_invoice,1,0,0,0
+access_vendor_credit_material,vendor.credit.material,model_vendor_credit_material,account.group_account_invoice,1,1,1,1
+access_vendor_credit_reason_manager,vendor.credit.reason.manage,model_vendor_credit_reason,account.group_account_manager,1,1,1,1
+access_vendor_credit_adjustment,vendor.credit.group.adjustment,model_vendor_credit_group_adjustment,account.group_account_invoice,1,1,1,1
+access_vendor_credit_adjustment_line,vendor.credit.group.adjustment.line,model_vendor_credit_group_adjustment_line,account.group_account_invoice,1,1,1,1
 access_pos_order_split_invoice_wizard_user,pos.order.split.invoice.wizard.user,model_pos_order_split_invoice_wizard,point_of_sale.group_pos_user,1,1,1,1
 access_purchase_advance_invoice,purchase.advance.invoice,model_purchase_advance_invoice,account.group_account_invoice,1,1,1,1
 access_account_advance_apply,account.advance.apply,model_account_advance_apply,account.group_account_invoice,1,1,1,1
@@ -46,9 +53,10 @@ access_customer_account_adjustment,Customer account adjustment,model_customer_ac
 access_customer_account_adjustment_line,Customer account adjustment line,model_customer_account_adjustment_line,account.group_account_invoice,1,1,1,1
 access_pos_accounting_return,Accounting ticket return,model_pos_accounting_return,account.group_account_invoice,1,1,1,1
 access_pos_accounting_return_line,Accounting ticket return line,model_pos_accounting_return_line,account.group_account_invoice,1,1,1,1
-access_pos_return_order_read,Accounting ticket read,point_of_sale.model_pos_order,account.group_account_invoice,1,0,0,0
-access_pos_return_line_read,Accounting ticket line read,point_of_sale.model_pos_order_line,account.group_account_invoice,1,0,0,0
-access_pos_return_payment_read,Accounting ticket payment read,point_of_sale.model_pos_payment,account.group_account_invoice,1,0,0,0
-access_pos_return_session_read,Accounting ticket session read,point_of_sale.model_pos_session,account.group_account_invoice,1,0,0,0
-access_pos_return_config_read,Accounting ticket config read,point_of_sale.model_pos_config,account.group_account_invoice,1,0,0,0
-access_pos_return_payment_method_read,Accounting ticket payment method read,point_of_sale.model_pos_payment_method,account.group_account_invoice,1,0,0,0
+access_pos_return_order_read,Accounting ticket read,point_of_sale.model_pos_order,account.group_account_invoice,1,1,1,1
+access_pos_return_line_read,Accounting ticket line read,point_of_sale.model_pos_order_line,account.group_account_invoice,1,1,1,1
+access_pos_return_payment_read,Accounting ticket payment read,point_of_sale.model_pos_payment,account.group_account_invoice,1,1,1,1
+access_pos_return_session_read,Accounting ticket session read,point_of_sale.model_pos_session,account.group_account_invoice,1,1,1,1
+access_pos_return_config_read,Accounting ticket config read,point_of_sale.model_pos_config,account.group_account_invoice,1,1,1,1
+access_pos_return_payment_method_read,Accounting ticket payment method read,point_of_sale.model_pos_payment_method,account.group_account_invoice,1,1,1,1
+access_sale_tint_wizard,sale.tint.wizard,model_sale_tint_wizard,sales_team.group_sale_salesman,1,1,1,1

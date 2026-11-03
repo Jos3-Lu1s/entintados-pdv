@@ -1,5 +1,10 @@
+import logging
+
 from odoo import api, Command, fields, models, _
 from odoo.exceptions import UserError, ValidationError
+
+
+_logger = logging.getLogger(__name__)
 
 
 class ResCompany(models.Model):
@@ -22,29 +27,92 @@ class ResCompany(models.Model):
         self.ensure_one()
         if not self.env.su and not self.env.user.has_group('account.group_account_manager'):
             raise UserError(_('La configuración de anticipos requiere permisos de administrador contable.'))
+        with self.env.cr.savepoint():
+            self._prepare_advance_defaults(activate=True)
+        return True
+
+    def _prepare_advance_defaults(self, activate=False):
+        """Prepare all related values before writing the company constraints."""
+        self.ensure_one()
+        company = self.with_company(self)
         Account = self.env['account.account'].with_company(self)
+        values = {}
+        custom_configuration = bool(company.advance_product_id or company.supplier_advance_account_id)
         for field_name, code, name, account_type in (
             ('downpayment_account_id', 'ANTCLI', 'Anticipos de clientes', 'liability_current'),
             ('supplier_advance_account_id', 'ANTPRO', 'Anticipos a proveedores', 'asset_current'),
         ):
-            if not self[field_name]:
-                if Account.search_count([('code', '=', code), ('company_ids', 'in', self.id)]):
-                    raise UserError(_('El código %s ya existe. Selecciona la cuenta correspondiente en Ajustes.') % code)
-                self[field_name] = Account.create({
-                    'code': code, 'name': name, 'account_type': account_type,
-                    'reconcile': True, 'company_ids': [Command.set(self.ids)],
+            account = company[field_name]
+            compatible = (account and account.active and account.account_type == account_type
+                          and account.reconcile and company in account.company_ids)
+            if account and not compatible and custom_configuration:
+                raise ValidationError(_(
+                    'La cuenta %(account)s no es compatible con anticipos en %(company)s. '
+                    'Revise su tipo y conciliación antes de preparar la configuración.',
+                    account=account.display_name, company=company.display_name))
+            if not compatible:
+                # A native sales down-payment account may be an income account.
+                # Keep that account intact and create/select a liability default.
+                domain = [('code', '=', code), ('company_ids', 'in', company.id)]
+                account = Account.search(domain + [('account_type', '=', account_type), ('reconcile', '=', True)], limit=1)
+                if not account:
+                    candidate, suffix = code, 0
+                    while Account.with_context(active_test=False).search_count([
+                            ('code', '=', candidate), ('company_ids', 'in', company.id)]):
+                        suffix += 1
+                        candidate = '%s%s' % (code, suffix)
+                    account = Account.create({
+                        'code': candidate, 'name': name, 'account_type': account_type,
+                        'reconcile': True, 'company_ids': [Command.set(self.ids)],
+                    })
+            values[field_name] = account.id
+        product = company.advance_product_id
+        if not product:
+            Product = self.env['product.product'].with_company(company)
+            reference = 'ANTICIPO-%s' % company.id
+            product = Product.search([
+                ('default_code', '=', reference), ('company_id', '=', company.id),
+                ('type', '=', 'service'), ('is_accounting_advance', '=', True),
+                ('property_account_income_id', '=', values['downpayment_account_id']),
+                ('property_account_expense_id', '=', values['supplier_advance_account_id']),
+            ], limit=1)
+            if not product:
+                candidate, suffix = reference, 0
+                while Product.with_context(active_test=False).search_count([('default_code', '=', candidate)]):
+                    suffix += 1
+                    candidate = '%s-%s' % (reference, suffix)
+                product = Product.create({
+                    'name': 'Anticipo', 'default_code': candidate,
+                    'type': 'service', 'available_in_pos': True, 'company_id': self.id,
+                    'is_accounting_advance': True,
+                    'property_account_income_id': values['downpayment_account_id'],
+                    'property_account_expense_id': values['supplier_advance_account_id'],
+                    'taxes_id': [Command.clear()], 'supplier_taxes_id': [Command.clear()],
                 })
-        self._check_advance_configuration()
-        if not self.advance_product_id:
-            self.advance_product_id = self.env['product.product'].with_company(self).create({
-                'name': 'Anticipo', 'default_code': 'ANTICIPO-%s' % self.id,
-                'type': 'service', 'available_in_pos': True, 'company_id': self.id,
-                'is_accounting_advance': True,
-                'property_account_income_id': self.downpayment_account_id.id,
-                'property_account_expense_id': self.supplier_advance_account_id.id,
-                'taxes_id': [Command.clear()], 'supplier_taxes_id': [Command.clear()],
-            })
-        self.advance_risk_enabled = True
+        values['advance_product_id'] = product.id
+        if activate:
+            values['advance_risk_enabled'] = True
+        company.write(values)
+        company._check_advance_configuration()
+        boxes = self.env['pos.config'].with_context(active_test=False).search([
+            ('company_id', '=', company.id), ('down_payment_product_id', '=', False)])
+        for box in boxes:
+            try:
+                with self.env.cr.savepoint():
+                    box.write({'down_payment_product_id': product.id})
+            except (UserError, ValidationError) as error:
+                _logger.warning('Advance product not assigned to POS %s: %s', box.id, error)
+        return True
+
+    @api.model
+    def _setup_advance_defaults(self):
+        """XML install/upgrade entry point; isolate conflicting legacy setups."""
+        for company in self.sudo().search([]):
+            try:
+                with self.env.cr.savepoint():
+                    company._prepare_advance_defaults(activate=not bool(company.advance_product_id))
+            except (UserError, ValidationError) as error:
+                _logger.warning('Automatic advance setup skipped for company %s: %s', company.id, error)
         return True
 
     @api.constrains('downpayment_account_id', 'supplier_advance_account_id', 'advance_product_id')

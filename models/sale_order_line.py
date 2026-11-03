@@ -151,13 +151,13 @@ class SaleOrderLine(models.Model):
                     line=line.name,
                 ))
 
-    @api.constrains('product_id')
+    @api.constrains('product_id', 'tint_section_id')
     def _check_colorant_not_sold_alone(self):
         for line in self:
-            if line.product_id.tint_role == 'colorant':
+            if line.product_id.tint_role == 'colorant' and not line.tint_section_id.tint_snapshot:
                 raise ValidationError(_(
                     "El colorante «%s» no se vende solo: solo puede salir "
-                    "como parte de un producto entintado en el Punto de Venta.",
+                    "como parte de un entintado en Ventas o en el Punto de Venta.",
                     line.product_id.display_name,
                 ))
 

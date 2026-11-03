@@ -6,12 +6,14 @@
         <field name="view_mode">list,form</field>
         <field name="domain">[('is_demo_flow', '=', True)]</field>
     </record>
-    <menuitem id="menu_demo_flow" name="Demostraciones" sequence="25"
+    <!-- This is a CRM entry, not a separate application. Keep its existing XML ID
+         so bookmarks continue to work when upgrading an existing database. -->
+    <menuitem id="menu_demo_flow_crm" name="Demostraciones" parent="crm.crm_menu_sales"
+              action="action_demo_flow_crm" sequence="25"
               groups="entintados_pdv.group_demo_user"/>
-    <menuitem id="menu_demo_flow_crm" name="CRM" parent="menu_demo_flow"
-              action="action_demo_flow_crm" sequence="10"/>
-    <menuitem id="menu_demo_flow_approvals" name="Aprobaciones" parent="menu_demo_flow"
-              action="action_approval_demo_list" sequence="20"/>
-    <menuitem id="menu_demo_flow_outputs" name="Salidas" parent="menu_demo_flow"
-              action="action_stock_demo_outputs" sequence="30"/>
+    <!-- Approvals and warehouse outputs already have their native entries.
+         Optional references make cleanup harmless on a fresh installation. -->
+    <delete model="ir.ui.menu" search="[('id', '=', ref('entintados_pdv.menu_demo_flow_approvals', False))]"/>
+    <delete model="ir.ui.menu" search="[('id', '=', ref('entintados_pdv.menu_demo_flow_outputs', False))]"/>
+    <delete model="ir.ui.menu" search="[('id', '=', ref('entintados_pdv.menu_demo_flow', False))]"/>
 </odoo>

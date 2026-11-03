@@ -1,0 +1,3 @@
+<odoo>
+    <function model="sale.order" name="_setup_sale_tint_layout"/>
+</odoo>

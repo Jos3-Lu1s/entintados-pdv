@@ -80,4 +80,10 @@
         <field name="parent_id" ref="account_vendor_catalogs_section"/>
         <field name="sequence">20</field>
     </record>
+    <menuitem id="vendor_credit_reason_menu" name="Motivos de notas de crédito"
+              parent="account_vendor_catalogs_section" action="vendor_credit_reason_action"
+              sequence="30" groups="account.group_account_invoice"/>
+    <menuitem id="customer_credit_reason_menu" name="Motivos de notas de crédito"
+              parent="account_customer_catalogs_section" action="customer_credit_reason_action"
+              sequence="30" groups="account.group_account_invoice"/>
 </odoo>

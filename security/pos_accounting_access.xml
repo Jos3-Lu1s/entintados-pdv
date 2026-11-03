@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Accounting return rules grant a narrow read scope to accountants.
+         Group rules are combined with OR, so POS operators also need their
+         native operational read scope when they have both roles. Global
+         multi-company rules continue to intersect these grants. -->
+    <record id="pos_operational_order_read_rule" model="ir.rule">
+        <field name="name">PDV: lectura operativa de tickets</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order"/>
+        <field name="groups" eval="[Command.link(ref('point_of_sale.group_pos_user'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="pos_operational_line_read_rule" model="ir.rule">
+        <field name="name">PDV: lectura operativa de líneas</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order_line"/>
+        <field name="groups" eval="[Command.link(ref('point_of_sale.group_pos_user'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="pos_operational_payment_read_rule" model="ir.rule">
+        <field name="name">PDV: lectura operativa de pagos</field>
+        <field name="model_id" ref="point_of_sale.model_pos_payment"/>
+        <field name="groups" eval="[Command.link(ref('point_of_sale.group_pos_user'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+</odoo>

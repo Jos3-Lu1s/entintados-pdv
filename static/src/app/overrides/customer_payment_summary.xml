@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.CustomerPaymentSummary" t-inherit="point_of_sale.PaymentScreenDue" t-inherit-mode="extension">
+        <xpath expr="//section" position="replace">
+            <section class="o-customer-payment-summary" aria-label="Resumen de compra">
+                <t t-set="summary" t-value="customerPaymentSummary"/>
+                <header class="p-3 border-bottom">
+                    <h4 class="mb-1">Resumen de compra</h4>
+                    <div t-esc="currentOrder.getPartner()?.name || 'Público en general'"/>
+                </header>
+                <div class="o-customer-purchase-lines table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead><tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio unit.</th><th class="text-end">Descuento / promoción</th><th class="text-end">Importe</th></tr></thead>
+                        <tbody>
+                            <tr t-foreach="summary.rows" t-as="row" t-key="row.id">
+                                <td><span t-esc="row.name"/><small t-if="row.color" class="d-block text-muted">Color: <t t-esc="row.color"/></small></td>
+                                <td class="text-end text-nowrap"><t t-esc="row.quantity"/> <small t-esc="row.unit"/></td>
+                                <td class="text-end text-nowrap" t-esc="env.utils.formatCurrency(row.unitPrice)"/>
+                                <td class="text-end text-nowrap" t-esc="env.utils.formatCurrency(row.saving)"/>
+                                <td class="text-end text-nowrap fw-bold" t-esc="env.utils.formatCurrency(row.amount)"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <footer class="p-3 border-top">
+                    <small class="text-muted">Precios e importes de productos antes de impuestos.</small>
+                    <dl class="o-customer-price-breakdown mb-0 mt-2">
+                        <dt>Importe antes de descuentos</dt><dd t-esc="env.utils.formatCurrency(summary.gross)"/>
+                        <dt>Descuentos</dt><dd t-esc="env.utils.formatCurrency(-summary.discounts)"/>
+                        <dt>Promociones</dt><dd t-esc="env.utils.formatCurrency(-summary.promotions)"/>
+                        <dt>Subtotal</dt><dd t-esc="env.utils.formatCurrency(summary.subtotal)"/>
+                        <t t-foreach="summary.taxes" t-as="tax" t-key="tax_index">
+                            <dt t-esc="tax.name"/><dd t-esc="env.utils.formatCurrency(tax.amount)"/>
+                        </t>
+                        <t t-if="!summary.taxes.length"><dt>Impuestos</dt><dd t-esc="env.utils.formatCurrency(summary.tax)"/></t>
+                        <t t-if="!currentOrder.currency.isZero(summary.rounding)"><dt>Redondeo</dt><dd t-esc="env.utils.formatCurrency(summary.rounding)"/></t>
+                        <dt class="o-customer-total">Total a pagar</dt><dd class="o-customer-total" t-esc="env.utils.formatCurrency(summary.total)"/>
+                    </dl>
+                </footer>
+            </section>
+        </xpath>
+    </t>
+</templates>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Run on installation and upgrades; the method reuses compatible data
+         per company and preserves previously selected products and accounts. -->
+    <function model="res.company" name="_setup_advance_defaults"/>
+</odoo>

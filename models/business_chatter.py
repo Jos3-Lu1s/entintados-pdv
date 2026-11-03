@@ -127,7 +127,10 @@ def values(record, names):
             continue
         value = record[name]
         if field.type in ('many2one', 'many2many'):
-            result[name] = (tuple(sorted(value.ids)), ', '.join(value.mapped('display_name')) or '—')
+            # Native bank statement creation links its move before every
+            # related record has a display name. Keep the audit readable
+            # without preventing the underlying accounting operation.
+            result[name] = (tuple(sorted(value.ids)), ', '.join(document_label(item) for item in value) or '—')
         elif field.type == 'binary':
             raw = record.with_context(bin_size=False)[name] or b''
             raw = raw.encode() if isinstance(raw, str) else raw

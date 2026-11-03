@@ -84,7 +84,7 @@ class PosAccountingReturn(models.Model):
             raise UserError(_('Usa los botones de la devolución para cambiar su etapa.'))
         if 'return_lot_names' in vals and any(r.state not in ('draft', 'waiting_stock') for r in self):
             raise UserError(_('Los lotes o series solo pueden capturarse antes de recibir la devolución.'))
-        if set(vals) & {'order_id', 'partner_id', 'company_id', 'date', 'reason', 'journal_id', 'line_ids'}:
+        if set(vals) & {'order_id', 'partner_id', 'company_id', 'date', 'reason', 'reason_id', 'journal_id', 'line_ids'}:
             self._check_editable()
         return super().write(vals)
 
@@ -351,6 +351,7 @@ class PosAccountingReturn(models.Model):
         with operation(self, 'Nota y devolución de importe de ticket sin factura'):
             credit = self.env['account.move'].create({
                 'move_type': 'out_refund', 'partner_id': self.partner_id.id, 'journal_id': self.journal_id.id,
+                'customer_credit_reason_id': self.reason_id.id,
                 'company_id': self.company_id.id, 'currency_id': self.currency_id.id,
                 'invoice_date': self.date, 'date': self.date, 'ref': '%s: %s' % (self.name, self.reason),
                 'invoice_origin': self.order_id.pos_reference or self.order_id.name,

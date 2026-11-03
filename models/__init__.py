@@ -45,6 +45,8 @@ from . import pos_stock
 from . import pos_customer
 from . import pos_order_split_invoice_wizard
 from . import vendor_credit_wizard
+from . import vendor_credit_reason
+from . import vendor_credit_material
 from . import account_payment_register
 from . import account_move
 from . import advance_accounting
@@ -68,4 +70,10 @@ from . import pos_accounting_return
 from . import return_credit_navigation
 from . import sale_contact_owner
 from . import product_line_uniqueness
+from . import sale_tint
+from . import sale_tint_stock
 from . import pos_invoice_collection
+from . import pos_sale_quotation
+from . import customer_credit_reason
+from . import pos_bank_payments
+from . import vendor_credit_report

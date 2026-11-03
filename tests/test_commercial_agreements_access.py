@@ -30,6 +30,9 @@ class TestCommercialAgreementsAccess(TransactionCase):
         }).product_variant_ids[0]
         cls.partner = cls.env['res.partner'].create({
             'name': 'Cliente Acuerdos', 'is_customer': True, 'discount': 0.10, 'phone': '5512345678',
+            # Sales ownership now comes from the contact, even when create()
+            # receives an explicit user_id for the order.
+            'user_id': cls.salesman.id,
         })
         cls.partner.property_product_pricelist = cls.env['product.pricelist'].create({'name': 'Tarifa Acuerdos'})
         cls.rule = cls.env['res.partner.discount.rule'].create({
@@ -135,9 +138,22 @@ class TestCommercialAgreementsAccess(TransactionCase):
             'order_line': [Command.create({'product_id': self.other_product.id, 'product_uom_qty': 1.0})],
         })
         line = order.order_line
+        self.assertEqual(order.user_id, self.salesman)
+        self.assertEqual(line.salesman_id, self.salesman)
         self.assertEqual(line.price_unit, 200.0)
         self.assertNotEqual(line.pricing_rule_type, 'fixed_price')
         self.assertEqual(line.discount, 10.0)
+
+    def test_agreements_group_does_not_grant_other_salespeople_orders(self):
+        """Managing agreements does not bypass the native sales ownership rule."""
+        with self.assertRaises(AccessError), self.cr.savepoint():
+            self.env['sale.order'].with_user(self.agreements_manager).create({
+                'partner_id': self.partner.id,
+                'user_id': self.agreements_manager.id,
+                'order_line': [Command.create({
+                    'product_id': self.other_product.id, 'product_uom_qty': 1.0,
+                })],
+            })
 
     def test_pos_cashier_loads_agreements(self):
         """Un cajero sin el grupo sigue cargando los acuerdos del cliente en el PDV."""

@@ -8,6 +8,18 @@ class PosConfig(models.Model):
     advance_product_id = fields.Many2one(related='company_id.advance_product_id')
     advance_risk_enabled = fields.Boolean(related='company_id.advance_risk_enabled')
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        prepared = []
+        for vals in vals_list:
+            vals = dict(vals)
+            company = self.env['res.company'].browse(vals.get('company_id')) if vals.get('company_id') else self.env.company
+            if ('down_payment_product_id' not in vals and company.advance_risk_enabled
+                    and company.advance_product_id):
+                vals['down_payment_product_id'] = company.advance_product_id.id
+            prepared.append(vals)
+        return super().create(prepared)
+
     def _get_special_products(self):
         return super()._get_special_products() | self.env.companies.advance_product_id
 

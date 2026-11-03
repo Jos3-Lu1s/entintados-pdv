@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.BankPaymentLabels" t-inherit="point_of_sale.PaymentScreenMethods" t-inherit-mode="extension">
+        <xpath expr="//span[hasclass('payment-name')]" position="replace">
+            <span class="payment-name">
+                <t t-esc="paymentMethod.name"/>
+                <small t-if="paymentMethod.collection_type === 'card' and paymentMethod.terminal_label" class="d-block text-muted">Terminal: <t t-esc="paymentMethod.terminal_label"/></small>
+            </span>
+        </xpath>
+    </t>
+</templates>

@@ -38,3 +38,12 @@ from . import test_untracked_discount_agreement
 from . import test_combo_price_breakdown
 from . import test_combo_agreements
 from . import test_scheme_line_selector
+from . import test_bank_statement_audit
+from . import test_pos_accounting_access
+from . import test_advance_defaults
+from . import test_vendor_credit_reasons
+from . import test_sale_tint
+from . import test_pos_sale_quotation
+from . import test_customer_credit_reasons
+from . import test_pos_bank_payments
+from . import test_distributed_credit_report

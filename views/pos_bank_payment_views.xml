@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_bank_payment_method_form" model="ir.ui.view">
+        <field name="name">pos.payment.method.bank.collection</field><field name="model">pos.payment.method</field>
+        <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='journal_id']" position="before">
+                <field name="collection_type"/>
+                <field name="terminal_label" invisible="collection_type == 'standard'" required="collection_type == 'card'"/>
+            </xpath>
+            <xpath expr="//field[@name='outstanding_account_id']" position="attributes"><attribute name="string">Cuenta contable de cobros pendientes</attribute></xpath>
+            <xpath expr="//field[@name='outstanding_account_id']" position="after">
+                <div class="text-muted" colspan="2" invisible="collection_type == 'standard'">El cobro se registra en esta cuenta al contabilizar la sesión. Contabilidad puede cambiarla con las sesiones cerradas. La cuenta bancaria final se configura en el diario.</div>
+            </xpath>
+        </field>
+    </record>
+    <record id="pos_bank_payment_method_list" model="ir.ui.view">
+        <field name="name">pos.payment.method.bank.collection.list</field><field name="model">pos.payment.method</field>
+        <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_tree"/>
+        <field name="arch" type="xml"><xpath expr="//field[@name='name']" position="after"><field name="collection_type" optional="show"/><field name="terminal_label" optional="show"/></xpath></field>
+    </record>
+    <delete model="ir.ui.view" id="pos_bank_payment_config"/>
+</odoo>

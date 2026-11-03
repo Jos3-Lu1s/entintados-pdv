@@ -10,6 +10,8 @@ class TintColorFormula(models.Model):
     _name = 'tint.color.formula'
     _description = "Fórmula de entintado"
     _order = 'gallery_id, color_id, base_type_id, size_id, id'
+    _rec_names_search = ['color_id.name', 'color_id.code', 'gallery_id.name',
+                         'base_type_id.name', 'size_id.name', 'line_scheme_id.name']
     _inherit = ['pos.load.mixin']
 
     gallery_id = fields.Many2one(

@@ -131,7 +131,7 @@ class CustomerAccountAdjustment(models.Model):
     def write(self, vals):
         if 'state' in vals:
             raise UserError(_('Usa los botones del ajuste para cambiar su etapa y actualizar los documentos relacionados.'))
-        if {'partner_id', 'company_id', 'currency_id', 'journal_id', 'date', 'reason', 'line_ids', 'state'}.intersection(vals):
+        if {'partner_id', 'company_id', 'currency_id', 'journal_id', 'date', 'reason', 'reason_id', 'line_ids', 'state'}.intersection(vals):
             self._check_editable()
         return super().write(vals)
 
@@ -326,6 +326,7 @@ class CustomerAccountAdjustment(models.Model):
                 'date': self.date, 'invoice_date': self.date, 'journal_id': self.journal_id.id,
                 'auto_post': 'no', 'ref': '%s: %s' % (self.name, self.reason),
                 'customer_adjustment_id': self.id, 'line_ids': commands,
+                'customer_credit_reason_id': self.reason_id.id,
             }], cancel=False)
             difference = self.currency_id.round(amount - credit.amount_total)
             if difference:

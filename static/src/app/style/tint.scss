@@ -2,6 +2,36 @@
    Variables y Sistema de Breakpoints Responsivos (Bootstrap/Odoo 19)
    ========================================================================== */
 $tint-breakpoint-xs: 575.98px;
+
+.o-customer-payment-summary {
+    background: #fff;
+    border: 1px solid #dbe3ec;
+    border-radius: 12px;
+    width: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    color: #1e293b;
+
+    thead th { background: #edf4f8; font-size: .8rem; }
+    td, th { padding: .75rem; }
+    .o-customer-purchase-lines { max-height: 35vh; overflow: auto; }
+    thead { position: sticky; top: 0; }
+    .o-customer-price-breakdown {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .45rem 1rem;
+        margin-left: auto;
+        max-width: 440px;
+        dt { font-weight: 500; }
+        dd { text-align: right; margin: 0; font-variant-numeric: tabular-nums; }
+        .o-customer-total {
+            border-top: 2px solid #b9ccd8;
+            padding-top: .65rem;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+    }
+}
 $tint-breakpoint-sm: 767.98px;
 $tint-breakpoint-md: 991.98px;
 $tint-breakpoint-lg: 1199.98px;

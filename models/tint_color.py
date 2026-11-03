@@ -8,6 +8,7 @@ class TintColor(models.Model):
     _name = 'tint.color'
     _description = "Color de la carta"
     _order = 'name, id'
+    _rec_names_search = ['name', 'code']
     _inherit = ['pos.load.mixin', 'tint.code.mixin']
 
     name = fields.Char(

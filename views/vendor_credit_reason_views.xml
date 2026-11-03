@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="vendor_credit_reason_list" model="ir.ui.view">
+        <field name="name">vendor.credit.reason.list</field>
+        <field name="model">vendor.credit.reason</field>
+        <field name="arch" type="xml">
+            <list><field name="sequence" widget="handle"/><field name="name"/>
+                <field name="operation_type"/><field name="company_id" groups="base.group_multi_company"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="vendor_credit_reason_form" model="ir.ui.view">
+        <field name="name">vendor.credit.reason.form</field>
+        <field name="model">vendor.credit.reason</field>
+        <field name="arch" type="xml">
+            <form string="Motivo de nota de crédito"><sheet><group>
+                <field name="name"/><field name="sequence"/>
+                <field name="operation_type"/>
+                <field name="company_id"/>
+                <field name="active"/>
+            </group>
+            <group string="Cuentas contables">
+                <field name="account_id" options="{'no_create': True}" domain="[('company_ids', 'in', company_id), ('account_type', 'not in', ['liability_payable', 'asset_receivable', 'off_balance'])]"/>
+                <field name="payable_account_id" options="{'no_create': True}" domain="[('company_ids', 'in', company_id), ('account_type', '=', 'liability_payable'), ('reconcile', '=', True)]"/>
+                <div class="text-muted" colspan="2">Si dejas las cuentas vacías, se utilizan las cuentas de la factura. Los impuestos conservan sus cuentas fiscales. La cuenta por pagar debe coincidir con la factura para liquidarla.</div>
+            </group>
+            <div class="alert alert-info" invisible="operation_type != 'return'">Solicita productos, cantidades y su recepción de origen. Al generar las notas se crea la devolución al proveedor; Almacén debe validarla para registrar la salida física.</div>
+            </sheet></form>
+        </field>
+    </record>
+    <record id="vendor_credit_reason_action" model="ir.actions.act_window">
+        <field name="name">Motivos de notas de crédito</field>
+        <field name="res_model">vendor.credit.reason</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="vendor_credit_adjustment_form" model="ir.ui.view">
+        <field name="name">vendor.credit.group.adjustment.form</field>
+        <field name="model">vendor.credit.group.adjustment</field>
+        <field name="arch" type="xml">
+            <form string="Ajustar notas y pagos">
+                <group><field name="group_id"/><field name="company_id" invisible="1"/>
+                    <field name="currency_id" invisible="1"/><field name="revision" invisible="1"/>
+                    <field name="reason_id" options="{'no_create': True}"
+                           domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"/>
+                    <field name="explanation"/>
+                </group>
+                <p>La factura quedará liquidada con el nuevo importe de la nota y el pago recalculado.
+                    Solo se ajustan pagos manuales aplicados exclusivamente a esta factura, sin conciliación bancaria ni timbrado.</p>
+                <field name="line_ids"><list editable="bottom" create="0" delete="0">
+                    <field name="source_line_id" column_invisible="True"/><field name="currency_id" column_invisible="True"/>
+                    <field name="invoice_id"/><field name="old_amount"/><field name="amount"/>
+                    <field name="payment_id"/><field name="payment_amount"/>
+                </list></field>
+                <footer><button name="action_apply" string="Aplicar ajuste y conciliar" type="object" class="btn-primary"/>
+                    <button string="Cancelar" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

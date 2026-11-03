@@ -382,11 +382,12 @@ class SaleOrder(models.Model):
             insufficient_lines = []
             quantities = {}
             for line in order.order_lines_for_stock_check():
-                if line.product_uom_qty <= 0:
+                pending = max(line.product_uom_qty - line.qty_delivered, 0)
+                if pending <= 0:
                     continue
                 product = line.product_id
                 quantities[product] = quantities.get(product, 0) + line.product_uom_id._compute_quantity(
-                    line.product_uom_qty, product.uom_id, round=False)
+                    pending, product.uom_id, round=False)
             for product, quantity in quantities.items():
                 available = product.with_company(order.company_id).with_context(
                     warehouse_id=order.warehouse_id.id, warehouse=order.warehouse_id.id

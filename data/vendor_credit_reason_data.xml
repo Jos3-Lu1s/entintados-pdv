@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="vendor_credit_reason_bonus" model="vendor.credit.reason">
+            <field name="name">Bonificación del proveedor</field><field name="company_id" eval="False"/>
+        </record>
+        <record id="vendor_credit_reason_discount" model="vendor.credit.reason">
+            <field name="name">Descuento comercial</field><field name="company_id" eval="False"/>
+        </record>
+        <record id="vendor_credit_reason_price" model="vendor.credit.reason">
+            <field name="name">Ajuste de precio</field><field name="company_id" eval="False"/>
+        </record>
+        <record id="vendor_credit_reason_return" model="vendor.credit.reason">
+            <field name="name">Devolución de mercancía</field><field name="company_id" eval="False"/>
+            <field name="operation_type">return</field>
+        </record>
+    </data>
+    <function model="vendor.credit.group" name="_migrate_reason_catalog"/>
+</odoo>

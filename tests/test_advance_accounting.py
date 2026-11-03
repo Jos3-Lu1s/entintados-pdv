@@ -19,9 +19,10 @@ class TestAdvanceAccounting(TransactionCase):
             ('expense', 'expense'), ('income', 'income'),
             ('outstanding', 'asset_current'),
             ('vat', 'asset_current'),
+            ('pos_bridge', 'asset_receivable'),
         ):
             cls.accounts[key] = cls.env['account.account'].create({
-                'name': 'Advance test ' + key, 'code': 'ADV' + key.upper(),
+                'name': 'Advance test ' + key, 'code': 'ADV' + key.replace('_', '').upper(),
                 'account_type': account_type, 'reconcile': key not in ('expense', 'income'),
                 'company_ids': [Command.set(cls.company.ids)],
             })
@@ -31,7 +32,7 @@ class TestAdvanceAccounting(TransactionCase):
             'supplier_advance_account_id': cls.accounts['supplier'].id,
             'advance_risk_enabled': True,
             'account_fiscal_country_id': cls.env.ref('base.us').id,
-            'account_default_pos_receivable_account_id': cls.accounts['receivable'].id,
+            'account_default_pos_receivable_account_id': cls.accounts['pos_bridge'].id,
         })
         cls.advance_product = cls.env['product.product'].create({
             'name': 'Test advance', 'default_code': 'TEST-ADVANCE', 'type': 'service',
@@ -259,7 +260,7 @@ class TestAdvanceAccounting(TransactionCase):
         order, source = self._native_sale_advance()
         target = order._create_invoices(final=True)
         self.assertEqual(target.advance_source_ids, source)
-        target.with_context(bypass_risk=True).action_post()
+        self.assertEqual(target.state, 'posted')
         self.assertEqual(target.amount_total, 700)
         self.assertEqual(source.advance_available, 0)
 
@@ -470,7 +471,7 @@ class TestAdvanceAccounting(TransactionCase):
         order, source = self._native_sale_advance()
         target = order._create_invoices(final=True)
         self.assertFalse(target.invoice_line_ids.advance_source_id)
-        target.with_context(bypass_risk=True).action_post()
+        self.assertEqual(target.state, 'posted')
         self.company.advance_risk_enabled = True
         self.assertEqual(source.advance_available, 0)
         self.assertEqual(source.advance_applied, 300)
@@ -531,7 +532,7 @@ class TestAdvanceAccounting(TransactionCase):
         target = sale._create_invoices(final=True)
         self.assertEqual(target.advance_source_ids, first | source)
         self.assertEqual(target.amount_total, 500)
-        target.with_context(bypass_risk=True).action_post()
+        self.assertEqual(target.state, 'posted')
         self.assertEqual(source.advance_available, 0)
         self.assertEqual(source.advance_applied, 200)
         self.assertEqual(source.advance_final_ids, target)

@@ -2,14 +2,15 @@
 {
     'name': "Entintados PDV",
 
-    'summary': "Configurar entintado de pintura desde la caja del Punto de Venta",
+    'summary': "Cotizar fórmulas de entintado en Ventas y configurar pintura desde el Punto de Venta",
 
     'description': """
 Entintado de pintura en el Punto de Venta
 =========================================
 
 Permite configurar y vender pintura entintada directamente desde la caja,
-sin pasar por cotización ni pedido de venta.
+y cotizar fórmulas existentes en Ventas con un encabezado de color,
+precio del entintado y desglose de base y puntos de colorante.
 
 Catálogo de entintado
 ---------------------
@@ -32,14 +33,16 @@ Catálogo de entintado
     # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Sales/Point of Sale',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.11',
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'l10n_mx_edi', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
+    'depends': ['base', 'contacts', 'account', 'l10n_mx_edi', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
 
     "assets": {
         "point_of_sale._assets_pos": [
+            "entintados_pdv/static/src/app/overrides/pos_sale_quotation.js",
+            "entintados_pdv/static/src/app/overrides/pos_sale_quotation.xml",
             # Corrección de incompatibilidad Odoo 19 (community vs enterprise pos_settle_due)
             ("after", "web/static/src/core/registry.js", "entintados_pdv/static/src/app/overrides/patch_registry.js"),
             "entintados_pdv/static/src/app/overrides/advance_controls.js",
@@ -50,6 +53,10 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_invoice_collection.js",
             "entintados_pdv/static/src/app/overrides/pos_debt_line_removal.js",
             "entintados_pdv/static/src/app/overrides/pos_financing.xml",
+            "entintados_pdv/static/src/app/overrides/pos_bank_payments.xml",
+            "entintados_pdv/static/src/app/overrides/customer_payment_summary.js",
+            "entintados_pdv/static/src/app/utils/customer_summary.js",
+            "entintados_pdv/static/src/app/overrides/customer_payment_summary.xml",
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
             # Componentes reutilizables (js + xml co-localizados)
@@ -97,6 +104,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
             "entintados_pdv/static/src/fields/crm_material_product/merge_material_product.js",
             "entintados_pdv/static/src/fields/crm_material_product/crm_material_product.js",
             "entintados_pdv/static/src/fields/opportunity_relations/opportunity_relations.js",
@@ -126,6 +134,8 @@ Catálogo de entintado
     'data': [
         'security/security.xml',
         'security/demo_flow_security.xml',
+        'security/pos_accounting_access.xml',
+        'security/vendor_credit_security.xml',
         'security/ir.model.access.csv',
         # Catálogo de entintado: datos maestros físicos
         'data/uom_data.xml',
@@ -159,16 +169,24 @@ Catálogo de entintado
         'views/lines_product_views.xml',
         'views/tint_menu_views.xml',
         'views/pos_config_views.xml',
+        'views/pos_bank_payment_views.xml',
+        'data/pos_bank_payment_data.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
+        'views/sale_tint_views.xml',
+        'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
         'views/account_move_views.xml',
         'views/account_payment_register.xml',
+        'views/vendor_credit_reason_views.xml',
         'views/vendor_credit_wizard_views.xml',
+        'data/vendor_credit_reason_data.xml',
+        'data/customer_credit_reason_data.xml',
         'views/customer_account_adjustment_views.xml',
         'views/pos_accounting_return_views.xml',
+        'views/customer_credit_reason_views.xml',
         'views/account_payment_views.xml',
         'views/crm_lead_views.xml',
         'views/crm_opportunity_list_views.xml',
@@ -198,6 +216,8 @@ Catálogo de entintado
         'report/report_picking_action.xml',
         'report/report_picking_crm.xml',
         'report/pos_sale_details.xml',
+        'report/distributed_credit_report.xml',
+        'views/distributed_credit_export_actions.xml',
         'wizards/partner_risk_exceeded_view.xml',
         'wizards/crm_field_visit_confirm_wizard_view.xml',
         'wizards/crm_material_request_partner_wizzard_views.xml',
@@ -209,6 +229,8 @@ Catálogo de entintado
         'views/pos_order_views.xml',
         'data/pos_order_reference.xml',
         'views/accounting_menu_sections.xml',
+        'data/advance_accounting_data.xml',
+        'data/sale_tint_data.xml',
     ],
     'demo': [],
     "installable": True,

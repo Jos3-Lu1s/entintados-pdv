@@ -17,6 +17,13 @@ def checks(env):
                      'views/crm_lead_views.xml', 'views/demo_flow_menu_views.xml'):
         convert_file(env, 'entintados_pdv', filename, {}, mode='update')
 
+    assert not env.ref('entintados_pdv.menu_demo_flow', raise_if_not_found=False)
+    assert not env.ref('entintados_pdv.menu_demo_flow_approvals', raise_if_not_found=False)
+    assert not env.ref('entintados_pdv.menu_demo_flow_outputs', raise_if_not_found=False)
+    assert env.ref('entintados_pdv.menu_demo_flow_crm').parent_id == env.ref('crm.crm_menu_sales')
+    assert env.ref('entintados_pdv.menu_approval_demo_list').parent_id == env.ref('approvals.approvals_menu_manager')
+    assert env.ref('entintados_pdv.menu_stock_demo_outputs').parent_id == env.ref('stock.menu_stock_transfers')
+
     def user(role, suffix):
         return env['res.users'].with_context(no_reset_password=True).create({
             'name': 'Demo access ' + suffix, 'login': 'demo-access-' + suffix,

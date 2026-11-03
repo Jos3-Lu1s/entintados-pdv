@@ -6,8 +6,10 @@
         <field name="arch" type="xml">
             <form string="Nota de crédito agrupada">
                 <header>
+                    <button name="action_preview_distributed_credit" type="object" string="Ver reporte"/>
                     <button name="action_create_credit" type="object" string="Generar y conciliar notas" class="btn-primary" invisible="state != 'draft'"/>
                     <button name="action_open_credit" type="object" string="Ver notas de crédito" invisible="credit_count == 0"/>
+                    <button name="action_adjust_amounts" type="object" string="Ajustar notas y pagos" invisible="state != 'generated'"/>
                     <button name="action_cancel" type="object" string="Cancelar" invisible="state == 'cancel'" confirm="Se cancelarán las notas relacionadas y se desvincularán las facturas. Las notas contabilizadas se regresarán a borrador y se desconciliarán. ¿Continuar?"/>
                     <button name="action_draft" type="object" string="Restablecer a borrador" invisible="state != 'cancel'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,generated,cancel"/>
@@ -15,6 +17,9 @@
                 <sheet>
 
                 <div class="oe_button_box" name="button_box">
+                    <button name="action_view_material_returns" type="object" class="oe_stat_button" icon="fa-truck" invisible="not return_picking_ids">
+                        <span>Devoluciones</span>
+                    </button>
                     <button name="action_view_invoices" type="object" class="oe_stat_button"
                             icon="fa-file-text-o" invisible="invoice_count == 0">
                         <field name="invoice_count" widget="statinfo" string="Facturas"/>
@@ -41,7 +46,11 @@
                     <group string="Datos de la nota">
                         <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
                         <field name="date" readonly="state != 'draft'"/>
-                        <field name="reason" readonly="state != 'draft'" placeholder="Por ejemplo: bonificación del proveedor"/>
+                        <field name="reason_id" required="1" readonly="state != 'draft'" options="{'no_create': True}"
+                               domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"/>
+                        <field name="reason" readonly="1" invisible="1"/>
+                        <field name="operation_type" readonly="1"/>
+                        <field name="return_picking_ids" invisible="1"/>
                     </group>
                 </group>
                 <div class="alert alert-warning" role="status" invisible="state != 'cancel'">
@@ -54,7 +63,7 @@
                     <i class="fa fa-info-circle mt-1" aria-hidden="true"/>
                     <div>
                         Se generará una nota por cada factura seleccionada, con contabilización y conciliación automáticas.
-                        Los importes incluyen impuestos y se distribuyen proporcionalmente entre las líneas de cada factura.
+                        Los importes incluyen impuestos. Al modificarlos se recalcula el pago registrado para liquidar la factura.
                     </div>
                 </div>
                 <div class="alert alert-success" role="status" invisible="state != 'generated'">
@@ -80,14 +89,32 @@
                         <field name="invoice_id" readonly="1" force_save="1"/>
                         <field name="residual"/>
                         <field name="amount" readonly="not selected" force_save="1"/>
+                        <field name="payment_to_adjust_id" optional="show"/>
+                        <field name="proposed_payment_amount"/>
                         <field name="invoice_total" readonly="1"/>
                     </list>
                 </field>
+                <group string="Material a devolver" invisible="operation_type != 'return'">
+                    <div class="alert alert-info" colspan="2">Selecciona el producto facturado, la cantidad y la recepción realizada. Las cantidades usan la unidad de la factura. El importe se distribuye entre estos productos y se crea una devolución para que Almacén valide la salida física.</div>
+                    <field name="material_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'" context="{'default_group_id': id}">
+                        <list editable="bottom">
+                            <field name="group_id" column_invisible="True"/>
+                            <field name="company_id" column_invisible="True"/>
+                            <field name="allocation_id" domain="[('group_id', '=', parent.id), ('selected', '=', True)]" options="{'no_create': True}"/>
+                            <field name="invoice_id" column_invisible="True"/>
+                            <field name="invoice_line_id" domain="[('move_id', '=', invoice_id), ('display_type', '=', 'product'), ('product_id', '!=', False), ('quantity', '&gt;', 0)]" options="{'no_create': True}"/>
+                            <field name="product_id" column_invisible="True"/>
+                            <field name="quantity"/><field name="product_uom_id"/>
+                            <field name="receipt_move_id" domain="[('product_id', '=', product_id), ('company_id', '=', company_id), ('state', '=', 'done'), ('location_id.usage', '=', 'supplier'), ('location_dest_id.usage', '=', 'internal')]" options="{'no_create': True}"/>
+                        </list>
+                    </field>
+                </group>
                 <group class="oe_subtotal_footer oe_right mt-3">
                     <field name="invoice_count" string="Facturas seleccionadas" readonly="1"/>
-                    <field name="amount_total" widget="monetary" class="oe_subtotal_footer_separator" readonly="1"/>
+                    <field name="amount_total" widget="monetary" class="oe_subtotal_footer_separator" readonly="state != 'draft'"/>
                 </group>
                 </sheet>
+                <chatter/>
             </form>
         </field>
     </record>
@@ -96,8 +123,11 @@
         <field name="model">vendor.credit.group</field>
         <field name="arch" type="xml">
             <list string="Notas de crédito agrupadas">
+                <header>
+                    <button name="action_preview_all_distributed_credits" type="object" string="Ver reporte general" display="always"/>
+                </header>
                 <field name="date"/>
-                <field name="reason"/>
+                <field name="reason_id"/>
                 <field name="partner_id" domain="[('distributed_notes', '=', True)]"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="currency_id" optional="hide"/>

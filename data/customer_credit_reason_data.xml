@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="customer_credit_reason_bonus" model="customer.credit.reason"><field name="name">Bonificación al cliente</field><field name="company_id" eval="False"/></record>
+    <record id="customer_credit_reason_discount" model="customer.credit.reason"><field name="name">Descuento comercial</field><field name="company_id" eval="False"/></record>
+    <record id="customer_credit_reason_price" model="customer.credit.reason"><field name="name">Ajuste de precio</field><field name="company_id" eval="False"/></record>
+    <record id="customer_credit_reason_return" model="customer.credit.reason"><field name="name">Devolución de mercancía</field><field name="company_id" eval="False"/></record>
+</odoo>
