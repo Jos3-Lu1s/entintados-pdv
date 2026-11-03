@@ -381,17 +381,11 @@ class ResPartner(models.Model):
         if self.vat and isinstance(self.vat, str):
             self.vat = self.vat.strip().upper()
 
-    def init(self):
-        # Índice único para RFC activos; ignora archivados y RFC genéricos.
-        # Se recrea para mantener la definición actual.
-        super().init()
-        self.env.cr.execute("DROP INDEX IF EXISTS res_partner_vat_uniq_active_idx")
-        self.env.cr.execute("""
-            CREATE UNIQUE INDEX res_partner_vat_uniq_active_idx
-            ON res_partner (upper(trim(vat)))
-            WHERE vat IS NOT NULL AND trim(vat) != '' AND active = true
-                  AND upper(trim(vat)) NOT IN %(generic_rfcs)s
-        """, {'generic_rfcs': tuple(GENERIC_RFCS)})
+    _vat_uniq_active_idx = models.UniqueIndex(
+        "(upper(trim(vat))) WHERE vat IS NOT NULL AND trim(vat) != '' AND active = true "
+        "AND upper(trim(vat)) NOT IN (%s)" % ', '.join(f"'{rfc}'" for rfc in sorted(GENERIC_RFCS)),
+        'Ya existe un contacto activo con este RFC.',
+    )
 
     def _find_duplicate_by_vat(self, vat, exclude_ids=None):
         vat = (vat or '').strip()
