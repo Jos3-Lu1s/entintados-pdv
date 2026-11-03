@@ -8,8 +8,10 @@ class PosOrderBranchReference(models.Model):
 
     @api.model
     def _next_branch_order_reference(self, company):
-        # Serialize sequence creation as well as numbering across all tills of a branch.
-        self.env.cr.execute('SELECT id FROM res_company WHERE id = %s FOR UPDATE', [company.id])
+        # Serialize numbering without blocking the FK KEY SHARE lock taken by
+        # report assets. wkhtmltopdf fetches those assets in separate HTTP
+        # transactions while this order transaction is still open.
+        self.env.cr.execute('SELECT id FROM res_company WHERE id = %s FOR NO KEY UPDATE', [company.id])
         sequences = self.env['ir.sequence'].sudo()
         sequence = sequences.search([
             ('code', '=', 'entintados_pdv.branch_order'),

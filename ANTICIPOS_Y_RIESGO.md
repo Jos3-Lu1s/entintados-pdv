@@ -8,7 +8,7 @@ La integración se activa por compañía. Actualizar el módulo agrega las funci
 
 ## Configuración
 
-1. Actualizar `entintados_pdv` a `19.0.1.0.4` y reiniciar Odoo.
+1. Instalar `entintados_pdv` y reiniciar Odoo.
 2. En Contabilidad → Configuración → Ajustes → Anticipos y riesgo financiero, seleccionar:
    - Cuenta de anticipos de clientes: pasivo circulante, conciliable.
    - Cuenta de anticipos a proveedores: activo circulante, conciliable.
