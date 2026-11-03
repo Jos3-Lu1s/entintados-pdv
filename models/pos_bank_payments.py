@@ -19,7 +19,8 @@ class PosBankPaymentMethod(models.Model):
             configs = self.env['pos.config'].search([('company_id', '=', company.id)])
             methods = self.with_company(company)
             bank_methods = methods.search([('company_id', '=', company.id), ('journal_id.type', '=', 'bank')])
-            journal = bank_methods[:1].journal_id or self.env['account.journal'].search([
+            # A branch's existing methods may point at the parent's journal, which the bank constraint rejects.
+            journal = bank_methods.journal_id.filtered(lambda item: item.company_id == company)[:1] or self.env['account.journal'].search([
                 ('company_id', '=', company.id), ('type', '=', 'bank')], limit=1)
             if not journal:
                 code, suffix = 'BNK', 0
@@ -138,10 +139,8 @@ class PosConfigBankPayments(models.Model):
         account = accounts.search([('name', '=', name), ('company_ids', 'in', self.company_id.ids),
                                    ('account_type', '=', 'asset_current'), ('reconcile', '=', True), ('active', '=', True)], limit=1)
         if not account:
-            number = 102990001 + index
-            while accounts.with_context(active_test=False).search_count([
-                    ('code', '=', str(number)), ('company_ids', 'in', self.company_id.ids)]):
-                number += 1
-            account = accounts.create({'name': name, 'code': str(number), 'account_type': 'asset_current',
+            # Without an explicit cache, the core skips the start code even when it is free.
+            code = accounts.with_context(active_test=False)._search_new_account_code(str(102990001 + index), cache=set())
+            account = accounts.create({'name': name, 'code': code, 'account_type': 'asset_current',
                                        'reconcile': True, 'company_ids': [Command.set(self.company_id.ids)]})
         return account

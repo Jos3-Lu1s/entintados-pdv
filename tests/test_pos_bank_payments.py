@@ -22,6 +22,35 @@ class TestPosBankPayments(TransactionCase):
         self.env['pos.payment.method']._ensure_transfer_check_methods()
         self.assertEqual(self.config.payment_method_ids.filtered(lambda item: item.collection_type in ('transfer', 'check')), methods)
 
+    def test_native_methods_are_created_for_parent_and_branch_companies(self):
+        branch = self.env['res.company'].create({'name': 'Sucursal QA', 'parent_id': self.env.company.id})
+        self.env.user.company_ids |= branch
+        branch_config = self.env['pos.config'].with_company(branch).create({
+            'name': 'Bancos sucursal QA', 'payment_method_ids': [Command.clear()]})
+        self.env['pos.payment.method']._ensure_transfer_check_methods()
+        parent_accounts = self.config.payment_method_ids.filtered(
+            lambda item: item.collection_type in ('transfer', 'check')).outstanding_account_id
+        branch_accounts = branch_config.payment_method_ids.filtered(
+            lambda item: item.collection_type in ('transfer', 'check')).outstanding_account_id
+        self.assertEqual(len(parent_accounts), 1)
+        self.assertEqual(len(branch_accounts), 1)
+        self.assertNotEqual(parent_accounts.code, branch_accounts.with_company(branch).code)
+
+    def test_branch_with_card_on_parent_journal_gets_its_own_bank_journal(self):
+        parent_journal = self.env['account.journal'].search([
+            ('company_id', '=', self.env.company.id), ('type', '=', 'bank')], limit=1)
+        branch = self.env['res.company'].create({'name': 'Sucursal QA', 'parent_id': self.env.company.id})
+        self.env.user.company_ids |= branch
+        card = self.env['pos.payment.method'].with_company(branch).create({
+            'name': 'Tarjeta sucursal QA', 'company_id': branch.id, 'journal_id': parent_journal.id})
+        branch_config = self.env['pos.config'].with_company(branch).create({
+            'name': 'Bancos sucursal QA', 'payment_method_ids': [Command.set(card.ids)]})
+        self.env['pos.payment.method']._ensure_transfer_check_methods()
+        methods = branch_config.payment_method_ids.filtered(lambda item: item.collection_type in ('transfer', 'check'))
+        self.assertEqual(len(methods), 2)
+        self.assertEqual(methods.journal_id.company_id, branch)
+        self.assertEqual(card.journal_id, parent_journal)
+
     def test_upgrade_preserves_existing_methods_and_accounts(self):
         methods = self._prepare()
         before = {method.id: (method.name, method.journal_id.id, method.outstanding_account_id.id) for method in methods}
