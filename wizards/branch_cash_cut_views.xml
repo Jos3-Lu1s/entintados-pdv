@@ -1,0 +1,87 @@
+<odoo>
+    <record id="branch_cash_cut_form" model="ir.ui.view">
+        <field name="name">branch.cash.cut.form</field>
+        <field name="model">branch.cash.cut</field>
+        <field name="arch" type="xml">
+            <form string="Corte de caja">
+                <group>
+                    <field name="company_id" domain="[('id', 'in', context.get('allowed_company_ids', []))]" options="{'no_create': True}"/>
+                    <field name="date_from"/>
+                    <field name="date_to"/>
+                    <separator string="Orígenes"/>
+                    <field name="include_pos"/>
+                    <field name="include_sale"/>
+                </group>
+                <p class="text-muted">Los cobros y las devoluciones se consultan por fecha del movimiento. Facturado a crédito muestra el total de las facturas PPD emitidas en el periodo y no forma parte del total neto.</p>
+                <footer>
+                    <button name="action_open_cut" string="Generar corte" type="object" class="btn-primary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    <record id="branch_cash_cut_line_list" model="ir.ui.view">
+        <field name="name">branch.cash.cut.line.list</field>
+        <field name="model">branch.cash.cut.line</field>
+        <field name="arch" type="xml">
+            <list string="Corte de caja" create="0" edit="0" delete="0" open_form_view="0">
+                <header>
+                    <button name="action_change_filters" string="Cambiar filtros" type="object" display="always"/>
+                    <button name="action_print_general" string="Imprimir corte general" type="object" display="always" class="btn-primary"/>
+                    <button name="action_print_detail" string="Imprimir corte detallado" type="object" display="always"/>
+                </header>
+                <field name="date"/>
+                <field name="invoice_id" widget="many2one"/>
+                <field name="partner_id"/>
+                <field name="origin"/>
+                <field name="order_reference"/>
+                <field name="method"/>
+                <field name="subtype"/>
+                <field name="register" optional="hide"/>
+                <field name="cashier" optional="hide"/>
+                <field name="payment_move_id" optional="hide"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="cash_sales" sum="Total contado"/>
+                <field name="credit_receipts" sum="Total abonos"/>
+                <field name="advances" sum="Total anticipos"/>
+                <field name="refund" sum="Total devoluciones"/>
+                <field name="net" sum="Total neto"/>
+                <field name="credit_billed" sum="Total facturado a crédito"/>
+            </list>
+        </field>
+    </record>
+    <record id="branch_cash_cut_line_search" model="ir.ui.view">
+        <field name="name">branch.cash.cut.line.search</field>
+        <field name="model">branch.cash.cut.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="invoice_id"/>
+                <field name="partner_id"/>
+                <field name="method"/>
+                <field name="subtype"/>
+                <field name="register"/>
+                <field name="cashier"/>
+                <filter name="from_pos" string="Punto de Venta" domain="[('origin', '=', 'pos')]"/>
+                <filter name="from_sale" string="Ventas" domain="[('origin', '=', 'sale')]"/>
+                <group>
+                    <filter name="group_method" string="Método" context="{'group_by': 'method'}"/>
+                    <filter name="group_subtype" string="Subtipo" context="{'group_by': 'subtype'}"/>
+                    <filter name="group_origin" string="Origen" context="{'group_by': 'origin'}"/>
+                    <filter name="group_register" string="Caja" context="{'group_by': 'register'}"/>
+                    <filter name="group_cashier" string="Usuario" context="{'group_by': 'cashier'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="branch_cash_cut_action" model="ir.actions.act_window">
+        <field name="name">Corte de caja</field>
+        <field name="res_model">branch.cash.cut</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="branch_cash_cut_form"/>
+        <field name="target">new</field>
+    </record>
+    <menuitem id="menu_osel_reports" name="Reportes OSEL" parent="account.menu_finance_reports"
+              sequence="35" groups="account.group_account_readonly,account.group_account_invoice"/>
+    <menuitem id="menu_branch_cash_cut" name="Corte de caja"
+              parent="menu_osel_reports" action="branch_cash_cut_action"
+              sequence="35" groups="account.group_account_readonly,account.group_account_invoice"/>
+</odoo>

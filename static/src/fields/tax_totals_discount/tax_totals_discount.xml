@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- Cada fila va en su propio `t`: `purchase` extiende esta plantilla con `//tr[2]`,
+         y dos filas hermanas le darían una coincidencia equivocada. -->
+    <t t-inherit="account.TaxTotalsField" t-inherit-mode="extension">
+        <xpath expr="//t[@t-foreach='totals.subtotals']" position="before">
+            <t t-if="props.record.resModel === 'sale.order' and props.record.data.amount_discount">
+                <tr name="amount_before_discount">
+                    <td class="o_td_label">
+                        <label class="o_form_label o_tax_total_label">Antes de descuento</label>
+                    </td>
+                    <td class="o_list_monetary">
+                        <span style="white-space: nowrap;" t-out="formatMonetary(props.record.data.amount_before_discount)"/>
+                    </td>
+                </tr>
+            </t>
+            <t t-if="props.record.resModel === 'sale.order' and props.record.data.amount_discount">
+                <tr name="amount_discount">
+                    <td class="o_td_label">
+                        <label class="o_form_label o_tax_total_label">Descuento total</label>
+                    </td>
+                    <td class="o_list_monetary">
+                        <span style="white-space: nowrap;" t-out="formatMonetary(props.record.data.amount_discount)"/>
+                    </td>
+                </tr>
+            </t>
+        </xpath>
+    </t>
+</templates>

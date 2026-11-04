@@ -124,6 +124,8 @@ Catálogo de entintado
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
+            # Importe antes de descuento y descuento total en la tabla de totales de ventas
+            "entintados_pdv/static/src/fields/tax_totals_discount/tax_totals_discount.xml",
             # Sin creación rápida de productos: quedarían sin referencia interna
             "entintados_pdv/static/src/fields/product_no_quick_create/product_no_quick_create.js",
             # Sin creación rápida de contactos: quedarían sin teléfono
@@ -226,6 +228,8 @@ Catálogo de entintado
         'wizards/crm_material_auditor_assign_wizard_views.xml',
         'wizards/sale_order_discount_views.xml',
         'wizards/product_stock_lookup_views.xml',
+        'wizards/branch_cash_cut_views.xml',
+        'report/branch_cash_cut.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

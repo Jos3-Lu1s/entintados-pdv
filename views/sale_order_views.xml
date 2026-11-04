@@ -56,6 +56,7 @@
                 <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="move"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form//div[@name='discount']/parent::t" position="after">
+                <field name="discount_amount" readonly="1" groups="sale.group_discount_per_so_line"/>
                 <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" invisible="not pricing_rule_origin" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban/field[@name='currency_id']" position="after">
@@ -67,6 +68,12 @@
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='price_unit']" position="after">
                 <field name="price_origin" widget="price_origin_icon" invisible="is_downpayment"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/kanban//field[@name='discount']/parent::div" position="after">
+                <div class="text-muted" groups="sale.group_discount_per_so_line">
+                    Descuento:
+                    <field name="discount_amount"/>
+                </div>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='discount']/ancestor::t[1]" position="after">
                 <div invisible="not pricing_rule_origin">
@@ -150,6 +157,12 @@
                 <attribute name="readonly">not manual_discount_allowed or parent.discount_edit_locked</attribute>
             </xpath>
 
+            <xpath expr="//group[@name='sale_total']/field[@name='tax_totals']" position="before">
+                <!-- Los pinta `tax_totals_discount.xml` como filas de la tabla de totales. -->
+                <field name="amount_before_discount" invisible="1" groups="sale.group_discount_per_so_line"/>
+                <field name="amount_discount" invisible="1" groups="sale.group_discount_per_so_line"/>
+            </xpath>
+
             <xpath expr="//list/field[@name='price_unit']" position="attributes">
                 <attribute name="readonly">qty_invoiced &gt; 0 or pricing_rule_type == 'fixed_price' or combo_item_id or parent.price_unit_edit_locked</attribute>
             </xpath>
@@ -167,6 +180,7 @@
                 <field name="technical_discount" column_invisible="True"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="after">
+                <field name="discount_amount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
                 <field name="pricing_rule_type" column_invisible="True"/>
                 <field name="pricing_rule_id" column_invisible="True"/>
                 <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
