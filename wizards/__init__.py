@@ -9,3 +9,4 @@ from . import base_partner_merge
 from . import vendor_credit_adjustment
 from . import sale_tint
 from . import product_stock_lookup
+from . import branch_cash_cut

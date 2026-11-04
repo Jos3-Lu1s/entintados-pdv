@@ -64,3 +64,7 @@ access_pos_return_session_read,Accounting ticket session read,point_of_sale.mode
 access_pos_return_config_read,Accounting ticket config read,point_of_sale.model_pos_config,account.group_account_invoice,1,1,1,1
 access_pos_return_payment_method_read,Accounting ticket payment method read,point_of_sale.model_pos_payment_method,account.group_account_invoice,1,1,1,1
 access_sale_tint_wizard,sale.tint.wizard,model_sale_tint_wizard,sales_team.group_sale_salesman,1,1,1,1
+access_branch_cash_cut_readonly,branch.cash.cut.readonly,model_branch_cash_cut,account.group_account_readonly,1,1,1,1
+access_branch_cash_cut_invoice,branch.cash.cut.invoice,model_branch_cash_cut,account.group_account_invoice,1,1,1,1
+access_branch_cash_cut_line_readonly,branch.cash.cut.line.readonly,model_branch_cash_cut_line,account.group_account_readonly,1,0,1,1
+access_branch_cash_cut_line_invoice,branch.cash.cut.line.invoice,model_branch_cash_cut_line,account.group_account_invoice,1,0,1,1

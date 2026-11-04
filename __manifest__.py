@@ -227,6 +227,8 @@ Catálogo de entintado
         'wizards/crm_material_auditor_assign_wizard_views.xml',
         'wizards/sale_order_discount_views.xml',
         'wizards/product_stock_lookup_views.xml',
+        'wizards/branch_cash_cut_views.xml',
+        'report/branch_cash_cut.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

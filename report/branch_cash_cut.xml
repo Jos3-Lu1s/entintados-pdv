@@ -1,0 +1,122 @@
+<odoo>
+    <record id="action_branch_cash_cut_pdf" model="ir.actions.report">
+        <field name="name">Corte de caja por sucursal</field>
+        <field name="model">branch.cash.cut</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.branch_cash_cut_pdf</field>
+        <field name="report_file">entintados_pdv.branch_cash_cut_pdf</field>
+    </record>
+    <record id="action_branch_cash_cut_detail_pdf" model="ir.actions.report">
+        <field name="name">Corte de caja detallado</field>
+        <field name="model">branch.cash.cut</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.branch_cash_cut_detail_pdf</field>
+    </record>
+    <template id="branch_cash_cut_detail_pdf">
+        <t t-call="entintados_pdv.branch_cash_cut_pdf">
+            <t t-set="detailed" t-value="True"/>
+        </t>
+    </template>
+    <template id="branch_cash_cut_pdf">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-set="company" t-value="o.company_id"/>
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h2 t-if="detailed">Corte de caja detallado</h2>
+                        <h2 t-else="">Corte de caja por sucursal</h2>
+                        <p>
+                            <strong>Sucursal:</strong> <span t-field="o.company_id"/><br/>
+                            <strong>Periodo:</strong> <span t-field="o.date_from"/> al <span t-field="o.date_to"/><br/>
+                            <strong>Origen:</strong>
+                            <span t-if="o.include_pos">Punto de Venta</span>
+                            <span t-if="o.include_pos and o.include_sale"> y </span>
+                            <span t-if="o.include_sale">Ventas</span>
+                        </p>
+                        <table t-if="not detailed" class="table table-sm" style="font-size: 11px;">
+                            <thead style="display: table-header-group;">
+                                <tr>
+                                    <th>Método de pago</th><th>Subtipo</th>
+                                    <th class="text-end">Contado cobrado</th>
+                                    <th class="text-end">Abonos a crédito</th>
+                                    <th class="text-end">Anticipos recibidos</th>
+                                    <th class="text-end">Devoluciones</th>
+                                    <th class="text-end">Total neto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="summary" t-as="item" style="page-break-inside: avoid;">
+                                    <td t-out="item[0][0]"/><td t-out="item[0][1] or '—'"/>
+                                    <td t-foreach="columns" t-as="key" class="text-end text-nowrap">
+                                        <span t-out="item[1][key]" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
+                                    </td>
+                                </tr>
+                                <tr t-if="not summary"><td colspan="7">No hay cobros ni devoluciones para los filtros seleccionados.</td></tr>
+                                <tr class="fw-bold border-top">
+                                    <td colspan="2">Totales</td>
+                                    <td t-foreach="columns" t-as="key" class="text-end text-nowrap">
+                                        <span t-out="totals[key]" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <t t-if="detailed" t-foreach="summary" t-as="item">
+                            <h4 class="mt-3" style="page-break-after: avoid;">
+                                <span t-out="item[0][0]"/><span t-if="item[0][1]"> · <t t-out="item[0][1]"/></span>
+                            </h4>
+                            <table class="table table-sm" style="font-size: 11px;">
+                                <thead style="display: table-header-group;">
+                                    <tr><th>Fecha</th><th>Factura / nota</th><th>Cliente</th><th>Origen / orden</th>
+                                        <th>Tipo de pago</th><th class="text-end">Importe neto</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="details[item[0]]" t-as="row" style="page-break-inside: avoid;">
+                                        <td><span t-out="row['date']" t-options="{'widget': 'date'}"/></td>
+                                        <td t-out="invoice_names[row['invoice_id']]"/>
+                                        <td t-out="partner_names.get(row['partner_id'], '')"/>
+                                        <td><span t-out="origins[row['origin']]"/><br/><span t-out="row['order_reference']"/></td>
+                                        <td>
+                                            <t t-set="invoice" t-value="o.env['account.move'].browse(row['invoice_id'])"/>
+                                            <t t-set="source" t-value="invoice.reversed_entry_id or invoice"/>
+                                            <span t-out="'Crédito' if source.l10n_mx_edi_payment_policy == 'PPD' and not source.is_advance_invoice else 'Contado'"/>
+                                            <small t-if="row['refund']" class="d-block text-muted">Devolución</small>
+                                            <small t-elif="row['advances']" class="d-block text-muted">Anticipo</small>
+                                        </td>
+                                        <td class="text-end text-nowrap">
+                                            <span t-out="row['net']" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
+                                        </td>
+                                    </tr>
+                                    <tr class="fw-bold"><td colspan="5">Subtotal neto</td><td class="text-end text-nowrap">
+                                        <span t-out="item[1]['net']" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </t>
+                        <table t-if="detailed" class="table table-sm table-borderless mt-3" name="cash_cut_payments">
+                            <thead style="display: table-header-group;">
+                                <tr style="background-color: #d6d8da;">
+                                    <th colspan="2">Pagos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="summary" t-as="item">
+                                    <td><strong t-out="item[0][0]"/><span t-if="item[0][1] and item[0][1] != item[0][0]"> · <t t-out="item[0][1]"/></span></td>
+                                    <td class="text-end text-nowrap">
+                                        <span t-out="item[1]['net']" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
+                                    </td>
+                                </tr>
+                                <tr t-if="not summary"><td colspan="2">No hay cobros ni devoluciones para los filtros seleccionados.</td></tr>
+                                <tr class="fw-bold" style="border-top: 2px solid #18212c;">
+                                    <td>Total</td>
+                                    <td class="text-end text-nowrap">
+                                        <span t-out="totals['net']" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>
