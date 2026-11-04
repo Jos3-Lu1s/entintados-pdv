@@ -99,6 +99,10 @@ class PosOrderQuotation(models.Model):
             raise UserError(_('El ticket todavía está sincronizándose o cambió en otra caja. Espera y vuelve a intentar.'))
         for uuid, product, qty, price, discount, parent, note, color in sent:
             line = stored[uuid]
+            # Newly added POS component lines can omit their zero discount.
+            # JSON sends that slot as null, while Odoo stores it as 0.0.
+            if discount is None:
+                discount = 0
             if (product != line.product_id.id or parent != (line.combo_parent_id.uuid or False)
                     or note != (line.customer_note or '') or color != (line.tint_color_code or False)
                     or any(not isinstance(value, (int, float)) or not math.isfinite(value)
@@ -226,7 +230,9 @@ class PosOrderQuotation(models.Model):
         for child in children:
             if not child.product_id.is_storable or not child.product_id.uom_id._has_common_reference(point):
                 raise UserError(_('Revisa la unidad y el inventario del colorante %s.') % child.product_id.display_name)
-            points = child.product_id.uom_id._compute_quantity(child.qty / line.qty, point, round=False)
+            # The POS tint builder stores the child quantity in formula points,
+            # even when inventory tracks the colorant in ounces.
+            points = child.qty / line.qty
             snapshot['doses'].append({'product_id': child.product_id.id, 'name': child.product_id.display_name,
                                       'points': points, 'unit_price': 0})
         return snapshot

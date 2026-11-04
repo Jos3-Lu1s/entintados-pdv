@@ -14,7 +14,8 @@ function fixture(fail = false) {
     const calls = [];
     const order = { id: 'local', uuid: 'ticket', state: 'draft', payment_ids: [],
         getPartner: () => ({ id: 1 }), lines: [{ uuid: 'line', product_id: { id: 2 }, qty: 1, price_unit: 100, discount: 0 }],
-        setOrderPrices() { calls.push('prices'); }, serializeForORM() { return { uuid: this.uuid, state: this.state }; } };
+        setOrderPrices() { calls.push('prices'); this.lines[0].price_unit = 120; },
+        serializeForORM() { return { uuid: this.uuid, state: this.state, price: this.lines[0].price_unit }; } };
     const button = new ControlButtons();
     Object.assign(button, { dialog: {}, props: {}, notification: { add() {} },
         quotationUI: { block() {}, unblock() { calls.push('unblock'); } },
@@ -35,8 +36,19 @@ test('creates quotation using one atomic RPC before removing the ticket', async 
     assert.equal(calls[0], 'prices');
     assert.equal(calls[1].method, 'create_sale_quotation_from_ui');
     assert.equal(calls[1].args[0].state, 'draft');
+    assert.equal(calls[1].args[1].lines[0][3], calls[1].args[0].price);
     assert.equal(calls[2], 'removePending');
     assert.equal(calls[3], 'remove');
+});
+
+test('sends zero for an unset component discount', async () => {
+    const { button, calls } = fixture();
+    const order = button.pos.getOrder();
+    order.lines.push({ uuid: 'colorant', product_id: { id: 3 }, qty: 1, price_unit: 0,
+        combo_parent_id: order.lines[0] });
+    await button.onClickCreateSaleQuotation();
+    assert.equal(calls[1].args[1].lines[1][4], 0);
+    assert.equal(calls[1].args[1].lines[1][5], 'line');
 });
 
 test('keeps ticket on RPC failure and releases UI for retry', async () => {

@@ -55,6 +55,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_financing.xml",
             "entintados_pdv/static/src/app/overrides/pos_bank_payments.xml",
             "entintados_pdv/static/src/app/overrides/customer_payment_summary.js",
+            "entintados_pdv/static/src/app/components/customer_contact_info.xml",
             "entintados_pdv/static/src/app/utils/customer_summary.js",
             "entintados_pdv/static/src/app/overrides/customer_payment_summary.xml",
             # Estilos del POS

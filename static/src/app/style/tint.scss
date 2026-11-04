@@ -3,6 +3,16 @@
    ========================================================================== */
 $tint-breakpoint-xs: 575.98px;
 
+.o-pos-contact-info details[open] {
+    max-height: 14rem;
+    overflow-y: auto;
+}
+
+.o-pos-contact-info summary {
+    cursor: pointer;
+    padding-block: .25rem;
+}
+
 .o-customer-payment-summary {
     background: #fff;
     border: 1px solid #dbe3ec;

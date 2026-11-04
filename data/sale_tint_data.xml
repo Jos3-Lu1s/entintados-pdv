@@ -1,3 +1,4 @@
 <odoo>
+    <function model="sale.order" name="_redact_private_chatter_details"/>
     <function model="sale.order" name="_setup_sale_tint_layout"/>
 </odoo>

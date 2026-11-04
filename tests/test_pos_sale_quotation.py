@@ -1,3 +1,5 @@
+from markupsafe import Markup
+
 from odoo import Command
 from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import TransactionCase, new_test_user, tagged
@@ -75,6 +77,20 @@ class TestPosSaleQuotation(TransactionCase):
             self.env['pos.order'].create_sale_quotation_from_ui({'uuid': ticket.uuid, 'state': 'paid'})
         self.assertFalse(ticket.generated_quotation_id)
 
+    def test_tinted_ticket_accepts_omitted_component_discount_from_pos(self):
+        ticket = self._ticket(tinted=True, discount=10)
+        expected = {
+            'partner_id': ticket.partner_id.id, 'pricelist_id': ticket.pricelist_id.id,
+            'fiscal_position_id': ticket.fiscal_position_id.id,
+            'lines': [[line.uuid, line.product_id.id, line.qty, line.price_unit,
+                       None if line.combo_parent_id else line.discount,
+                       line.combo_parent_id.uuid or False, line.customer_note or '',
+                       line.tint_color_code or False] for line in ticket.lines],
+        }
+        ticket.action_create_sale_quotation(expected)
+        self.assertEqual(ticket.generated_quotation_id.state, 'draft')
+        self.assertEqual(ticket.generated_quotation_id.order_line._tint_recipe()['doses'][0]['points'], 12)
+
     def test_tinted_ticket_keeps_price_discount_and_frozen_doses(self):
         ticket = self._ticket(tinted=True, discount=10)
         ticket.action_create_sale_quotation()
@@ -84,9 +100,32 @@ class TestPosSaleQuotation(TransactionCase):
         self.assertAlmostEqual(quote.amount_total, 403.2)
         self.assertEqual(quote.order_line._tint_recipe()['doses'][0]['points'], 12)
         self.assertIn('Rojo caja QA', quote.order_line.name)
+        self.assertFalse(any('"doses"' in str(message.body) for message in quote.message_ids))
+        old_message = quote._message_log(body=Markup(
+            '<p class="o_business_audit">Origen: Ventas</p><ul>'
+            '<li>Fórmula cotizada: — → {"base_id": 1, "doses": [{"points": 12}]}</li>'
+            '<li>Cantidad: — → 2</li></ul>'))
+        quote._redact_private_chatter_details()
+        self.assertNotIn('"doses"', old_message.body)
+        self.assertIn('Cantidad: — → 2', old_message.body)
         quote._recompute_pricing_rules()
         self.assertAlmostEqual(quote.amount_total, 403.2)
         self.assertFalse(ticket.picking_ids | quote.picking_ids)
+
+    def test_tint_quote_keeps_pos_points_for_colorant_stocked_in_ounces(self):
+        self.colorant.uom_id = self.env.ref('entintados_pdv.uom_tint_ounce')
+        ticket = self._ticket(tinted=True)
+        ticket.action_create_sale_quotation()
+        quotation = ticket.generated_quotation_id
+        self.assertEqual(quotation.state, 'draft')
+        self.assertEqual(quotation.order_line._tint_recipe()['doses'][0]['points'], 12)
+        wizard = self.env['product.stock.lookup'].create({
+            'sale_order_id': quotation.id, 'sale_line_id': quotation.order_line.id,
+            'warehouse_id': quotation.warehouse_id.id,
+        })
+        colorant = wizard.line_ids.filtered(lambda row: row.product_id == self.colorant)
+        self.assertAlmostEqual(colorant.required_qty, 0.5)
+        self.assertFalse(ticket.picking_ids | quotation.picking_ids)
 
     def test_tax_amounts_preserved(self):
         tax = self.env['account.tax'].create({'name': 'IVA caja QA', 'amount': 16, 'type_tax_use': 'sale'})
