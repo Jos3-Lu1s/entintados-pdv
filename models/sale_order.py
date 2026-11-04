@@ -415,18 +415,32 @@ class SaleOrder(models.Model):
                     warehouse_id=order.warehouse_id.id, warehouse=order.warehouse_id.id
                 ).free_qty
                 if available <= 0 or product.uom_id.compare(quantity, available) > 0:
-                    insufficient_lines.append(_(
-                        '%(product)s: solicitado %(qty)s, disponible %(available)s'
-                    ) % {
-                        'product': product.display_name,
-                        'qty': quantity,
-                        'available': available,
-                    })
+                    insufficient_lines.append(order._stock_shortage_details(product, quantity, available))
             if insufficient_lines:
                 raise UserError(_(
                     "No se puede confirmar la orden: no hay inventario suficiente "
                     "para los siguientes productos:\n\n%s"
                 ) % '\n'.join(insufficient_lines))
+
+    def _stock_shortage_details(self, product, quantity, available):
+        self.ensure_one()
+        details = [_('%(product)s — almacén %(warehouse)s: solicitado %(qty)s %(unit)s, disponible %(available)s %(unit)s') % {
+            'product': product.display_name, 'warehouse': self.warehouse_id.display_name,
+            'qty': quantity, 'unit': product.uom_id.name, 'available': available}]
+        alternatives = []
+        for warehouse in self.env['stock.warehouse'].search([
+                ('company_id', '=', self.company_id.id), ('id', '!=', self.warehouse_id.id)], order='name, id'):
+            stock = product.with_company(self.company_id).with_context(
+                warehouse_id=warehouse.id, warehouse=warehouse.id).free_qty
+            if product.uom_id.compare(stock, 0) > 0:
+                coverage = _('cubre lo solicitado') if product.uom_id.compare(stock, quantity) >= 0 else _('disponibilidad parcial')
+                alternatives.append('• %s: %s %s (%s)' % (warehouse.display_name, stock, product.uom_id.name, coverage))
+        if alternatives:
+            details.append(_('Disponibilidad en otras sucursales:'))
+            details.extend(alternatives)
+        else:
+            details.append(_('Sin stock disponible en otras sucursales accesibles de esta compañía.'))
+        return '\n'.join(details)
 
     def order_lines_for_stock_check(self):
         self.ensure_one()

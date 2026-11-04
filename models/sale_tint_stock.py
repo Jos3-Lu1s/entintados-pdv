@@ -15,6 +15,18 @@ class StockMove(models.Model):
         'UNIQUE(tint_base_move_id, product_id)',
         'El colorante ya se descontó para esta salida de base.')
 
+    @api.depends('product_id', 'picking_type_id', 'description_picking_manual', 'sale_line_id',
+                 'sale_line_id.tint_snapshot', 'pos_tint_sale_line_id', 'origin_returned_move_id')
+    def _compute_description_picking(self):
+        super()._compute_description_picking()
+        for move in self:
+            if move.description_picking_manual:
+                continue
+            line = move._tint_sale_line()
+            if line and move.product_id.id == line._tint_recipe().get('base_id'):
+                # The native delivery report already prints the base product separately.
+                move.description_picking = line.tint_color_description or ''
+
     @api.model_create_multi
     def create(self, vals_list):
         if self.env.context.get('_tint_operation') is not _TINT_OPERATION and any(
@@ -95,7 +107,7 @@ class StockMove(models.Model):
                     # Link it to its base move, rather than adding it to the commercial picking.
                     'state': 'confirmed', 'picking_type_id': base_move.picking_type_id.id,
                     'company_id': base_move.company_id.id, 'origin': base_move.origin,
-                    'description_picking': _('Colorante de %s') % snapshot.get('color_name', snapshot['name']),
+                    'description_picking': _('Colorante de %s') % snapshot.get('color_name', snapshot.get('name', '')),
                     'tint_base_move_id': base_move.id,
                     'origin_returned_move_id': previous.id,
                 })

@@ -248,6 +248,7 @@ class StockPickingPosQuotation(models.Model):
         sale_line = order_lines.sale_order_line_id
         if len(sale_line) == 1 and sale_line._tint_recipe().get('base_only'):
             values['pos_tint_sale_line_id'] = sale_line.id
+            values['description_picking'] = sale_line.tint_color_description or ''
         return values
 
 

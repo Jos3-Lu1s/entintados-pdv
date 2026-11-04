@@ -93,7 +93,7 @@ class TestVendorCreditGroup(TransactionCase):
 
     def _group(self, invoices, amount=60):
         return self.env['vendor.credit.group'].create({
-            'partner_id': self.partner.id, 'company_id': self.company.id,
+            'partner_id': self.partner.id, 'company_id': self.company.id, 'supplier_reference': 'PROV-QA-001',
             'currency_id': invoices.currency_id.id,
             'journal_id': self.journal.id, 'reason': 'Credit test',
             'reason_id': self.env.ref('entintados_pdv.vendor_credit_reason_bonus').id,
@@ -213,7 +213,7 @@ class TestVendorCreditGroup(TransactionCase):
         self.journal.sequence = 0
         group = self.env['vendor.credit.group'].create({
             'partner_id': self.partner.id, 'company_id': self.company.id,
-            'currency_id': self.company.currency_id.id, 'reason': 'Automatic purchase journal',
+            'currency_id': self.company.currency_id.id, 'reason': 'Automatic purchase journal', 'supplier_reference': 'QA-JOURNAL-001',
         })
         self.assertEqual(group.journal_id, self.journal)
         self.assertEqual(group.journal_id.type, 'purchase')
@@ -225,7 +225,7 @@ class TestVendorCreditGroup(TransactionCase):
         })
         group = self.env['vendor.credit.group'].with_context(allowed_company_ids=[self.company.id, company.id]).create({
             'partner_id': self.partner.id, 'company_id': company.id,
-            'currency_id': company.currency_id.id, 'reason': 'Other company journal',
+            'currency_id': company.currency_id.id, 'reason': 'Other company journal', 'supplier_reference': 'QA-JOURNAL-002',
         })
         self.assertEqual(group.journal_id, journal)
 

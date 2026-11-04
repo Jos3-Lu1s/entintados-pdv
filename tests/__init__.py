@@ -50,3 +50,6 @@ from . import test_distributed_credit_report
 from . import test_line_scheme_unlink
 from . import test_pricelist_item_esquema
 from . import test_sale_discount_amount
+from . import test_pos_legacy_view_cleanup
+from . import test_vendor_credit_summary
+from . import test_product_stock_lookup

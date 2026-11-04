@@ -263,8 +263,16 @@ class PosOrder(models.Model):
     def action_view_invoice_custom(self):
         self.ensure_one()
         invoices = self.account_move | self.split_invoice_ids
-        if len(invoices) <= 1:
+        if len(invoices) <= 1 and (not invoices or self.account_move):
             return super().action_view_invoice()
+        if len(invoices) == 1:
+            return {
+                "name": _("Recibo/Factura"),
+                "view_mode": "form",
+                "res_model": "account.move",
+                "res_id": invoices.id,
+                "type": "ir.actions.act_window",
+            }
         return {
             "name": _("Facturas de cliente"),
             "view_mode": "list,form",

@@ -134,6 +134,7 @@ Catálogo de entintado
 
     # always loaded
     'data': [
+        'views/pos_order_legacy_cleanup.xml',
         'security/security.xml',
         'security/demo_flow_security.xml',
         'security/pos_accounting_access.xml',
@@ -225,6 +226,7 @@ Catálogo de entintado
         'wizards/crm_material_request_partner_wizzard_views.xml',
         'wizards/crm_material_auditor_assign_wizard_views.xml',
         'wizards/sale_order_discount_views.xml',
+        'wizards/product_stock_lookup_views.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

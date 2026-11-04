@@ -51,7 +51,7 @@ class TestVendorCreditReasons(TransactionCase):
         supplier = self.env['res.partner'].create({'name': 'Reason migration supplier', 'is_supplier': True})
         journal = self.env['account.journal'].create({'name': 'Reason migration purchases', 'code': 'RSMG', 'type': 'purchase'})
         groups = self.env['vendor.credit.group'].create([
-            {'partner_id': supplier.id, 'journal_id': journal.id, 'reason': 'Legacy supplier bonus'}
+            {'partner_id': supplier.id, 'journal_id': journal.id, 'reason': 'Legacy supplier bonus', 'supplier_reference': 'QA-LEGACY'}
             for _ in range(2)
         ])
         self.env['vendor.credit.group']._migrate_reason_catalog()
@@ -63,7 +63,7 @@ class TestVendorCreditReasons(TransactionCase):
     def test_catalog_selection_supplies_reason_description(self):
         supplier = self.env['res.partner'].create({'name': 'Reason selected supplier', 'is_supplier': True})
         reason = self.env.ref('entintados_pdv.vendor_credit_reason_bonus')
-        group = self.env['vendor.credit.group'].create({'partner_id': supplier.id, 'reason_id': reason.id})
+        group = self.env['vendor.credit.group'].create({'partner_id': supplier.id, 'reason_id': reason.id, 'supplier_reference': 'QA-REASON'})
         self.assertEqual(group.reason, reason.name)
         reason = reason.copy({'name': 'Archived QA reason'})
         reason.active = False
@@ -81,7 +81,7 @@ class TestVendorCreditReasons(TransactionCase):
     def test_migration_moves_an_old_reset_sequence_after_existing_folios(self):
         supplier = self.env['res.partner'].create({'name': 'Sequence migration supplier', 'is_supplier': True})
         self.env['vendor.credit.group'].create({
-            'name': 'NCD-00999', 'partner_id': supplier.id,
+            'name': 'NCD-00999', 'partner_id': supplier.id, 'supplier_reference': 'QA-SEQUENCE',
             'reason_id': self.env.ref('entintados_pdv.vendor_credit_reason_bonus').id,
         })
         sequence = self.env.ref('entintados_pdv.seq_vendor_credit_group')

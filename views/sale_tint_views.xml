@@ -56,7 +56,7 @@
                             </group>
                         </group>
                     </div>
-                    <p class="text-muted small mb-0">Se agregará como una línea de producto. El total se cobra en la base. El color y la fórmula quedan en su descripción; los colorantes se descuentan al validar la salida. Los colores y fórmulas se administran en Entintados o en el Punto de Venta.</p>
+                    <p class="text-muted small mb-0">Se agregará la base con su código y nombre. La descripción mostrará únicamente el código y nombre del color. Los colorantes se descuentan al validar la salida.</p>
                 </sheet>
                 <footer>
                     <button name="action_apply" type="object" string="Agregar a la cotización" class="btn-primary" invisible="not formula_id or not base_id or quantity &lt;= 0"/>
@@ -75,15 +75,22 @@
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="tint_display_name" column_invisible="True"/>
+                <field name="tint_color_description" column_invisible="True"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form" position="inside">
                 <field name="tint_display_name" invisible="1"/>
+                <field name="tint_color_description" invisible="1"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban/field[@name='currency_id']" position="after">
                 <field name="tint_display_name"/>
+                <field name="tint_color_description"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='product_id'][not(@widget)]" position="before">
                 <field name="tint_display_name" class="fw-bold" invisible="not tint_display_name"/>
+                <field name="tint_color_description" class="text-muted fst-italic" invisible="not tint_display_name"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/kanban//field[@name='name']" position="attributes">
+                <attribute name="invisible" add="tint_display_name" separator=" or "/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='product_id'][not(@widget)]" position="attributes">
                 <attribute name="invisible">tint_display_name</attribute>

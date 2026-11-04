@@ -38,7 +38,7 @@ def seed(env):
     payment.action_post()
     (bill | payment.move_id).line_ids.filtered(lambda l: l.account_type == 'liability_payable').reconcile()
     group = env['vendor.credit.group'].create({
-        'name': 'PRUEBA-AJUSTE-NOTA-001',
+        'name': 'PRUEBA-AJUSTE-NOTA-001', 'supplier_reference': 'DEMO-AJUSTE-001',
         'partner_id': supplier.id, 'journal_id': get(env, 'purchases').id,
         'reason_id': env.ref('entintados_pdv.vendor_credit_reason_discount').id,
         'date': TODAY, 'currency_id': bill.currency_id.id,

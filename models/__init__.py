@@ -77,3 +77,4 @@ from . import pos_sale_quotation
 from . import customer_credit_reason
 from . import pos_bank_payments
 from . import vendor_credit_report
+from . import vendor_credit_summary

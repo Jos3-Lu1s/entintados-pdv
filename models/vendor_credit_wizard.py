@@ -457,13 +457,7 @@ class VendorCreditGroupLine(models.Model):
         payable = self.invoice_id.line_ids.filtered(lambda item: item.account_type == 'liability_payable').account_id
         if reason.payable_account_id and payable != reason.payable_account_id:
             raise UserError(_('La cuenta por pagar del motivo debe coincidir con la factura %s.') % self.invoice_id.display_name)
-        material = self.group_id.material_line_ids.filtered(lambda item: item.allocation_id == self)
-        if reason.operation_type == 'return':
-            base = sum(item.invoice_line_id.price_total * item.quantity / item.invoice_line_id.quantity for item in material)
-            source = [(item.invoice_line_id, item.quantity) for item in material]
-        else:
-            base = self.invoice_total
-            source = [(line, line.quantity) for line in self.invoice_id.invoice_line_ids.filtered(lambda item: item.display_type == 'product')]
+        base, source = self._credit_source_lines(reason)
         if base <= 0:
             raise UserError(_('Selecciona material con importe positivo para la factura %s.') % self.invoice_id.display_name)
         commands = []
@@ -480,6 +474,15 @@ class VendorCreditGroupLine(models.Model):
                 values['account_id'] = reason.account_id.id
             commands.append(Command.create(values))
         return commands
+
+    def _credit_source_lines(self, reason):
+        self.ensure_one()
+        if reason.operation_type == 'return':
+            material = self.group_id.material_line_ids.filtered(lambda item: item.allocation_id == self)
+            source = [(item.invoice_line_id, item.quantity) for item in material if item.invoice_line_id.quantity]
+            return sum(line.price_total * quantity / line.quantity for line, quantity in source), source
+        return self.invoice_total, [(line, line.quantity) for line in self.invoice_id.invoice_line_ids
+                                    if line.display_type == 'product']
 
     def _payment_adjustment_plan(self, amount, credit=None):
         self.ensure_one()
