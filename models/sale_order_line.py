@@ -102,6 +102,12 @@ class SaleOrderLine(models.Model):
         compute='_compute_combo_subtotal',
         currency_field='currency_id',
     )
+    # Línea del paquete: suma de sus productos, que son los que llevan el importe real.
+    discount_amount = fields.Monetary(
+        string='Descuento $',
+        compute='_compute_discount_amount',
+        currency_field='currency_id',
+    )
     # Último descuento asignado por el cálculo. El onchange de `discount` también se dispara
     # cuando lo cambia el cálculo: solo es manual si difiere de este valor.
     technical_discount = fields.Float(
@@ -131,6 +137,30 @@ class SaleOrderLine(models.Model):
             line.combo_subtotal = line.product_type == 'combo' and sum(
                 line._get_linked_lines().filtered('combo_item_id').mapped('price_subtotal')
             )
+
+    @api.depends(
+        'product_type', 'virtual_id', 'currency_id', 'price_subtotal', 'price_unit',
+        'product_uom_qty', 'discount', 'order_id.order_line.price_subtotal',
+        'order_id.order_line.price_unit', 'order_id.order_line.product_uom_qty',
+        'order_id.order_line.discount', 'order_id.order_line.linked_line_id',
+        'order_id.order_line.linked_virtual_id',
+    )
+    def _compute_discount_amount(self):
+        for line in self:
+            if line.product_type == 'combo':
+                items = line._get_linked_lines().filtered('combo_item_id')
+                line.discount_amount = sum(item._get_own_discount_amount() for item in items)
+            else:
+                line.discount_amount = line._get_own_discount_amount()
+
+    def _get_own_discount_amount(self):
+        # Misma fórmula que `amount_undiscounted`: partir del subtotal excluye el IVA incluido en el precio.
+        self.ensure_one()
+        if self.discount == 100:
+            amount = self.price_unit * self.product_uom_qty
+        else:
+            amount = self.price_subtotal * self.discount / (100 - self.discount)
+        return self.currency_id.round(amount) if self.currency_id else amount
 
     @api.depends('product_id')
     def _compute_product_uom_readonly(self):

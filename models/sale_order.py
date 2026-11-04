@@ -20,6 +20,30 @@ class SaleOrder(models.Model):
     # Solo para la vista: el bloqueo de Ajustes no se aplica en el servidor.
     price_unit_edit_locked = fields.Boolean(compute='_compute_edit_locked')
     discount_edit_locked = fields.Boolean(compute='_compute_edit_locked')
+    amount_discount = fields.Monetary(
+        string='Descuento total',
+        compute='_compute_amount_discount',
+        currency_field='currency_id',
+    )
+    amount_before_discount = fields.Monetary(
+        string='Antes de descuento',
+        compute='_compute_amount_before_discount',
+        currency_field='currency_id',
+    )
+
+    @api.depends('order_line.discount_amount', 'order_line.product_type')
+    def _compute_amount_discount(self):
+        for order in self:
+            # El paquete de combo solo repite lo que ya suman sus productos.
+            lines = order.order_line.filtered(lambda line: line.product_type != 'combo')
+            order.amount_discount = sum(lines.mapped('discount_amount'))
+
+    @api.depends('amount_untaxed', 'amount_discount', 'currency_id')
+    def _compute_amount_before_discount(self):
+        # No se usa `amount_undiscounted`: no redondea por línea y podría no cuadrar con el descuento mostrado.
+        for order in self:
+            amount = order.amount_untaxed + order.amount_discount
+            order.amount_before_discount = order.currency_id.round(amount) if order.currency_id else amount
 
     @api.depends('company_id')
     @api.depends_context('uid')
