@@ -20,6 +20,47 @@ class VendorCreditReason(models.Model):
     payable_account_id = fields.Many2one('account.account', string='Cuenta por pagar', ondelete='restrict',
                                         help='Debe coincidir con la cuenta por pagar de la factura para poder conciliarla. '
                                              'Sin configurar se utiliza la de la factura.')
+    reference_account_code = fields.Char(string='Código de abono indicado en el Excel', copy=False)
+    reference_account_name = fields.Char(string='Nombre de cuenta indicado en el Excel', copy=False)
+
+    @api.model
+    def _setup_purchase_credit_reasons(self):
+        """Import the supplied purchase reasons without creating accounts or resetting configuration."""
+        catalog = [
+            ('Devoluciones sobre compras', '115.01.01', 'INVENTARIO PRINCIPAL', 'return'),
+            ('Descuentos sobre compras', '502.01.00', 'Descuentos sobre compras', 'monetary'),
+            ('Publicidad', '601.61.17', 'Publicidad', 'monetary'),
+            ('Descuento Totalplay', '601.50.01', 'Teléfono', 'monetary'),
+        ]
+        for company in self.env['res.company'].sudo().search([]):
+            reasons = self.sudo().with_company(company).with_context(active_test=False)
+            accounts = self.env['account.account'].sudo().with_company(company)
+            for sequence, (name, code, label, operation) in enumerate(catalog, 50):
+                reason = reasons.search([('name', '=ilike', name), ('company_id', '=', company.id)], limit=1)
+                if reason and reason.reference_account_code:
+                    # Keep accountants' later choices, including leaving a field empty.
+                    continue
+                account = accounts.search([
+                    ('company_ids', 'in', company.ids), ('code', '=', code), ('active', '=', True),
+                    ('account_type', 'not in', ['liability_payable', 'asset_receivable', 'off_balance']),
+                ], limit=2)
+                values = {
+                    'name': name, 'sequence': sequence, 'company_id': company.id,
+                    'operation_type': operation, 'reference_account_code': code,
+                    'reference_account_name': label,
+                    'account_id': account.id if len(account) == 1 else False,
+                    # Supplier/creditor is taken from each source bill so the
+                    # note remains reconcilable with that bill's payable line.
+                    'payable_account_id': False,
+                }
+                if reason:
+                    values = {key: value for key, value in values.items()
+                              if key in ('reference_account_code', 'reference_account_name', 'account_id')}
+                    if reason.account_id:
+                        values.pop('account_id', None)
+                    reason.write(values)
+                else:
+                    reasons.create(values)
 
     @api.constrains('account_id', 'payable_account_id', 'company_id')
     def _check_accounts(self):
