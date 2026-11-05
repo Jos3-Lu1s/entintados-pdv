@@ -5,13 +5,15 @@ import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../static/src/app/overrides/add_info_popup.js', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
+const invoiceOptionsSource = fs.readFileSync(new URL('../static/src/app/utils/invoice_options.js', import.meta.url), 'utf8')
+    .replace(/^export /gm, '');
 
 function popupFor(values = {}) {
     class Popup {
         setup() { this.state = {}; }
         confirm() { this.payload = { ...this.state }; }
     }
-    vm.runInNewContext(source, { AddInfoPopup: Popup, patch(target, extension) {
+    vm.runInNewContext(invoiceOptionsSource + '\n' + source, { AddInfoPopup: Popup, patch(target, extension) {
         Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));
         Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
     } });
@@ -57,7 +59,7 @@ test('Saving a ticket explicitly replaces an old split count with one invoice', 
     const orderSource = fs.readFileSync(new URL('../static/src/app/overrides/pos_order_line.js', import.meta.url), 'utf8')
         .replace(/^import .*;\r?\n/gm, '');
     vm.runInNewContext(orderSource, {
-        PosOrder: Order, PosOrderline: class {}, _t: (value) => value,
+        PosOrder: Order, PosOrderline: class {}, TicketScreen: class {}, _t: (value) => value,
         console: { log() {} },
         patch(target, extension) {
             Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));

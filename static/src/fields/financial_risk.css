@@ -1,0 +1,8 @@
+.o_form_view .o_entintados_risk_limits {
+    min-width: 0;
+}
+
+.o_form_view .o_entintados_risk_limits .o_inner_group.oe_subtotal_footer .o_form_label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}

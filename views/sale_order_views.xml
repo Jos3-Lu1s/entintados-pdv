@@ -45,6 +45,16 @@
                 <field name="price_unit_edit_locked" invisible="1"/>
                 <field name="discount_edit_locked" invisible="1"/>
             </xpath>
+            <xpath expr="//button[@name='action_open_reward_wizard'][not(@disabled)]" position="attributes">
+                <attribute name="string">Promociones</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_open_reward_wizard'][not(@disabled)]" position="inside">
+                <span>Promociones</span>
+                <span class="ms-1" invisible="not promo_available_line_count">(<field name="promo_available_line_count" class="d-inline"/>)</span>
+            </xpath>
+            <xpath expr="//button[@name='action_open_reward_wizard'][@disabled]" position="attributes">
+                <attribute name="string">Promociones</attribute>
+            </xpath>
             <xpath expr="//button[@name='action_open_discount_wizard'][not(@disabled)]" position="attributes">
                 <attribute name="invisible">locked or state == 'cancel' or discount_edit_locked</attribute>
             </xpath>
@@ -74,10 +84,12 @@
             </xpath>
             <xpath expr="//field[@name='order_line']/form//div[@name='discount']/parent::t" position="after">
                 <field name="discount_amount" readonly="1" groups="sale.group_discount_per_so_line"/>
-                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" invisible="not pricing_rule_origin" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
+                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" invisible="not pricing_rule_origin" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'manual'" decoration-primary="pricing_rule_type == 'promo'"/>
+                <field name="promo_available_info" string="Promoción" widget="promo_hint" options="{'selectable': false}" readonly="1" invisible="not promo_available_info"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban/field[@name='currency_id']" position="after">
                 <field name="pricing_rule_type"/>
+                <field name="promo_available_info"/>
                 <field name="price_origin_label"/>
                 <field name="is_downpayment"/>
                 <field name="combo_price_snapshot"/>
@@ -93,8 +105,9 @@
                 </div>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='discount']/ancestor::t[1]" position="after">
-                <div invisible="not pricing_rule_origin">
-                    <field name="pricing_rule_origin" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
+                <div invisible="not pricing_rule_origin and not promo_available_info">
+                    <field name="pricing_rule_origin" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'manual'" decoration-primary="pricing_rule_type == 'promo'"/>
+                    <field name="promo_available_info" widget="promo_hint" invisible="not promo_available_info"/>
                 </div>
             </xpath>
             <!-- La lista de escritorio no muestra la UdM en la fila del combo: el móvil tampoco. -->
@@ -200,7 +213,8 @@
                 <field name="discount_amount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
                 <field name="pricing_rule_type" column_invisible="True"/>
                 <field name="pricing_rule_id" column_invisible="True"/>
-                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type in ('manual', 'promo')"/>
+                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'manual'" decoration-primary="pricing_rule_type == 'promo'"/>
+                <field name="promo_available_info" string=" " widget="promo_hint" readonly="1" nolabel="1" width="32px"/>
             </xpath>
         </field>
     </record>

@@ -58,6 +58,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/components/customer_contact_info.xml",
             "entintados_pdv/static/src/app/utils/customer_summary.js",
             "entintados_pdv/static/src/app/overrides/customer_payment_summary.xml",
+            "entintados_pdv/static/src/app/overrides/order_price_breakdown.js",
+            "entintados_pdv/static/src/app/overrides/order_price_breakdown.xml",
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
             # Componentes reutilizables (js + xml co-localizados)
@@ -112,6 +114,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/customer_payment_policy.js",
             "entintados_pdv/static/src/views/tint_sales_report.js",
             "entintados_pdv/static/src/views/tint_sales_report.xml",
+            "entintados_pdv/static/src/fields/financial_risk.css",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
             "entintados_pdv/static/src/fields/crm_material_product/merge_material_product.js",
             "entintados_pdv/static/src/fields/crm_material_product/crm_material_product.js",
@@ -131,6 +134,10 @@ Catálogo de entintado
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
+            # Promoción disponible en las líneas de venta
+            "entintados_pdv/static/src/fields/promo_hint/promo_hint_text.js",
+            "entintados_pdv/static/src/fields/promo_hint/promo_hint_field.js",
+            "entintados_pdv/static/src/fields/promo_hint/promo_hint_field.xml",
             # Importe antes de descuento y descuento total en la tabla de totales de ventas
             "entintados_pdv/static/src/fields/tax_totals_discount/tax_totals_discount.xml",
             # Sin creación rápida de productos: quedarían sin referencia interna
@@ -225,6 +232,7 @@ Catálogo de entintado
         'data/pos_financing_data.xml',
         'views/pos_financing_views.xml',
         'views/pos_credit_approval_views.xml',
+        'views/sale_credit_views.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
         'report/report_picking_action.xml',
@@ -244,6 +252,7 @@ Catálogo de entintado
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
         'views/pos_order_views.xml',
+        'data/pos_order_reference_data.xml',
         'views/accounting_menu_sections.xml',
         'data/advance_accounting_data.xml',
         'data/sale_tint_data.xml',

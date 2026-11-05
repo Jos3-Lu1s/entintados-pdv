@@ -17,6 +17,28 @@
             </xpath>
         </field>
     </record>
+    <record id="view_pos_order_branch_form" model="ir.ui.view">
+        <field name="name">pos.order.branch.form</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='company_id']" position="attributes">
+                <attribute name="string">Sucursal</attribute>
+                <attribute name="groups"/>
+                <attribute name="readonly">1</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_pos_order_branch_list" model="ir.ui.view">
+        <field name="name">pos.order.branch.list</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="company_id" string="Sucursal" readonly="1" optional="show"/>
+            </xpath>
+        </field>
+    </record>
     <record id="view_pos_order_invoice_status" model="ir.ui.view">
         <field name="name">pos.order.invoice.status</field>
         <field name="model">pos.order</field>
