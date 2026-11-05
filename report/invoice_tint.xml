@@ -1,0 +1,7 @@
+<odoo>
+    <template id="report_invoice_tint_components" inherit_id="account.report_invoice_document">
+        <xpath expr="//t[@t-set='lines']" position="attributes">
+            <attribute name="t-value">o._tint_invoice_lines_for_print(o.invoice_line_ids).sorted(key=lambda l: (-l.sequence, l.date, l.move_name, -l.id), reverse=True)</attribute>
+        </xpath>
+    </template>
+</odoo>

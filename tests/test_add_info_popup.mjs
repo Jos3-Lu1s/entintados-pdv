@@ -57,7 +57,7 @@ test('Saving a ticket explicitly replaces an old split count with one invoice', 
     const orderSource = fs.readFileSync(new URL('../static/src/app/overrides/pos_order_line.js', import.meta.url), 'utf8')
         .replace(/^import .*;\r?\n/gm, '');
     vm.runInNewContext(orderSource, {
-        PosOrder: Order, PosOrderline: class {}, _t: (value) => value,
+        PosOrder: Order, PosOrderline: class {}, TicketScreen: class {}, _t: (value) => value,
         console: { log() {} },
         patch(target, extension) {
             Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));

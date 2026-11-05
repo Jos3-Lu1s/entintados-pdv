@@ -638,5 +638,6 @@ class SaleOrder(models.Model):
     
     def _create_invoices(self, grouped=False, final=False, date=None):
         moves = super()._create_invoices(grouped=grouped, final=final, date=date)
-        moves.filtered(lambda m: m.state == "draft").action_post()
+        moves.filtered(lambda move: move.state == 'draft' and not move._is_sale_credit_invoice()
+                       and (not move.company_id.advance_risk_enabled or move.advance_source_ids)).action_post()
         return moves

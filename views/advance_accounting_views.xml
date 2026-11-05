@@ -31,7 +31,7 @@
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
                 <field name="is_advance_invoice" invisible="1"/>
-                <button name="action_apply_advance" type="object" string="Aplicar anticipo" invisible="move_type not in ('in_invoice', 'out_invoice') or is_advance_invoice or state == 'cancel'" groups="account.group_account_invoice"/>
+                <button name="action_apply_advance" type="object" string="Aplicar anticipo" invisible="1" groups="account.group_account_invoice"/>
             </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_advance_links" type="object" class="oe_stat_button" icon="fa-exchange" invisible="advance_link_count == 0">
@@ -99,8 +99,8 @@
                     </group>
                     <group>
                         <field name="supplier_advance_available"/>
-                        <button name="action_view_available_advances" type="object" string="Ver anticipos y aplicaciones" class="btn-link"/>
-                        <div class="text-muted">Los anticipos a proveedores no incrementan el crédito de cliente. Las aplicaciones en borrador reservan saldo hasta confirmarlas o cancelarlas.</div>
+                        <button name="action_view_available_advances" type="object" string="Ver anticipos y aplicaciones" class="btn-link text-wrap" colspan="2"/>
+                        <div class="text-muted text-wrap text-break" style="overflow-wrap: anywhere;" colspan="2">Los anticipos a proveedores no incrementan el crédito de cliente. Las aplicaciones en borrador reservan saldo hasta confirmarlas o cancelarlas.</div>
                     </group>
                 </group>
             </xpath>

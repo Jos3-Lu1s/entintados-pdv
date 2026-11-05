@@ -191,6 +191,13 @@ patch(PaymentScreen.prototype, {
         return await super.toggleIsToInvoice(...arguments);
     },
     async validateOrder() {
+        if (this.isCollectingCustomerAdvance && (
+            ['credit', 'ppd_partial'].includes(this.currentOrder.pos_payment_flow) ||
+            this.currentOrder.payment_ids.some((line) => line.payment_method_id.type === 'pay_later')
+        )) {
+            this.notification.add(_t('Los anticipos solo se reciben de contado. Retira Crédito de cliente o PPD y selecciona un medio real de pago.'), { type: 'warning' });
+            return false;
+        }
         if (this.currentOrder.lines.some((line) => line.settled_invoice_id || line.settled_order_id?.account_move)) {
             this.currentOrder.setToInvoice(false);
             this.currentOrder.pos_payment_flow = "standard";

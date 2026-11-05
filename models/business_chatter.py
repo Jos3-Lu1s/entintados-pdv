@@ -4,6 +4,7 @@ import json
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from lxml import html
 from markupsafe import Markup
 from odoo import api, models
 from odoo.tools import html2plaintext, ormcache
@@ -34,6 +35,8 @@ PARENTS = {
     'stock.move.line': 'picking_id',
     'account.bank.statement.line': 'move_id',
 }
+PRIVATE_AUDIT_FIELDS = {'tint_snapshot', 'combo_price_snapshot', 'pos_quotation_snapshot',
+                        'pos_quotation_uuid', 'pos_quotation_session_id'}
 
 
 def audit_enabled(records):
@@ -122,8 +125,9 @@ def values(record, names):
     localized = record.with_context(lang=chatter_language(record))
     for name in names:
         field = record._fields.get(name)
-        if (not field or name in TECHNICAL_FIELDS or name.startswith(TECHNICAL_PREFIXES)
-                or field.type == 'one2many' or field.inherited or not record._has_field_access(field, 'read')):
+        if (not field or name in TECHNICAL_FIELDS or name in PRIVATE_AUDIT_FIELDS or name.startswith(TECHNICAL_PREFIXES)
+                or field.type in ('one2many', 'json', 'properties', 'properties_definition')
+                or field.inherited or not record._has_field_access(field, 'read')):
             continue
         value = record[name]
         if field.type in ('many2one', 'many2many'):
@@ -257,6 +261,32 @@ def track_audit(records, fields_iter, initial, track):
 
 class SaleOrderBusinessChatter(models.Model):
     _inherit = 'sale.order'
+
+    @api.model
+    def _redact_private_chatter_details(self):
+        self.env['mail.tracking.value'].sudo().search([
+            ('mail_message_id.model', '=', 'sale.order'),
+            ('field_id.model', '=', 'sale.order'),
+            ('field_id.name', 'in', ['pos_quotation_uuid', 'pos_quotation_snapshot', 'pos_quotation_session_id']),
+        ]).unlink()
+        messages = self.env['mail.message'].sudo().search([
+            ('model', '=', 'sale.order'), ('body', 'ilike', 'o_business_audit'),
+            '|', '|', ('body', 'ilike', 'doses'), ('body', 'ilike', 'Desglose del precio del combo:'),
+            ('body', 'ilike', 'Pos Quotation'),
+        ])
+        for message in messages:
+            body = html.fragment_fromstring(str(message.body), create_parent='div')
+            changed = False
+            for item in body.xpath('.//li'):
+                content = item.text_content()
+                if (content.startswith(('Fórmula cotizada:', 'Desglose del precio del combo:'))
+                        or content.startswith(('Pos Quotation Snapshot:', 'Pos Quotation Uuid:', 'Pos Quotation Session:'))
+                        or all(key in content for key in ('"base_id"', '"doses"', '"points"'))):
+                    item.clear(keep_tail=True)
+                    item.text = 'Detalle técnico reservado'
+                    changed = True
+            if changed:
+                message.body = Markup(html.tostring(body, encoding='unicode', method='html'))
 
     def message_post(self, **kwargs):
         return super().message_post(**enrich_message(self, kwargs))

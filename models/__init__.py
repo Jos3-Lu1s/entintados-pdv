@@ -79,3 +79,7 @@ from . import pos_bank_payments
 from . import vendor_credit_report
 from . import vendor_credit_summary
 from . import loyalty_line_promotion
+from . import tint_sales_report
+from . import partner_payment_policy
+from . import sale_auto_delivery
+from . import sale_credit

@@ -21,8 +21,11 @@
                 <field name="active"/>
             </group>
             <group string="Cuentas contables">
-                <field name="account_id" options="{'no_create': True}" domain="[('company_ids', 'in', company_id), ('account_type', 'not in', ['liability_payable', 'asset_receivable', 'off_balance'])]"/>
-                <field name="payable_account_id" options="{'no_create': True}" domain="[('company_ids', 'in', company_id), ('account_type', '=', 'liability_payable'), ('reconcile', '=', True)]"/>
+                <field name="payable_account_id" string="Cuenta de cargo (proveedor / acreedor)" options="{'no_create': True}" domain="[('company_ids', 'in', company_id), ('account_type', '=', 'liability_payable'), ('reconcile', '=', True)]"/>
+                <field name="account_id" string="Cuenta de abono (ajuste)" options="{'no_create': True}" domain="[('company_ids', 'in', company_id), ('account_type', 'not in', ['liability_payable', 'asset_receivable', 'off_balance'])]"/>
+                <field name="reference_account_code" readonly="1" invisible="not reference_account_code"/>
+                <field name="reference_account_name" readonly="1" invisible="not reference_account_name"/>
+                <div class="text-muted" colspan="2" invisible="not reference_account_code">La cuenta de cargo se toma del proveedor o acreedor de la factura. Si no existe la cuenta de abono del Excel, el campo queda vacío para configurarlo posteriormente.</div>
                 <div class="text-muted" colspan="2">Si dejas las cuentas vacías, se utilizan las cuentas de la factura. Los impuestos conservan sus cuentas fiscales. La cuenta por pagar debe coincidir con la factura para liquidarla.</div>
             </group>
             <div class="alert alert-info" invisible="operation_type != 'return'">Solicita productos, cantidades y su recepción de origen. Al generar las notas se crea la devolución al proveedor; Almacén debe validarla para registrar la salida física.</div>

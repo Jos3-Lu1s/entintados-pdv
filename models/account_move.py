@@ -3,6 +3,32 @@ from odoo import models, api, fields, _
 class AccountMove(models.Model):
     _inherit = 'account.move'
 
+    def _tint_invoice_lines_for_print(self, lines):
+        """Keep recipe components in accounting while excluding them from the PDF."""
+        self.ensure_one()
+        self.check_access('read')
+        if self.move_type not in ('out_invoice', 'out_refund'):
+            return lines
+        # Read only the origin of this accessible invoice, also for accounting
+        # users who do not have access to the POS application.
+        orders = self.env['pos.order'].sudo().search([
+            ('company_id', '=', self.company_id.id),
+            '|', ('account_move', '=', self.id), ('split_invoice_ids', 'in', self.ids),
+        ])
+        products = orders.lines.filtered(
+            lambda line: line.product_id.tint_role == 'colorant'
+            and line.combo_parent_id.product_id.tint_role == 'base'
+        ).product_id.ids
+        return lines.filtered(lambda line: not (
+            line.product_id.tint_role == 'colorant' and (
+                line.product_id.id in products or line.sale_line_ids.filtered(
+                    lambda sale: sale.tint_section_id and sale._tint_recipe())
+            )
+        ))
+
+    def _get_move_lines_to_report(self):
+        return self._tint_invoice_lines_for_print(super()._get_move_lines_to_report())
+
     vendor_credit_source_ids = fields.Many2many(
         'account.move', 'vendor_credit_source_rel', 'credit_id', 'invoice_id',
         string='Facturas de origen', copy=False, check_company=True,

@@ -60,8 +60,8 @@ with registry.cursor() as order_cr:
             raise AssertionError('La numeración de la sucursal dejó de estar serializada')
     next_number, next_reference = env['pos.order']._next_branch_order_reference(company)
     assert next_number == number + 1
-    assert reference == f'{company.name} - PDV-{number:04d}'
-    assert next_reference == f'{company.name} - PDV-{next_number:04d}'
+    assert reference == f'PDV-{number:04d}'
+    assert next_reference == f'PDV-{next_number:04d}'
     if '--pdf' in sys.argv:
         journal = env['account.journal'].search([('company_id', '=', company_id), ('type', '=', 'sale')], limit=1)
         income = env['account.account'].search([('company_ids', 'in', company.ids), ('account_type', '=', 'income')], limit=1)

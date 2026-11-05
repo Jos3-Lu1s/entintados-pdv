@@ -16,4 +16,5 @@
         </record>
     </data>
     <function model="vendor.credit.group" name="_migrate_reason_catalog"/>
+    <function model="vendor.credit.reason" name="_setup_purchase_credit_reasons"/>
 </odoo>

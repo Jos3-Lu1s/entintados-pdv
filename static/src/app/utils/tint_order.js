@@ -157,21 +157,16 @@ export function extractionLiters(baseType, size) {
 }
 
 /** Genera la nota comercial limpia y confidencial para el cliente (sin revelar receta). */
-export function buildCustomerNote({ color, gallery }) {
-    const galleryName = gallery?.name || "";
+export function buildCustomerNote({ color }) {
     const colorCode = color?.code ? `[${color.code}] ` : "";
     const colorName = color?.name || "";
     if (!colorName && !colorCode) {
         return "";
     }
-    let text = _t("Color: %(code)s%(name)s", {
+    return _t("Color: %(code)s%(name)s", {
         code: colorCode,
         name: colorName,
     });
-    if (galleryName) {
-        text += ` (${galleryName})`;
-    }
-    return text;
 }
 
 /** Genera la receta técnica detallada para uso exclusivo interno (taller / etiqueta de bote). */
@@ -317,6 +312,35 @@ export async function addTintedBaseToOrder(
 export function isTintColorant(line) {
     return Boolean(line?.is_tint_colorant || line?.product_id?.tint_role === "colorant" ||
         line?.product_id?.product_tmpl_id?.tint_role === "colorant");
+}
+
+export function tintedProductName(line) {
+    if (!isTintedBase(line)) {
+        return "";
+    }
+    const product = line.product_id;
+    const recipe = line.sale_order_line_id?.tint_snapshot || {};
+    const code = recipe.color_code || line.tint_color_code || "";
+    const color = code ? line.models?.["tint.color"]?.getAll()?.find((item) => item.code === code) : null;
+    let name = recipe.color_name || color?.name || "";
+    if (!name) {
+        const note = (line.customer_note || "").split("\n").find((part) => /^\s*(Color:|\+)/.test(part)) || "";
+        name = note.replace(/^\s*(?:Color:|\+)\s*/, "").trim();
+        if (code && name.startsWith(`[${code}]`)) {
+            name = name.slice(code.length + 2).trim();
+        }
+        const gallery = line.models?.["tint.gallery"]?.getAll()?.find(
+            (item) => item.name && name.endsWith(` (${item.name})`));
+        if (gallery) {
+            name = name.slice(0, -(gallery.name.length + 3)).trim();
+        }
+    }
+    const productCode = product?.default_code || product?.product_tmpl_id?.default_code || "";
+    const baseName = product?.name || product?.display_name || "";
+    const base = productCode && !baseName.startsWith(`[${productCode}] `)
+        ? `[${productCode}] ${baseName}` : baseName;
+    const colorName = [code ? `[${code}]` : "", name].filter(Boolean).join(" ");
+    return [base, colorName].filter(Boolean).join(" + ");
 }
 
 export function isTintedBase(line) {

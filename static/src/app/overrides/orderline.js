@@ -1,6 +1,7 @@
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
 import { patch } from "@web/core/utils/patch";
 import { formatCurrency } from "@web/core/currency";
+import { tintedProductName } from "@entintados_pdv/app/utils/tint_order";
 
 /**
  * Parche para el componente visual Orderline del POS para evitar la duplicación
@@ -42,10 +43,16 @@ patch(Orderline.prototype, {
             }
         }
 
+        const tintName = tintedProductName(line);
+        if (tintName) {
+            values.name = tintName;
+            return values;
+        }
+
         if (this.props.mode === "display" && values.name) {
             const productCode = line.product_id?.default_code ||
                 line.product_id?.product_tmpl_id?.default_code;
-            const codes = [...new Set([productCode, line.tint_color_code].filter(Boolean))];
+            const codes = [productCode].filter(Boolean);
             const prefix = codes.map((code) => `[${code}]`).join(" ");
             if (prefix && !values.name.startsWith(prefix + " ")) {
                 // El nombre del core puede incluir ya la referencia del producto.

@@ -44,6 +44,35 @@ class TintColor(models.Model):
     formula_count = fields.Integer(
         string="Número de fórmulas", compute='_compute_formula_count',
         help="Número de fórmulas registradas para este color.")
+    sold_quantity = fields.Float(string='Vendido', compute='_compute_sold_quantity')
+
+    def _compute_sold_quantity(self):
+        report = self.env['tint.sales.report']
+        totals = {}
+        if report.has_access('read'):
+            totals = {
+                color.id: quantity for color, quantity in report._read_group(
+                    [('color_id', 'in', self.ids), '|',
+                     ('sale_order_id.state', '=', 'sale'), ('pos_order_id', '!=', False)],
+                    ['color_id'], ['quantity:sum'])
+            }
+        for color in self:
+            color.sold_quantity = totals.get(color.id, 0)
+
+    def action_open_sold_tints(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Entintados vendidos · %s', self.display_name),
+            'res_model': 'tint.sales.report',
+            'view_mode': 'list,pivot',
+            'views': [(self.env.ref('entintados_pdv.view_tint_color_sales_list').id, 'list'),
+                      (False, 'pivot')],
+            'search_view_id': self.env.ref('entintados_pdv.view_tint_sales_report_search').id,
+            'domain': [('color_id', '=', self.id), '|',
+                       ('sale_order_id.state', '=', 'sale'), ('pos_order_id', '!=', False)],
+            'context': {'group_by': 'date_order:month'},
+        }
     has_formula = fields.Boolean(
         string="Tiene fórmula", compute='_compute_has_formula', store=True,
         help="Indica si el color tiene al menos una fórmula registrada.")

@@ -1,0 +1,3 @@
+<odoo>
+    <function model="pos.order" name="_normalize_branch_order_references"/>
+</odoo>

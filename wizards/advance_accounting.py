@@ -84,12 +84,14 @@ class AccountAdvanceApply(models.TransientModel):
     def action_apply(self):
         self.ensure_one()
         target, source = self.invoice_id, self.source_id
+        target.check_access('write')
         source.check_access('read')
         if (target.move_type not in ('in_invoice', 'out_invoice') or target.is_advance_invoice
                 or source.move_type != target.move_type or not source.is_advance_invoice
                 or source.state != 'posted' or source.company_id != target.company_id
                 or source.currency_id != target.currency_id or source.commercial_partner_id != target.commercial_partner_id):
             raise UserError(_('Selecciona una factura de anticipo contabilizada del mismo contacto, compañía y moneda.'))
+        source._lock_advance_balances()
         if (source.currency_id.compare_amounts(self.amount, 0) <= 0
                 or source.currency_id.compare_amounts(self.amount, source.advance_available) > 0):
             raise UserError(_('El importe debe ser positivo y no superar el anticipo disponible.'))

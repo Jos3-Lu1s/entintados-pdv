@@ -1,0 +1,195 @@
+<odoo>
+    <record id="access_tint_sales_report_pos" model="ir.model.access">
+        <field name="name">Entintados vendidos (pos)</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="group_id" ref="point_of_sale.group_pos_manager"/>
+        <field name="perm_read" eval="True"/>
+    </record>
+    <record id="rule_tint_sales_report_pos" model="ir.rule">
+        <field name="name">Entintados vendidos (pos)</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="groups" eval="[(4, ref('point_of_sale.group_pos_manager'))]"/>
+        <field name="active" eval="False"/>
+    </record>
+    <record id="access_tint_sales_report_sale" model="ir.model.access">
+        <field name="name">Entintados vendidos (sale)</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="group_id" ref="sales_team.group_sale_manager"/>
+        <field name="perm_read" eval="True"/>
+    </record>
+    <record id="rule_tint_sales_report_sale" model="ir.rule">
+        <field name="name">Entintados vendidos (sale)</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        <field name="active" eval="False"/>
+    </record>
+    <record id="access_tint_sales_report_account" model="ir.model.access">
+        <field name="name">Entintados vendidos (account)</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="group_id" ref="account.group_account_readonly"/>
+        <field name="perm_read" eval="True"/>
+    </record>
+    <record id="rule_tint_sales_report_account" model="ir.rule">
+        <field name="name">Entintados vendidos (account)</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="groups" eval="[(4, ref('account.group_account_readonly'))]"/>
+        <field name="domain_force">[]</field>
+    </record>
+    <record id="rule_tint_sales_report_company" model="ir.rule">
+        <field name="name">Entintados vendidos por compañía</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="view_tint_sales_report_list" model="ir.ui.view">
+        <field name="name">tint.sales.report.list</field>
+        <field name="model">tint.sales.report</field>
+        <field name="arch" type="xml">
+            <list string="Entintados vendidos" create="0" edit="0" delete="0" js_class="tint_sales_report_list">
+                <field name="date_order" widget="date" width="95px"/>
+                <field name="document_id" widget="tint_document_link" width="160px" class="text-wrap"/>
+                <field name="source" optional="show" width="110px"/>
+                <field name="base_color" width="330px" class="text-wrap"/>
+                <field name="color" width="210px" class="text-wrap"/>
+                <field name="base_type_id" width="115px" class="text-wrap"/>
+                <field name="status" width="110px"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="invoiced" column_invisible="True"/>
+                <field name="has_margin" column_invisible="True"/>
+                <field name="margin" optional="hide" invisible="not has_margin" width="145px"/>
+                <field name="sale_price" string="Importe" width="145px"/>
+                <field name="invoiced_amount" string="Total" invisible="not invoiced" width="165px"/>
+                <field name="quantity" sum="Total de entintados" width="100px"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_tint_color_sales_list" model="ir.ui.view">
+        <field name="name">tint.color.sales.list</field>
+        <field name="model">tint.sales.report</field>
+        <field name="inherit_id" ref="view_tint_sales_report_list"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <field name="document_id" position="attributes">
+                <attribute name="string">Orden</attribute>
+            </field>
+            <field name="base_color" position="after">
+                <field name="partner_id" width="180px"/>
+                <field name="salesperson_id" width="150px"/>
+            </field>
+        </field>
+    </record>
+    <record id="view_tint_sales_report_search" model="ir.ui.view">
+        <field name="name">tint.sales.report.search</field>
+        <field name="model">tint.sales.report</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="reference"/>
+                <field name="base_id"/>
+                <field name="color"/>
+                <field name="base_type_id"/>
+                <filter name="invoiced" string="Facturados" domain="[('invoiced', '=', True)]"/>
+                <filter name="pending" string="Pendientes de facturar" domain="[('status', '=', 'pending')]"/>
+                <filter name="quotation" string="Cotizaciones" domain="[('status', '=', 'quotation')]"/>
+                <separator/>
+                <filter name="date_order" string="Fecha" date="date_order"/>
+                <group>
+                    <filter name="by_base" string="Base" context="{'group_by': 'base_id'}"/>
+                    <filter name="by_color" string="Color" context="{'group_by': 'color'}"/>
+                    <filter name="by_type" string="Tipo de base" context="{'group_by': 'base_type_id'}"/>
+                    <filter name="by_status" string="Estado" context="{'group_by': 'status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="view_tint_sales_report_pivot" model="ir.ui.view">
+        <field name="name">tint.sales.report.pivot</field>
+        <field name="model">tint.sales.report</field>
+        <field name="arch" type="xml">
+            <pivot string="Total de entintados vendidos" disable_linking="1">
+                <field name="base_id" type="row"/>
+                <field name="color" type="row"/>
+                <field name="quantity" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+    <record id="action_tint_sales_report_pos" model="ir.actions.act_window">
+        <field name="name">Entintados vendidos</field>
+        <field name="res_model">tint.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="search_view_id" ref="view_tint_sales_report_search"/>
+        <field name="domain">[]</field>
+        <field name="context">{'search_default_invoiced': 1}</field>
+    </record>
+    <menuitem id="menu_tint_sales_report_pos" name="Entintados vendidos"
+              parent="point_of_sale.menu_point_rep" action="action_tint_sales_report_pos"
+              groups="point_of_sale.group_pos_manager" sequence="75"/>
+    <record id="action_tint_sales_report_sale" model="ir.actions.act_window">
+        <field name="name">Entintados vendidos</field>
+        <field name="res_model">tint.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="search_view_id" ref="view_tint_sales_report_search"/>
+        <field name="domain">[]</field>
+        <field name="context">{'search_default_invoiced': 1}</field>
+    </record>
+    <menuitem id="menu_tint_sales_report_sale" name="Entintados vendidos"
+              parent="sale.menu_sale_report" action="action_tint_sales_report_sale"
+              groups="sales_team.group_sale_manager" sequence="75"/>
+    <record id="action_tint_sales_report_account" model="ir.actions.act_window">
+        <field name="name">Entintados vendidos</field>
+        <field name="res_model">tint.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="search_view_id" ref="view_tint_sales_report_search"/>
+        <field name="domain">[]</field>
+        <field name="context">{'search_default_invoiced': 1}</field>
+    </record>
+    <menuitem id="menu_tint_sales_report_account" name="Entintados vendidos"
+              parent="account.menu_finance_reports" action="action_tint_sales_report_account"
+              groups="account.group_account_readonly" sequence="75"/>
+    <record id="action_tint_sales_pending_pos" model="ir.actions.act_window">
+        <field name="name">Entintados pendientes de facturar</field>
+        <field name="res_model">tint.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="domain">[('status', '=', 'pending')]</field>
+    </record>
+    <menuitem id="menu_tint_sales_pending_pos" name="Entintados pendientes de facturar"
+              parent="point_of_sale.menu_point_rep" action="action_tint_sales_pending_pos"
+              groups="point_of_sale.group_pos_manager" sequence="76"/>
+    <record id="action_tint_sales_pending_sale" model="ir.actions.act_window">
+        <field name="name">Entintados pendientes de facturar</field>
+        <field name="res_model">tint.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="domain">[('status', '=', 'pending')]</field>
+    </record>
+    <menuitem id="menu_tint_sales_pending_sale" name="Entintados pendientes de facturar"
+              parent="sale.menu_sale_report" action="action_tint_sales_pending_sale"
+              groups="sales_team.group_sale_manager" sequence="76"/>
+    <record id="action_tint_sales_pending_account" model="ir.actions.act_window">
+        <field name="name">Entintados pendientes de facturar</field>
+        <field name="res_model">tint.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="domain">[('status', '=', 'pending')]</field>
+    </record>
+    <menuitem id="menu_tint_sales_pending_account" name="Entintados pendientes de facturar"
+              parent="account.menu_finance_reports" action="action_tint_sales_pending_account"
+              groups="account.group_account_readonly" sequence="76"/>
+    <record id="menu_tint_sales_pending_pos" model="ir.ui.menu"><field name="active" eval="False"/></record>
+    <record id="menu_tint_sales_pending_sale" model="ir.ui.menu"><field name="active" eval="False"/></record>
+    <record id="menu_tint_sales_pending_account" model="ir.ui.menu"><field name="active" eval="False"/></record>
+    <record id="action_tint_sales_selected_excel" model="ir.actions.server">
+        <field name="name">Exportar Excel</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="binding_model_id" ref="model_tint_sales_report"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(6, 0, [ref('point_of_sale.group_pos_manager'), ref('sales_team.group_sale_manager'), ref('account.group_account_readonly')])]"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_export_excel()</field>
+    </record>
+    <record id="action_tint_sales_selected_pdf" model="ir.actions.server">
+        <field name="name">Abrir PDF</field>
+        <field name="model_id" ref="model_tint_sales_report"/>
+        <field name="binding_model_id" ref="model_tint_sales_report"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(6, 0, [ref('point_of_sale.group_pos_manager'), ref('sales_team.group_sale_manager'), ref('account.group_account_readonly')])]"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_open_pdf()</field>
+    </record>
+</odoo>

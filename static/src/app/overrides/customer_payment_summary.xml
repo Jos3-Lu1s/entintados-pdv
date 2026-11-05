@@ -6,17 +6,24 @@
                 <t t-set="summary" t-value="customerPaymentSummary"/>
                 <header class="p-3 border-bottom">
                     <h4 class="mb-1">Resumen de compra</h4>
-                    <div t-esc="currentOrder.getPartner()?.name || 'Público en general'"/>
+                    <t t-if="currentOrder.getPartner()" t-call="entintados_pdv.CustomerContactInfo">
+                        <t t-set="partner" t-value="currentOrder.getPartner()"/>
+                    </t>
+                    <div t-else="">Público en general</div>
                 </header>
                 <div class="o-customer-purchase-lines table-responsive">
                     <table class="table mb-0 align-middle">
-                        <thead><tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio unit.</th><th class="text-end">Descuento / promoción</th><th class="text-end">Importe</th></tr></thead>
+                        <thead><tr><th>Producto</th><th class="text-end">Cant.</th><th class="text-end">Precio unit.</th><th class="text-end">Descuento / promoción</th><th t-if="summary.showMargins" class="text-end">Margen interno</th><th class="text-end">Importe</th></tr></thead>
                         <tbody>
                             <tr t-foreach="summary.rows" t-as="row" t-key="row.id">
                                 <td><span t-esc="row.name"/><small t-if="row.color" class="d-block text-muted">Color: <t t-esc="row.color"/></small></td>
                                 <td class="text-end text-nowrap"><t t-esc="row.quantity"/> <small t-esc="row.unit"/></td>
                                 <td class="text-end text-nowrap" t-esc="env.utils.formatCurrency(row.unitPrice)"/>
                                 <td class="text-end text-nowrap" t-esc="env.utils.formatCurrency(row.saving)"/>
+                                <td t-if="summary.showMargins" class="text-end text-nowrap">
+                                    <t t-esc="row.margin === null ? '—' : env.utils.formatCurrency(row.margin)"/>
+                                    <span t-if="row.marginPercent !== null" class="ms-1">(<t t-esc="formatMarginPercent(row.marginPercent)"/>%)</span>
+                                </td>
                                 <td class="text-end text-nowrap fw-bold" t-esc="env.utils.formatCurrency(row.amount)"/>
                             </tr>
                         </tbody>

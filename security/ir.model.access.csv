@@ -14,9 +14,9 @@ access_tint_base_capacity_user,tint.base.capacity (lectura usuario interno),mode
 access_tint_base_capacity_manager,tint.base.capacity (administrador de catalogo),model_tint_base_capacity,entintados_pdv.group_tint_manager,1,1,1,1
 access_tint_color_user,tint.color (lectura usuario interno),model_tint_color,base.group_user,1,0,0,0
 access_tint_color_manager,tint.color (administrador de catalogo),model_tint_color,entintados_pdv.group_tint_manager,1,1,1,1
-access_tint_color_formula_user,tint.color.formula (lectura usuario interno),model_tint_color_formula,base.group_user,1,0,0,0
+access_tint_color_formula_user,tint.color.formula (lectura usuario interno),model_tint_color_formula,base.group_user,1,1,1,1
 access_tint_color_formula_manager,tint.color.formula (administrador de catalogo),model_tint_color_formula,entintados_pdv.group_tint_manager,1,1,1,1
-access_tint_color_formula_line_user,tint.color.formula.line (lectura usuario interno),model_tint_color_formula_line,base.group_user,1,0,0,0
+access_tint_color_formula_line_user,tint.color.formula.line (lectura usuario interno),model_tint_color_formula_line,base.group_user,1,1,1,1
 access_tint_color_formula_line_manager,tint.color.formula.line (administrador de catalogo),model_tint_color_formula_line,entintados_pdv.group_tint_manager,1,1,1,1
 access_tint_gallery_user,tint.gallery (lectura usuario interno),model_tint_gallery,base.group_user,1,0,0,0
 access_tint_gallery_manager,tint.gallery (administrador de catalogo),model_tint_gallery,entintados_pdv.group_tint_manager,1,1,1,1
@@ -64,3 +64,8 @@ access_pos_return_session_read,Accounting ticket session read,point_of_sale.mode
 access_pos_return_config_read,Accounting ticket config read,point_of_sale.model_pos_config,account.group_account_invoice,1,1,1,1
 access_pos_return_payment_method_read,Accounting ticket payment method read,point_of_sale.model_pos_payment_method,account.group_account_invoice,1,1,1,1
 access_sale_tint_wizard,sale.tint.wizard,model_sale_tint_wizard,sales_team.group_sale_salesman,1,1,1,1
+access_sale_cash_advance,sale.cash.advance,model_sale_cash_advance,account.group_account_invoice,1,1,1,1
+access_branch_cash_cut_readonly,branch.cash.cut.readonly,model_branch_cash_cut,account.group_account_readonly,1,1,1,1
+access_branch_cash_cut_invoice,branch.cash.cut.invoice,model_branch_cash_cut,account.group_account_invoice,1,1,1,1
+access_branch_cash_cut_line_readonly,branch.cash.cut.line.readonly,model_branch_cash_cut_line,account.group_account_readonly,1,0,1,1
+access_branch_cash_cut_line_invoice,branch.cash.cut.line.invoice,model_branch_cash_cut_line,account.group_account_invoice,1,0,1,1

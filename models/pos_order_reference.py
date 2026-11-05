@@ -26,7 +26,14 @@ class PosOrderBranchReference(models.Model):
                 'padding': 4,
             })
         number = int(sequence.next_by_id())
-        return number, f'{company.name} - PDV-{number:04d}'
+        return number, f'PDV-{number:04d}'
+
+    @api.model
+    def _normalize_branch_order_references(self):
+        for order in self.sudo().search([('branch_order_number', '>', 0)]):
+            reference = f'PDV-{order.branch_order_number:04d}'
+            if order.name != reference:
+                super(PosOrderBranchReference, order).write({'name': reference})
 
     @api.model_create_multi
     def create(self, vals_list):

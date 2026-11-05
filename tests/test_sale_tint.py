@@ -35,6 +35,114 @@ class TestSaleTint(TransactionCase):
     def _order(self):
         return self.env['sale.order'].create({'partner_id': self.partner.id})
 
+    def _stock_lookup(self, order, **values):
+        return self.env['product.stock.lookup'].create({
+            'sale_order_id': order.id, 'product_id': self.base.id,
+            'company_id': order.company_id.id, **values})
+
+    def test_stock_lookup_selects_each_tint_even_with_same_base(self):
+        order = self._order()
+        first = order._apply_tint(self.formula, self.base, 1)
+        color = self.env['tint.color'].create({'name': 'Azul consulta sucursal',
+            'gallery_id': self.color.gallery_id.id, 'code_number': '9875'})
+        formula = self.env['tint.color.formula'].create({
+            'color_id': color.id, 'base_type_id': self.base_type.id, 'size_id': self.size.id,
+            'line_ids': [Command.create({'colorant_id': self.colorant.id, 'points': 8})],
+        })
+        second = order._apply_tint(formula, self.base, 2)
+        action = order.action_check_branch_stock()
+        self.assertFalse(action['context']['default_sale_line_id'])
+        original_labels = (first | second).mapped('display_name')
+        labels = (first | second).with_context(stock_lookup_order_line=True).mapped('display_name')
+        self.assertIn(self.color.name, labels[0])
+        self.assertIn(color.name, labels[1])
+        self.assertNotEqual(labels[0], labels[1])
+        self.assertEqual((first | second).mapped('display_name'), original_labels)
+        matches = self.env['sale.order.line'].with_context(stock_lookup_order_line=True).name_search(
+            color.name, domain=[('order_id', '=', order.id)])
+        self.assertIn(second.id, [record_id for record_id, _name in matches])
+        with Form(self.env['product.stock.lookup'].with_context(**action['context'])) as form:
+            form.sale_line_id = first
+            form.warehouse_id = order.warehouse_id
+        wizard = form.record
+        self.assertEqual(wizard.product_id, self.base)
+        self.assertEqual(wizard.requested_qty, 1)
+        self.assertEqual(wizard.line_ids.filtered(lambda row: row.product_id == self.colorant).required_qty, 12)
+        wizard.sale_line_id = second
+        self.assertEqual(wizard.requested_qty, 2)
+        self.assertEqual(wizard.line_ids.filtered(lambda row: row.product_id == self.colorant).required_qty, 16)
+        self.assertEqual(order.order_line, first | second)
+        other = self._order()._apply_tint(self.formula, self.base, 1)
+        with self.assertRaises(ValidationError), self.cr.savepoint():
+            wizard.sale_line_id = other
+
+    def test_stock_lookup_aggregates_frozen_components_without_changing_sale(self):
+        order = self._order()
+        first = order._apply_tint(self.formula, self.base, 1)
+        self.formula.line_ids.points = 8
+        second = order._apply_tint(self.formula, self.base, 2)
+        self.formula.line_ids.points = 20
+        before = order.order_line.read(['product_id', 'product_uom_qty', 'price_unit', 'tint_snapshot'])
+        location = order.warehouse_id.lot_stock_id
+        self.env['stock.quant']._update_available_quantity(self.base, location, 4)
+        self.env['stock.quant']._update_available_quantity(self.colorant, location, 20)
+        quant = self.env['stock.quant'].search([('product_id', '=', self.colorant.id), ('location_id', '=', location.id)])
+        quant.reserved_quantity = 5
+        wizard = self._stock_lookup(order, warehouse_id=order.warehouse_id.id)
+        self.assertTrue(wizard.has_tint)
+        self.assertEqual(len(wizard.line_ids), 2)
+        base = wizard.line_ids.filtered(lambda row: row.product_id == self.base)
+        colorant = wizard.line_ids - base
+        self.assertEqual(base.required_qty, 3)
+        self.assertEqual(base.component_kind, 'base')
+        self.assertFalse(base.shortage)
+        self.assertEqual(colorant.required_qty, 28)
+        self.assertEqual(colorant.available, 15)
+        self.assertTrue(colorant.shortage)
+        self.assertIn(self.color.name, colorant.color_names)
+        self.assertEqual(wizard.total_available, 4)
+        self.assertEqual(order.order_line, first | second)
+        self.assertEqual(order.order_line.read(['product_id', 'product_uom_qty', 'price_unit', 'tint_snapshot']), before)
+        self.assertFalse(order.picking_ids)
+        self.assertEqual(quant.quantity, 20)
+        branch = self.env['stock.warehouse'].create({'name': 'Componentes sucursal QA', 'code': 'TCQA'})
+        self.env['stock.quant']._update_available_quantity(self.colorant, branch.lot_stock_id, 100)
+        wizard.warehouse_id = False
+        rows = wizard.line_ids.filtered(lambda row: row.warehouse_id == branch)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows.filtered(lambda row: row.product_id == self.base).available, 0)
+        self.assertEqual(rows.filtered(lambda row: row.product_id == self.colorant).available, 100)
+        self.assertEqual(wizard.total_available, 4)
+
+    def test_stock_lookup_keeps_missing_components(self):
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 2)
+        self.env['stock.quant']._update_available_quantity(self.colorant, order.warehouse_id.lot_stock_id, 30)
+        wizard = self._stock_lookup(order, warehouse_id=order.warehouse_id.id)
+        self.assertEqual(len(wizard.line_ids), 2)
+        base = wizard.line_ids.filtered(lambda row: row.product_id == self.base)
+        self.assertEqual(base.available, 0)
+        self.assertTrue(base.shortage)
+
+    def test_stock_lookup_pending_components_convert_to_inventory_unit(self):
+        self.colorant.uom_id = self.env.ref('entintados_pdv.uom_tint_ounce')
+        order, _location = self._prepare_delivery(colorant_stock=10)
+        self._deliver(order.picking_ids, 1)
+        wizard = self._stock_lookup(order, warehouse_id=order.warehouse_id.id)
+        base = wizard.line_ids.filtered(lambda row: row.product_id == self.base)
+        colorant = wizard.line_ids - base
+        self.assertEqual(base.required_qty, 1)
+        self.assertAlmostEqual(colorant.required_qty, 0.25)
+        self.assertEqual(colorant.product_uom_id, self.colorant.uom_id)
+
+    def test_stock_lookup_historical_components_are_not_counted_twice(self):
+        order = self._order()
+        self._legacy_layout(order, quantity=2, with_colorant_lines=True)
+        wizard = self._stock_lookup(order, warehouse_id=order.warehouse_id.id)
+        self.assertEqual(len(wizard.line_ids), 2)
+        colorant = wizard.line_ids.filtered(lambda row: row.product_id == self.colorant)
+        self.assertEqual(colorant.required_qty, 24)
+
     def test_only_base_product_with_notes_and_full_price(self):
         order = self._order()
         line = order._apply_tint(self.formula, self.base, 2)
@@ -262,24 +370,68 @@ class TestSaleTint(TransactionCase):
     def test_delivery_consumes_colorants_without_sale_lines(self):
         order, location = self._prepare_delivery()
         picking = order.picking_ids
+        self.assertEqual(picking.move_ids.product_id, self.base | self.colorant)
+        self.assertEqual(picking._tint_consumption_moves().product_uom_qty, 24)
         self._deliver(picking, 2)
         consumption = picking._tint_consumption_moves()
         self.assertEqual(consumption.product_id, self.colorant)
         self.assertEqual(consumption.quantity, 24)
         self.assertEqual(consumption.state, 'done')
+        self.assertEqual(consumption.picking_id, picking)
         self.assertFalse(consumption.sale_line_id)
         self.assertFalse(order.order_line.filtered(lambda l: l.product_id == self.colorant))
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
         picking.move_ids._action_done()
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
 
+    def test_delivery_components_follow_updated_demand(self):
+        order, location = self._prepare_delivery()
+        base = order.picking_ids.move_ids.filtered(lambda move: move.product_id == self.base)
+        base.product_uom_qty = 3
+        self.assertEqual(order.picking_ids._tint_consumption_moves().product_uom_qty, 36)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 100)
+
+    def test_delivery_native_validate_and_view(self):
+        from odoo.tools.convert import convert_file
+        convert_file(self.env, 'entintados_pdv', 'views/sale_tint_stock_views.xml', {}, mode='update')
+        order, location = self._prepare_delivery()
+        picking = order.picking_ids
+        picking.move_ids.picked = True
+        picking.with_context(skip_backorder=True, skip_sms=True).button_validate()
+        self.assertEqual(picking.state, 'done')
+        self.assertEqual(picking.move_ids.product_id, self.base | self.colorant)
+        self.assertEqual(picking._tint_consumption_moves().description_picking, self.colorant.display_name)
+        self.assertFalse(order.order_line.filtered(lambda line: line.product_id == self.colorant))
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
+
+    def test_delivery_partial_without_backorder(self):
+        order, location = self._prepare_delivery()
+        self._deliver(order.picking_ids.with_context(cancel_backorder=True), 1)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 88)
+        self.assertEqual(order.picking_ids._tint_consumption_moves().quantity, 12)
+        self.assertEqual(len(order.picking_ids), 1)
+
+    def test_delivery_upgrade_reuses_existing_moves(self):
+        order, location = self._prepare_delivery()
+        picking = order.picking_ids
+        moves = picking.move_ids
+        self.env['stock.move']._setup_tint_delivery_components()
+        self.env['stock.move']._setup_tint_delivery_components()
+        self.assertEqual(picking.move_ids, moves)
+        self._deliver(picking, 2)
+        component = picking._tint_consumption_moves()
+        component.picking_id = False
+        self.env['stock.move']._setup_tint_delivery_components()
+        self.assertEqual(component.picking_id, picking)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
+
     def test_partial_delivery_invoice_and_material_consumption_are_consistent(self):
         self.base.invoice_policy = 'delivery'
         order, location = self._prepare_delivery()
-        expected = self.base.display_name + '\n+ [%s] %s' % (self.color.code, self.color.name)
+        expected = self.base.display_name + ' + [%s] %s' % (self.color.code, self.color.name)
         picking = order.picking_ids
         self.assertEqual(picking.move_ids.filtered(lambda move: move.product_id == self.base).description_picking,
-                         '+ [%s] %s' % (self.color.code, self.color.name))
+                         self.base.display_name)
         self._deliver(picking, 1)
         first = order._create_invoices()
         lines = first.invoice_line_ids.filtered(lambda line: line.display_type == 'product')
@@ -316,13 +468,13 @@ class TestSaleTint(TransactionCase):
             self._deliver(picking, 2)
         self.assertNotEqual(picking.state, 'done')
         self.assertEqual(self.base.with_context(location=location.id).qty_available, 100)
-        self.assertFalse(picking._tint_consumption_moves())
+        self.assertFalse(picking._tint_consumption_moves().filtered(lambda move: move.state == 'done'))
 
     def test_cancel_before_delivery_does_not_consume_colorants(self):
         order, location = self._prepare_delivery()
         order._action_cancel()
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 100)
-        self.assertFalse(order.picking_ids._tint_consumption_moves())
+        self.assertFalse(order.picking_ids._tint_consumption_moves().filtered(lambda move: move.state != 'cancel'))
 
     def test_delivery_keeps_snapshot_after_formula_changes(self):
         order, location = self._prepare_delivery()
@@ -368,6 +520,6 @@ class TestSaleTint(TransactionCase):
 
     def test_consumption_cannot_be_forged(self):
         order, _location = self._prepare_delivery()
-        base_move = order.picking_ids.move_ids
+        base_move = order.picking_ids.move_ids.filtered(lambda move: move.product_id == self.base)
         with self.assertRaises(ValidationError), self.cr.savepoint():
             base_move.copy({'tint_base_move_id': base_move.id})

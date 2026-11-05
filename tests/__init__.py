@@ -30,6 +30,7 @@ from . import test_colorant_not_sold_alone
 from . import test_vendor_credit_group
 from . import test_payment_register_percentages
 from . import test_advance_accounting
+from . import test_sale_credit
 from . import test_commercial_agreements_access
 from . import test_partner_merge_agreements
 from . import test_service_agreements
@@ -54,3 +55,4 @@ from . import test_sale_line_promotion
 from . import test_pos_legacy_view_cleanup
 from . import test_vendor_credit_summary
 from . import test_product_stock_lookup
+from . import test_pos_contact_info

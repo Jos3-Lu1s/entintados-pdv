@@ -19,6 +19,37 @@ class PosOrder(models.Model):
     entintados_invoice_count = fields.Integer(
         string="Facturas", compute="_compute_entintados_invoice_count")
 
+    def _get_invoice_lines_values(self, line_values, pos_line, move_type):
+        values = super()._get_invoice_lines_values(line_values, pos_line, move_type)
+        description, _note = pos_line._tint_invoice_description()
+        if description:
+            values['name'] = description
+        return values
+
+    def _prepare_invoice_lines(self, move_type):
+        commands = []
+        for order in self:
+            notes = {}
+            for line in order.lines:
+                description, note = line._tint_invoice_description()
+                if description and line.customer_note:
+                    notes[(line.product_id.id, description, line.customer_note)] = note
+            current = (False, '')
+            for command in super(PosOrder, order)._prepare_invoice_lines(move_type):
+                values = command[2]
+                if values.get('display_type') == 'line_note':
+                    key = (*current, values.get('name'))
+                    if key in notes:
+                        note = notes[key]
+                        current = (False, '')
+                        if not note:
+                            continue
+                        values['name'] = note
+                else:
+                    current = (values.get('product_id'), values.get('name'))
+                commands.append(command)
+        return commands
+
     @api.model
     def _process_order(self, order, existing_order):
         if order.get('is_refund') or order.get('refunded_order_id') or any(

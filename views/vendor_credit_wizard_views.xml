@@ -133,6 +133,7 @@
                 <header>
                     <button name="action_preview_all_distributed_credits" type="object" string="Ver reporte general" display="always"/>
                 </header>
+                <field name="name"/>
                 <field name="date"/>
                 <field name="supplier_reference" optional="show"/>
                 <field name="reason_id"/>

@@ -236,7 +236,7 @@ class SaleOrderLine(models.Model):
         values = super()._prepare_invoice_line(**optional_values)
         recipe = self._tint_recipe()
         if recipe.get('base_only') and self.product_id.id == recipe.get('base_id'):
-            values['name'] = self.order_id._tint_base_description(recipe)
+            values['name'] = self.order_id._tint_base_description(recipe).replace('\n', ' ')
         return values
 
     def _tint_recipe(self):

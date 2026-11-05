@@ -28,6 +28,13 @@
         <field name="arch" type="xml">
             <form string="Color">
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_sold_tints" type="object"
+                                class="oe_stat_button" icon="fa-bar-chart"
+                                groups="point_of_sale.group_pos_manager,sales_team.group_sale_manager,account.group_account_readonly">
+                            <field name="sold_quantity" widget="statinfo" string="Vendido"/>
+                        </button>
+                    </div>
                     <widget
                         name="web_ribbon"
                         title="Archivado"

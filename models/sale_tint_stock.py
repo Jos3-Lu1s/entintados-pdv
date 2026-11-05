@@ -24,8 +24,7 @@ class StockMove(models.Model):
                 continue
             line = move._tint_sale_line()
             if line and move.product_id.id == line._tint_recipe().get('base_id'):
-                # The native delivery report already prints the base product separately.
-                move.description_picking = line.tint_color_description or ''
+                move.description_picking = move.product_id.display_name
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -37,9 +36,66 @@ class StockMove(models.Model):
     def write(self, vals):
         if 'tint_base_move_id' in vals and self.env.context.get('_tint_operation') is not _TINT_OPERATION:
             raise ValidationError(_('No se puede cambiar el origen de un consumo de colorante.'))
-        return super().write(vals)
+        result = super().write(vals)
+        if 'product_uom_qty' in vals:
+            self.filtered(lambda move: move.state not in ('draft', 'done', 'cancel')
+                          and move.picking_id and bool(move._tint_sale_line()))._prepare_tint_colorant_moves()
+        return result
+
+    def _prepare_merge_moves_distinct_fields(self):
+        return super()._prepare_merge_moves_distinct_fields() + ['tint_base_move_id']
+
+    def _action_cancel(self):
+        components = self.search([('tint_base_move_id', 'in', self.ids),
+                                  ('state', 'not in', ['done', 'cancel'])])
+        result = super()._action_cancel()
+        if components:
+            components._action_cancel()
+        return result
+
+    def _action_confirm(self, merge=True, merge_into=False, **kwargs):
+        moves = super()._action_confirm(merge=merge, merge_into=merge_into, **kwargs)
+        bases = moves.filtered(lambda move: move.state not in ('done', 'cancel')
+                               and move.picking_id and move.location_dest_id.usage == 'customer'
+                               and bool(move._tint_sale_line()))
+        bases._prepare_tint_colorant_moves()
+        return moves
+
+    def _prepare_tint_colorant_moves(self):
+        point = self.env.ref('entintados_pdv.uom_tint_point')
+        for base in self:
+            line = base._tint_sale_line()
+            containers = base.product_uom._compute_quantity(
+                base.product_uom_qty, line.product_uom_id, round=False)
+            for dose in line._tint_recipe()['doses']:
+                existing = self.search([('tint_base_move_id', '=', base.id),
+                                        ('product_id', '=', dose['product_id'])])
+                if existing:
+                    if existing.state not in ('done', 'cancel'):
+                        quantity = point._compute_quantity(
+                            dose['points'] * containers, existing.product_uom, round=False)
+                        if existing.product_uom.compare(existing.product_uom_qty, quantity):
+                            existing.product_uom_qty = quantity
+                            existing._action_assign()
+                    continue
+                component = self.with_context(_tint_operation=_TINT_OPERATION).create({
+                    'product_id': dose['product_id'], 'product_uom': point.id,
+                    'product_uom_qty': dose['points'] * containers,
+                    'picking_id': base.picking_id.id, 'picking_type_id': base.picking_type_id.id,
+                    'location_id': base.location_id.id, 'location_dest_id': base.location_dest_id.id,
+                    'company_id': base.company_id.id, 'origin': base.origin,
+                    'tint_base_move_id': base.id,
+                })
+                component._action_confirm(merge=False)
+                component._action_assign()
 
     def _action_done(self, cancel_backorder=False):
+        # Formula quantities follow the containers actually delivered. They are
+        # completed below, never independently by the picking's move batch.
+        components = self.filtered('tint_base_move_id')
+        regular = self - components.filtered(lambda move: move.tint_base_move_id.state != 'done')
+        if regular != self:
+            return regular._action_done(cancel_backorder=cancel_backorder)
         bases = self.filtered(lambda move: move.state not in ('done', 'cancel')
                               and (move.location_dest_id.usage == 'customer'
                                    or (move.location_id.usage == 'customer' and move.origin_returned_move_id))
@@ -51,8 +107,32 @@ class StockMove(models.Model):
             self.env['res.company']._with_locked_records(bases.sorted('id'))
             bases.invalidate_recordset(['state', 'quantity', 'move_line_ids'])
             pending = bases.filtered(lambda move: move.state not in ('done', 'cancel'))
+            pending._prepare_tint_colorant_moves()
+            colorants = self.search([('tint_base_move_id', 'in', pending.ids),
+                                     ('state', 'not in', ['done', 'cancel'])])
+            pickings = {move.id: move.tint_base_move_id.picking_id for move in colorants}
+            point = self.env.ref('entintados_pdv.uom_tint_point')
+            for component in colorants:
+                base = component.tint_base_move_id
+                if base.picked and base.quantity > 0:
+                    line = base._tint_sale_line()
+                    containers = base.product_uom._compute_quantity(
+                        base.quantity, line.product_uom_id, round=False)
+                    points = sum(dose['points'] for dose in line._tint_recipe()['doses']
+                                 if dose['product_id'] == component.product_id.id) * containers
+                    component.product_uom_qty = point._compute_quantity(points, component.product_uom, round=False)
+                component._do_unreserve()
+                component._action_assign()
+            # Keep these reservations on the original delivery while Odoo splits
+            # the base and creates the native backorder for its remaining demand.
+            colorants.write({'picking_id': False})
             result = super()._action_done(cancel_backorder=cancel_backorder)
             pending.filtered(lambda move: move.state == 'done')._consume_tint_colorants()
+            for component in colorants:
+                if self.env.context.get('_tint_picking_completion') is not _TINT_OPERATION:
+                    component.picking_id = pickings[component.id]
+                if component.tint_base_move_id.state == 'cancel':
+                    component._action_cancel()
             return result
 
     def _tint_sale_line(self):
@@ -64,6 +144,22 @@ class StockMove(models.Model):
                 return line
             move = move.origin_returned_move_id
         return self.env['sale.order.line']
+
+    @api.model
+    def _setup_tint_delivery_components(self):
+        bases = self.search([
+            ('sale_line_id.tint_snapshot', '!=', False),
+            ('state', 'not in', ['draft', 'done', 'cancel']),
+            ('picking_id', '!=', False), ('location_dest_id.usage', '=', 'customer'),
+        ]).filtered(lambda move: bool(move._tint_sale_line()))
+        self.env['res.company']._with_locked_records(bases.sorted('id'))
+        bases._compute_description_picking()
+        bases._prepare_tint_colorant_moves()
+        # Reuse historical consumptions; do not move or deduct stock again.
+        for component in self.search([
+                ('tint_base_move_id.picking_id', '!=', False), ('picking_id', '=', False),
+                ('state', '=', 'done')]):
+            component.picking_id = component.tint_base_move_id.picking_id
 
     def _is_tint_consumption(self):
         self.ensure_one()
@@ -99,18 +195,26 @@ class StockMove(models.Model):
                     ('tint_base_move_id', '=', base_move.origin_returned_move_id.id),
                     ('product_id', '=', product.id), ('state', '=', 'done'),
                 ], limit=1) if base_move.origin_returned_move_id else self.browse()
-                consumption = self.with_context(_tint_operation=_TINT_OPERATION).create({
+                values = {
                     'product_id': product.id, 'product_uom': point.id,
                     'product_uom_qty': dose['points'] * containers,
                     'location_id': source.id, 'location_dest_id': destination.id,
-                    # An independent inventory consumption is not a delivered sale item.
-                    # Link it to its base move, rather than adding it to the commercial picking.
+                    'picking_id': (False if self.env.context.get('_tint_picking_completion') is _TINT_OPERATION
+                                   else base_move.picking_id.id),
                     'state': 'confirmed', 'picking_type_id': base_move.picking_type_id.id,
                     'company_id': base_move.company_id.id, 'origin': base_move.origin,
-                    'description_picking': _('Colorante de %s') % snapshot.get('color_name', snapshot.get('name', '')),
+                    'description_picking': product.display_name,
                     'tint_base_move_id': base_move.id,
                     'origin_returned_move_id': previous.id,
-                })
+                }
+                consumption = self.search([('tint_base_move_id', '=', base_move.id),
+                                           ('product_id', '=', product.id)], limit=1)
+                if consumption.state == 'done':
+                    continue
+                if consumption:
+                    consumption.with_context(_tint_operation=_TINT_OPERATION).write(values)
+                else:
+                    consumption = self.with_context(_tint_operation=_TINT_OPERATION).create(values)
                 consumption._action_assign()
                 if point.compare(consumption.quantity, consumption.product_uom_qty) < 0:
                     raise UserError(_('No hay suficiente colorante disponible para validar la salida: %s.') % product.display_name)
@@ -121,6 +225,15 @@ class StockMove(models.Model):
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
+
+    def _action_done(self):
+        # sale_stock adds any extra delivered product as a billable sale line.
+        # Reattach formula components only after that native synchronization.
+        result = super(StockPicking, self.with_context(_tint_picking_completion=_TINT_OPERATION))._action_done()
+        components = self._tint_consumption_moves()
+        for component in components.filtered(lambda move: not move.picking_id):
+            component.picking_id = component.tint_base_move_id.picking_id
+        return result
 
     tint_consumption_count = fields.Integer(string='Movimientos de colorante', compute='_compute_tint_consumption_count')
 
@@ -141,3 +254,16 @@ class StockPicking(models.Model):
             'domain': [('tint_base_move_id', 'in', self.move_ids.ids)],
             'context': {'create': False},
         }
+
+
+class StockReturnPicking(models.TransientModel):
+    _inherit = 'stock.return.picking'
+
+    @api.depends('picking_id')
+    def _compute_moves_locations(self):
+        super()._compute_moves_locations()
+        for wizard in self:
+            # Return containers; their frozen recipe is restored proportionally
+            # by the returned base move, including partial returns.
+            wizard.product_return_moves = wizard.product_return_moves.filtered(
+                lambda line: not line.move_id or not line.move_id._is_tint_consumption())

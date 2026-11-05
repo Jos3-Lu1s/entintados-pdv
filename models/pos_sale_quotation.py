@@ -57,13 +57,21 @@ class PosOrderQuotation(models.Model):
 
     @api.model
     def create_sale_quotation_from_ui(self, order, expected=None):
-        """Persist the ticket and quotation together; retries use the POS UUID."""
+        """Create a quotation from an in-memory ticket, without a POS sale."""
         if not self.env.user.has_group('point_of_sale.group_pos_user'):
             raise AccessError(_('Se requieren permisos de Punto de Venta.'))
         if not order.get('uuid') or order.get('state') != 'draft':
             raise UserError(_('Solo se puede cotizar un ticket pendiente, sin cobrar.'))
         uuid = order['uuid']
         with self.env.cr.savepoint():
+            self._lock_sale_quotation_uuid(uuid)
+            quotation = self.env['sale.order'].sudo().search([('pos_quotation_uuid', '=', uuid)], limit=1)
+            if quotation:
+                quotation = quotation.with_user(self.env.user)
+                quotation.check_access('read')
+                if expected is not None and quotation.pos_quotation_snapshot != expected:
+                    raise UserError(_('El ticket ya se convirtió con otros datos. Recupera su cotización.'))
+                return {'id': quotation.id, 'name': quotation.name}
             ticket = self.search([('uuid', '=', uuid)], limit=1)
             if ticket:
                 self.env['res.company']._with_locked_records(ticket)
@@ -71,14 +79,94 @@ class PosOrderQuotation(models.Model):
                 quotation = ticket.get_generated_sale_quotation(expected)
                 if quotation:
                     return quotation
-            self.sync_from_ui([order])
-            ticket = self.search([('uuid', '=', uuid)], limit=1)
-            if not ticket:
-                raise UserError(_('No se pudo guardar el ticket para crear la cotización.'))
-            return ticket.action_create_sale_quotation(expected)
+                ticket.check_access('write')
+                if (ticket.state != 'draft' or ticket.payment_ids or ticket.amount_paid
+                        or ticket.account_move or ticket.picking_ids):
+                    raise UserError(_('El ticket debe estar pendiente y sin pagos ni entregas.'))
+                if ticket.session_id.id != order.get('session_id'):
+                    raise UserError(_('El ticket pertenece a otra sesión. Sincroniza la caja.'))
+            virtual = self._quotation_ticket_from_ui(order)
+            result = virtual.action_create_sale_quotation(expected)
+            quotation = self.env['sale.order'].browse(result['id'])
+            quotation.with_context(_quotation_operation=_QUOTATION_OPERATION).write({
+                'pos_quotation_uuid': uuid, 'pos_quotation_session_id': virtual.session_id.id,
+                'pos_quotation_snapshot': expected,
+            })
+            if ticket:
+                # This is the same accessible, unpaid draft checked above. Remove
+                # its synced copy instead of generating a cancellation for reports.
+                ticket.sudo().unlink()
+            return result
+
+    @api.model
+    def _lock_sale_quotation_uuid(self, uuid):
+        if not isinstance(uuid, str) or not uuid or len(uuid) > 64:
+            raise UserError(_('Referencia de ticket inválida.'))
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext('pos.sale.quotation'), hashtext(%s))", [uuid])
+
+    @api.model
+    def _quotation_ticket_from_ui(self, order):
+        if order.get('payment_ids') or order.get('amount_paid') or order.get('is_refund'):
+            raise UserError(_('Solo se puede cotizar un ticket sin pagos ni devoluciones.'))
+        session = self.env['pos.session'].browse(order.get('session_id')).exists()
+        session.check_access('read')
+        if not session or session.company_id not in self.env.companies or session.state != 'opened':
+            raise UserError(_('Usa una sesión abierta de la compañía activa.'))
+        names = ['uuid', 'partner_id', 'pricelist_id', 'fiscal_position_id', 'amount_total',
+                 'amount_tax', 'amount_return', 'pos_reference', 'name']
+        values = {name: order[name] for name in names if name in order}
+        values.update(session_id=session.id, company_id=session.company_id.id, state='draft', amount_paid=0)
+        virtual = self.with_company(session.company_id).new(values)
+        line_names = ['uuid', 'product_id', 'qty', 'price_unit', 'discount', 'price_subtotal',
+                      'price_subtotal_incl', 'full_product_name', 'customer_note', 'tint_color_code',
+                      'sale_order_line_id', 'sale_order_origin_id', 'refunded_orderline_id', 'advance_source_ref']
+        lines = self.env['pos.order.line']
+        parents = {}
+        identifiers = {}
+        for command in order.get('lines', []):
+            if len(command) < 3 or command[0] not in (Command.CREATE, Command.UPDATE):
+                continue
+            data = command[2]
+            line_values = {name: data[name] for name in line_names if name in data}
+            tax_ids = []
+            for tax_command in data.get('tax_ids') or []:
+                # POS serializes many2many values as IDs as well as ORM
+                # commands, depending on whether the relation was modified.
+                if isinstance(tax_command, int) and not isinstance(tax_command, bool):
+                    tax_ids.append(tax_command)
+                elif not isinstance(tax_command, (list, tuple)) or not tax_command:
+                    raise UserError(_('Los impuestos del ticket tienen un formato inválido. Recarga la caja.'))
+                elif tax_command[0] == Command.SET:
+                    tax_ids = list(tax_command[2])
+                elif tax_command[0] == Command.LINK:
+                    tax_ids.append(tax_command[1])
+                elif tax_command[0] == Command.CLEAR:
+                    tax_ids = []
+                elif tax_command[0] == Command.UNLINK:
+                    tax_ids = [tax_id for tax_id in tax_ids if tax_id != tax_command[1]]
+            line_values.update(order_id=virtual, tax_ids=[Command.set(tax_ids)])
+            line = self.env['pos.order.line'].new(line_values)
+            lines |= line
+            identifiers[line.uuid] = line
+            if command[1]:
+                identifiers[command[1]] = line
+            parents[line.uuid] = data.get('combo_parent_id')
+        virtual.lines = lines
+        mapping = order.get('relations_uuid_mapping', {}).get('pos.order.line', {})
+        for line in lines:
+            parent = mapping.get(line.uuid, {}).get('combo_parent_id') or parents[line.uuid]
+            if parent:
+                if parent not in identifiers:
+                    raise UserError(_('La fórmula del entintado está incompleta. Vuelve a agregarlo.'))
+                line.combo_parent_id = identifiers[parent]
+        return virtual
 
     @api.model
     def _process_order(self, order, existing_order):
+        if order.get('uuid'):
+            self._lock_sale_quotation_uuid(order['uuid'])
+            if self.env['sale.order'].sudo().search_count([('pos_quotation_uuid', '=', order['uuid'])]):
+                raise UserError(_('Este ticket ya se convirtió en cotización. Recupérala desde Cotización/Orden.'))
         if existing_order:
             self.env['res.company']._with_locked_records(existing_order)
             existing_order.invalidate_recordset()
@@ -99,6 +187,10 @@ class PosOrderQuotation(models.Model):
             raise UserError(_('El ticket todavía está sincronizándose o cambió en otra caja. Espera y vuelve a intentar.'))
         for uuid, product, qty, price, discount, parent, note, color in sent:
             line = stored[uuid]
+            # Newly added POS component lines can omit their zero discount.
+            # JSON sends that slot as null, while Odoo stores it as 0.0.
+            if discount is None:
+                discount = 0
             if (product != line.product_id.id or parent != (line.combo_parent_id.uuid or False)
                     or note != (line.customer_note or '') or color != (line.tint_color_code or False)
                     or any(not isinstance(value, (int, float)) or not math.isfinite(value)
@@ -112,8 +204,9 @@ class PosOrderQuotation(models.Model):
         if not self.env.user.has_group('point_of_sale.group_pos_user'):
             raise AccessError(_('Se requieren permisos de Punto de Venta.'))
         with self.env.cr.savepoint():
-            self.env['res.company']._with_locked_records(self)
-            self.invalidate_recordset()
+            if self.id:
+                self.env['res.company']._with_locked_records(self)
+                self.invalidate_recordset()
             self._check_quotation_ticket_snapshot(expected)
             if self.generated_quotation_id:
                 self.generated_quotation_id.check_access('read')
@@ -125,8 +218,9 @@ class PosOrderQuotation(models.Model):
             if (self.state != 'draft' or self.session_id.state != 'opened'
                     or self.company_id not in self.env.companies):
                 raise UserError(_('Usa un ticket pendiente de una sesión abierta de la compañía activa.'))
-            self.env['res.company']._with_locked_records(self.lines)
-            self.lines.invalidate_recordset()
+            if self.id:
+                self.env['res.company']._with_locked_records(self.lines)
+                self.lines.invalidate_recordset()
             if not self.partner_id or not self.lines:
                 raise UserError(_('Selecciona un cliente y agrega productos antes de crear la cotización.'))
             if self.payment_ids or self.amount_paid or self.account_move or self.picking_ids:
@@ -169,10 +263,36 @@ class PosOrderQuotation(models.Model):
                 self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION).create(values)
             if self.currency_id.compare_amounts(quotation.amount_total, self.amount_total):
                 raise UserError(_('El total de la cotización difiere del ticket. Revisa impuestos, redondeos o promociones; no se convirtió el ticket.'))
-            self.with_context(_quotation_operation=_QUOTATION_OPERATION).write({'generated_quotation_id': quotation.id})
-            self.action_pos_order_cancel()
+            if self.id:
+                self.with_context(_quotation_operation=_QUOTATION_OPERATION).write({'generated_quotation_id': quotation.id})
+                self.action_pos_order_cancel()
             quotation.message_post(body=_('Cotización creada desde el ticket %s, sin cobro ni salida de inventario.') % (self.pos_reference or self.name))
             return {'id': quotation.id, 'name': quotation.name}
+
+
+class SaleOrderPosQuotation(models.Model):
+    _inherit = 'sale.order'
+
+    pos_quotation_uuid = fields.Char(copy=False, readonly=True, index=True)
+    pos_quotation_session_id = fields.Many2one('pos.session', copy=False, readonly=True, check_company=True)
+    pos_quotation_snapshot = fields.Json(copy=False, readonly=True)
+    _pos_quotation_uuid_unique = models.Constraint('UNIQUE(pos_quotation_uuid)', 'El ticket ya tiene una cotización.')
+
+    @api.model_create_multi
+    def create(self, values_list):
+        if any(values.get('pos_quotation_uuid') for values in values_list):
+            raise UserError(_('La referencia de caja se asigna al crear la cotización desde POS.'))
+        return super().create(values_list)
+
+    def write(self, values):
+        if ({'pos_quotation_uuid', 'pos_quotation_session_id', 'pos_quotation_snapshot'} & values.keys()
+                and self.env.context.get('_quotation_operation') is not _QUOTATION_OPERATION):
+            raise UserError(_('No se puede cambiar la referencia de la cotización de caja.'))
+        return super().write(values)
+
+
+class PosOrderQuotationPricelist(models.Model):
+    _inherit = 'pos.order'
 
     def _quotation_pricelist(self):
         self.ensure_one()
@@ -226,7 +346,9 @@ class PosOrderQuotation(models.Model):
         for child in children:
             if not child.product_id.is_storable or not child.product_id.uom_id._has_common_reference(point):
                 raise UserError(_('Revisa la unidad y el inventario del colorante %s.') % child.product_id.display_name)
-            points = child.product_id.uom_id._compute_quantity(child.qty / line.qty, point, round=False)
+            # The POS tint builder stores the child quantity in formula points,
+            # even when inventory tracks the colorant in ounces.
+            points = child.qty / line.qty
             snapshot['doses'].append({'product_id': child.product_id.id, 'name': child.product_id.display_name,
                                       'points': points, 'unit_price': 0})
         return snapshot

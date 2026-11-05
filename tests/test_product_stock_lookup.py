@@ -32,11 +32,10 @@ class TestProductStockLookup(TransactionCase):
         self.assertEqual(line.available, 7)
         self.assertEqual(wizard.total_available, 7)
 
-    def test_available_filter_and_product_change(self):
+    def test_all_branches_and_product_change(self):
         wizard = self._wizard()
         self.assertIn(self.second, wizard.line_ids.warehouse_id)
-        wizard.only_available = True
-        self.assertNotIn(self.second, wizard.line_ids.warehouse_id)
+        self.assertEqual(wizard.line_ids.filtered(lambda row: row.warehouse_id == self.second).available, 0)
         wizard.product_id = self.other
         self.assertEqual(wizard.total_on_hand, 99)
         self.assertEqual(wizard.total_reserved, 0)

@@ -40,8 +40,7 @@ class AccountMove(models.Model):
         self.ensure_one()
         partner = self.partner_id.commercial_partner_id
         incremental_risk = self.risk_amount_total_currency
-        # Draft deductions have already reserved the original advance; do not discount it twice.
-        exposure = max(partner.risk_gross_total + incremental_risk - partner.customer_advance_available, 0)
+        exposure = max(partner.risk_gross_total + incremental_risk, 0)
         exception_msg = ""
         if partner.risk_exception:
             exception_msg = self.env._("Financial risk exceeded.\n")
@@ -70,6 +69,8 @@ class AccountMove(models.Model):
         for invoice in self.filtered(
             lambda x: x.move_type == "out_invoice"
             and not x.company_id.allow_overrisk_invoice_validation
+            and not x._is_sale_credit_invoice()
+            and not (x.is_advance_invoice and x.company_id.advance_risk_enabled)
         ):
             exception_msg = invoice.risk_exception_msg()
             if exception_msg:
