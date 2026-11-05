@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="sale_order_payment_policy_required" model="ir.ui.view">
+        <field name="name">sale.order.payment.policy.required</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="l10n_mx_edi_sale.sale_order_form_inherit_l10n_mx_edi_website_sale"/>
+        <field name="arch" type="xml">
+            <field name="l10n_mx_edi_payment_method_id" position="attributes">
+                <attribute name="required">country_code == 'MX'</attribute>
+            </field>
+            <field name="l10n_mx_edi_payment_policy" position="before">
+                <field name="payment_credit_authorized" invisible="1"/>
+            </field>
+            <field name="l10n_mx_edi_payment_policy" position="attributes">
+                <attribute name="required">country_code == 'MX'</attribute>
+                <attribute name="widget">sale_customer_payment_policy</attribute>
+            </field>
+        </field>
+    </record>
     <record id="view_order_form" model="ir.ui.view">
         <field name="name">sale.order.view.form.inherit.entintados_pdv</field>
         <field name="model">sale.order</field>

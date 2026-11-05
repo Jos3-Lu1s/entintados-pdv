@@ -37,7 +37,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'l10n_mx_edi', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
+    'depends': ['base', 'contacts', 'account', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -105,6 +105,9 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/fields/customer_payment_policy.js",
+            "entintados_pdv/static/src/views/tint_sales_report.js",
+            "entintados_pdv/static/src/views/tint_sales_report.xml",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
             "entintados_pdv/static/src/fields/crm_material_product/merge_material_product.js",
             "entintados_pdv/static/src/fields/crm_material_product/crm_material_product.js",
@@ -179,6 +182,9 @@ Catálogo de entintado
         'views/res_partner_views.xml',
         'views/sale_order_views.xml',
         'views/sale_tint_views.xml',
+        'views/tint_sales_report_views.xml',
+        'report/tint_sales_report.xml',
+        'report/invoice_tint.xml',
         'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',

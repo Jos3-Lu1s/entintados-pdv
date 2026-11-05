@@ -1,0 +1,91 @@
+<odoo>
+    <record id="tint_sales_paperformat" model="report.paperformat">
+        <field name="name">Entintados en horizontal</field>
+        <field name="format">A3</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_top">12</field>
+        <field name="margin_bottom">12</field>
+        <field name="margin_left">8</field>
+        <field name="margin_right">8</field>
+    </record>
+    <record id="action_tint_sales_pdf" model="ir.actions.report">
+        <field name="name">Reporte de entintados</field>
+        <field name="model">tint.sales.report</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.tint_sales_pdf</field>
+        <field name="paperformat_id" ref="tint_sales_paperformat"/>
+    </record>
+    <template id="tint_sales_pdf">
+        <t t-call="web.html_container">
+            <t t-set="show_margin" t-value="docs.env.context.get('tint_show_margin', False)"/>
+            <div class="article">
+                <div class="page">
+                    <style>
+                        .tint-sales-grid {
+                            width: 100%;
+                            table-layout: fixed;
+                            border-collapse: collapse;
+                            font-size: 12pt;
+                            line-height: 1.3;
+                        }
+                        .tint-sales-grid th, .tint-sales-grid td {
+                            border: 1px solid #7c8da3;
+                            padding: 6px 7px;
+                            vertical-align: top;
+                            word-wrap: break-word;
+                        }
+                        .tint-sales-grid thead { display: table-header-group; }
+                        .tint-sales-grid th { background: #e4edf7; font-weight: bold; }
+                        .tint-sales-grid tbody tr:nth-child(even) { background: #f4f7fb; }
+                        .tint-sales-grid tr { page-break-inside: avoid; }
+                        .tint-sales-total { font-size: 13pt; margin-top: 12px; }
+                    </style>
+                    <h2>Reporte de entintados</h2>
+                    <p>Importe: venta neta antes de impuestos. Total: venta facturada con impuestos incluidos.
+                        <t t-if="show_margin">Margen sobre el importe facturado o, en pendientes y cotizaciones,
+                        sobre la venta neta.</t> — indica que el dato no está disponible.</p>
+                    <p t-if="not docs">No hay entintados con los filtros seleccionados.</p>
+                    <table t-if="docs" class="tint-sales-grid">
+                        <colgroup>
+                            <col style="width: 7%;"/><col style="width: 10%;"/>
+                            <col style="width: 6%;"/><col style="width: 20%;"/>
+                            <col style="width: 13%;"/><col style="width: 6%;"/>
+                            <col style="width: 7%;"/><col t-if="show_margin" style="width: 8%;"/>
+                            <col style="width: 9%;"/><col style="width: 8%;"/>
+                            <col style="width: 6%;"/>
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Documento</th><th>Origen</th>
+                                <th>Base + color</th><th>Color</th><th>Tipo de base</th>
+                                <th>Estado</th>
+                                <th t-if="show_margin" class="text-end">Margen</th>
+                                <th class="text-end">Importe</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Entintados</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="row">
+                                <td><span t-field="row.date_order" t-options="{'widget': 'date'}"/></td>
+                                <td><a t-if="row.document_url" t-att-href="row.document_url"><span t-field="row.reference"/></a><span t-else="" t-field="row.reference"/></td>
+                                <td><span t-field="row.source"/></td>
+                                <td><span t-field="row.base_color"/></td>
+                                <td><span t-field="row.color"/></td>
+                                <td><span t-field="row.base_type_id"/></td>
+                                <td><span t-field="row.status"/></td>
+                                <td t-if="show_margin" class="text-end"><span t-if="row.has_margin" t-field="row.margin"/><span t-else="">—</span></td>
+                                <td class="text-end"><span t-field="row.sale_price"/></td>
+                                <td class="text-end"><span t-if="row.invoiced" t-field="row.invoiced_amount"/><span t-else="">—</span></td>
+                                <td class="text-end"><span t-field="row.quantity"/></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="tint-sales-total text-end"><strong>Total de entintados</strong>
+                        <span t-out="sum(docs.mapped('quantity'))" t-options="{'widget': 'float'}"/>
+                    </p>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

@@ -1,3 +1,6 @@
+import json
+from urllib.parse import parse_qs, urlsplit
+
 from markupsafe import Markup
 
 from odoo import Command
@@ -126,6 +129,101 @@ class TestPosSaleQuotation(TransactionCase):
         colorant = wizard.line_ids.filtered(lambda row: row.product_id == self.colorant)
         self.assertAlmostEqual(colorant.required_qty, 0.5)
         self.assertFalse(ticket.picking_ids | quotation.picking_ids)
+
+    def test_tint_sales_report_counts_only_sold_bases_and_deduplicates_pos_payment(self):
+        report = self.env['tint.sales.report']
+        gallery = self.env['tint.gallery'].create({'name': 'Ventas de color QA', 'code': 'SALE-QA'})
+        color = self.env['tint.color'].create({
+            'name': 'Rojo caja QA', 'gallery_id': gallery.id, 'code': 'QA-ROJO'})
+        ticket = self._ticket(tinted=True)
+        ticket.action_create_sale_quotation()
+        quote = ticket.generated_quotation_id
+        self.env.flush_all()
+        quotation_rows = report.search([('base_id', '=', self.base.id)])
+        self.assertEqual(quotation_rows.status, 'quotation')
+        self.assertEqual(quotation_rows.quantity, 2)
+        self.assertTrue(quotation_rows.pos_quotation)
+        self.assertEqual(quotation_rows.color_id, color)
+        self.assertEqual(color.sold_quantity, 0)
+        quote.state = 'sale'
+        direct = self._ticket(tinted=True)
+        direct.state = 'paid'
+        linked = self._ticket(tinted=True)
+        linked.lines.filtered(lambda line: not line.combo_parent_id).sale_order_line_id = quote.order_line
+        linked.state = 'paid'
+        self.env.flush_all()
+        report.invalidate_model()
+        rows = report.search([('base_id', '=', self.base.id)])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(set(rows.mapped('source')), {'sale', 'pos'})
+        for module, group in (
+            ('pos', 'point_of_sale.group_pos_manager'),
+            ('sale', 'sales_team.group_sale_manager'),
+            ('account', 'account.group_account_readonly'),
+        ):
+            action = self.env.ref(f'entintados_pdv.action_tint_sales_report_{module}')
+            self.assertEqual(action.domain, '[]')
+            user = new_test_user(self.env, login=f'tint_report_{module}', groups=f'base.group_user,{group}')
+            visible = report.with_user(user).search([('base_id', '=', self.base.id)])
+            self.assertEqual(set(visible.ids), set(rows.ids))
+            for export in ('excel', 'pdf'):
+                export_action = self.env.ref(f'entintados_pdv.action_tint_sales_selected_{export}')
+                result = export_action.with_user(user).with_context(
+                    active_model=report._name, active_ids=visible.ids).run()
+                self.assertEqual(result['type'], 'ir.actions.act_url')
+                params = parse_qs(urlsplit(result['url']).query)
+                self.assertEqual(json.loads(params['domain'][0]), [['id', 'in', visible.ids]])
+                self.assertEqual(params['show_margin'], ['0'])
+                result = export_action.with_user(user).with_context(
+                    active_model=report._name, active_ids=visible.ids, tint_show_margin=True).run()
+                self.assertEqual(parse_qs(urlsplit(result['url']).query)['show_margin'], ['1'])
+        self.assertEqual(set(rows.mapped('status')), {'pending'})
+        self.assertEqual(sum(rows.mapped('quantity')), 4)
+        color.invalidate_recordset(['sold_quantity'])
+        self.assertEqual(color.sold_quantity, 4)
+        sold_action = color.action_open_sold_tints()
+        self.assertEqual(set(report.search(sold_action['domain']).ids), set(rows.ids))
+        self.assertEqual(rows.partner_id, self.partner)
+        self.assertEqual(rows.base_type_id, self.base.tint_base_type_id)
+        self.assertTrue(all('QA-ROJO' in row.base_color for row in rows))
+        self.assertFalse(rows.filtered('invoiced'))
+
+        invoice = self.env['account.move'].create({
+            'move_type': 'out_invoice',
+            'partner_id': quote.partner_id.id,
+            'invoice_line_ids': [Command.create({
+                'product_id': self.base.id, 'quantity': 1, 'price_unit': 224,
+                'sale_line_ids': [Command.link(quote.order_line.id)],
+            })],
+        })
+        self.env.flush_all()
+        self.assertFalse(report.search([('base_id', '=', self.base.id), ('invoiced', '=', True)]))
+        invoice.action_post()
+        self.env.flush_all()
+        report.invalidate_model()
+        billed = report.search([('base_id', '=', self.base.id), ('invoiced', '=', True)])
+        pending = report.search([('base_id', '=', self.base.id), ('invoiced', '=', False)])
+        self.assertEqual(billed.quantity, 1)
+        self.assertEqual(billed.invoiced_amount, invoice.invoice_line_ids.price_subtotal)
+        self.assertEqual(billed.sale_price, quote.order_line.price_unit)
+        self.assertEqual(billed.document_id, quote)
+        self.assertIn(f'id={quote.id}&model=sale.order', billed.document_url)
+        for action in (billed.action_export_excel(), billed.action_open_pdf()):
+            params = parse_qs(urlsplit(action['url']).query)
+            self.assertEqual(json.loads(params['domain'][0]), [['id', 'in', billed.ids]])
+        self.assertEqual(sum(pending.mapped('quantity')), 3)
+        color.invalidate_recordset(['sold_quantity'])
+        self.assertEqual(color.sold_quantity, 4)
+        report_action = self.env.ref('entintados_pdv.action_tint_sales_pdf')
+        self.assertEqual(report_action.paperformat_id.orientation, 'Landscape')
+        html, _ = report_action._render_qweb_html(report_action.report_name, billed.ids)
+        self.assertIn(b'Facturado', html)
+        self.assertNotIn(b'>Pendiente<', html)
+        self.assertNotIn(b'>Margen</th>', html)
+        self.assertIn(b'>Importe</th>', html)
+        html, _ = report_action.with_context(tint_show_margin=True)._render_qweb_html(
+            report_action.report_name, billed.ids)
+        self.assertIn(b'>Margen</th>', html)
 
     def test_tax_amounts_preserved(self):
         tax = self.env['account.tax'].create({'name': 'IVA caja QA', 'amount': 16, 'type_tax_use': 'sale'})

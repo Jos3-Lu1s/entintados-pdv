@@ -7,11 +7,23 @@
                 <strong class="text-break" t-esc="partner.name"/>
                 <span t-if="info.reference" class="badge text-bg-light border">Clave: <t t-esc="info.reference"/></span>
             </div>
-            <div class="d-flex flex-wrap gap-3 text-muted mt-1">
-                <span t-if="info.vat">RFC: <t t-esc="info.vat"/></span>
-                <span>Vendedor: <t t-esc="info.salesperson || partner.sale_owner_name || 'Sin vendedor asignado'"/></span>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <strong t-if="info.vat" class="badge bg-light text-dark border fs-6 text-wrap text-break">
+                    RFC: <t t-esc="info.vat"/>
+                </strong>
+                <span class="text-muted">Vendedor: <t t-esc="info.salesperson || partner.sale_owner_name || 'Sin vendedor asignado'"/></span>
+                <span t-if="partner.total_due !== undefined and partner.total_due !== null"
+                      class="text-nowrap border-start ps-2">
+                    <span class="text-muted">Total adeudado: </span>
+                    <strong t-esc="env.utils.formatCurrency(partner.total_due)"/>
+                </span>
+                <span t-if="partner.customer_advance_available !== undefined and partner.customer_advance_available !== null"
+                      class="text-nowrap border-start ps-2">
+                    <span class="text-muted">Anticipo disponible (saldo a favor): </span>
+                    <strong class="text-success" t-esc="env.utils.formatCurrency(partner.customer_advance_available)"/>
+                </span>
             </div>
-            <details class="mt-1" t-if="info.address || info.fiscal_regime || info.invoice || info.delivery">
+            <details class="mt-2" t-if="info.address || info.fiscal_regime || info.invoice || info.delivery">
                 <summary class="text-primary">Direcciones y datos fiscales</summary>
                 <div class="text-break pt-2">
                     <p t-if="info.address" class="mb-1"><strong>Dirección: </strong><t t-esc="info.address"/></p>

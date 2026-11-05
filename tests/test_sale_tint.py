@@ -370,24 +370,68 @@ class TestSaleTint(TransactionCase):
     def test_delivery_consumes_colorants_without_sale_lines(self):
         order, location = self._prepare_delivery()
         picking = order.picking_ids
+        self.assertEqual(picking.move_ids.product_id, self.base | self.colorant)
+        self.assertEqual(picking._tint_consumption_moves().product_uom_qty, 24)
         self._deliver(picking, 2)
         consumption = picking._tint_consumption_moves()
         self.assertEqual(consumption.product_id, self.colorant)
         self.assertEqual(consumption.quantity, 24)
         self.assertEqual(consumption.state, 'done')
+        self.assertEqual(consumption.picking_id, picking)
         self.assertFalse(consumption.sale_line_id)
         self.assertFalse(order.order_line.filtered(lambda l: l.product_id == self.colorant))
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
         picking.move_ids._action_done()
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
 
+    def test_delivery_components_follow_updated_demand(self):
+        order, location = self._prepare_delivery()
+        base = order.picking_ids.move_ids.filtered(lambda move: move.product_id == self.base)
+        base.product_uom_qty = 3
+        self.assertEqual(order.picking_ids._tint_consumption_moves().product_uom_qty, 36)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 100)
+
+    def test_delivery_native_validate_and_view(self):
+        from odoo.tools.convert import convert_file
+        convert_file(self.env, 'entintados_pdv', 'views/sale_tint_stock_views.xml', {}, mode='update')
+        order, location = self._prepare_delivery()
+        picking = order.picking_ids
+        picking.move_ids.picked = True
+        picking.with_context(skip_backorder=True, skip_sms=True).button_validate()
+        self.assertEqual(picking.state, 'done')
+        self.assertEqual(picking.move_ids.product_id, self.base | self.colorant)
+        self.assertEqual(picking._tint_consumption_moves().description_picking, self.colorant.display_name)
+        self.assertFalse(order.order_line.filtered(lambda line: line.product_id == self.colorant))
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
+
+    def test_delivery_partial_without_backorder(self):
+        order, location = self._prepare_delivery()
+        self._deliver(order.picking_ids.with_context(cancel_backorder=True), 1)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 88)
+        self.assertEqual(order.picking_ids._tint_consumption_moves().quantity, 12)
+        self.assertEqual(len(order.picking_ids), 1)
+
+    def test_delivery_upgrade_reuses_existing_moves(self):
+        order, location = self._prepare_delivery()
+        picking = order.picking_ids
+        moves = picking.move_ids
+        self.env['stock.move']._setup_tint_delivery_components()
+        self.env['stock.move']._setup_tint_delivery_components()
+        self.assertEqual(picking.move_ids, moves)
+        self._deliver(picking, 2)
+        component = picking._tint_consumption_moves()
+        component.picking_id = False
+        self.env['stock.move']._setup_tint_delivery_components()
+        self.assertEqual(component.picking_id, picking)
+        self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 76)
+
     def test_partial_delivery_invoice_and_material_consumption_are_consistent(self):
         self.base.invoice_policy = 'delivery'
         order, location = self._prepare_delivery()
-        expected = self.base.display_name + '\n+ [%s] %s' % (self.color.code, self.color.name)
+        expected = self.base.display_name + ' + [%s] %s' % (self.color.code, self.color.name)
         picking = order.picking_ids
         self.assertEqual(picking.move_ids.filtered(lambda move: move.product_id == self.base).description_picking,
-                         '+ [%s] %s' % (self.color.code, self.color.name))
+                         self.base.display_name)
         self._deliver(picking, 1)
         first = order._create_invoices()
         lines = first.invoice_line_ids.filtered(lambda line: line.display_type == 'product')
@@ -424,13 +468,13 @@ class TestSaleTint(TransactionCase):
             self._deliver(picking, 2)
         self.assertNotEqual(picking.state, 'done')
         self.assertEqual(self.base.with_context(location=location.id).qty_available, 100)
-        self.assertFalse(picking._tint_consumption_moves())
+        self.assertFalse(picking._tint_consumption_moves().filtered(lambda move: move.state == 'done'))
 
     def test_cancel_before_delivery_does_not_consume_colorants(self):
         order, location = self._prepare_delivery()
         order._action_cancel()
         self.assertEqual(self.colorant.with_context(location=location.id).qty_available, 100)
-        self.assertFalse(order.picking_ids._tint_consumption_moves())
+        self.assertFalse(order.picking_ids._tint_consumption_moves().filtered(lambda move: move.state != 'cancel'))
 
     def test_delivery_keeps_snapshot_after_formula_changes(self):
         order, location = self._prepare_delivery()
@@ -476,6 +520,6 @@ class TestSaleTint(TransactionCase):
 
     def test_consumption_cannot_be_forged(self):
         order, _location = self._prepare_delivery()
-        base_move = order.picking_ids.move_ids
+        base_move = order.picking_ids.move_ids.filtered(lambda move: move.product_id == self.base)
         with self.assertRaises(ValidationError), self.cr.savepoint():
             base_move.copy({'tint_base_move_id': base_move.id})

@@ -12,7 +12,8 @@ TRACKABLE_TYPES = {
     'boolean', 'char', 'text', 'integer', 'float', 'monetary',
     'selection', 'date', 'datetime', 'many2one', 'many2many',
 }
-TECHNICAL_FIELDS = {'id', 'create_uid', 'create_date', 'write_uid', 'write_date', 'display_name'}
+TECHNICAL_FIELDS = {'id', 'create_uid', 'create_date', 'write_uid', 'write_date', 'display_name',
+                    'pos_quotation_uuid', 'pos_quotation_snapshot', 'pos_quotation_session_id'}
 TECHNICAL_PREFIXES = ('message_', 'activity_', 'access_', 'website_', 'rating_')
 NATIVE_STOCK_LOGS = ContextVar('entintados_native_stock_logs', default=())
 

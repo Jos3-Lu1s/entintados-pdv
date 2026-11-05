@@ -4,7 +4,7 @@ import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
-import { isTintColorant, isTintedBase, tintDose } from "@entintados_pdv/app/utils/tint_order";
+import { isTintColorant, isTintedBase, tintDose, tintedProductName } from "@entintados_pdv/app/utils/tint_order";
 
 /**
  * Parche para PosOrderline para:
@@ -13,6 +13,10 @@ import { isTintColorant, isTintedBase, tintDose } from "@entintados_pdv/app/util
  * 3. Bloqueo de edición manual y protección de líneas hijas de colorantes.
  */
 patch(PosOrderline.prototype, {
+    getFullProductName() {
+        return tintedProductName(this) || super.getFullProductName(...arguments);
+    },
+
     setQuantity(quantity, keep_price = false) {
         if (isTintColorant(this) && !this._entintadosSyncingQuantity) {
             const notification =

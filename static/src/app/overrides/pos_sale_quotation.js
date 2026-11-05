@@ -52,8 +52,8 @@ patch(ControlButtons.prototype, {
                 lines: order.lines.map((line) => [line.uuid, line.product_id.id, line.qty, line.price_unit,
                     line.discount ?? 0, line.combo_parent_id?.uuid || false, line.customer_note || "", line.tint_color_code || false]),
             };
-            // A single RPC rolls back the ticket too if quotation creation fails.
-            // The UUID makes retries safe even when the first response was lost.
+            // Create only a sales quotation. Its source UUID makes retries safe
+            // without saving or cancelling an order in POS.
             const quotation = await this.pos.data.call("pos.order", "create_sale_quotation_from_ui",
                 [order.serializeForORM({ keepCommands: true }), expected], {
                     context: this.pos.getSyncAllOrdersContext([order]),

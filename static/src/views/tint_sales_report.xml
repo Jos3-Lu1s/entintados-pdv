@@ -1,0 +1,16 @@
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.TintDocumentLink">
+        <a t-if="props.record.data.document_url" t-att-href="props.record.data.document_url"
+           t-on-click="openDocument" class="text-wrap"
+           t-esc="props.record.data.reference"/>
+        <span t-else="" t-esc="props.record.data.reference"/>
+    </t>
+    <t t-name="entintados_pdv.TintSalesReportExport">
+        <DropdownItem onSelected.bind="downloadExcel">
+            <i class="fa fa-fw fa-file-excel-o me-1" aria-hidden="true"/>Exportar Excel
+        </DropdownItem>
+        <DropdownItem onSelected.bind="openPdf">
+            <i class="fa fa-fw fa-file-pdf-o me-1" aria-hidden="true"/>Abrir PDF
+        </DropdownItem>
+    </t>
+</templates>

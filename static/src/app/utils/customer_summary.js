@@ -19,6 +19,7 @@ export function customerSummary(order, showMargins = false) {
         const amount = components.reduce((sum, item) => sum + item.priceExcl, 0);
         const gross = components.reduce((sum, item) => sum + item.priceExclNoDiscount, 0);
         const cost = showMargins ? components.reduce((sum, item) => sum + item.getTotalCost(), 0) : NaN;
+        const margin = Number.isFinite(cost) ? amount - cost : null;
         return {
             id: line.uuid,
             name: line.getFullProductName?.() || line.product_id?.display_name || line.product_id?.name || "",
@@ -28,7 +29,8 @@ export function customerSummary(order, showMargins = false) {
             unitPrice: line.qty ? gross / line.qty : 0,
             saving: gross - amount,
             amount,
-            margin: Number.isFinite(cost) ? amount - cost : null,
+            margin,
+            marginPercent: margin !== null && amount !== 0 ? (margin / amount) * 100 : null,
         };
     });
     const taxes = (order.prices.taxDetails.subtotals || []).flatMap((subtotal) =>

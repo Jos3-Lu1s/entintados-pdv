@@ -5,9 +5,7 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//div[@name='button_box']" position="inside">
-                <button name="action_view_tint_consumptions" type="object" class="oe_stat_button" icon="fa-tint" invisible="not tint_consumption_count">
-                    <field name="tint_consumption_count" widget="statinfo" string="Colorantes"/>
-                </button>
+                <field name="tint_consumption_count" invisible="1"/>
             </xpath>
         </field>
     </record>
