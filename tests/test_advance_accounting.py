@@ -204,13 +204,13 @@ class TestAdvanceAccounting(TransactionCase):
         self.assertEqual(credit.amount_residual, 0)
         self.assertEqual(source.advance_available, 0)
 
-    def test_pending_advance_offsets_prospective_risk(self):
+    def test_unused_advance_does_not_offset_prospective_invoice_risk(self):
         source = self._invoice(300, advance=True)
         self._pay(source)
         invoice = self._invoice(1200)
-        self.assertFalse(invoice.risk_exception_msg())
-        invoice.invoice_line_ids.price_unit = 1400
         self.assertTrue(invoice.risk_exception_msg())
+        self._apply(source, invoice, 200)
+        self.assertFalse(invoice.risk_exception_msg())
 
     def test_wrong_operation_cannot_apply_supplier_advance_to_customer(self):
         source = self._invoice(300, supplier=True, advance=True)
@@ -303,6 +303,28 @@ class TestAdvanceAccounting(TransactionCase):
             self._pos_order(100, pay_later=True)._check_pos_advances()
         self._pos_order(100)._check_pos_advances()
 
+    def test_pos_advance_rejects_ppd_flow_even_without_credit_payment_line(self):
+        for flow in ('credit', 'ppd_partial'):
+            order = self._pos_order(100)
+            order.pos_payment_flow = flow
+            with self.assertRaises(UserError):
+                order._check_pos_advances()
+
+    def test_customer_advance_policy_cannot_be_changed_to_ppd(self):
+        advance = self._invoice(100, advance=True)
+        self.assertEqual(advance.l10n_mx_edi_payment_policy, 'PUE')
+        with self.assertRaises(UserError), self.env.cr.savepoint():
+            advance.l10n_mx_edi_payment_policy = 'PPD'
+        self.assertEqual(advance.l10n_mx_edi_payment_policy, 'PUE')
+
+    def test_legacy_ppd_advance_cannot_be_posted(self):
+        advance = self._invoice(100, advance=True)
+        self.env.flush_all()
+        self.env.cr.execute("UPDATE account_move SET l10n_mx_edi_payment_policy = 'PPD' WHERE id = %s", [advance.id])
+        advance.invalidate_recordset(['l10n_mx_edi_payment_policy'])
+        with self.assertRaises(UserError):
+            advance.with_context(bypass_risk=True)._post()
+
     def test_pos_invoice_uses_advance_liability(self):
         order = self._pos_order(100)
         values = order._prepare_invoice_lines('out_invoice')
@@ -355,6 +377,8 @@ class TestAdvanceAccounting(TransactionCase):
         self.assertTrue(order.to_invoice)
         self.assertEqual(order.account_move.state, 'posted')
         self.assertTrue(order.account_move.is_advance_invoice)
+        self.assertEqual(order.account_move.l10n_mx_edi_payment_policy, 'PUE')
+        self.assertFalse(order.account_move.invoice_payment_term_id)
         self.assertEqual(order.account_move.amount_total, 100)
         self.assertEqual(order.account_move.amount_residual, 0)
         self.assertEqual(order.account_move.advance_available, 100)

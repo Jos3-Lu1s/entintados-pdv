@@ -133,7 +133,7 @@ class AccountMove(models.Model):
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    def _pos_credit_exposure(self, exclude_order=None):
+    def _pos_credit_exposure(self, exclude_order=None, exclude_invoice=None):
         """Keep a debt floor even when optional OCA accounting categories are off."""
         self.ensure_one()
         total, = self.env['account.move.line'].sudo()._read_group([
@@ -144,6 +144,14 @@ class ResPartner(models.Model):
         ledger = self.env.company.currency_id._convert(
             total or 0, self.risk_currency_id, self.env.company, fields.Date.context_today(self))
         gross = self.risk_gross_total
+        if exclude_invoice and self.risk_invoice_draft_include:
+            for line in exclude_invoice.sudo().line_ids.filtered(
+                lambda line: line.account_id.account_type == 'asset_receivable' and line.partner_id == self
+            ):
+                gross -= self._get_amount_in_risk_currency(
+                    line.currency_id, line.amount_residual_currency, line.amount_residual,
+                    line.account_id, line.company_id,
+                )
         if (exclude_order and exclude_order.state in ('paid', 'done') and not exclude_order.account_move
                 and self.env.company.advance_risk_enabled and exclude_order.session_id.state != 'closed'):
             own = sum(exclude_order.payment_ids.filtered(

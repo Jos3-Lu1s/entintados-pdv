@@ -31,9 +31,9 @@
                         <group name="risk_include" class="o_group_col_6">
                             <group
                                 col="3"
-                                class="oe_subtotal_footer"
+                                class="oe_subtotal_footer w-100"
                                 string="General Limits"
-                                style="float: left !important; border-top: none;"
+                                style="border-top: none; min-width: 0; overflow-wrap: anywhere;"
                             >
                                 <field
                                     name="risk_invoice_draft_include"
@@ -42,7 +42,7 @@
                                 <button
                                     name="open_risk_pivot_info"
                                     type="object"
-                                    class="btn-link pt-0"
+                                    class="btn-link pt-0 text-wrap mw-100"
                                     context="{'open_risk_field': 'risk_invoice_draft'}"
                                 >
                                     <field
@@ -59,7 +59,7 @@
                                 <button
                                     name="open_risk_pivot_info"
                                     type="object"
-                                    class="btn-link pt-0"
+                                    class="btn-link pt-0 text-wrap mw-100"
                                     context="{'open_risk_field': 'risk_invoice_open'}"
                                 >
                                     <field
@@ -76,7 +76,7 @@
                                 <button
                                     name="open_risk_pivot_info"
                                     type="object"
-                                    class="btn-link pt-0"
+                                    class="btn-link pt-0 text-wrap mw-100"
                                     context="{'open_risk_field': 'risk_invoice_unpaid'}"
                                 >
                                     <field
@@ -93,7 +93,7 @@
                                 <button
                                     name="open_risk_pivot_info"
                                     type="object"
-                                    class="btn-link pt-0"
+                                    class="btn-link pt-0 text-wrap mw-100"
                                     context="{'open_risk_field': 'risk_account_amount'}"
                                 >
                                     <field
@@ -110,7 +110,7 @@
                                 <button
                                     name="open_risk_pivot_info"
                                     type="object"
-                                    class="btn-link pt-0"
+                                    class="btn-link pt-0 text-wrap mw-100"
                                     context="{'open_risk_field': 'risk_account_amount_unpaid'}"
                                 >
                                     <field
@@ -125,7 +125,7 @@
                                     for="risk_remaining_percentage"
                                     string="Risk Remaining"
                                 />
-                                <div class="oe_inline" colspan="2">
+                                <div class="d-flex flex-wrap align-items-baseline gap-1" colspan="2">
                                     <field
                                         class="oe_inline"
                                         name="risk_remaining_value"
@@ -151,11 +151,11 @@
                                 />
                             </group>
                         </group>
-                        <group name="risk_limits" class="o_group_col_6">
+                        <group name="risk_limits" class="o_group_col_6 o_entintados_risk_limits">
                             <group
-                                class="oe_subtotal_footer"
+                                class="oe_subtotal_footer w-100"
                                 string="Specific Limits"
-                                style="float: left !important; border-top: none; "
+                                style="border-top: none;"
                             >
                                 <field
                                     name="risk_invoice_draft_limit"
@@ -194,7 +194,7 @@
                     <group string="Info">
                         <group>
                             <label class="o_label" for="credit_currency" />
-                            <div class="oe_inline">
+                            <div class="d-flex flex-wrap align-items-baseline gap-1">
                                 <field
                                     class="oe_inline"
                                     name="credit_currency"
@@ -211,7 +211,7 @@
                                 </span>
                             </div>
                             <label for="credit_limit" />
-                            <div class="o_row">
+                            <div class="o_row flex-wrap">
                                 <field
                                     name="credit_limit"
                                     widget="monetary"

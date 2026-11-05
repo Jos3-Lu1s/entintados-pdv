@@ -290,14 +290,29 @@ class AccountMove(models.Model):
             'context': {'default_invoice_id': self.id},
         }
 
+    def _lock_advance_balances(self):
+        if self:
+            self.flush_recordset()
+            self.env.cr.execute('SELECT id FROM account_move WHERE id IN %s ORDER BY id FOR NO KEY UPDATE', [tuple(self.ids)])
+            # A competing repeatable-read transaction must retry with a fresh snapshot.
+            self.env.cr.execute('UPDATE account_move SET write_date = write_date WHERE id IN %s', [tuple(self.ids)])
+            self.invalidate_recordset(['advance_application_line_ids', 'advance_paid', 'advance_applied', 'advance_reserved', 'advance_available'])
+
+    @api.constrains('is_advance_invoice', 'move_type', 'l10n_mx_edi_payment_policy')
+    def _check_customer_advance_payment_policy(self):
+        if any(move.move_type == 'out_invoice' and move.is_advance_invoice
+               and move.l10n_mx_edi_payment_policy == 'PPD' for move in self):
+            raise UserError(_('Los anticipos de clientes solo se reciben de contado y su factura debe ser PUE.'))
+
     def _check_advance_applications(self):
-        sources = self.invoice_line_ids.advance_source_id
-        if sources:
-            # Serialize posting against the source, so two cashiers cannot spend the same balance.
-            sources.flush_recordset()
-            self.env.cr.execute('SELECT id FROM account_move WHERE id IN %s ORDER BY id FOR UPDATE', [tuple(sources.ids)])
-            sources.invalidate_recordset(['advance_application_line_ids', 'advance_paid', 'advance_applied', 'advance_reserved', 'advance_available'])
+        self._check_customer_advance_payment_policy()
+        self.invoice_line_ids.advance_source_id._lock_advance_balances()
         for move in self:
+            if move.move_type == 'out_invoice' and move.is_advance_invoice:
+                date = move.invoice_date or fields.Date.context_today(move)
+                if ((move.invoice_date_due and move.invoice_date_due > date)
+                        or len(move.invoice_payment_term_id.line_ids) > 1):
+                    raise UserError(_('La factura de anticipo requiere una condición de pago inmediata, de contado.'))
             if move.is_advance_invoice and (move.advance_document or move.company_id.advance_risk_enabled):
                 if move.currency_id.compare_amounts(move.amount_total, 0) <= 0:
                     raise UserError(_('La factura de anticipo debe tener un importe positivo.'))

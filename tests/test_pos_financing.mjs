@@ -482,3 +482,14 @@ test('Receiving customer funds hides and rejects on-account debt but accepts cas
     assert.equal(await screen.addNewPaymentLine(screen.payment_methods_from_config[0]), true);
     assert.equal(screen.addedMethod.type, 'cash');
 });
+
+test('Advance validation blocks restored PPD or credit flows and existing on-account payments', async () => {
+    for (const flow of ['ppd_partial', 'credit', 'standard']) {
+        const { screen, order, deferred, makePayment } = fixture();
+        order.lines[0].product_id.product_tmpl_id.is_accounting_advance = true;
+        order.pos_payment_flow = flow;
+        if (flow === 'standard') makePayment(deferred, 700);
+        assert.equal(await screen.validateOrder(), false);
+        assert.equal(screen.validated, undefined);
+    }
+});

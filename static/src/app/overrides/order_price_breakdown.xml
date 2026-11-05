@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.OrderPriceBreakdown" t-inherit="point_of_sale.OrderDisplay" t-inherit-mode="extension">
+        <xpath expr="//div[contains(@class, 'order-summary')]" position="replace">
+            <div t-if="props.mode !== 'receipt'" class="order-summary o-order-price-summary p-2 border-bottom">
+                <t t-set="summary" t-value="orderPriceBreakdown"/>
+                <dl class="o-order-price-breakdown mb-0">
+                    <dt>Importe antes de descuentos</dt><dd t-esc="formatCurrency(summary.gross)"/>
+                    <dt>Descuentos</dt><dd t-esc="formatCurrency(-summary.discounts)"/>
+                    <dt>Promociones</dt><dd t-esc="formatCurrency(-summary.promotions)"/>
+                    <dt>Subtotal</dt><dd class="subtotal" t-esc="formatCurrency(summary.subtotal)"/>
+                    <t t-foreach="summary.taxes" t-as="tax" t-key="tax_index">
+                        <dt t-esc="tax.name"/><dd class="tax" t-esc="formatCurrency(tax.amount)"/>
+                    </t>
+                    <t t-if="!summary.taxes.length">
+                        <dt>Impuestos</dt><dd class="tax" t-esc="formatCurrency(summary.tax)"/>
+                    </t>
+                    <t t-if="!order.currency.isZero(summary.rounding)">
+                        <dt>Redondeo</dt><dd t-esc="formatCurrency(summary.rounding)"/>
+                    </t>
+                    <dt class="o-order-price-total">Total</dt>
+                    <dd class="o-order-price-total total" t-esc="formatCurrency(summary.total)"/>
+                </dl>
+            </div>
+        </xpath>
+    </t>
+</templates>

@@ -78,8 +78,9 @@ class PosOrder(models.Model):
             positive = lines.filtered(lambda line: line.price_unit * line.qty > 0)
             if positive and (len(lines) != len(order.lines) or lines.filtered('advance_source_ref')):
                 raise UserError(_('Cobra el anticipo en un pedido separado de la venta o de su aplicación.'))
-            if positive and order.payment_ids.filtered(lambda payment: payment.payment_method_id.type == 'pay_later'):
-                raise UserError(_('Un anticipo debe cobrarse con efectivo o un método real de pago; no puede cobrarse a crédito.'))
+            if positive and (order.pos_payment_flow in ('credit', 'ppd_partial')
+                             or order.payment_ids.filtered(lambda payment: payment.payment_method_id.type == 'pay_later')):
+                raise UserError(_('Los anticipos solo se reciben de contado. Selecciona un medio real de pago y retira Crédito de cliente o PPD.'))
             native_pending = positive.filtered(lambda line: line.sale_order_origin_id and not line.sale_order_line_id)
             for sale in native_pending.sale_order_origin_id:
                 self.env.cr.execute('SELECT id FROM sale_order WHERE id = %s FOR UPDATE', [sale.id])
@@ -160,4 +161,5 @@ class PosOrder(models.Model):
         values = super()._prepare_invoice_vals()
         if self.lines and all(line._is_accounting_advance_line() and line.price_unit * line.qty > 0 for line in self.lines):
             values['advance_document'] = True
+            values.update(l10n_mx_edi_payment_policy='PUE', invoice_payment_term_id=False)
         return values

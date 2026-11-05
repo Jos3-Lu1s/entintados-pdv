@@ -42,6 +42,38 @@ $tint-breakpoint-xs: 575.98px;
         }
     }
 }
+.pos .o-order-price-summary {
+    max-height: 45vh;
+    overflow-y: auto;
+
+    .o-order-price-breakdown {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .2rem .75rem;
+        font-size: .875rem;
+
+        dt {
+            min-width: 0;
+            font-weight: 500;
+            overflow-wrap: anywhere;
+        }
+
+        dd {
+            margin: 0;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .o-order-price-total {
+            margin-top: .25rem;
+            padding-top: .25rem;
+            border-top: 2px solid #b9ccd8;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+    }
+}
+
 $tint-breakpoint-sm: 767.98px;
 $tint-breakpoint-md: 991.98px;
 $tint-breakpoint-lg: 1199.98px;
