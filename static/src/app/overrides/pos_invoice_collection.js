@@ -5,6 +5,9 @@ import { _t } from "@web/core/l10n/translation";
 import { ask } from "@point_of_sale/app/utils/make_awaitable_dialog";
 
 patch(OrderPaymentValidation.prototype, {
+    shouldDownloadInvoice() {
+        return false;
+    },
     async settleOrderDues(partner, paylaterPaymentMethod, settleLines) {
         const invoiceLines = settleLines.filter((line) =>
             line.settled_invoice_id || line.settled_order_id?.account_move);

@@ -1,0 +1,16 @@
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.PosTintRows" t-inherit="web.ListRenderer.Rows" t-inherit-mode="primary">
+        <xpath expr="//t[@t-foreach='list.records']" position="attributes">
+            <attribute name="t-foreach">tintRecords(list)</attribute>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.PosTintRecordRow" t-inherit="web.ListRenderer.RecordRow" t-inherit-mode="primary">
+        <xpath expr="//tr[hasclass('o_data_row')]" position="before">
+            <tr t-if="tintHeader(record, list)" class="o_pos_tint_group_header bg-body-secondary">
+                <td t-att-colspan="nbCols" class="fw-bold text-wrap py-2">
+                    <t t-esc="tintHeader(record, list)"/>
+                </td>
+            </tr>
+        </xpath>
+    </t>
+</templates>

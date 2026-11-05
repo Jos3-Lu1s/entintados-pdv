@@ -75,6 +75,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/pricing_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
+            "entintados_pdv/static/src/app/utils/invoice_options.js",
+            "entintados_pdv/static/src/app/utils/quotation_print.js",
             # Pantalla de seleccion de color
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.js",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.xml",
@@ -105,6 +107,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/fields/pos_tint_grouped_lines.js",
+            "entintados_pdv/static/src/fields/pos_tint_grouped_lines.xml",
             "entintados_pdv/static/src/fields/customer_payment_policy.js",
             "entintados_pdv/static/src/views/tint_sales_report.js",
             "entintados_pdv/static/src/views/tint_sales_report.xml",

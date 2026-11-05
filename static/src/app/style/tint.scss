@@ -13,6 +13,40 @@ $tint-breakpoint-xs: 575.98px;
     padding-block: .25rem;
 }
 
+// Keep one scrolling pane for the summary, fiscal options and registered payments.
+.payment-screen .o-entintados-payment-layout {
+    min-height: 0;
+    min-width: 0;
+    overflow-y: auto;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+
+    > .o-customer-payment-summary {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+
+    .payment-summary {
+        flex: 0 0 auto !important;
+        overflow: visible !important;
+        width: 100%;
+        padding: .75rem 1rem !important;
+        background: #fff;
+        border: 1px solid #dbe3ec;
+        border-radius: 12px;
+    }
+
+    .paymentlines {
+        flex-shrink: 0;
+        overflow-y: visible !important;
+    }
+}
+
+// Its data is already editable in the full-width invoicing table above.
+.payment-screen .mx_invoice {
+    display: none !important;
+}
+
 .o-customer-payment-summary {
     background: #fff;
     border: 1px solid #dbe3ec;
@@ -25,6 +59,18 @@ $tint-breakpoint-xs: 575.98px;
     thead th { background: #edf4f8; font-size: .8rem; }
     td, th { padding: .75rem; }
     .o-customer-purchase-lines { max-height: 35vh; overflow: auto; }
+    .o-customer-invoice-options {
+        width: calc(100% + 2rem);
+        margin-left: -1rem;
+        table { width: 100%; }
+        th:nth-child(1) { width: 50%; }
+        th:nth-child(2), th:nth-child(3) { width: 25%; }
+        th, td { padding: .35rem .5rem; }
+        thead { position: static; }
+        label { margin: 0; }
+        input { min-width: 100px; }
+        select { min-width: 130px; }
+    }
     thead { position: sticky; top: 0; }
     .o-customer-price-breakdown {
         display: grid;

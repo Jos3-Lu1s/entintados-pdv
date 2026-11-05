@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_pos_order_tint_product_groups" model="ir.ui.view">
+        <field name="name">pos.order.tint.product.groups</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='lines']" position="attributes">
+                <attribute name="widget">pos_tint_grouped_lines</attribute>
+            </xpath>
+            <xpath expr="//field[@name='lines']/list" position="inside">
+                <field name="tint_group_key" column_invisible="True"/>
+                <field name="tint_group_name" column_invisible="True"/>
+                <field name="tint_line_role" widget="badge" optional="show"
+                       decoration-info="tint_line_role == 'base'"
+                       decoration-muted="tint_line_role == 'colorant'"/>
+            </xpath>
+        </field>
+    </record>
     <record id="view_pos_order_invoice_status" model="ir.ui.view">
         <field name="name">pos.order.invoice.status</field>
         <field name="model">pos.order</field>
