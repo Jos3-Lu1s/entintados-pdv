@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tools import float_compare
 
 AGREEMENT_DISCOUNT_TYPES = ('product', 'line', 'scheme', 'global')
@@ -51,6 +51,14 @@ class SaleOrderLine(models.Model):
         copy=False,
         ondelete='set null',
     )
+    promo_reward_id = fields.Many2one(
+        comodel_name='loyalty.reward',
+        string='Promoción aplicada',
+        copy=False,
+        ondelete='set null',
+    )
+    promo_available_info = fields.Json(string='Promociones disponibles', compute='_compute_promo_available')
+    promo_available_count = fields.Integer(string='Número de promociones disponibles', compute='_compute_promo_available')
     price_origin = fields.Selection(
         selection=[
             ('list', 'Precio de venta'),
@@ -268,6 +276,7 @@ class SaleOrderLine(models.Model):
             'pricing_rule_type': 'manual',
             'pricing_rule_origin': f"Desc. Manual ({discount:.1f}%)",
             'pricing_rule_id': False,
+            'promo_reward_id': False,
         }
 
     def _manual_price_values(self):
@@ -465,13 +474,14 @@ class SaleOrderLine(models.Model):
                         recompute_lines |= line
         manual_discount_lines = self.filtered(lambda line: line._is_manual_discount_vals(vals))
         # Línea a la que se le escribe el % del acuerdo vigente: toma el badge de ese acuerdo, sea
-        # cual sea el guardado. Precio fijo y promoción conservan el suyo.
+        # cual sea el guardado. Precio fijo y regalo de promoción conservan el suyo.
         # En un recálculo forzado el `discount` lo escribe el propio `_compute_discount` del core.
         agreement_discount_lines = self.browse()
         if self._is_untracked_discount_vals(vals) and not self.env.context.get('force_price_recomputation'):
             product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
             agreement_discount_lines = (self - manual_discount_lines).filtered(
-                lambda line: line.pricing_rule_type not in ('fixed_price', 'promo')
+                lambda line: line.pricing_rule_type != 'fixed_price'
+                and (line.pricing_rule_type != 'promo' or line.promo_reward_id)
                 and line._admits_partner_agreement(product)
             )
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
@@ -526,6 +536,9 @@ class SaleOrderLine(models.Model):
             # del producto anterior junto al `discount` recibido. El recálculo o el descuento manual
             # de después ponen el badge definitivo.
             vals['pricing_rule_type'] = 'none'
+        # El formulario envía el origen nuevo, no la referencia a la recompensa.
+        if vals.get('pricing_rule_type', 'promo') != 'promo':
+            vals.setdefault('promo_reward_id', False)
         res = super().write(vals)
         if 'product_uom_qty' in vals:
             # El núcleo solo copia la cantidad del paquete a sus productos en el onchange del
@@ -927,6 +940,16 @@ class SaleOrderLine(models.Model):
             and not reset_manual
             and (not line._origin.id or line.product_id == line._origin.product_id)
         }
+        # Promoción por línea: la misma regla que el descuento manual. Un precio fijo vigente solo
+        # gana en un recálculo forzado: en una línea guardada se aplica con «Actualizar precios».
+        promo = {
+            line: (line.discount, line.pricing_rule_origin)
+            for line in self
+            if line.promo_reward_id
+            and not reset_manual
+            and (not line._origin.id or line.product_id == line._origin.product_id)
+            and (line in frozen or not line._has_fixed_price_agreement())
+        }
         # El % que deja el core es el de la tarifa, que ya va en el precio: se descarta siempre.
         # Las líneas de precio fijo no pasan por el core: llamado directo sobre líneas guardadas
         # (p. ej. `_recompute_prices`), su % sería un write real y la restricción lo rechazaría.
@@ -935,7 +958,12 @@ class SaleOrderLine(models.Model):
         # Llamado directo sobre líneas guardadas (p. ej. `_recompute_prices`), asignar `discount`
         # pasa por write(): no es un descuento manual.
         for line in self.with_context(skip_manual_discount_breakdown=True):
-            if line in manual and (line in frozen or not line._has_fixed_price_agreement()):
+            if line.promo_reward_id and line not in promo:
+                line.promo_reward_id = False
+            if line in promo:
+                discount, origin = promo[line]
+                badge = ('promo', origin, False)
+            elif line in manual and (line in frozen or not line._has_fixed_price_agreement()):
                 discount, origin = manual[line]
                 badge = ('manual', origin, False)
             elif line in frozen:
@@ -1126,6 +1154,178 @@ class SaleOrderLine(models.Model):
             and not self.is_downpayment
             and not self._is_global_discount()
         )
+
+    def _is_listed_for_line_promotion(self):
+        """Línea que el selector de promociones muestra, elegible o no."""
+        self.ensure_one()
+        return bool(
+            self.product_id
+            and not self.display_type
+            and not self.combo_item_id
+            and not self.is_reward_line
+            and not self.is_downpayment
+            and self.product_id != self.company_id.sale_discount_product_id
+        )
+
+    def _get_line_promotion_block_reason(self):
+        """Motivo por el que una línea listada no puede tomar una promoción."""
+        self.ensure_one()
+        if self.pricing_rule_type == 'fixed_price':
+            return _("Precio fijo de acuerdo")
+        if self.product_type == 'combo':
+            return _("Combo")
+        if self.tint_area or self.tint_section_id or self.tint_snapshot:
+            return _("Entintado")
+        if self.qty_invoiced > 0:
+            return _("Ya facturada")
+        return False
+
+    def _admits_line_promotion(self):
+        self.ensure_one()
+        return self._is_listed_for_line_promotion() and not self._get_line_promotion_block_reason()
+
+    def _get_lines_with_price_batch(self):
+        """`_get_lines_with_price` del core, que solo admite una línea, para varias."""
+        lines = self.browse()
+        for line in self:
+            lines |= line._get_lines_with_price()
+        return lines
+
+    @api.depends(
+        'order_id.state', 'order_id.partner_id', 'order_id.pricelist_id', 'order_id.code_enabled_rule_ids',
+        'order_id.order_line.product_id', 'order_id.order_line.product_uom_qty',
+        'order_id.order_line.price_unit', 'order_id.order_line.discount',
+        'order_id.order_line.price_subtotal', 'order_id.order_line.price_total',
+        'order_id.order_line.tax_ids', 'order_id.order_line.pricing_rule_type',
+        'order_id.order_line.promo_reward_id',
+    )
+    def _compute_promo_available(self):
+        self.promo_available_info = False
+        self.promo_available_count = 0
+        for order, lines in self.grouped('order_id').items():
+            if order.state not in ('draft', 'sent'):
+                continue
+            # Es solo informativo: quien lee el pedido puede no tener acceso a lealtad.
+            available = order.sudo()._get_line_promotion_rewards()
+            for line in lines:
+                applied = line.promo_reward_id.sudo()
+                rewards = available.get(line, self.env['loyalty.reward']) - applied
+                if not rewards and not applied:
+                    continue
+                base_amount = line._get_amount_without_discount()
+
+                def difference(discount):
+                    return line.currency_id.round(base_amount * (discount - line.discount) / 100)
+
+                line.promo_available_count = len(rewards)
+                options = [{
+                    'reward_id': reward.id,
+                    'name': reward.program_id.name,
+                    'discount': reward.discount,
+                    'difference': difference(reward.discount),
+                    'applied': reward == applied,
+                } for reward in (rewards | applied).sorted(key=lambda reward: (-reward.discount, reward.id))]
+                fallback = False
+                if applied:
+                    agreement = line._agreement_discount() or 0.0
+                    rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
+                    fallback = {
+                        'label': rule.get('origin_label') or _("sin acuerdo"),
+                        'difference': difference(agreement),
+                    }
+                line.promo_available_info = {'options': options, 'fallback': fallback}
+
+    def action_set_line_promotion(self, reward_id=False):
+        """Aplica la promoción `reward_id` a la línea, o la quita si es falso. Lo usa el selector
+        de la estrella."""
+        self.ensure_one()
+        if self.order_id.state not in ('draft', 'sent'):
+            raise UserError(_("Las promociones por línea solo se eligen en una cotización."))
+        reward = self.env['loyalty.reward'].browse(reward_id).exists()
+        if reward:
+            if reward != self.promo_reward_id:
+                self._apply_line_promotion(reward)
+        else:
+            self._drop_line_promotion()
+        self.order_id._reevaluate_line_promotions()
+        return True
+
+    def _get_taxes_without_discount(self):
+        self.ensure_one()
+        return self.tax_ids.compute_all(
+            self.price_unit, self.currency_id, self.product_uom_qty,
+            product=self.product_id, partner=self.order_id.partner_shipping_id,
+        )
+
+    def _get_amount_without_discount(self):
+        """Importe sin IVA de la línea antes de cualquier descuento."""
+        return self._get_taxes_without_discount()['total_excluded']
+
+    def _get_line_promotion_threshold_amounts(self):
+        """Importe sin IVA y con IVA con el que la línea cuenta para el mínimo de un programa.
+
+        El de la línea en promoción se mide sin ese descuento, igual que el core no cuenta su
+        propia línea de recompensa: si no, aplicar la promoción podría cancelarla.
+        """
+        self.ensure_one()
+        if not self.promo_reward_id:
+            return self.price_subtotal, self.price_total
+        taxes = self._get_taxes_without_discount()
+        return taxes['total_excluded'], taxes['total_included']
+
+    def _line_promotion_values(self, reward):
+        return {
+            'discount': reward.discount,
+            'technical_discount': reward.discount,
+            'pricing_rule_type': 'promo',
+            'pricing_rule_origin': f"Promo: {reward.program_id.name} ({reward.discount:.1f}%)",
+            'pricing_rule_id': False,
+            'promo_reward_id': reward.id,
+        }
+
+    def _apply_line_promotion(self, reward):
+        """Sustituye el descuento de las líneas por el de `reward`, si se les ofrece."""
+        for order, lines in self.grouped('order_id').items():
+            available = order._get_line_promotion_rewards()
+            for line in lines:
+                if reward not in available[line]:
+                    raise ValidationError(_(
+                        "La promoción «%(reward)s» no está disponible para la línea «%(line)s».",
+                        reward=reward.display_name,
+                        line=line.name,
+                    ))
+        self.with_context(skip_manual_discount_breakdown=True).write(self._line_promotion_values(reward))
+
+    def _drop_line_promotion(self):
+        """Quita la promoción de las líneas y las devuelve a su acuerdo vigente."""
+        lines = self.filtered('promo_reward_id')
+        if not lines:
+            return
+        lines.with_context(skip_manual_discount_breakdown=True).write({
+            'promo_reward_id': False,
+            'pricing_rule_type': 'none',
+            'pricing_rule_origin': '',
+        })
+        # Como `_recompute_pricing_rules`: el acuerdo vigente puede ser ahora un precio fijo.
+        lines.invalidate_recordset(['pricelist_item_id'])
+        recompute_lines = lines.with_context(force_price_recomputation=True)
+        recompute_lines._reset_price_unit()
+        recompute_lines._compute_price_unit()
+        recompute_lines._compute_discount()
+
+    @api.constrains('promo_reward_id')
+    def _check_line_promotion(self):
+        for line in self.filtered('promo_reward_id'):
+            if not line.promo_reward_id._is_line_promotion():
+                raise ValidationError(_(
+                    "La recompensa «%(reward)s» no se elige por línea.",
+                    reward=line.promo_reward_id.display_name,
+                ))
+            if not line._admits_line_promotion():
+                raise ValidationError(_(
+                    "La línea «%(line)s» no admite promociones.",
+                    line=line.name,
+                ))
 
     def _has_fixed_price_agreement(self):
         self.ensure_one()

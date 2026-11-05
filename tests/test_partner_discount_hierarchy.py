@@ -324,19 +324,22 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             })],
         })
         reward = program.reward_ids[0]
-        coupon = self.env['loyalty.card'].create({
-            'program_id': program.id,
-            'points': 0,
-        })
 
-        reward_vals = order._get_reward_values_discount(reward, coupon)
-        self.assertTrue(reward_vals)
-        # line2 recibe 5% de descuento comercial base del cliente ($100 * 0.95 = $95 netos)
+        # line2 recibe 5% de descuento comercial base del cliente
         self.assertEqual(line2.discount, 5.0)
-        # El 10% promocional aplica únicamente sobre la base descontable neta ($95 * 10% = -$9.50)
-        self.assertAlmostEqual(reward_vals[0]['price_unit'], -9.5)
+        available = order._get_line_promotion_rewards()
+        self.assertFalse(available[line1])
+        self.assertIn(reward, available[line2])
+        with self.assertRaises(ValidationError):
+            line1._apply_line_promotion(reward)
+
+        # La promoción sustituye al acuerdo de su línea, no se suma, y no toca el precio fijo
+        line2._apply_line_promotion(reward)
+        self.assertEqual(line2.discount, 10.0)
+        self.assertEqual(line2.pricing_rule_type, 'promo')
         self.assertEqual(line1.price_unit, 300.0)
         self.assertEqual(line1.discount, 0.0)
+        self.assertEqual(line1.pricing_rule_type, 'fixed_price')
 
     def test_sale_order_line_change_product_reactivity(self):
         """Verificar que al cambiar product_id en una línea existente, el precio y descuento se actualicen de inmediato."""

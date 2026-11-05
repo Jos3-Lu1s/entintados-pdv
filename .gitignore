@@ -12,3 +12,4 @@ GEMINI.md
 .tmp_docx/
 backups/
 migrations/
+*.md

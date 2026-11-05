@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.PromoHintField">
+        <span t-if="info"
+              role="button"
+              tabindex="0"
+              class="o_promo_hint_icon d-inline-block px-1"
+              t-att-aria-label="title"
+              t-att-title="title"
+              t-on-click.stop="onClick">
+            <i role="img" t-attf-class="fa {{hasPromo ? 'fa-star' : 'fa-star-o'}} text-primary"/>
+        </span>
+    </t>
+
+    <t t-name="entintados_pdv.PromoHintPopover">
+        <div class="o_promo_hint_popover list-group list-group-flush" style="min-width: 260px; max-width: 360px;">
+            <t t-foreach="props.rows" t-as="row" t-key="row.key">
+                <div t-if="!props.selectable or row.applied"
+                     class="list-group-item small"
+                     t-att-class="{'fw-bold': row.applied}">
+                    <i t-if="row.applied" class="fa fa-check text-success me-1" role="img" aria-label="Aplicada"/>
+                    <span t-esc="row.text"/>
+                    <div class="text-muted" t-esc="row.detail"/>
+                </div>
+                <button t-else=""
+                        type="button"
+                        class="list-group-item list-group-item-action small text-start"
+                        t-on-click="() => this.select(row)">
+                    <span t-esc="row.text"/>
+                    <div class="text-muted" t-esc="row.detail"/>
+                </button>
+            </t>
+        </div>
+    </t>
+
+</templates>
