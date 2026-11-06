@@ -2,6 +2,7 @@ from odoo import Command
 from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase, tagged
 from odoo.tools.convert import convert_file
+from lxml import etree
 
 from .test_vendor_credit_group import TestVendorCreditGroup
 
@@ -79,7 +80,8 @@ class TestVendorCreditSummary(TransactionCase):
         arch = self.env.ref('entintados_pdv.vendor_credit_wizard_form')._get_combined_arch()
         currency = arch.xpath('//group/field[@name="currency_id"]')[0]
         self.assertEqual(currency.getnext().get('name'), 'reason_id')
-        self.assertEqual(arch.xpath('//field[@name="supplier_reference"]')[0].get('required'), '1')
+        source = etree.fromstring(self.env.ref('entintados_pdv.vendor_credit_wizard_form').arch_db.encode())
+        self.assertEqual(source.xpath('//field[@name="supplier_reference"]')[0].get('required'), 'supplier_reference_required')
         self.assertEqual(arch.xpath('//field[@name="operation_type"]')[0].get('invisible'), '1')
         footer = arch.xpath('//group[contains(@class,"oe_subtotal_footer")]')[0]
         self.assertTrue({'amount_untaxed', 'amount_iva', 'amount_other_taxes', 'amount_withholding',

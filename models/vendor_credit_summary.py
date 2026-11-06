@@ -11,6 +11,13 @@ class VendorCreditSummary(models.Model):
     # Historical groups may have no supplier reference. New groups must supply it;
     # retaining an empty historical value avoids inventing a supplier document number.
     supplier_reference = fields.Char(string='Folio de referencia', copy=False, tracking=True)
+    supplier_reference_required = fields.Boolean(compute='_compute_supplier_reference_required')
+
+    @api.depends('supplier_reference')
+    def _compute_supplier_reference_required(self):
+        for group in self:
+            group.supplier_reference_required = not (group._origin.id and not group.supplier_reference)
+
     amount_untaxed = fields.Monetary(string='Subtotal', compute='_compute_credit_breakdown')
     amount_iva = fields.Monetary(string='IVA', compute='_compute_credit_breakdown')
     amount_other_taxes = fields.Monetary(string='Otros impuestos', compute='_compute_credit_breakdown')
@@ -30,7 +37,7 @@ class VendorCreditSummary(models.Model):
     def write(self, vals):
         if 'supplier_reference' in vals:
             vals = dict(vals, supplier_reference=(vals['supplier_reference'] or '').strip())
-            if not vals['supplier_reference']:
+            if not vals['supplier_reference'] and any(record.supplier_reference for record in self):
                 raise UserError(_('El folio de referencia no puede quedar vacío.'))
         return super().write(vals)
 
@@ -40,6 +47,8 @@ class VendorCreditSummary(models.Model):
         return super()._create_group_credits()
 
     @api.depends('line_ids.selected', 'line_ids.amount', 'currency_id', 'reason_id.operation_type',
+                 'line_ids.selected_reason_id', 'line_ids.selected_reason_id.operation_type',
+                 'line_ids.effective_reason_id', 'line_ids.operation_type',
                  'line_ids.invoice_id.amount_total', 'line_ids.invoice_id.invoice_line_ids.price_unit',
                  'line_ids.invoice_id.invoice_line_ids.quantity', 'line_ids.invoice_id.invoice_line_ids.discount',
                  'line_ids.invoice_id.invoice_line_ids.tax_ids', 'line_ids.credit_id.amount_total',
@@ -53,17 +62,18 @@ class VendorCreditSummary(models.Model):
             base_total = iva = other = withholding = 0.0
             complete = True
             for allocation in group.line_ids.filtered('selected'):
+                reason = allocation.effective_reason_id
                 credit = allocation.credit_id.filtered(lambda move: move.state != 'cancel')
                 if credit:
                     source = [(line, line.quantity, line.price_unit) for line in credit.invoice_line_ids
                               if line.display_type == 'product']
                     base_total += credit.amount_untaxed
                 else:
-                    base, lines = allocation._credit_source_lines(group.reason_id)
+                    base, lines = allocation._credit_source_lines(reason)
                     if base <= 0 or not math.isfinite(allocation.amount):
                         complete = False
                         continue
-                    if group.reason_id.operation_type == 'return':
+                    if reason.operation_type == 'return':
                         source = [(line, quantity, line.price_unit * allocation.amount / base)
                                   for line, quantity in lines]
                     else:
@@ -73,7 +83,7 @@ class VendorCreditSummary(models.Model):
                     # Use the same tax engine, discount and taxable quantities as the credit.
                     result = line.tax_ids.compute_all(price * (1 - line.discount / 100),
                         currency=group.currency_id, quantity=quantity,
-                        product=line.product_id if credit or group.reason_id.operation_type == 'return' else False,
+                        product=line.product_id if credit or reason.operation_type == 'return' else False,
                         partner=group.partner_id, is_refund=True)
                     if not credit:
                         base_total += result['total_excluded']

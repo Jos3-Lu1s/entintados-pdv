@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+        <html data-report-margin-top="10" web-base-url="http://localhost:8069">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="initial-scale=1"/>
+                <title>Odoo Report</title>
+                <link type="text/css" rel="stylesheet" href="/web/assets/412d186/web.report_assets_common.autoprefixed.min.css"/>
+        <script type="text/javascript" src="/web/assets/8b0af72/web.report_assets_common.min.js" onerror="__odooAssetError=1"></script>
+                
+                
+                <script type="text/javascript">
+                    document.addEventListener('DOMContentLoaded', () => {
+                        if (window.self !== window.top) {
+                            document.body.classList.add("o_in_iframe", "container-fluid");
+                            document.body.classList.remove("container");
+                        }
+                    });
+                </script>
+            </head>
+            <body class="o_body_html container overflow-x-hidden" dir="ltr">
+                <div id="wrapwrap">
+                    <main>
+                        
+            
+
+            
+        
+            <div class="header"></div>
+            <div class="article mat-invoice" data-oe-model="account.move" data-oe-id="1373" data-oe-lang="es_419">
+                <style>
+                    .mat-invoice {font-family: Arial, sans-serif; font-size:13px; color:#111; width:100%; overflow-wrap:break-word; word-wrap:break-word;}
+                    .mat-invoice table {width:100%;}
+                    .mat-invoice .text-end {text-align:right;}
+                    .mat-invoice .row {width:100%;}
+                    .mat-invoice {direction:ltr;text-align:left;}
+                    .mat-invoice #complement span {word-break:break-all;}
+                    .mat-invoice .mat-lines {border:1px solid #eee;border-radius:10px;margin-top:18px;font-size:12px;}
+                    .mat-invoice .mat-lines th {background:#efeddb;color:#24468d;}
+                    .mat-invoice .mat-lines td,.mat-invoice .mat-lines th {padding:8px 5px;text-align:left;vertical-align:top;}
+                    .mat-invoice .mat-summary {width:50%;margin:14px 0 14px auto;border:1px solid #eee;border-radius:10px;padding:8px;page-break-inside:avoid;}
+                    .mat-invoice .mat-summary td {padding:5px;}
+                    .mat-invoice .mat-card {border:1px solid #eee; border-radius:12px; padding:12px;}
+                    .mat-invoice .mat-heading {background:#efeddb; color:#24468d; font-weight:bold; padding:8px;}
+                    .mat-invoice .mat-top {width:100%; table-layout:fixed; border-collapse:separate; border-spacing:7px; margin-bottom:8px;}
+                    .mat-invoice .mat-top td {vertical-align:top; border:0;}
+                    .mat-invoice .mat-brand {width:34%; text-align:center;}
+                    .mat-invoice .mat-company {width:36%; text-align:center; line-height:1.6;}
+                    .mat-invoice .mat-dates {width:30%; text-align:center;}
+                    .mat-invoice .mat-date {padding:8px; font-weight:bold;}
+                    .mat-invoice .mat-customer {width:68%; line-height:1.55;}
+                    .mat-invoice .mat-agent {width:32%; line-height:1.55;}
+                    .mat-invoice table[name='invoice_line_table'] {border:1px solid #eee; border-radius:10px; margin-top:18px; font-size:12px;}
+                    .mat-invoice table[name='invoice_line_table'] thead {background:#efeddb; color:#24468d; display:table-header-group;}
+                    .mat-invoice table[name='invoice_line_table'] td {padding:8px 5px; border:0; vertical-align:top;}
+                    .mat-invoice table[name='invoice_line_table'] th {padding:8px 5px; border:0;}
+                    .mat-invoice #informations {display:none;}
+                    .mat-invoice #total {width:50%; margin-left:50%; border:1px solid #eee; border-radius:12px; padding:8px; margin-top:14px; page-break-inside:avoid;}
+                    .mat-invoice #total td {padding:5px;}
+                    .mat-invoice #total .row, .mat-invoice #total .col-6 {width:100%;margin:0;}
+                    .mat-invoice .o_total {border-top:1px solid #222; font-weight:bold;}
+                    .mat-invoice #payment_term {font-size:11px;}
+                    .mat-invoice .mat-thanks {color:#24468d; font-weight:bold; margin-top:14px;}
+                    .mat-invoice #complement {font-size:9px; margin-top:15px;}
+                    .mat-invoice #complement .barcode {float:left; width:20%;}
+                    .mat-invoice #complement .barcode img {width:125px;height:125px;}
+                    .mat-invoice #complement .complement-details {float:right; width:79%;}
+                    .mat-invoice .page {margin:0;}
+                
+    .mat-invoice .mat-panel {background:white;border:1px solid #f2f2f2;border-radius:12px;box-shadow:0 2px 6px #ededed;overflow:hidden;}
+    .mat-invoice .mat-panel.mat-brand,.mat-invoice .mat-panel.mat-dates,.mat-invoice .mat-top .mat-company {width:100%;box-sizing:border-box;}
+    .mat-invoice table.mat-top {border:0!important;border-spacing:6px;margin:0 0 4px;}
+    .mat-invoice .mat-top > tbody > tr > td,.mat-invoice .mat-top > tr > td {padding:0!important;border:0!important;vertical-align:top;}
+    .mat-invoice .mat-company {font-size:12px;line-height:1.45;}
+    .mat-invoice .mat-brand img {margin:8px auto;}
+    .mat-invoice .mat-folio {padding:8px;background:#efeddb;color:#24468d;}
+    .mat-invoice .mat-stage {font-size:10px;padding:5px;color:#24468d;}
+    .mat-invoice .mat-date {padding:9px;font-size:12px;}
+    .mat-invoice .mat-details {border:0;font-size:12px;}
+    .mat-invoice .mat-details th {width:85px;text-align:left;vertical-align:top;padding:0 8px 0 0;}
+    .mat-invoice .mat-details td {text-align:left;padding:0;}
+    .mat-invoice .mat-lines {border-spacing:0;box-shadow:0 2px 6px #ededed;}
+</style>
+                 
+                <div class="row">
+                        <div class="offset-col-6 col-6" name="address_same_as_shipping">
+                        </div>
+                </div>
+                <div class="clearfix invoice_main">
+                    <div class="page mb-4">
+                        <div class="oe_structure"></div>
+    <table class="mat-top"><tr>
+        <td style="width:34%;"><div class="mat-panel mat-brand">
+            <img src="/entintados_pdv/static/src/img/invoice_logo_placeholder.png" style="width:210px;height:80px;object-fit:contain;" alt="Logotipo de la empresa"/>
+            <div class="mat-folio"><strong>Factura:</strong> <span>INV/2026/00027</span></div>
+            <div class="mat-stage">Etapa: <strong>Facturado</strong></div>
+        </div></td>
+        <td style="width:36%;"><div class="mat-company" style="padding:14px 8px;">
+            <strong>ESCUELA KEMPER URGATE</strong><br/>
+            <strong>RFC: <span>EKU9003173C9</span></strong>
+            <div>
+    <address class="o_portal_address mb-0">
+        <div class="gap-2" itemscope="itemscope" itemtype="http://schema.org/PostalAddress">
+
+            <div class="d-flex align-items-baseline gap-1">
+                <span class="w-100 lh-sm text-break d-block" itemprop="streetAddress">72490 ,<br/>México</span>
+            </div>
+            
+            <div itemprop="telephone"></div>
+        </div>
+    </address></div>
+            
+        </div></td>
+        <td style="width:30%;"><div class="mat-panel mat-dates">
+            <div class="mat-heading">Fecha de factura</div><div class="mat-date">05/11/2026</div>
+        </div><div class="mat-panel mat-dates" style="margin-top:10px;">
+            <div class="mat-heading">Fecha de vencimiento</div><div class="mat-date">05/11/2026</div>
+        </div><div style="text-align:center;font-size:11px;margin-top:5px;">Moneda: <span>MXN</span></div></td>
+    </tr></table>
+    <table class="mat-top"><tr>
+        <td style="width:70%;"><div class="mat-panel">
+            <div class="mat-heading">En atención a:</div><div style="padding:12px;line-height:1.5;">
+                <table class="mat-details"><tr><th>CLAVE:</th><td></td></tr>
+                <tr><th>NOMBRE:</th><td><span>Chuerk joton</span></td></tr>
+                <tr><th>RFC:</th><td>XAXX010101000</td></tr>
+                <tr><th>AGENTE:</th><td><span>Administrator</span></td></tr>
+                <tr><th>Dirección:</th><td><div data-oe-type="contact" data-oe-expression="mat_partner">
+    <address class="o_portal_address mb-0">
+        <div class="css_non_editable_mode_hidden">
+            --<span class="text-muted">Empresa de representantes de odoo, Chuerk joton</span>--
+        </div>
+        <div class="gap-2" itemscope="itemscope" itemtype="http://schema.org/PostalAddress">
+
+            
+            <div itemprop="telephone"></div>
+        </div>
+    </address></div></td></tr>
+                <tr><th>Origen:</th><td>S00182</td></tr></table>
+          <div name="l10n_mx_fiscal_regime_receptor">
+              <span>Régimen fiscal: </span>
+              <span>Sin obligaciones fiscales</span>
+          </div>
+            </div>
+        </div></td>
+        <td style="width:30%;"><div class="mat-panel" style="padding:12px;line-height:1.5;">
+            <strong>Administrator</strong><div style="font-size:11px;margin-top:14px;">
+                <div><strong>Teléfono: </strong><span>+52 221 363 8696</span></div>
+                <div data-oe-type="contact" data-oe-expression="mat_agent_address">
+    <address class="o_portal_address mb-0">
+        <div class="gap-2" itemscope="itemscope" itemtype="http://schema.org/PostalAddress">
+
+            <div class="d-flex align-items-baseline gap-1">
+                <span class="w-100 lh-sm text-break d-block" itemprop="streetAddress">72490 ,<br/>México</span>
+            </div>
+            
+            <div itemprop="telephone"></div>
+        </div>
+    </address></div>
+                <div><span>d.zayas@tekuno.mx</span></div>
+                <div><strong>Referencia: </strong><span>S00182</span></div>
+            </div>
+        </div></td>
+    </tr></table>
+    <div class="mat-panel" style="padding:8px 12px;font-size:10px;margin:4px 7px 12px;">
+        <strong>Uso CFDI: </strong><span>S01 Sin efectos fiscales</span>
+        <br/><strong>Forma de pago: </strong><span>01 - Efectivo</span>
+        <strong> · Método de pago: </strong><span>PUE</span>
+    </div>
+                        <div id="informations" class="row mb-4">
+                            <div class="col" name="invoice_date">
+                                <strong>Fecha de factura</strong>
+                                <div>05/11/2026</div>
+                            </div>
+                            <div class="col" name="due_date">
+                                <strong>Fecha límite</strong>
+                                <div>05/11/2026</div>
+                            </div>
+                            <div class="col" name="delivery_date">
+                                <strong>Fecha de entrega</strong>
+                                <div>05/11/2026</div>
+                            </div>
+                            <div class="col" name="origin">
+                                <strong>Origen</strong>
+                                <div>S00182</div>
+                            </div>
+                <div name="cfdi_values[&#39;usage&#39;]" class="col">
+                    <strong>Uso</strong>
+                    <div><span>S01</span><span> - </span><span>Sin efectos fiscales</span></div>
+                </div>
+                <div name="l10n_mx_edi_cfdi_payment_way" class="col">
+                    <strong>Forma de pago:</strong>
+                    <div>01 - Efectivo</div>
+                </div>
+            <div name="l10n_mx_edi_cfdi_payment_method" class="col">
+                <strong>Método de pago:</strong>
+                <div>PUE</div>
+            </div>
+                            <div class="col" name="reference">
+                                <strong>Referencia</strong>
+                                <div>S00182</div>
+                            </div>
+                        </div>
+
+                        <div class="oe_structure"></div>
+                <table class="mat-lines" name="mat_invoice_lines" dir="ltr">
+                    <thead><tr>
+                        <th>Cantidad</th><th>Código</th><th style="width:40%;">Descripción</th><th>Valor unitario</th><th>Importe</th>
+                    </tr></thead>
+                    <tbody>
+                            <tr>
+                                <td><span>1,00</span></td>
+                                <td><span>211241 + OMD-0001</span></td>
+                                <td><span>[211241] Bases revision tecnica + [OMD-0001] Azul Amuro Ray</span></td>
+                                <td><span data-oe-type="monetary" data-oe-expression="mat_values[&#39;unit&#39;]">$ <span class="oe_currency_value">12.834,00</span></span></td>
+                                <td><span>$ <span class="oe_currency_value">12.834,00</span></span></td>
+                            </tr>
+                    </tbody>
+                </table>
+                        <div class="overflow-hidden">
+                <div class="mat-summary-block" style="display:block;width:100%;flex:0 0 100%;clear:both;">
+                <table class="mat-summary" name="mat_invoice_summary">
+                    <tbody>
+                        
+                        <tr><td>Importe sin impuestos</td><td class="text-end"><span>$ <span class="oe_currency_value">12.834,00</span></span></td></tr>
+                            <tr><td><span>IVA 16%</span></td><td class="text-end"><span data-oe-type="monetary" data-oe-expression="tax_group[&#39;tax_amount_currency&#39;]">$ <span class="oe_currency_value">2.053,44</span></span></td></tr>
+                        <tr class="o_total"><td>Total</td><td class="text-end"><span>$ <span class="oe_currency_value">14.887,44</span></span></td></tr>
+                    </tbody>
+                </table>
+                <div name="mat_amount_words" style="display:block;clear:both;width:100%;margin-top:8px;text-align:left;color:#24468d;font-weight:bold;">Importe con letra: <span>CATORCE MIL OCHOCIENTOS OCHENTA Y SIETE PESOS 44/100 M.N</span></div>
+                <div class="mat-thanks" style="margin-top:6px;text-align:left;">Gracias por su preferencia.</div>
+                </div>
+                            <div id="right-elements" class="col-12 col-md-5 ms-5 d-inline-block float-end">
+                                <div class="mb-2">
+                                </div>
+
+                                
+                                    <div class="oe_structure"></div>
+                            </div>
+                            <div id="payment_term" class="clearfix mt-3">
+                                <div class="justify-text">
+                                </div>
+                                <div class="justify-text">
+                                </div>
+                                <div class="mb-3">
+                                    <span id="payment_terms_note_id" name="payment_term"><p>Términos de pago: pago inmediato</p></span><br/>
+                                </div>
+                                <div class="mb-3">
+                                    <p name="payment_communication">
+                                        Comunicación del pago: <span class="fw-bold">INV/2026/00027</span>
+                                    </p>
+                                </div>
+                                <div name="qr_code_placeholder" class="oe_structure"></div>
+                                
+                                <div class="oe_structure"></div>
+                            </div>
+            <div class="row col-12" id="complement">
+                <div class="barcode col-3">
+                    <img alt="Código de barras" src="data:image/png;base64,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"/>
+                </div>
+                <div class="complement-details col-9">
+                    <div class="digital-stamp">
+                        <span>Sello digital del emisor</span>
+                    </div>
+                    <div class="digital-stamp-content">
+                        <span>CPBWudvdhGRjz+3vWIXfxcxpJeCRbXKSyKizVS3PqUm/BUnCMUenNXqbZADGbciFAFRg91tpKnuhN9vppjgqoG+Ub8M62zsgT3MoxrETE3DCDnn2dUPibbKxNM3tHhnrOTfFO2tnrshfBbgw1LkumzMK1qdX2Sf9STAQs4m7O7lBOYBjkZaLu8YsqaByXwTQG5kS1Ze9VFGO4aphOZ2xooluT66N9FgnZ8VUYZfl2N4FUXabBqi0hCrDHnImFjJOIbs2zsJ0jtVMtNTOo9604K0B+BdaWAebJNnlvvnkh8ktCCdvqIm/DiPlMuDg9R/8DoZe9z1qwV/FOwwGHxm2kQ==</span>
+                    </div>
+                    <div class="digital-stamp">
+                        <span>Sello digital del SAT</span>
+                    </div>
+                    <div class="digital-stamp-content">
+                        <span>FyCJWOBeG3RkVF3UUcWPsXfy2CgTbDq4gbXb3ivNOREQoKbJQNixTLhUntJcvWAKMoDQbDiIhHtULHztTwWPdA1MAqyzGHej3lsZUyft8gF8awadsQ78uMGUYtwhU2Lxjz+bCRH1U+eWkmFilShtITJq7SOexIFKiGBmbwf5IZXXRLMyFhxw44h0muqpFTPjmC5Lkdzltrex9SeE0jLeuUQY4Om766ukIxcVXmT1z82n3oVMc7P38D4JDE8mh+N8icmgsCSTqAjKth0ucYBnHd2sGNOhFgp8H+kJlIqUnEmm66zF00DCP/n5ooTJX4E6gyA0tLTx8+6UODEzAb325g==</span>
+                    </div>
+                    <div class="digital-stamp">
+                        <span>Cadena original del complemento del certificado digital del SAT</span>
+                    </div>
+                    <div class="digital-stamp-content">
+                        <span class="nowrap">||1.1|A43A4EB0-7033-4093-8B8E-10D2440D6F0C|2026-11-05T14:38:54|SFE0807172W7|CPBWudvdhGRjz+3vWIXfxcxpJeCRbXKSyKizVS3PqUm/BUnCMUenNXqbZADGbciFAFRg91tpKnuhN9vppjgqoG+Ub8M62zsgT3MoxrETE3DCDnn2dUPibbKxNM3tHhnrOTfFO2tnrshfBbgw1LkumzMK1qdX2Sf9STAQs4m7O7lBOYBjkZaLu8YsqaByXwTQG5kS1Ze9VFGO4aphOZ2xooluT66N9FgnZ8VUYZfl2N4FUXabBqi0hCrDHnImFjJOIbs2zsJ0jtVMtNTOo9604K0B+BdaWAebJNnlvvnkh8ktCCdvqIm/DiPlMuDg9R/8DoZe9z1qwV/FOwwGHxm2kQ==|30001000000500003442||</span>
+                    </div>
+                    <div class="digital-stamp">
+                        <span>Información adicional</span>
+                    </div>
+                    <div class="digital-stamp-content">
+                        <span>Certificado del emisor:</span> <span>30001000000500003416</span>
+                        <span> | Certificado SAT:</span> <span>30001000000500003442</span>
+                        <span> | Lugar de expedición:</span> <span>72490</span>
+                        <span> | Régimen fiscal:</span><span>601</span>
+                        <span> | Fecha de emisión:</span> <span>2026-11-05 14:38:51</span>
+                        <span> | Fecha de certificación:</span> <span>2026-11-05 14:38:54</span>
+                        <span> | Folio Fiscal:</span> <span>A43A4EB0-7033-4093-8B8E-10D2440D6F0C</span>
+                    </div>
+                    <div class="digital-stamp-content text-center">
+                        <strong>Este documento es una representación impresa de un CFDI</strong>
+                    </div>
+                </div>
+            </div>
+                        </div>
+                    </div>
+                </div>
+            
+            </div>
+            <div class="footer" style="font-size:9px;color:#666;text-align:right;">
+                <span>ESCUELA KEMPER URGATE</span> · Página <span class="page"></span> / <span class="topage"></span>
+            </div>
+
+            
+        
+                    </main>
+                </div>
+            </body>
+        </html>

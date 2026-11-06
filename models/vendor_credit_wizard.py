@@ -72,6 +72,8 @@ class VendorCreditGroup(models.Model):
                 raise UserError(_('Las agrupaciones deben crearse en borrador y sin notas generadas.'))
             if vals.get('reason_id'):
                 vals['reason'] = self.env['vendor.credit.reason'].browse(vals['reason_id']).name
+            if not vals.get('reason'):
+                vals['reason'] = _('Nota de crédito distribuida')
             if vals.get('name', _('New')) == _('New'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('vendor.credit.group') or _('New')
         return super().create(vals_list)
@@ -186,7 +188,7 @@ class VendorCreditGroup(models.Model):
         for group in self.search([]):
             if group.name.startswith('NCD-') and group.name[4:].isdigit():
                 highest_number = max(highest_number, int(group.name[4:]))
-            if not group.reason_id:
+            if not group.reason_id and group.reason != _('Nota de crédito distribuida') and not group.line_ids.selected_reason_id:
                 name = group.reason or _('Otro')
                 reasons = self.env['vendor.credit.reason'].with_context(active_test=False)
                 reason = reasons.search([('name', '=', name), ('company_id', '=', group.company_id.id)], limit=1)
@@ -210,13 +212,14 @@ class VendorCreditGroup(models.Model):
             self._populate_lines_from_partner()
 
     def _populate_lines_from_partner(self):
-        """Carga automáticamente las facturas con pago parcial del proveedor,
+        """Carga automáticamente las facturas pendientes o con pago parcial del proveedor,
         solo cuando el proveedor tiene activo 'distributed_notes'."""
         self.ensure_one()
         domain = [
             ('move_type', '=', 'in_invoice'),
             ('state', '=', 'posted'),
-            ('payment_state', '=', 'partial'),
+            ('payment_state', 'in', ['not_paid', 'partial']),
+            ('amount_residual', '>', 0),
             ('partner_id', '=', self.partner_id.id),
             ('company_id', '=', self.company_id.id),
             ('currency_id', '=', self.currency_id.id),
@@ -245,8 +248,8 @@ class VendorCreditGroup(models.Model):
             return self.action_open_credit()
         if self.state == 'cancel':
             raise UserError(_('No puedes generar una nota desde una agrupación cancelada.'))
-        if self.reason_id and not self.reason_id.active:
-            raise UserError(_('Selecciona un motivo activo antes de generar las notas.'))
+        for allocation in self.line_ids.filtered('selected'):
+            allocation._validate_line_reason()
         self._validate_material_selection()
         selected_lines = self.line_ids.filtered('selected')
         if not selected_lines:
@@ -266,11 +269,12 @@ class VendorCreditGroup(models.Model):
         for allocation in selected_lines:
             invoice = allocation.invoice_id
             if (invoice.move_type != 'in_invoice' or invoice.state != 'posted'
-                    or invoice.payment_state != 'partial'
+                    or invoice.payment_state not in ('not_paid', 'partial')
+                    or invoice.amount_residual <= 0
                     or invoice.partner_id != self.partner_id
                     or invoice.company_id != self.company_id
                     or invoice.currency_id != self.currency_id):
-                raise UserError(_('Todas las facturas deben estar contabilizadas, tener pago parcial y pertenecer al mismo proveedor, compañía y moneda.'))
+                raise UserError(_('Todas las facturas deben estar contabilizadas, tener saldo pendiente y pertenecer al mismo proveedor, compañía y moneda.'))
             allocation._validate_credit_amount(allocation.amount)
             if self.currency_id.compare_amounts(invoice.amount_total, 0) <= 0:
                 raise UserError(_('La factura debe tener un total positivo.'))
@@ -284,7 +288,7 @@ class VendorCreditGroup(models.Model):
                 'move_type': 'in_refund', 'partner_id': self.partner_id.id,
                 'company_id': self.company_id.id, 'currency_id': self.currency_id.id,
                 'journal_id': self.journal_id.id, 'invoice_date': self.date, 'date': self.date,
-                'ref': self.reason, 'invoice_origin': invoice.name,
+                'ref': allocation.effective_reason_id.name, 'invoice_origin': invoice.name,
                 'vendor_credit_source_ids': [Command.set(invoice.ids)],
                 'invoice_line_ids': commands,
             })
@@ -314,7 +318,7 @@ class VendorCreditGroup(models.Model):
             'context': {'default_group_id': self.id},
         }
 
-    def _apply_amount_adjustment(self, amounts, reason, explanation, revision):
+    def _apply_amount_adjustment(self, amounts, reason, explanation, revision, line_reasons=None):
         self.ensure_one()
         self.check_access('write')
         with self.env.cr.savepoint():
@@ -324,12 +328,17 @@ class VendorCreditGroup(models.Model):
                 raise UserError(_('La agrupación cambió. Cierra el asistente y vuelve a abrirlo.'))
             if set(amounts) != set(self.line_ids.ids) or not explanation.strip():
                 raise UserError(_('Revisa las facturas y explica el ajuste.'))
-            reason.check_access('read')
-            if (reason.operation_type == 'return') != bool(self.return_picking_ids):
-                raise UserError(_('No puedes cambiar entre ajuste monetario y devolución después de generar las notas. Crea otra agrupación.'))
-            if not reason.active or (reason.company_id and reason.company_id != self.company_id):
-                raise UserError(_('Selecciona un motivo activo de la misma compañía.'))
-            if reason != self.reason_id and any(
+            reasons = {line.id: self.env['vendor.credit.reason'].browse(line_reasons[line.id])
+                       if line_reasons is not None and line.id in line_reasons else reason
+                       for line in self.line_ids}
+            for line in self.line_ids:
+                chosen = reasons[line.id]
+                chosen.check_access('read')
+                if not chosen or not chosen.active or (chosen.company_id and chosen.company_id != self.company_id):
+                    raise UserError(_('Selecciona un motivo activo de la misma compañía para cada factura.'))
+                if chosen.operation_type != line.effective_reason_id.operation_type:
+                    raise UserError(_('No puedes cambiar entre ajuste monetario y devolución después de generar las notas. Crea otra agrupación.'))
+            if any(reasons[line.id] != line.effective_reason_id for line in self.line_ids) and any(
                     credit.state != 'posted' or getattr(credit, 'l10n_mx_edi_cfdi_uuid', False)
                     or credit.l10n_mx_edi_cfdi_state in ('sent', 'cancel_requested', 'cancel')
                     for credit in self.credit_ids):
@@ -338,7 +347,8 @@ class VendorCreditGroup(models.Model):
             for allocation in self.line_ids:
                 credit = allocation._group_credit()
                 allocation._validate_credit_amount(amounts[allocation.id])
-                if self.currency_id.is_zero(amounts[allocation.id] - allocation.amount) and reason == self.reason_id:
+                if (self.currency_id.is_zero(amounts[allocation.id] - allocation.amount)
+                        and reasons[allocation.id] == allocation.effective_reason_id):
                     continue
                 if (allocation.invoice_id.state != 'posted'
                         or credit.vendor_credit_source_ids != allocation.invoice_id
@@ -376,8 +386,9 @@ class VendorCreditGroup(models.Model):
                 credit.button_draft()
                 if plan:
                     allocation._apply_payment_plan(plan)
-                credit.write({'invoice_line_ids': [Command.clear()] + allocation._credit_line_commands(amount, reason),
-                              'ref': reason.name})
+                selected_reason = reasons[allocation.id]
+                credit.write({'invoice_line_ids': [Command.clear()] + allocation._credit_line_commands(amount, selected_reason),
+                              'ref': selected_reason.name})
                 if self.currency_id.compare_amounts(credit.amount_total, amount):
                     raise UserError(_('Los impuestos o redondeos no permiten obtener el importe solicitado.'))
                 allocation._set_credit_payable(credit)
@@ -386,11 +397,13 @@ class VendorCreditGroup(models.Model):
                 if not self.currency_id.is_zero(allocation.invoice_id.amount_residual):
                     raise UserError(_('No se pudo liquidar la factura %(invoice)s; quedó un saldo de %(residual)s. El ajuste completo fue revertido.',
                                       invoice=allocation.invoice_id.name, residual=allocation.invoice_id.amount_residual))
-                super(VendorCreditGroupLine, allocation).write({'amount': amount, 'credit_id': credit.id})
+                super(VendorCreditGroupLine, allocation).write({'amount': amount, 'credit_id': credit.id,
+                                                               'selected_reason_id': selected_reason.id})
                 changes.append('%s: %s → %s' % (allocation.invoice_id.name, old, amount))
-            self.credit_ids.write({'ref': reason.name})
-            super().write({'reason_id': reason.id, 'reason': reason.name,
-                           'adjustment_revision': self.adjustment_revision + 1})
+            values = {'adjustment_revision': self.adjustment_revision + 1}
+            if line_reasons is None:
+                values.update(reason_id=reason.id, reason=reason.name)
+            super().write(values)
             self.message_post(body=_('Ajuste de notas y pagos. %(details)s. Justificación: %(explanation)s',
                                      details='; '.join(changes), explanation=explanation))
             return self.action_open_credit()
@@ -413,6 +426,35 @@ class VendorCreditGroupLine(models.Model):
     payment_to_adjust_id = fields.Many2one('account.payment', string='Pago a ajustar', compute='_compute_proposed_payment')
     proposed_payment_amount = fields.Monetary(string='Nuevo importe del pago', compute='_compute_proposed_payment')
     invoice_total = fields.Monetary(related='invoice_id.amount_total', string='Importe total de la factura', readonly=True)
+    company_id = fields.Many2one(related='group_id.company_id')
+    selected_reason_id = fields.Many2one('vendor.credit.reason', string='Motivo de la factura',
+                                        ondelete='restrict', check_company=True, copy=True)
+    effective_reason_id = fields.Many2one('vendor.credit.reason', string='Motivo',
+        compute='_compute_effective_reason', inverse='_inverse_effective_reason', readonly=False)
+    operation_type = fields.Selection(related='effective_reason_id.operation_type')
+
+    @api.depends('selected_reason_id', 'group_id.reason_id')
+    def _compute_effective_reason(self):
+        for line in self:
+            line.effective_reason_id = line.selected_reason_id or line.group_id.reason_id
+
+    def _inverse_effective_reason(self):
+        for line in self:
+            line.selected_reason_id = line.effective_reason_id
+
+    def _validate_line_reason(self):
+        self.ensure_one()
+        reason = self.effective_reason_id
+        reason.check_access('read')
+        if not reason or not reason.active or (reason.company_id and reason.company_id != self.group_id.company_id):
+            raise UserError(_('Selecciona un motivo activo de la misma compañía para cada factura.'))
+        reason._check_accounts()
+        return reason
+
+    @api.onchange('invoice_id')
+    def _onchange_invoice_amount(self):
+        if self.invoice_id:
+            self.amount = self.invoice_id.amount_residual
 
     def _group_credit(self):
         self.ensure_one()
@@ -452,7 +494,7 @@ class VendorCreditGroupLine(models.Model):
         credit.line_ids.filtered(lambda line: line.display_type == 'payment_term').account_id = payable
 
     def _credit_line_commands(self, amount, reason=None):
-        reason = reason or self.group_id.reason_id
+        reason = reason or self.effective_reason_id
         reason._check_accounts()
         payable = self.invoice_id.line_ids.filtered(lambda item: item.account_type == 'liability_payable').account_id
         if reason.payable_account_id and payable != reason.payable_account_id:
@@ -489,6 +531,10 @@ class VendorCreditGroupLine(models.Model):
         invoice = self.invoice_id
         delta = self.currency_id.round(invoice.amount_residual + (credit.amount_total if credit else 0) - amount)
         if self.currency_id.is_zero(delta):
+            return None
+        if not credit and invoice.payment_state == 'not_paid' and delta >= 0:
+            # An unpaid bill has no payment to resize. Apply the credit normally
+            # and leave the remainder payable instead of manufacturing a payment.
             return None
         payment = self._candidate_payment()
         if not payment:

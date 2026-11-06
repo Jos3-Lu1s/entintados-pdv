@@ -138,6 +138,10 @@ def values(record, names):
         elif field.type == 'binary':
             raw = record.with_context(bin_size=False)[name] or b''
             raw = raw.encode() if isinstance(raw, str) else raw
+            # Odoo also uses Binary fields for structured UI data (for
+            # example tax_totals). These are not attachments or audit content.
+            if not isinstance(raw, (bytes, bytearray, memoryview)):
+                continue
             result[name] = (hashlib.sha256(raw).hexdigest(), 'Archivo presente' if raw else 'Sin archivo')
         elif field.type == 'html':
             text = html2plaintext(value or '')

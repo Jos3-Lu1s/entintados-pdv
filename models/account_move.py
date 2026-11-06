@@ -1,7 +1,49 @@
+import base64
+import re
+from urllib.parse import parse_qs, urlsplit
+
 from odoo import models, api, fields, _
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
+
+    def _mat_invoice_line_values(self, line):
+        """Display amounts excluding tax, using the same tax engine as accounting."""
+        taxes = line.tax_ids.compute_all(line.price_unit, currency=self.currency_id,
+            quantity=line.quantity, product=line.product_id, partner=self.partner_id,
+            is_refund=self.move_type in ('out_refund', 'in_refund'))
+        gross = taxes['total_excluded']
+        unit = line.tax_ids.with_context(round=False).compute_all(
+            line.price_unit, currency=self.currency_id, quantity=1,
+            product=line.product_id, partner=self.partner_id)['total_excluded']
+        code = line.product_id.default_code or ''
+        color = re.search(r'\+\s*\[([^\]]+)\]', line.name or '')
+        if color and line.product_id.tint_role == 'base':
+            code = ' + '.join(filter(None, [code, color.group(1)]))
+        return {'code': code, 'unit': unit, 'gross': gross,
+                'discount': self.currency_id.round(gross - line.price_subtotal)}
+
+    def _mat_invoice_discount_summary(self):
+        self.ensure_one()
+        discount = 0
+        adjustments = []
+        for line in self.invoice_line_ids.filtered(lambda row: row.display_type == 'product'):
+            if line.price_subtotal < 0 and line.quantity >= 0:
+                adjustments.append({'name': line.name, 'amount': line.price_subtotal})
+            elif line.discount:
+                discount += self._mat_invoice_line_values(line)['discount']
+        return {'discount': discount, 'adjustments': adjustments,
+                'gross': self.amount_untaxed + discount - sum(row['amount'] for row in adjustments)}
+
+    def _mat_invoice_barcode(self, source):
+        """Embed the native SAT QR so PDF rendering needs no barcode HTTP call."""
+        if not source or not source.startswith('/report/barcode/'):
+            return source
+        query = parse_qs(urlsplit(source).query)
+        if query.get('barcode_type') != ['QR'] or not query.get('value'):
+            return source
+        image = self.env['ir.actions.report'].barcode('QR', query['value'][0], width=180, height=180)
+        return 'data:image/png;base64,' + base64.b64encode(image).decode('ascii')
 
     def _tint_invoice_lines_for_print(self, lines):
         """Keep recipe components in accounting while excluding them from the PDF."""

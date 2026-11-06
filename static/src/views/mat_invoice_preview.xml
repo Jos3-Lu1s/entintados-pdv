@@ -1,0 +1,7 @@
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.MatInvoicePreview" t-inherit="mail.AttachmentView" t-inherit-mode="extension">
+        <xpath expr="//iframe[@t-ref='iframeViewerPdf']" position="attributes">
+            <attribute name="t-att-src">matPdfSource</attribute>
+        </xpath>
+    </t>
+</templates>

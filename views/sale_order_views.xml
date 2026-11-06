@@ -15,6 +15,13 @@
                 <attribute name="required">country_code == 'MX'</attribute>
                 <attribute name="widget">sale_customer_payment_policy</attribute>
             </field>
+            <field name="payment_term_id" position="before">
+                <field name="sale_allowed_payment_term_ids" invisible="1"/>
+            </field>
+            <field name="payment_term_id" position="attributes">
+                <attribute name="required">country_code == 'MX'</attribute>
+                <attribute name="domain">[('id', 'in', sale_allowed_payment_term_ids)]</attribute>
+            </field>
         </field>
     </record>
     <record id="view_order_form" model="ir.ui.view">
