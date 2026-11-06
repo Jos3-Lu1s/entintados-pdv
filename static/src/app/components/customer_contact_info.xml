@@ -18,8 +18,13 @@
                 <span class="text-muted">Vendedor: <t t-esc="info.salesperson || partner.sale_owner_name || 'Sin vendedor asignado'"/></span>
                 <span t-if="partner.total_due !== undefined and partner.total_due !== null"
                       class="text-nowrap border-start ps-2">
-                    <span class="text-muted">Total adeudado: </span>
+                    <span class="text-muted">Deuda actual: </span>
                     <strong t-esc="env.utils.formatCurrency(partner.total_due)"/>
+                </span>
+                <span class="text-nowrap border-start ps-2">
+                    <span class="text-muted">Límite de crédito autorizado: </span>
+                    <strong t-if="info.credit_authorized"><t t-esc="info.credit_limit_text"/> <t t-esc="info.credit_currency"/></strong>
+                    <strong t-else="" class="text-muted">Sin crédito autorizado</strong>
                 </span>
                 <span t-if="partner.customer_advance_available !== undefined and partner.customer_advance_available !== null"
                       class="text-nowrap border-start ps-2">

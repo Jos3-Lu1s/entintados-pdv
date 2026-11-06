@@ -5,6 +5,13 @@ from odoo.exceptions import UserError
 class SaleAdvancePaymentInv(models.TransientModel):
     _inherit = 'sale.advance.payment.inv'
 
+    def create_invoices(self):
+        self.ensure_one()
+        if self.advance_payment_method == 'delivered':
+            return self.sale_order_ids.action_generate_validated_invoice(
+                deduct_down_payments=self.deduct_down_payments)
+        return super().create_invoices()
+
     def _prepare_down_payment_invoice_values(self, order, so_lines):
         values = super()._prepare_down_payment_invoice_values(order, so_lines)
         if order.l10n_mx_edi_payment_policy == 'PPD' or order.company_id.advance_risk_enabled:

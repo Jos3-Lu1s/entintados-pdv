@@ -1,6 +1,6 @@
 /** @odoo-module */
 
-import { Registry } from "@web/core/registry";
+import { registry } from "@web/core/registry";
 
 /**
  * En Odoo 19, CustomSelectCreateDialog fue integrado en point_of_sale core
@@ -11,14 +11,15 @@ import { Registry } from "@web/core/registry";
  * registrar la clave "custom_select_create" en la categoría "dialogs" produce
  * un DuplicatedKeyError que bloquea la carga del Punto de Venta.
  *
- * Este parche intercepta Registry.prototype.add para que cuando se registre
+ * Este parche intercepta solo add de la categoría dialogs para que cuando se registre
  * "custom_select_create" en "dialogs" y ya exista en el registro, se aplique
- * autom\u00e1ticamente force: true, evitando que falle la carga del POS.
+ * automáticamente force: true, evitando que falle la carga del POS.
  */
-const originalAdd = Registry.prototype.add;
+const dialogs = registry.category("dialogs");
+const originalAdd = dialogs.add;
 
-Registry.prototype.add = function (key, value, options = {}) {
-    if (this.name === "dialogs" && key === "custom_select_create" && key in this.content) {
+dialogs.add = function (key, value, options = {}) {
+    if (key === "custom_select_create" && this.contains(key)) {
         options = { ...options, force: true };
     }
     return originalAdd.call(this, key, value, options);

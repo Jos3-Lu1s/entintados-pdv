@@ -29,6 +29,15 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//button[@id='create_invoice']" position="attributes">
+                <attribute name="name">action_generate_validated_invoice</attribute>
+                <attribute name="type">object</attribute>
+            </xpath>
+            <xpath expr="//button[@id='create_invoice_percentage']" position="attributes">
+                <attribute name="name">action_generate_validated_invoice</attribute>
+                <attribute name="type">object</attribute>
+                <attribute name="context">{}</attribute>
+            </xpath>
             <xpath expr="//div[hasclass('oe_title')]" position="attributes">
                 <attribute name="class" add="w-100" separator=" "/>
                 <attribute name="style">max-width: 100%;</attribute>
