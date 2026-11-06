@@ -55,7 +55,6 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_financing.xml",
             "entintados_pdv/static/src/app/overrides/pos_bank_payments.xml",
             "entintados_pdv/static/src/app/overrides/customer_payment_summary.js",
-            "entintados_pdv/static/src/app/components/customer_credit_badge.js",
             "entintados_pdv/static/src/app/components/customer_credit_badge.xml",
             "entintados_pdv/static/src/app/components/customer_contact_info.xml",
             "entintados_pdv/static/src/app/utils/customer_summary.js",
@@ -111,12 +110,9 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
-<<<<<<< Updated upstream
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.js",
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.xml",
-=======
             "entintados_pdv/static/src/reports/ppd_receivable_line_cell.xml",
->>>>>>> Stashed changes
             "entintados_pdv/static/src/fields/customer_payment_policy.js",
             "entintados_pdv/static/src/views/tint_sales_report.js",
             "entintados_pdv/static/src/views/tint_sales_report.xml",

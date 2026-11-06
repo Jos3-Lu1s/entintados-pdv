@@ -1,22 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
-    <t t-name="entintados_pdv.CustomerCreditBadge">
-        <span t-if="visible" class="badge rounded-pill text-bg-success" role="status">
-            <i class="fa fa-check-circle me-1" aria-hidden="true"/>
-            Crédito disponible: <t t-esc="env.utils.formatCurrency(state.available)"/>
-        </span>
-    </t>
     <t t-name="entintados_pdv.PartnerLineCreditBadge"
        t-inherit="point_of_sale.PartnerLine" t-inherit-mode="extension">
         <xpath expr="//tr[hasclass('partner-line')]/td[1]/b" position="after">
-            <div t-if="props.partner.is_credit || props.partner.commercial_partner_id?.is_credit" class="mt-1">
+            <div t-if="props.partner.is_credit or (props.partner.commercial_partner_id and props.partner.commercial_partner_id.is_credit)" class="mt-1">
                 <span class="badge rounded-pill text-bg-primary" title="Cliente con condición de pago a crédito">
                     <i class="fa fa-credit-card me-1" aria-hidden="true"/>Crédito
                 </span>
             </div>
         </xpath>
         <xpath expr="//div[hasclass('partner-info')]//b" position="after">
-            <div t-if="props.partner.is_credit || props.partner.commercial_partner_id?.is_credit" class="mt-1">
+            <div t-if="props.partner.is_credit or (props.partner.commercial_partner_id and props.partner.commercial_partner_id.is_credit)" class="mt-1">
                 <span class="badge rounded-pill text-bg-primary" title="Cliente con condición de pago a crédito">
                     <i class="fa fa-credit-card me-1" aria-hidden="true"/>Crédito
                 </span>

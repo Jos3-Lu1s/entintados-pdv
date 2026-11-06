@@ -83,8 +83,5 @@ from . import tint_sales_report
 from . import partner_payment_policy
 from . import sale_auto_delivery
 from . import sale_credit
-<<<<<<< Updated upstream
 from . import mat_report
-=======
 from . import ppd_receivable_report
->>>>>>> Stashed changes
