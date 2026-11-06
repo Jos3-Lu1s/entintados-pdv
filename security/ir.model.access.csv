@@ -69,3 +69,5 @@ access_branch_cash_cut_readonly,branch.cash.cut.readonly,model_branch_cash_cut,a
 access_branch_cash_cut_invoice,branch.cash.cut.invoice,model_branch_cash_cut,account.group_account_invoice,1,1,1,1
 access_branch_cash_cut_line_readonly,branch.cash.cut.line.readonly,model_branch_cash_cut_line,account.group_account_readonly,1,0,1,1
 access_branch_cash_cut_line_invoice,branch.cash.cut.line.invoice,model_branch_cash_cut_line,account.group_account_invoice,1,0,1,1
+access_ppd_receivable_download_readonly,ppd.receivable.download.readonly,model_ppd_receivable_download,account.group_account_readonly,1,1,1,1
+access_ppd_receivable_download_basic,ppd.receivable.download.basic,model_ppd_receivable_download,account.group_account_basic,1,1,1,1

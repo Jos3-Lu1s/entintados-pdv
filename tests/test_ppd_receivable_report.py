@@ -1,6 +1,7 @@
 from odoo import Command, fields
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.tests import tagged
+from odoo.exceptions import UserError
 
 
 @tagged('post_install', '-at_install')
@@ -150,3 +151,40 @@ class TestPpdReceivableReport(AccountTestInvoicingCommon):
                     self.assertIsNone(values['ppd_due_date'])
                     self.assertIsNone(values['ppd_days_overdue'])
             self.assertEqual(found, expected)
+
+    def test_customer_download_wizard_filters_and_historical_balance(self):
+        invoice = self._invoice(1000)
+        self._invoice(200, policy='PUE')
+        self.partner_b.is_credit = True
+        self._invoice(700, partner=self.partner_b)
+        credit = self._invoice(250, move_type='out_refund')
+        credit.button_draft()
+        credit.write({'date': '2026-02-01', 'invoice_date': '2026-02-01'})
+        credit.with_context(bypass_risk=True).action_post()
+        (invoice.line_ids + credit.line_ids).filtered(
+            lambda line: line.account_id.account_type == 'asset_receivable').reconcile()
+        self.env.flush_all()
+        invoice.l10n_mx_edi_payment_policy = 'PPD'
+        options = self._options('2026-01-31')
+        self.assertTrue(any(b['action'] == 'action_download_customer_ppd' for b in options['buttons']))
+        action = self.report.dispatch_report_action(options, 'action_download_customer_ppd')
+        self.assertEqual(action['target'], 'new')
+        self.assertEqual(action['views'], [(
+            self.env.ref('entintados_pdv.ppd_receivable_download_form').id, 'form')])
+        wizard = self.env['ppd.receivable.download'].with_context(action['context']).create({
+            'partner_id': self.partner_a.id,
+        })
+        data = wizard._get_report_data()
+        self.assertEqual(data['credit_limit'], 5000)
+        self.assertEqual(data['total'], 1000)
+        self.assertEqual([r['invoice'] for r in data['rows']], [invoice.name])
+        wizard.date_to = '2026-02-28'
+        self.assertEqual(wizard._get_report_data()['total'], 750)
+        self.assertEqual(wizard.action_download()['report_type'], 'qweb-pdf')
+        pdf, _kind = self.env['ir.actions.report'].with_context(force_report_rendering=True)._render_qweb_pdf(
+            'entintados_pdv.action_ppd_customer_pdf', res_ids=wizard.ids)
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.partner_b.is_credit = False
+        wizard.partner_id = self.partner_b
+        with self.assertRaises(UserError):
+            wizard.action_download()

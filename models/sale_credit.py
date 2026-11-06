@@ -114,6 +114,17 @@ class ApprovalRequest(models.Model):
             raise AccessError(_('Solicita una nueva autorización desde la factura de Ventas.'))
         return super().action_draft()
 
+    def action_approve(self, approver=None):
+        pending = self.sudo().filtered(lambda r: r.sale_credit_move_id
+                                      and r.request_status == 'pending' and not r.sale_credit_consumed)
+        result = super().action_approve(approver)
+        for request in pending.filtered(lambda r: r.request_status == 'approved'):
+            invoice = request.sale_credit_move_id
+            if invoice.state == 'draft' and invoice._is_sale_credit_invoice():
+                # Reuse all posting checks, including the approved amount and current exposure.
+                invoice.with_company(invoice.company_id).action_post()
+        return result
+
 
 
 class ApprovalApprover(models.Model):
@@ -157,6 +168,19 @@ class AccountMove(models.Model):
     sale_credit_request_ids = fields.One2many('approval.request', 'sale_credit_move_id', readonly=True)
     sale_credit_needs_review = fields.Boolean(compute='_compute_sale_credit_needs_review')
     sale_credit_status = fields.Char(string='Autorización de crédito', compute='_compute_sale_credit_status')
+    sale_credit_stage = fields.Selection([
+        ('draft', 'Borrador'), ('credit_pending', 'Autorización pendiente'),
+        ('posted', 'Registrada'), ('cancel', 'Cancelada'),
+    ], string='Estado de factura', compute='_compute_sale_credit_stage')
+
+    @api.depends('state', 'sale_credit_request_ids.request_status',
+                 'sale_credit_request_ids.sale_credit_consumed')
+    def _compute_sale_credit_stage(self):
+        for move in self:
+            latest = move.sudo().sale_credit_request_ids.sorted('id', reverse=True)[:1]
+            move.sale_credit_stage = ('credit_pending' if move.state == 'draft'
+                                     and latest.request_status == 'pending'
+                                     and not latest.sale_credit_consumed else move.state)
 
     @api.depends('sale_credit_request_ids.name', 'sale_credit_request_ids.request_status',
                  'sale_credit_request_ids.sale_credit_consumed')

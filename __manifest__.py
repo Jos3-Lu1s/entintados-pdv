@@ -255,6 +255,8 @@ Catálogo de entintado
         'wizards/branch_cash_cut_views.xml',
         'report/branch_cash_cut.xml',
         'views/ppd_receivable_report_views.xml',
+        'wizards/ppd_receivable_download_views.xml',
+        'report/ppd_customer_receivable.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

@@ -90,6 +90,20 @@ class PpdReceivableReportHandler(models.AbstractModel):
         options['custom_display_config']['templates']['AccountReportLineCell'] = (
             'entintados_pdv.PpdReceivableLineCell'
         )
+        options['buttons'].append({
+            'name': 'Descargar reporte', 'action': 'action_download_customer_ppd',
+            'sequence': 5, 'always_show': True,
+        })
+
+    def action_download_customer_ppd(self, options):
+        report = self.env.ref('entintados_pdv.ppd_receivable_report')
+        clean_options = report.get_options({**options, 'is_opening_report': False,
+                                            'selected_variant_id': report.id})
+        return {'type': 'ir.actions.act_window', 'name': 'Descargar cuentas por cobrar PPD',
+                'res_model': 'ppd.receivable.download', 'view_mode': 'form', 'target': 'new',
+                'views': [(self.env.ref('entintados_pdv.ppd_receivable_download_form').id, 'form')],
+                'context': {**self.env.context, 'default_date_to': clean_options['date']['date_to'],
+                            'default_report_options': clean_options}}
 
     def _custom_line_postprocessor(self, report, options, lines):
         lines = super()._custom_line_postprocessor(report, options, lines)
