@@ -140,6 +140,28 @@ class TestAdvanceAccounting(TransactionCase):
         self.assertEqual(self.partner.customer_advance_available, 0)
         self.assertEqual(self.partner.advance_purchase_power, 1000)
 
+    def test_pos_credit_available_without_ppd_invoice_history(self):
+        self.env.user.group_ids |= self.env.ref('point_of_sale.group_pos_manager')
+        config = self.env['pos.config'].create({
+            'name': 'Credit badge test', 'company_id': self.company.id,
+            'invoice_journal_id': self.journals['sale'].id,
+        })
+        info = self.partner.get_advance_pos_info(config.id)
+        self.assertTrue(info['credit_authorized'])
+        self.assertEqual(info['purchase_power'], 1000)
+        self.assertFalse(info['has_outstanding_invoices'])
+        # Credit availability follows actual exposure, independently of PPD history.
+        debt = self._invoice(600)
+        debt.with_context(bypass_risk=True).action_post()
+        info = self.partner.get_advance_pos_info(config.id)
+        self.assertEqual(info['purchase_power'], 400)
+        child = self.env['res.partner'].create({
+            'name': 'Credit badge child', 'parent_id': self.partner.id, 'phone': '5551234567',
+        })
+        self.assertEqual(child.get_advance_pos_info(config.id)['purchase_power'], 400)
+        self.partner.is_credit = False
+        self.assertFalse(child.get_advance_pos_info(config.id)['credit_authorized'])
+
     def test_unused_advance_does_not_offset_credit_debt_or_financing(self):
         source = self._invoice(300, advance=True)
         self._pay(source)
