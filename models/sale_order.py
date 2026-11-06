@@ -1,4 +1,4 @@
-from odoo import models, fields, api, _, Command
+from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
 from odoo.tools import float_compare
 from collections import defaultdict
@@ -153,6 +153,12 @@ class SaleOrder(models.Model):
             )._reset_price_unit()
         if vals.keys() & {'order_line', 'partner_id', 'pricelist_id'}:
             self._reevaluate_line_promotions()
+            # El core solo reevalúa los regalos al confirmar o con «Promociones».
+            if not self.env.context.get('gift_reevaluation'):
+                for order in self.filtered(
+                    lambda order: order.state in ('draft', 'sent') and order._gift_reward_lines()
+                ):
+                    order.with_context(gift_reevaluation=True)._update_programs_and_rewards()
         return res
 
     @api.onchange('partner_id')
@@ -316,61 +322,15 @@ class SaleOrder(models.Model):
         return super(SaleOrder, order)._get_reward_values_discount(reward, coupon, **kwargs)
 
     def _get_reward_values_product(self, reward, coupon, product=None, **kwargs):
-        self.ensure_one()
-        assert reward.reward_type == 'product'
-
-        reward_products = reward.reward_product_ids
-        product = product or reward_products[:1]
-        if not product or product not in reward_products:
-            raise UserError(_("Producto no válido para reclamar."))
-
-        promo_origin = f"Promoción: {reward.program_id.name}"
-
-        # Buscar si el producto ya existe en la orden (excluyendo colorantes y precios fijos)
-        existing_line = self.order_line.filtered(
-            lambda l: l.product_id == product
-            and not l.display_type
-            and (not getattr(l, 'is_tint_colorant', False) and getattr(l.product_id, 'tint_role', False) != 'colorant')
-            and l.pricing_rule_type != 'fixed_price'
-        )[:1]
-
-        if existing_line:
-            if existing_line.product_uom_qty <= 1.0:
-                existing_line.discount = 100.0
-                existing_line.pricing_rule_type = 'promo'
-                existing_line.pricing_rule_origin = promo_origin
-                existing_line.pricing_rule_id = False
-                return []
-            else:
-                existing_line.product_uom_qty -= 1.0
-                taxes = existing_line.tax_ids
-                return [{
-                    'product_id': product.id,
-                    'product_uom_qty': 1.0,
-                    'price_unit': existing_line.price_unit,
-                    'discount': 100.0,
-                    'pricing_rule_type': 'promo',
-                    'pricing_rule_origin': promo_origin,
-                    'pricing_rule_id': False,
-                    'tax_ids': [Command.set(taxes.ids)],
-                }]
-
-        price_unit = product.with_company(self.company_id).lst_price
-        taxes = self.fiscal_position_id.map_tax(product.taxes_id._filter_taxes_by_company(self.company_id))
-        qty = reward.reward_product_qty or 1.0
-        return [{
-            'product_id': product.id,
-            'product_uom_qty': qty,
-            'price_unit': price_unit,
-            'discount': 100.0,
-            'pricing_rule_type': 'promo',
-            'pricing_rule_origin': promo_origin,
-            'pricing_rule_id': False,
-            'tax_ids': [Command.set(taxes.ids)],
-        }]
-
-    def _get_reward_values_free_product(self, reward, coupon, **kwargs):
-        return self._get_reward_values_product(reward, coupon, **kwargs)
+        # Línea de recompensa del core, en su propia línea aunque el producto ya esté en el pedido.
+        values_list = super()._get_reward_values_product(reward, coupon, product=product, **kwargs)
+        for values in values_list:
+            values.update({
+                'pricing_rule_type': 'promo',
+                'pricing_rule_origin': f"Promoción: {reward.program_id.name}",
+                'pricing_rule_id': False,
+            })
+        return values_list
 
     def _get_claimable_rewards(self, forced_coupons=None):
         # Las promociones por línea se eligen en su propio wizard, no consumen puntos del cupón.
@@ -509,14 +469,22 @@ class SaleOrder(models.Model):
                 elif line.pricing_rule_origin == values['pricing_rule_origin']:
                     continue
                 line.with_context(skip_manual_discount_breakdown=True).write(values)
-            if notices:
-                order.message_post(body=Markup('<br/>').join(notices))
-                self.env.user._bus_send('simple_notification', {
-                    'type': 'warning',
-                    'title': _("Promociones de %s", order.name),
-                    'message': '\n'.join(notices),
-                    'sticky': True,
-                })
+            order._notify_promotion_changes(notices)
+
+    def _notify_promotion_changes(self, notices):
+        self.ensure_one()
+        if not notices:
+            return
+        self.message_post(body=Markup('<br/>').join(notices))
+        self.env.user._bus_send('simple_notification', {
+            'type': 'warning',
+            'title': _("Promociones de %s", self.name),
+            'message': '\n'.join(notices),
+            'sticky': True,
+        })
+
+    def _gift_reward_lines(self):
+        return self.order_line.filtered(lambda line: line.reward_id.reward_type == 'product')
 
     def _update_programs_and_rewards(self):
         # El core mide el mínimo con el neto: quitaría el código de una promoción por línea que lo
@@ -524,7 +492,25 @@ class SaleOrder(models.Model):
         line_rules = self.code_enabled_rule_ids.filtered(
             lambda rule: any(reward._is_line_promotion() for reward in rule.program_id.reward_ids)
         )
+        # El core puede reescribir o recrear las líneas de regalo: se compara por recompensa.
+        gifts_before = defaultdict(lambda: self.env['product.product'])
+        for line in self._gift_reward_lines():
+            gifts_before[line.reward_id] |= line.product_id
         res = super()._update_programs_and_rewards()
+        # El core pone el precio de las recompensas en 0 y reescribe el regalo sin precio: con la
+        # misma cantidad no se recalcula, y el regalo quedaría a 0 con su 100 %.
+        gifts = self._gift_reward_lines()
+        gifts.with_context(force_price_recomputation=True)._compute_price_unit()
+        remaining_rewards = gifts.reward_id
+        self._notify_promotion_changes([
+            _(
+                "Se retiró el regalo %(product)s de la promoción %(program)s: ya no se cumple la condición.",
+                product=product.display_name,
+                program=reward.program_id.name,
+            )
+            for reward, products in gifts_before.items() if reward not in remaining_rewards
+            for product in products
+        ])
         removed_rules = line_rules - self.code_enabled_rule_ids
         if removed_rules:
             self.code_enabled_rule_ids |= removed_rules

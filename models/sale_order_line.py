@@ -474,14 +474,13 @@ class SaleOrderLine(models.Model):
                         recompute_lines |= line
         manual_discount_lines = self.filtered(lambda line: line._is_manual_discount_vals(vals))
         # Línea a la que se le escribe el % del acuerdo vigente: toma el badge de ese acuerdo, sea
-        # cual sea el guardado. Precio fijo y regalo de promoción conservan el suyo.
+        # cual sea el guardado. Precio fijo y promoción por línea conservan el suyo.
         # En un recálculo forzado el `discount` lo escribe el propio `_compute_discount` del core.
         agreement_discount_lines = self.browse()
         if self._is_untracked_discount_vals(vals) and not self.env.context.get('force_price_recomputation'):
             product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
             agreement_discount_lines = (self - manual_discount_lines).filtered(
                 lambda line: line.pricing_rule_type != 'fixed_price'
-                and (line.pricing_rule_type != 'promo' or line.promo_reward_id)
                 and line._admits_partner_agreement(product)
             )
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
@@ -522,8 +521,11 @@ class SaleOrderLine(models.Model):
                         line=line.name,
                     ))
             # El core escribe el importe del anticipo al publicar su factura: no es un precio tecleado.
-            # Reescribir el precio que ya tiene la línea (p. ej. reimportar una exportación) tampoco.
-            manual_price_lines = (self - fixed_lines - self.filtered('is_downpayment')).filtered(
+            # Reescribir el precio que ya tiene la línea (p. ej. reimportar una exportación) tampoco,
+            # ni el que pone `sale_loyalty` a sus recompensas.
+            manual_price_lines = (
+                self - fixed_lines - self.filtered('is_downpayment') - self.filtered('reward_id')
+            ).filtered(
                 lambda line: (line.currency_id or line.company_id.currency_id or self.env.company.currency_id)
                 .compare_amounts(line.price_unit, vals['price_unit'])
             )
@@ -870,6 +872,12 @@ class SaleOrderLine(models.Model):
     def _reset_price_unit(self):
         force_recompute = self.env.context.get('force_price_recomputation')
         for line in self.with_context(sale_write_from_compute=True):
+            if line.reward_id:
+                # Lo decide `sale_loyalty`: `_reset_loyalty` deja el precio en 0 con el técnico
+                # anterior, y eso no es un precio manual.
+                super(SaleOrderLine, line)._reset_price_unit()
+                line._set_price_origin()
+                continue
             if line.product_type == 'combo':
                 # El paquete vale 0, como en el core: su precio, de tarifa o fijo, lo reparten
                 # sus productos.
@@ -918,6 +926,16 @@ class SaleOrderLine(models.Model):
         'order_id.pricelist_id',
     )
     def _compute_discount(self):
+        # Las líneas de recompensa conservan su descuento, como en el core: lo decide `sale_loyalty`.
+        rewards = self.filtered('reward_id')
+        if rewards:
+            for line in rewards:
+                # Sin acuerdo; el regalo conserva la insignia de su promoción.
+                line.technical_discount = line.discount
+                line.pricing_rule_type = line.pricing_rule_type or 'none'
+                line.pricing_rule_origin = line.pricing_rule_origin or ''
+                line.pricing_rule_id = False
+            return (self - rewards)._compute_discount()
         # El acuerdo congelado se lee antes del super(): el core reescribe `discount`.
         force_recompute = self.env.context.get('force_price_recomputation')
         frozen = {
