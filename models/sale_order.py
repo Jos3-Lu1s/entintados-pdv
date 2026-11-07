@@ -152,13 +152,14 @@ class SaleOrder(models.Model):
                 lambda line: line.combo_item_id and line._get_linked_line() == package
             )._reset_price_unit()
         if vals.keys() & {'order_line', 'partner_id', 'pricelist_id'}:
-            self._reevaluate_line_promotions()
+            if not self.env.context.get('in_loyalty_update') and not self.env.context.get('gift_reevaluation'):
+                self._reevaluate_line_promotions()
             # El core solo reevalúa los regalos al confirmar o con «Promociones».
-            if not self.env.context.get('gift_reevaluation'):
+            if not self.env.context.get('gift_reevaluation') and not self.env.context.get('in_loyalty_update'):
                 for order in self.filtered(
                     lambda order: order.state in ('draft', 'sent') and order._gift_reward_lines()
                 ):
-                    order.with_context(gift_reevaluation=True)._update_programs_and_rewards()
+                    order.with_context(gift_reevaluation=True, in_loyalty_update=True)._update_programs_and_rewards()
         return res
 
     @api.onchange('partner_id')
@@ -436,6 +437,9 @@ class SaleOrder(models.Model):
         """Quita las promociones por línea que ya no proceden y actualiza el % de las vigentes."""
         digits = self.env['decimal.precision'].precision_get('Discount')
         for order in self.filtered(lambda order: order.state in ('draft', 'sent')):
+            orphaned = order.order_line.filtered(lambda l: not l.promo_reward_id and l.pricing_rule_type == 'promo')
+            if orphaned:
+                orphaned._drop_line_promotion()
             promo_lines = order.order_line.filtered('promo_reward_id')
             notices = []
             # Al volver al acuerdo, una línea puede dejar a otro programa debajo de su mínimo.
@@ -486,6 +490,28 @@ class SaleOrder(models.Model):
     def _gift_reward_lines(self):
         return self.order_line.filtered(lambda line: line.reward_id.reward_type == 'product')
 
+    def _program_check_compute_points(self, programs):
+        # El core evalúa el umbral mínimo usando el neto de la línea. Para líneas con promoción
+        # por línea, se evalúa el importe antes de dicha promoción para que la validación
+        # de compra mínima se comporte de manera consistente independientemente del orden de aplicación.
+        lines_with_promo = self.order_line.filtered('promo_reward_id')
+        if not lines_with_promo:
+            return super()._program_check_compute_points(programs)
+        saved = {}
+        for line in lines_with_promo:
+            untaxed, taxed = line._get_line_promotion_threshold_amounts()
+            saved[line] = (line.price_subtotal, line.price_total, line.price_tax)
+            line.price_subtotal = untaxed
+            line.price_total = taxed
+            line.price_tax = taxed - untaxed
+        try:
+            return super()._program_check_compute_points(programs)
+        finally:
+            for line, (subtotal, total, tax) in saved.items():
+                line.price_subtotal = subtotal
+                line.price_total = total
+                line.price_tax = tax
+
     def _update_programs_and_rewards(self):
         # El core mide el mínimo con el neto: quitaría el código de una promoción por línea que lo
         # cumple sin su propio descuento. Lo decide la reevaluación, que lo mide sin él.
@@ -497,8 +523,8 @@ class SaleOrder(models.Model):
         for line in self._gift_reward_lines():
             gifts_before[line.reward_id] |= line.product_id
         # El core reescribe `order_line` a mitad del recorrido: sin el contexto, `write` lanzaría
-        # otra reevaluación dentro de esta y la exterior borraría las recompensas siguientes.
-        res = super(SaleOrder, self.with_context(gift_reevaluation=True))._update_programs_and_rewards()
+        # otra reevaluación dentro de esta y la exterior borraría las promociones y recompensas siguientes.
+        res = super(SaleOrder, self.with_context(gift_reevaluation=True, in_loyalty_update=True))._update_programs_and_rewards()
         # El core pone el precio de las recompensas en 0 y reescribe el regalo sin precio: con la
         # misma cantidad no se recalcula, y el regalo quedaría a 0 con su 100 %.
         gifts = self._gift_reward_lines()

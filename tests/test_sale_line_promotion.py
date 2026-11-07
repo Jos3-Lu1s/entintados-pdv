@@ -1054,3 +1054,130 @@ class TestSaleLinePromotion(TransactionCase):
 
         first.promo_reward_id = offered[0]
         self.assertEqual(order._get_line_promotion_rewards()[second], offered)
+
+    def test_confirm_keeps_code_promo_with_minimum(self):
+        # Código con importe mínimo y promoción automática en el pedido: la promoción de línea se conserva al confirmar.
+        code_prog = self._code_program(code='PROMO194', minimum=1000.0)
+        native_prog = self.env['loyalty.program'].create({
+            'name': 'Nativa Barato',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.create({
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'percent',
+                'discount': 10.0,
+                'discount_applicability': 'cheapest',
+                'required_points': 1,
+            })],
+        })
+        order = self._create_order()
+        paint_no_agree = self._create_product('Pintura Sin Acuerdo', 100.0)
+        line_paint = self._create_line(order, paint_no_agree, qty=10.0)  # 10 x 100 = 1000
+        self._create_line(order, self.product_plain, qty=1.0)           # 1 x 50 = 50
+        res = order._try_apply_code('PROMO194')
+        self.assertNotIn('error', res)
+        order._update_programs_and_rewards()
+
+        claimable = order._get_claimable_rewards()
+        for coupon, rewards in claimable.items():
+            for reward in rewards:
+                if reward == native_prog.reward_ids:
+                    order._apply_program_reward(reward, coupon)
+
+        order._update_programs_and_rewards()
+        line_paint._apply_line_promotion(code_prog.reward_ids)
+        self.assertEqual(line_paint.promo_reward_id, code_prog.reward_ids)
+        self.assertEqual(line_paint.discount, 10.0)
+
+        order.action_confirm()
+
+        self.assertEqual(order.state, 'sale')
+        self.assertEqual(line_paint.promo_reward_id, code_prog.reward_ids)
+        self.assertEqual(line_paint.discount, 10.0)
+        self.assertEqual(line_paint.pricing_rule_type, 'promo')
+
+    def test_unlink_reward_in_use_protected(self):
+        # Programa con múltiples recompensas: borrar una recompensa en uso la archiva y conserva la referencia en la línea.
+        prog = self._create_program([{'discount': 20.0}, {'discount': 5.0}])
+        twenty = prog.reward_ids.filtered(lambda r: r.discount == 20.0)
+        order = self._create_order()
+        line = self._create_line(order)
+        line.action_set_line_promotion(twenty.id)
+        self.assertEqual(line.promo_reward_id, twenty)
+        self.assertEqual(line.discount, 20.0)
+        self.assertEqual(line.pricing_rule_type, 'promo')
+
+        twenty.unlink()
+
+        self.assertTrue(twenty.exists(), "La recompensa no debe eliminarse físicamente de la base de datos si está en uso")
+        self.assertFalse(twenty.active, "La recompensa en uso debe quedar archivada")
+        self.assertEqual(line.promo_reward_id, twenty)
+
+    def test_unlink_archived_program_in_use_cleans_lines(self):
+        # Al archivar y borrar un programa, las líneas con su promoción deben volver a su acuerdo vigente.
+        prog = self._create_program([{'discount': 20.0}])
+        order = self._create_order()
+        line = self._create_line(order)
+        line.action_set_line_promotion(prog.reward_ids.id)
+        self.assertEqual(line.promo_reward_id, prog.reward_ids)
+        self.assertEqual(line.discount, 20.0)
+
+        prog.action_archive()
+        prog.unlink()
+
+        self.assertFalse(line.promo_reward_id)
+        self.assertEqual(line.discount, 10.0)
+        self.assertEqual(line.pricing_rule_type, 'product')
+
+    def test_change_partner_with_discount_rule_no_phantom_promo(self):
+        # Al cambiar de cliente a uno con acuerdo comercial de porcentaje, la línea conserva su promoción válida sin degradar a promoción fantasma.
+        order, line, reward = self._promo_line()
+        self.assertEqual(line.promo_reward_id, reward)
+        self.assertEqual(line.discount, 20.0)
+
+        partner_b = self.env['res.partner'].create({
+            'name': 'Cliente B con Acuerdo 15%',
+            'is_customer': True,
+            'phone': '1234567895',
+            'property_product_pricelist': self.pricelist.id,
+        })
+        self.env['res.partner.discount.rule'].create({
+            'partner_id': partner_b.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.product_agreement.id,
+            'discount': 15.0,
+        })
+
+        order.write({'partner_id': partner_b.id})
+
+        if line.pricing_rule_type == 'promo':
+            self.assertTrue(line.promo_reward_id, "La línea en promo debe conservar promo_reward_id, no ser una promo fantasma")
+            self.assertEqual(line.promo_reward_id, reward)
+            self.assertEqual(line.discount, 20.0)
+        else:
+            self.assertEqual(line.pricing_rule_type, 'product')
+            self.assertEqual(line.discount, 15.0)
+            self.assertFalse(line.promo_reward_id)
+
+    def test_promo_code_minimum_threshold_deterministic(self):
+        # El umbral de compra mínima de un código se evalúa sin el descuento de la promoción de línea, garantizando determinismo.
+        auto_prog = self._create_program([{'discount': 20.0}])
+        code_prog = self._code_program(code='CODE199', minimum=1000.0)
+
+        order = self._create_order()
+        line = self._create_line(order, qty=10.0)  # 10 x 100 = 1000
+
+        line._apply_line_promotion(auto_prog.reward_ids)
+        self.assertEqual(line.discount, 20.0)
+        self.assertEqual(line.price_subtotal, 800.0)
+
+        res = order._try_apply_code('CODE199')
+        self.assertNotIn('error', res, f"El código debió aceptarse pero dio error: {res}")
+        self.assertIn(code_prog.rule_ids.id, order.code_enabled_rule_ids.ids)
+

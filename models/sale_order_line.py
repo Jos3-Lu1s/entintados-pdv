@@ -968,7 +968,7 @@ class SaleOrderLine(models.Model):
         # Promoción por línea: la misma regla que el descuento manual. Un precio fijo vigente solo
         # gana en un recálculo forzado: en una línea guardada se aplica con «Actualizar precios».
         promo = {
-            line: (line.discount, line.pricing_rule_origin)
+            line: (line.discount, line.pricing_rule_origin, line.promo_reward_id)
             for line in self
             if line.promo_reward_id
             and not reset_manual
@@ -979,15 +979,16 @@ class SaleOrderLine(models.Model):
         # Las líneas de precio fijo no pasan por el core: llamado directo sobre líneas guardadas
         # (p. ej. `_recompute_prices`), su % sería un write real y la restricción lo rechazaría.
         fixed_lines = self.filtered(lambda line: line.pricing_rule_type == 'fixed_price')
-        super(SaleOrderLine, self - fixed_lines)._compute_discount()
+        super(SaleOrderLine, (self - fixed_lines).with_context(skip_manual_discount_breakdown=True))._compute_discount()
         # Llamado directo sobre líneas guardadas (p. ej. `_recompute_prices`), asignar `discount`
         # pasa por write(): no es un descuento manual.
         for line in self.with_context(skip_manual_discount_breakdown=True):
             if line.promo_reward_id and line not in promo:
                 line.promo_reward_id = False
             if line in promo:
-                discount, origin = promo[line]
+                discount, origin, reward = promo[line]
                 badge = ('promo', origin, False)
+                line.promo_reward_id = reward
             elif line in manual and (line in frozen or not line._has_fixed_price_agreement()):
                 discount, origin = manual[line]
                 badge = ('manual', origin, False)
