@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from unittest.mock import MagicMock, patch
+
 from lxml import etree
 
 from odoo import Command
@@ -45,6 +47,62 @@ class TestSaleGiftPromotion(TransactionCase):
                 'reward_product_id': cls.product_q.id,
                 'reward_product_qty': 1,
                 'required_points': 1,
+            })],
+        })
+        cls.product_r = cls._create_product('R Regalo', 80.0)
+        cls.program_four = cls.env['loyalty.program'].create({
+            'name': 'Lleva4',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'active': False,
+            'rule_ids': [Command.clear(), Command.create({
+                'product_ids': [Command.set(cls.product_p.ids)],
+                'minimum_qty': 4,
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.clear(), Command.create({
+                'reward_type': 'product',
+                'reward_product_id': cls.product_r.id,
+                'reward_product_qty': 1,
+                'required_points': 1,
+            })],
+        })
+        cls.program_gift_card = cls.env['loyalty.program'].create({
+            'name': 'Tarjetas Regalo',
+            'program_type': 'gift_card',
+            'trigger': 'auto',
+            'applies_on': 'future',
+            'active': False,
+            'rule_ids': [Command.clear(), Command.create({
+                'reward_point_mode': 'money',
+                'reward_point_amount': 1,
+                'reward_point_split': True,
+            })],
+            'reward_ids': [Command.clear(), Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'per_point',
+                'discount': 1,
+                'discount_applicability': 'order',
+            })],
+        })
+        cls.program_next = cls.env['loyalty.program'].create({
+            'name': 'Next300',
+            'program_type': 'next_order_coupons',
+            'trigger': 'auto',
+            'applies_on': 'future',
+            'active': False,
+            'rule_ids': [Command.clear(), Command.create({
+                'minimum_amount': 300,
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.clear(), Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'percent',
+                'discount': 10,
+                'discount_applicability': 'order',
             })],
         })
 
@@ -248,6 +306,158 @@ class TestSaleGiftPromotion(TransactionCase):
         self.assertEqual(gift.reward_id, self.program.reward_ids)
         self.assertAlmostEqual(gift.price_unit, 50.0)
         self.assertAlmostEqual(order.amount_total, 200.0)
+
+    def _order_with_gift_card(self):
+        self.program_gift_card.active = True
+        card = self.env['loyalty.card'].create({
+            'program_id': self.program_gift_card.id,
+            'points': 150,
+            'code': 'GCD-150',
+        })
+        order = self._order_with_gift()
+        status = order._try_apply_code(card.code)
+        self.assertNotIn('error', status)
+        result = order._apply_program_reward(status[card], card)
+        self.assertNotIn('error', result)
+        self.assertAlmostEqual(order.amount_total, 50.0)
+        return order, card
+
+    def _card_lines(self, order, card):
+        return order.order_line.filtered(lambda line: line.coupon_id == card)
+
+    def test_confirm_keeps_gift_card(self):
+        order, card = self._order_with_gift_card()
+        order.action_confirm()
+        self.assertTrue(self._card_lines(order, card))
+        self.assertAlmostEqual(order.amount_total, 50.0)
+        self.assertAlmostEqual(card.points, 0.0)
+
+    def test_update_prices_keeps_gift_card(self):
+        order, card = self._order_with_gift_card()
+        order.action_update_prices()
+        self.assertTrue(self._card_lines(order, card))
+        self.assertAlmostEqual(order.amount_total, 50.0)
+
+    def test_confirm_keeps_second_gift(self):
+        self.program_four.active = True
+        order = self._create_order()
+        self._add_line(order, self.product_p, 4.0)
+        self._claim_gift(order)
+        self._claim_gift(order, self.program_four)
+        self.assertEqual(order.order_line.filtered('reward_id').product_id, self.product_q | self.product_r)
+        order.action_confirm()
+        self.assertEqual(
+            order.order_line.product_id, self.product_p | self.product_q | self.product_r,
+        )
+
+    def test_confirm_single_next_order_coupon(self):
+        self.program_next.active = True
+        order = self._order_with_gift()
+        # El Catálogo escribe la línea sin pasar por `sale.order.write`.
+        order.order_line.filtered(lambda line: line.product_id == self.product_p).product_uom_qty = 4.0
+        order.action_confirm()
+        coupons = self.env['loyalty.card'].search([
+            ('program_id', '=', self.program_next.id),
+            ('partner_id', '=', order.partner_id.id),
+        ])
+        self.assertEqual(len(coupons), 1)
+
+    def _catalog_set_qty(self, order, product, qty):
+        # Fuera de una petición HTTP no existe `request`, que el Catálogo usa para su contexto.
+        with patch('odoo.addons.sale.models.sale_order.request', new=MagicMock()):
+            return order._update_order_line_info(product.id, qty)
+
+    def _create_min1000(self):
+        self.program.active = False
+        return self.env['loyalty.program'].create({
+            'name': 'MIN1000',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.clear(), Command.create({
+                'minimum_amount': 1000.0,
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.clear(), Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'percent',
+                'discount_applicability': 'order',
+                'discount': 10.0,
+                'required_points': 1,
+            })],
+        }).reward_ids
+
+    def test_catalog_price_after_promotion_lost(self):
+        reward = self._create_min1000()
+        order = self._create_order()
+        line = self._add_line(order, self.product_p, 10.0)
+        line._apply_line_promotion(reward)
+        self.assertAlmostEqual(line._get_discounted_price(), 90.0)
+
+        price = self._catalog_set_qty(order, self.product_p, 9.0)
+
+        self.assertFalse(line.promo_reward_id)
+        self.assertAlmostEqual(line._get_discounted_price(), 100.0)
+        self.assertAlmostEqual(price, 100.0)
+
+    def test_catalog_lower_qty_removes_gift(self):
+        order = self._order_with_gift()
+        self._catalog_set_qty(order, self.product_p, 1.0)
+        self.assertFalse(order.order_line.filtered('reward_id'))
+        self.assertAlmostEqual(order.amount_total, 100.0)
+        self.assertIn(
+            "Se retiró el regalo Q Regalo de la promoción Lleva2: ya no se cumple la condición.",
+            order.message_ids[:1].body,
+        )
+
+    def test_catalog_remove_product_removes_gift(self):
+        order = self._order_with_gift()
+        self._catalog_set_qty(order, self.product_p, 0.0)
+        self.assertFalse(order.order_line.filtered(lambda line: line.product_id == self.product_p))
+        self.assertFalse(order.order_line.filtered('reward_id'))
+        self.assertAlmostEqual(order.amount_total, 0.0)
+
+    def test_catalog_reward_line_readonly(self):
+        order = self._order_with_gift()
+        paid = order.order_line.filtered(lambda line: line.product_id == self.product_p)
+        self.assertTrue(self._gift_line(order)._get_product_catalog_lines_data()['readOnly'])
+        self.assertFalse(paid._get_product_catalog_lines_data()['readOnly'])
+
+    def test_catalog_removal_reevaluates_line_promotion(self):
+        self.program.active = False
+        reward = self.env['loyalty.program'].create({
+            'name': 'MIN1000',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.clear(), Command.create({
+                'minimum_amount': 1000.0,
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.clear(), Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'percent',
+                'discount_applicability': 'order',
+                'discount': 20.0,
+                'required_points': 1,
+            })],
+        }).reward_ids
+        order = self._create_order(self.partner_c2)
+        line = self._add_line(order, self.product_p, 6.0)
+        self._add_line(order, self.product_r, 8.0)
+        line._apply_line_promotion(reward)
+        self.assertEqual(line.promo_reward_id, reward)
+        messages = order.message_ids
+
+        self._catalog_set_qty(order, self.product_r, 0.0)
+
+        self.assertFalse(line.promo_reward_id)
+        self.assertEqual(line.discount, 10.0)
+        self.assertEqual(line.pricing_rule_origin, 'Desc. Producto (10.0%)')
+        notice = (order.message_ids - messages).filtered(lambda message: 'dejó la promoción' in message.body)
+        self.assertEqual(len(notice), 1)
 
     def _order_line_views(self):
         arch = etree.fromstring(self.env['sale.order'].get_views([(False, 'form')])['views']['form']['arch'])

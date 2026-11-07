@@ -405,6 +405,13 @@ class SaleOrderLine(models.Model):
                 created.update(zip(batch, records))
         return self.browse([created[index].id for index in range(len(vals_list))])
 
+    def _get_product_catalog_lines_data(self, **kwargs):
+        # El core solo bloquea varias líneas del mismo producto: una recompensa suelta sería editable.
+        res = super()._get_product_catalog_lines_data(**kwargs)
+        if len(self) == 1 and self.is_reward_line:
+            res['readOnly'] = True
+        return res
+
     def write(self, vals):
         if 'product_id' in vals:
             # El configurador del núcleo borra y vuelve a crear los productos del combo: un cambio

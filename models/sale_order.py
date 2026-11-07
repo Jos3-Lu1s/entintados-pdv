@@ -496,7 +496,9 @@ class SaleOrder(models.Model):
         gifts_before = defaultdict(lambda: self.env['product.product'])
         for line in self._gift_reward_lines():
             gifts_before[line.reward_id] |= line.product_id
-        res = super()._update_programs_and_rewards()
+        # El core reescribe `order_line` a mitad del recorrido: sin el contexto, `write` lanzaría
+        # otra reevaluación dentro de esta y la exterior borraría las recompensas siguientes.
+        res = super(SaleOrder, self.with_context(gift_reevaluation=True))._update_programs_and_rewards()
         # El core pone el precio de las recompensas en 0 y reescribe el regalo sin precio: con la
         # misma cantidad no se recalcula, y el regalo quedaría a 0 con su 100 %.
         gifts = self._gift_reward_lines()
@@ -539,6 +541,21 @@ class SaleOrder(models.Model):
         changed = self.env['sale.order.line'].union(*lines_by_reward.values())
         self._reevaluate_line_promotions()
         return changed
+
+    def _update_order_line_info(self, product_id, quantity, **kwargs):
+        # El Catálogo escribe o borra la línea sin pasar por `write`: se reevalúa como al guardar.
+        res = super()._update_order_line_info(product_id, quantity, **kwargs)
+        if self.state not in ('draft', 'sent'):
+            return res
+        self._reevaluate_line_promotions()
+        if self._gift_reward_lines():
+            self._update_programs_and_rewards()
+        # El core calculó el precio de la tarjeta antes de reevaluar.
+        section_id = kwargs.get('section_id', False)
+        line = self.order_line.filtered(
+            lambda line: line.product_id.id == product_id and line.get_parent_section_line().id == section_id
+        )
+        return line._get_discounted_price() if len(line) == 1 else res
 
     def action_open_reward_wizard(self):
         # «Promociones»: aplica en bloque las promociones por línea que mejoran el descuento y
