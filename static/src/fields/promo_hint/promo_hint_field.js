@@ -5,7 +5,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { formatMonetary } from "@web/views/fields/formatters";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
-import { promoHintLines } from "./promo_hint_text";
+import { promoHintLines, resolveLineRecord } from "./promo_hint_text";
 
 export class PromoHintPopover extends Component {
     static template = "entintados_pdv.PromoHintPopover";
@@ -68,15 +68,20 @@ export class PromoHintField extends Component {
 
     async setPromotion(rewardId) {
         const root = this.props.record.model.root;
+        const prevIds = new Set((root.data.order_line?.records || []).map((r) => r.resId).filter(Boolean));
+        const lineIndex = (root.data.order_line?.records || []).indexOf(this.props.record);
         if (!(await root.save())) {
             return;
         }
-        const lineId = this.props.record.resId;
+        const activeRecord = resolveLineRecord(root, this.props.record, prevIds, lineIndex);
+        const lineId = activeRecord?.resId;
         if (!lineId) {
-            this.notification.add(_t("Guarda la línea antes de elegir su promoción."), { type: "warning" });
+            const notification = this.env.services.notification || this.notification;
+            notification?.add(_t("Guarda la línea antes de elegir su promoción."), { type: "warning" });
             return;
         }
-        await this.orm.call("sale.order.line", "action_set_line_promotion", [[lineId], rewardId]);
+        const orm = this.env.services.orm || this.orm || root.model.orm;
+        await orm.call("sale.order.line", "action_set_line_promotion", [[lineId], rewardId]);
         await root.load();
     }
 }

@@ -1,6 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
-from odoo.tools import float_compare
+from odoo.tools import float_compare, float_round
 from collections import defaultdict
 from markupsafe import Markup
 import logging
@@ -40,12 +40,20 @@ class SaleOrder(models.Model):
         currency_field='currency_id',
     )
 
-    @api.depends('order_line.discount_amount', 'order_line.product_type')
+    @api.depends('order_line.discount_amount', 'order_line.product_type', 'order_line.reward_id', 'order_line.price_subtotal', 'order_line.price_unit')
     def _compute_amount_discount(self):
         for order in self:
             # El paquete de combo solo repite lo que ya suman sus productos.
             lines = order.order_line.filtered(lambda line: line.product_type != 'combo')
-            order.amount_discount = sum(lines.mapped('discount_amount'))
+            standard_lines = lines.filtered(lambda line: not getattr(line, 'is_reward_line', False) and not line.reward_id)
+            fixed_reward_lines = lines.filtered(
+                lambda line: (getattr(line, 'is_reward_line', False) or bool(line.reward_id))
+                and (line.price_subtotal < 0 or line.price_unit < 0)
+            )
+            order.amount_discount = (
+                sum(standard_lines.mapped('discount_amount'))
+                + sum(-line.price_subtotal if line.price_subtotal < 0 else -line.price_unit * line.product_uom_qty for line in fixed_reward_lines)
+            )
 
     @api.depends('amount_untaxed', 'amount_discount', 'currency_id')
     def _compute_amount_before_discount(self):
@@ -374,8 +382,9 @@ class SaleOrder(models.Model):
                 price_line._get_line_promotion_threshold_amounts()
                 for price_line in amount_lines._get_lines_with_price_batch()
             ]
-            untaxed = sum(amount[0] for amount in amounts)
-            taxed = sum(amount[1] for amount in amounts)
+            precision = self.currency_id.decimal_places or 2
+            untaxed = float_round(sum(amount[0] for amount in amounts), precision_digits=precision)
+            taxed = float_round(sum(amount[1] for amount in amounts), precision_digits=precision)
             minimum = rule._compute_amount(self.currency_id)
             if minimum > (taxed if rule.minimum_amount_tax_mode == 'incl' else untaxed):
                 continue
@@ -388,7 +397,7 @@ class SaleOrder(models.Model):
             elif rule.reward_point_mode == 'unit':
                 points += rule.reward_point_amount * qty
             elif rule.reward_point_mode == 'money':
-                points += rule.reward_point_amount * taxed
+                points += float_round(rule.reward_point_amount * taxed, precision_digits=2, rounding_method='DOWN')
         return points
 
     def _get_line_promotion_rewards(self):
@@ -399,13 +408,14 @@ class SaleOrder(models.Model):
         eligible_lines = self.order_line.filtered(lambda line: line._admits_line_promotion())
         if not eligible_lines:
             return result
-        applied_programs = self.order_line.promo_reward_id.program_id
+        applied_programs = (self.order_line.promo_reward_id.program_id | self.order_line.reward_id.program_id)
         programs = self.env['loyalty.program'].search([
             *self._get_program_domain(),
             ('program_type', 'in', LINE_PROMOTION_PROGRAM_TYPES),
         ])
         for program in programs:
-            if program.limit_usage and program.total_order_count >= program.max_usage and program not in applied_programs:
+            prog_sudo = program.sudo()
+            if prog_sudo.limit_usage and prog_sudo.total_order_count >= prog_sudo.max_usage and program not in applied_programs:
                 continue
             points = self._get_line_promotion_points(program)
             if points is None:
@@ -518,6 +528,14 @@ class SaleOrder(models.Model):
         line_rules = self.code_enabled_rule_ids.filtered(
             lambda rule: any(reward._is_line_promotion() for reward in rule.program_id.reward_ids)
         )
+        # Restaurar % de promociones antes de que el core evalúe puntos y recompensas
+        for order in self:
+            for line in order.order_line.filtered('promo_reward_id'):
+                if line.promo_reward_id.discount and line.discount != line.promo_reward_id.discount:
+                    line.with_context(skip_manual_discount_breakdown=True).write({
+                        'discount': line.promo_reward_id.discount,
+                        'technical_discount': line.promo_reward_id.discount,
+                    })
         # El core puede reescribir o recrear las líneas de regalo: se compara por recompensa.
         gifts_before = defaultdict(lambda: self.env['product.product'])
         for line in self._gift_reward_lines():

@@ -63,6 +63,7 @@
             </xpath>
             <xpath expr="//button[@name='action_open_reward_wizard'][not(@disabled)]" position="attributes">
                 <attribute name="string">Promociones</attribute>
+                <attribute name="title">Promociones disponibles por aplicar en las líneas</attribute>
             </xpath>
             <xpath expr="//button[@name='action_open_reward_wizard'][not(@disabled)]" position="inside">
                 <span>Promociones</span>

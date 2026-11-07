@@ -1253,12 +1253,20 @@ class SaleOrderLine(models.Model):
                 } for reward in (rewards | applied).sorted(key=lambda reward: (-reward.discount, reward.id))]
                 fallback = False
                 if applied:
-                    agreement = line._agreement_discount() or 0.0
                     rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
-                    fallback = {
-                        'label': rule.get('origin_label') or _("sin acuerdo"),
-                        'difference': difference(agreement),
-                    }
+                    if rule.get('type') == 'fixed_price':
+                        fixed_subtotal = line.currency_id.round(rule['price'] * line.product_uom_qty)
+                        fallback_diff = line.currency_id.round(line.price_subtotal - fixed_subtotal)
+                        fallback = {
+                            'label': rule.get('origin_label') or _("Precio Fijo"),
+                            'difference': fallback_diff,
+                        }
+                    else:
+                        agreement = line._agreement_discount() or 0.0
+                        fallback = {
+                            'label': rule.get('origin_label') or _("sin acuerdo"),
+                            'difference': difference(agreement),
+                        }
                 line.promo_available_info = {'options': options, 'fallback': fallback}
 
     def action_set_line_promotion(self, reward_id=False):
@@ -1327,17 +1335,40 @@ class SaleOrderLine(models.Model):
         lines = self.filtered('promo_reward_id')
         if not lines:
             return
-        lines.with_context(skip_manual_discount_breakdown=True).write({
-            'promo_reward_id': False,
-            'pricing_rule_type': 'none',
-            'pricing_rule_origin': '',
-        })
-        # Como `_recompute_pricing_rules`: el acuerdo vigente puede ser ahora un precio fijo.
-        lines.invalidate_recordset(['pricelist_item_id'])
-        recompute_lines = lines.with_context(force_price_recomputation=True)
-        recompute_lines._reset_price_unit()
-        recompute_lines._compute_price_unit()
-        recompute_lines._compute_discount()
+        for line in lines:
+            rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
+            rule_type = rule.get('type')
+            if rule_type == 'fixed_price':
+                price = rule['price']
+                line.with_context(skip_manual_discount_breakdown=True).write({
+                    'promo_reward_id': False,
+                    'price_unit': price,
+                    'technical_price_unit': price,
+                    'discount': 0.0,
+                    'technical_discount': 0.0,
+                    'pricing_rule_type': 'fixed_price',
+                    'pricing_rule_origin': rule.get('origin_label') or 'Precio Fijo',
+                    'pricing_rule_id': rule.get('rule') and rule['rule'].id or False,
+                })
+            elif rule_type == 'discount':
+                disc = rule['discount']
+                line.with_context(skip_manual_discount_breakdown=True).write({
+                    'promo_reward_id': False,
+                    'discount': disc,
+                    'technical_discount': disc,
+                    'pricing_rule_type': rule.get('origin_type') or 'product',
+                    'pricing_rule_origin': rule.get('origin_label') or '',
+                    'pricing_rule_id': rule.get('rule') and rule['rule'].id or False,
+                })
+            else:
+                line.with_context(skip_manual_discount_breakdown=True).write({
+                    'promo_reward_id': False,
+                    'discount': 0.0,
+                    'technical_discount': 0.0,
+                    'pricing_rule_type': 'none',
+                    'pricing_rule_origin': '',
+                    'pricing_rule_id': False,
+                })
 
     @api.constrains('promo_reward_id')
     def _check_line_promotion(self):
