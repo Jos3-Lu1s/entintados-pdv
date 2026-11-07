@@ -162,12 +162,24 @@ class SaleOrderLine(models.Model):
                 line.discount_amount = line._get_own_discount_amount()
 
     def _get_own_discount_amount(self):
-        # Misma fórmula que `amount_undiscounted`: partir del subtotal excluye el IVA incluido en el precio.
+        # Base sin impuestos calculada con el motor fiscal para excluir correctamente el IVA incluido,
+        # incluso con 100 % de descuento o porcentajes fraccionarios altos.
         self.ensure_one()
-        if self.discount == 100:
-            amount = self.price_unit * self.product_uom_qty
+        if not self.product_uom_qty or not self.price_unit or not self.discount:
+            return 0.0
+        if self.tax_ids:
+            taxes_data = self.tax_ids.compute_all(
+                self.price_unit,
+                currency=self.currency_id,
+                quantity=self.product_uom_qty,
+                product=self.product_id,
+                partner=self.order_id.partner_shipping_id,
+                handle_price_include=True,
+            )
+            base_undiscounted = taxes_data['total_excluded']
         else:
-            amount = self.price_subtotal * self.discount / (100 - self.discount)
+            base_undiscounted = self.price_unit * self.product_uom_qty
+        amount = max(0.0, base_undiscounted - self.price_subtotal)
         return self.currency_id.round(amount) if self.currency_id else amount
 
     @api.depends('product_id')

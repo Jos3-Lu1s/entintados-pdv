@@ -1182,7 +1182,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertIn(code_prog.rule_ids.id, order.code_enabled_rule_ids.ids)
 
     def test_drop_promotion_restores_custom_or_agreement_price(self):
-        # AUD-0201: Quitar la promoción no debe forzar precio de lista general
+        # Quitar la promoción no debe forzar precio de lista general
         prod = self._create_product('Producto Acuerdo 120', 120.0)
         self._create_rule(prod, discount=10.0)
         order = self._create_order()
@@ -1208,7 +1208,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertEqual(line.discount, 10.0)
         self.assertEqual(line.pricing_rule_type, 'product')
 
-        # AUD-0201: Popover con regla de precio fijo calcula la diferencia exacta contra el subtotal real
+        # Popover con regla de precio fijo calcula la diferencia exacta contra el subtotal real
         prod_fixed = self._create_product('Producto Fixed 100', 100.0)
         self._create_rule(prod_fixed, fixed_price=70.0)
         order_fixed = self._create_order()
@@ -1228,7 +1228,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertEqual(line_fixed.pricing_rule_type, 'fixed_price')
 
     def test_program_max_usage_enforced_strictly_under_all_roles(self):
-        # AUD-0203: El límite de usos se evalúa bajo sudo() para todos los roles
+        # El límite de usos se evalúa bajo sudo() para todos los roles
         program = self._create_program([{'discount': 20.0}])
         program.write({'limit_usage': True, 'max_usage': 1})
         reward = program.reward_ids
@@ -1246,7 +1246,7 @@ class TestSaleLinePromotion(TransactionCase):
                          "La promoción no debe estar disponible porque ya alcanzó max_usage=1")
 
     def test_order_discount_totals_include_fixed_reward_line(self):
-        # AUD-0192: Descuento total e Importe antes de descuento incluyen recompensas de importe fijo
+        # Descuento total e Importe antes de descuento incluyen recompensas de importe fijo
         order = self._create_order()
         prod_line = self._create_line(order, qty=1.0)  # 1 x 100.0 = 100.0 con 10% acuerdo = 90.0
         self.assertEqual(order.amount_untaxed, 90.0)
@@ -1271,7 +1271,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertEqual(order.amount_before_discount, 100.0)
 
     def test_action_update_prices_no_spurious_chatter_warning(self):
-        # AUD-0197: Actualizar precios no debe generar aviso falso en el chatter
+        # Actualizar precios no debe generar aviso falso en el chatter
         order, line, reward = self._promo_line(discount=20.0)
         initial_msg_count = len(order.message_ids)
 
@@ -1281,7 +1281,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(spurious, "No debe publicarse aviso de pérdida de promoción o 0% en el chatter")
 
     def test_applied_programs_includes_native_reward_program(self):
-        # AUD-0205: Pedido que ya usa el programa con recompensa nativa puede usar la promo de línea si el límite está lleno
+        # Pedido que ya usa el programa con recompensa nativa puede usar la promo de línea si el límite está lleno
         program = self._create_program([{'discount': 20.0}])
         program.write({'limit_usage': True, 'max_usage': 1})
         line_reward = program.reward_ids[0]
@@ -1313,7 +1313,7 @@ class TestSaleLinePromotion(TransactionCase):
                       "La línea debe poder usar la recompensa de línea porque la orden ya participa en el programa")
 
     def test_money_points_exact_thousand_float_round(self):
-        # AUD-0206: Con puntos por dinero, suma exacta de 1,000.00 con decimales califica
+        # Con puntos por dinero, suma exacta de 1,000.00 con decimales califica
         program = self.env['loyalty.program'].create({
             'name': 'Puntos Dinero 1000',
             'program_type': 'promotion',
@@ -1345,7 +1345,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertIn(program.reward_ids, available.get(line3, self.env['loyalty.reward']))
 
     def test_promo_available_count_matches_unapplied_lines(self):
-        # AUD-0207: promo_available_line_count cuenta sólo líneas pendientes
+        # promo_available_line_count cuenta sólo líneas pendientes
         program = self._create_program([{'discount': 20.0}])
         reward = program.reward_ids
         order = self._create_order()

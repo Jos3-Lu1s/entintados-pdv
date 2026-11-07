@@ -187,6 +187,12 @@ class SaleOrder(models.Model):
         self.order_line.filtered('combo_item_id')._sync_combo_package_agreement()
         return res
 
+    def _get_update_prices_lines(self):
+        # Excluir líneas con formulación/receta entintada: su precio depende de los componentes y base,
+        # y sus envases/descuento están protegidos contra edición directa.
+        lines = super()._get_update_prices_lines()
+        return lines.filtered(lambda line: not (hasattr(line, '_tint_recipe') and line._tint_recipe()))
+
     def _recompute_prices(self):
         # "Actualizar precios": el core pone discount = 0 y llama a _compute_discount() sin forzar;
         # forzado, se reaplica el acuerdo vigente en vez de releer ese 0 como acuerdo congelado.
