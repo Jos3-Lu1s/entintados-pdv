@@ -8,6 +8,15 @@ class VendorCreditGroupMaterial(models.Model):
     _inherit = 'vendor.credit.group'
 
     operation_type = fields.Selection(related='reason_id.operation_type')
+    has_material_returns = fields.Boolean(compute='_compute_has_material_returns')
+
+    @api.depends('line_ids.selected', 'line_ids.effective_reason_id', 'line_ids.operation_type',
+                 'line_ids.selected_reason_id', 'reason_id.operation_type',
+                 'line_ids.selected_reason_id.operation_type')
+    def _compute_has_material_returns(self):
+        for group in self:
+            group.has_material_returns = any(line.operation_type == 'return'
+                                             for line in group.line_ids.filtered('selected'))
     material_line_ids = fields.One2many('vendor.credit.material', 'group_id', string='Material a devolver', copy=False)
     return_picking_ids = fields.Many2many('stock.picking', string='Devoluciones a proveedor', readonly=True,
                                         copy=False, check_company=True)
@@ -33,11 +42,11 @@ class VendorCreditGroupMaterial(models.Model):
 
     def _validate_material_selection(self):
         self.ensure_one()
-        if self.operation_type != 'return':
+        selected = self.line_ids.filtered(lambda line: line.selected and line.operation_type == 'return')
+        if not selected:
             if self.material_line_ids:
                 raise UserError(_('El motivo monetario no admite material. Elimina las líneas de devolución o cambia el motivo.'))
             return
-        selected = self.line_ids.filtered('selected')
         if self.material_line_ids.allocation_id != selected:
             # Recordsets may have different order; only membership matters.
             if set(self.material_line_ids.allocation_id.ids) != set(selected.ids):
@@ -46,7 +55,7 @@ class VendorCreditGroupMaterial(models.Model):
         self.material_line_ids._return_quantities()
 
     def _generate_material_returns(self):
-        if self.operation_type != 'return':
+        if not self.has_material_returns:
             super(VendorCreditGroupMaterial, self).write({'return_picking_ids': [Command.clear()]})
             return
         quantities = self.material_line_ids._return_quantities()

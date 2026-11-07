@@ -1,0 +1,226 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <template id="mat_document_header">
+    <t t-set="mat_header" t-value="o._mat_report_header()"/>
+    <t t-set="mat_partner" t-value="mat_header['partner']"/>
+    <t t-set="mat_agent" t-value="mat_header['agent']"/>
+    <table class="mat-top"><tr>
+        <td style="width:34%;"><div class="mat-panel mat-brand">
+            <img src="/entintados_pdv/static/src/img/invoice_logo_placeholder.png" style="width:210px;height:80px;object-fit:contain;" alt="Logotipo de la empresa"/>
+            <div class="mat-folio"><strong t-out="mat_header['title'] + ':'"/> <span t-out="o.name if o.name and o.name != '/' else 'Borrador'"/></div>
+            <div class="mat-stage">Etapa: <strong t-out="mat_header['stage']"/></div>
+        </div></td>
+        <td style="width:36%;"><div class="mat-company" style="padding:14px 8px;">
+            <strong t-field="o.company_id.name"/><br/>
+            <strong>RFC: <span t-field="o.company_id.vat"/></strong>
+            <div t-field="o.company_id.partner_id" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/>
+            <span t-field="o.company_id.website"/>
+        </div></td>
+        <td style="width:30%;"><div class="mat-panel mat-dates">
+            <div class="mat-heading" t-out="mat_header['date_label']"/><div class="mat-date" t-out="mat_header['date']"/>
+        </div><div class="mat-panel mat-dates" style="margin-top:10px;">
+            <div class="mat-heading" t-out="mat_header['due_label']"/><div class="mat-date" t-out="mat_header['due'] or 'Sin fecha definida'"/>
+        </div><div style="text-align:center;font-size:11px;margin-top:5px;">Moneda: <span t-field="o.currency_id.name"/></div></td>
+    </tr></table>
+    <table class="mat-top"><tr>
+        <td style="width:70%;"><div class="mat-panel">
+            <div class="mat-heading">En atención a:</div><div style="padding:12px;line-height:1.5;">
+                <table class="mat-details"><tr><th>CLAVE:</th><td><span t-field="mat_partner.ref"/></td></tr>
+                <tr><th>NOMBRE:</th><td><span t-field="mat_partner.name"/></td></tr>
+                <tr><th>RFC:</th><td t-out="mat_header['rfc']"/></tr>
+                <tr><th>AGENTE:</th><td><span t-field="mat_agent.name"/></td></tr>
+                <tr><th>Dirección:</th><td><div t-out="mat_partner" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/></td></tr>
+                <tr t-if="o.partner_shipping_id and o.partner_shipping_id != mat_partner"><th>Entrega a:</th><td><div t-field="o.partner_shipping_id" t-options="{'widget':'contact','fields':['name','address'],'no_marker':True}"/></td></tr>
+                <tr t-if="mat_header['origin']"><th>Origen:</th><td t-out="mat_header['origin']"/></tr></table>
+                <t t-if="not mat_header['sale']" t-call="l10n_mx_edi.l10n_mx_fiscal_regime_receptor"/>
+            </div>
+        </div></td>
+        <td style="width:30%;"><div class="mat-panel" style="padding:12px;line-height:1.5;">
+            <strong t-field="mat_agent.name"/><div style="font-size:11px;margin-top:14px;">
+                <div t-if="mat_agent.partner_id.phone"><strong>Teléfono: </strong><span t-field="mat_agent.partner_id.phone"/></div>
+                <t t-set="mat_agent_address" t-value="mat_agent.partner_id if mat_agent.partner_id.street else o.company_id.partner_id"/>
+                <div t-out="mat_agent_address" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/>
+                <div t-if="mat_agent.email"><span t-field="mat_agent.email"/></div>
+                <div t-if="mat_header['reference']"><strong>Referencia: </strong><span t-out="mat_header['reference']"/></div>
+            </div>
+        </div></td>
+    </tr></table>
+    <div class="mat-panel" style="padding:8px 12px;font-size:10px;margin:4px 7px 12px;">
+        <strong>Uso CFDI: </strong><span t-out="mat_header['usage']"/>
+        <br/><strong>Forma de pago: </strong><span t-out="mat_header['payment_way']"/>
+        <strong> · Método de pago: </strong><span t-out="mat_header['payment_method']"/>
+        <t t-if="mat_header['bank_account']"><br/>Cuenta bancaria: <span t-out="mat_header['bank_account']"/></t>
+    </div>
+</template><!-- Shared accounting report: POS and Sales keep their native invoice flow. -->
+    <template id="invoice_mat_layout">
+        <t t-if="o._name != 'sale.order' and o.move_type != 'out_invoice'" t-call="web.external_layout"><t t-out="0"/></t>
+        <t t-else="">
+            <div class="header"/>
+            <div class="article mat-invoice" t-att-data-oe-model="o._name" t-att-data-oe-id="o.id" t-att-data-oe-lang="o.env.context.get('lang')">
+                <style>
+                    .mat-invoice {font-family: Arial, sans-serif; font-size:13px; color:#111; width:100%; overflow-wrap:break-word; word-wrap:break-word;}
+                    .mat-invoice table {width:100%;}
+                    .mat-invoice .text-end {text-align:right;}
+                    .mat-invoice .row {width:100%;}
+                    .mat-invoice {direction:ltr;text-align:left;}
+                    .mat-invoice #complement span {word-break:break-all;}
+                    .mat-invoice .mat-lines {border:1px solid #eee;border-radius:10px;margin-top:18px;font-size:12px;}
+                    .mat-invoice .mat-lines th {background:#efeddb;color:#24468d;}
+                    .mat-invoice .mat-lines td,.mat-invoice .mat-lines th {padding:8px 5px;text-align:left;vertical-align:top;}
+                    .mat-invoice .mat-summary {width:50%;margin:14px 0 14px auto;border:1px solid #eee;border-radius:10px;padding:8px;page-break-inside:avoid;}
+                    .mat-invoice .mat-summary td {padding:5px;}
+                    .mat-invoice .mat-card {border:1px solid #eee; border-radius:12px; padding:12px;}
+                    .mat-invoice .mat-heading {background:#efeddb; color:#24468d; font-weight:bold; padding:8px;}
+                    .mat-invoice .mat-top {width:100%; table-layout:fixed; border-collapse:separate; border-spacing:7px; margin-bottom:8px;}
+                    .mat-invoice .mat-top td {vertical-align:top; border:0;}
+                    .mat-invoice .mat-brand {width:34%; text-align:center;}
+                    .mat-invoice .mat-company {width:36%; text-align:center; line-height:1.6;}
+                    .mat-invoice .mat-dates {width:30%; text-align:center;}
+                    .mat-invoice .mat-date {padding:8px; font-weight:bold;}
+                    .mat-invoice .mat-customer {width:68%; line-height:1.55;}
+                    .mat-invoice .mat-agent {width:32%; line-height:1.55;}
+                    .mat-invoice table[name='invoice_line_table'] {border:1px solid #eee; border-radius:10px; margin-top:18px; font-size:12px;}
+                    .mat-invoice table[name='invoice_line_table'] thead {background:#efeddb; color:#24468d; display:table-header-group;}
+                    .mat-invoice table[name='invoice_line_table'] td {padding:8px 5px; border:0; vertical-align:top;}
+                    .mat-invoice table[name='invoice_line_table'] th {padding:8px 5px; border:0;}
+                    .mat-invoice #informations {display:none;}
+                    .mat-invoice #total {width:50%; margin-left:50%; border:1px solid #eee; border-radius:12px; padding:8px; margin-top:14px; page-break-inside:avoid;}
+                    .mat-invoice #total td {padding:5px;}
+                    .mat-invoice #total .row, .mat-invoice #total .col-6 {width:100%;margin:0;}
+                    .mat-invoice .o_total {border-top:1px solid #222; font-weight:bold;}
+                    .mat-invoice #payment_term {font-size:11px;}
+                    .mat-invoice .mat-thanks {color:#24468d; font-weight:bold; margin-top:14px;}
+                    .mat-invoice #complement {font-size:9px; margin-top:15px;}
+                    .mat-invoice #complement .barcode {float:left; width:20%;}
+                    .mat-invoice #complement .barcode img {width:125px;height:125px;}
+                    .mat-invoice #complement .complement-details {float:right; width:79%;}
+                    .mat-invoice .page {margin:0;}
+                
+    .mat-invoice .mat-panel {background:white;border:1px solid #f2f2f2;border-radius:12px;box-shadow:0 2px 6px #ededed;overflow:hidden;}
+    .mat-invoice .mat-panel.mat-brand,.mat-invoice .mat-panel.mat-dates,.mat-invoice .mat-top .mat-company {width:100%;box-sizing:border-box;}
+    .mat-invoice table.mat-top {border:0!important;border-spacing:6px;margin:0 0 4px;}
+    .mat-invoice .mat-top &gt; tbody &gt; tr &gt; td,.mat-invoice .mat-top &gt; tr &gt; td {padding:0!important;border:0!important;vertical-align:top;}
+    .mat-invoice .mat-company {font-size:12px;line-height:1.45;}
+    .mat-invoice .mat-brand img {margin:8px auto;}
+    .mat-invoice .mat-folio {padding:8px;background:#efeddb;color:#24468d;}
+    .mat-invoice .mat-stage {font-size:10px;padding:5px;color:#24468d;}
+    .mat-invoice .mat-date {padding:9px;font-size:12px;}
+    .mat-invoice .mat-details {border:0;font-size:12px;}
+    .mat-invoice .mat-details th {width:85px;text-align:left;vertical-align:top;padding:0 8px 0 0;}
+    .mat-invoice .mat-details td {text-align:left;padding:0;}
+    .mat-invoice .mat-lines {border-spacing:0;box-shadow:0 2px 6px #ededed;}
+</style>
+                <t t-out="0"/>
+            </div>
+            <div class="footer" style="font-size:9px;color:#666;text-align:right;">
+                <span t-field="o.company_id.name"/> · Página <span class="page"/> / <span class="topage"/>
+            </div>
+        </t>
+    </template>
+
+    <template id="invoice_mat_paper_margins" inherit_id="web.report_layout">
+        <xpath expr="//html" position="attributes">
+            <attribute name="t-att-data-report-margin-top">10 if docs and (docs._name == 'sale.order' or docs._name == 'account.move' and all(move.move_type == 'out_invoice' for move in docs)) else None</attribute>
+            <attribute name="t-att-data-report-header-spacing">0 if docs and (docs._name == 'sale.order' or docs._name == 'account.move' and all(move.move_type == 'out_invoice' for move in docs)) else None</attribute>
+        </xpath>
+    </template>
+
+    <template id="invoice_mat_layout_selector" inherit_id="web.external_layout" priority="90">
+        <xpath expr="//t[@t-if='company.external_report_layout_id']" position="before">
+            <t t-if="mat_invoice_layout" t-call="entintados_pdv.invoice_mat_layout"><t t-out="0"/></t>
+        </xpath>
+        <xpath expr="//t[@t-if='company.external_report_layout_id']" position="attributes">
+            <attribute name="t-if"/>
+            <attribute name="t-elif">company.external_report_layout_id</attribute>
+        </xpath>
+    </template>
+    <template id="report_invoice_mat" inherit_id="account.report_invoice_document" priority="90">
+        <xpath expr="//t[@t-set='forced_vat']" position="after">
+            <t t-set="mat_invoice_layout" t-value="o.move_type == 'out_invoice'"/>
+        </xpath>
+        <xpath expr="//div[@id='informations']" position="before">
+            <t t-if="o.move_type == 'out_invoice'" t-call="entintados_pdv.mat_document_header"/></xpath>
+        <xpath expr="//th[@name='th_description']" position="before">
+            <th t-if="o.move_type == 'out_invoice'" class="text-end">Cantidad</th>
+            <th t-if="o.move_type == 'out_invoice'" class="text-start">Código</th>
+        </xpath>
+        <xpath expr="//td[@name='account_invoice_line_name']" position="before">
+            <td t-if="o.move_type == 'out_invoice'" class="text-end"><span t-field="line.quantity"/><br/><span t-field="line.product_uom_id" groups="uom.group_uom"/></td>
+            <td t-if="o.move_type == 'out_invoice'"><span t-field="line.product_id.default_code"/></td>
+        </xpath>
+        <xpath expr="//th[@name='th_quantity']" position="attributes">
+            <attribute name="t-if">o.move_type != 'out_invoice'</attribute>
+        </xpath>
+        <xpath expr="//td[@name='td_quantity']" position="attributes">
+            <attribute name="t-if">o.move_type != 'out_invoice'</attribute>
+        </xpath>
+        <xpath expr="//p[@t-if='o.company_id.display_invoice_amount_total_words']" position="attributes">
+            <attribute name="t-if">o.move_type != 'out_invoice' and o.company_id.display_invoice_amount_total_words</attribute>
+        </xpath>
+        <xpath expr="//t[@t-set='line_colspan']" position="attributes">
+            <attribute name="t-value" add="+ (1 if o.move_type == 'out_invoice' else 0)" separator=" "/>
+        </xpath>
+        <xpath expr="//table[@name='invoice_line_table']" position="before">
+            <t t-if="o.move_type == 'out_invoice'">
+                <t t-set="mat_lines" t-value="o._get_move_lines_to_report()"/>
+                <t t-set="mat_discount" t-value="any(line.discount for line in mat_lines)"/>
+                <table class="mat-lines" name="mat_invoice_lines" dir="ltr">
+                    <thead><tr>
+                        <th>Cantidad</th><th>Código</th><th style="width:40%;">Descripción</th>
+                        <th t-if="mat_discount">Descuento</th><th>Valor unitario</th><th>Importe</th>
+                    </tr></thead>
+                    <tbody>
+                        <t t-foreach="mat_lines" t-as="line">
+                            <tr t-if="line.display_type == 'product'">
+                                <t t-set="mat_values" t-value="o._mat_invoice_line_values(line)"/>
+                                <td><span t-field="line.quantity"/></td>
+                                <td><span t-out="mat_values['code']"/></td>
+                                <td><span t-field="line.name" t-options="{'widget':'text'}"/></td>
+                                <td t-if="mat_discount"><t t-if="line.discount"><span t-field="line.discount"/>%<br/><span t-out="mat_values['discount']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></t></td>
+                                <td><span t-out="mat_values['unit']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td>
+                                <td><span t-field="line.price_subtotal"/></td>
+                            </tr>
+                            <tr t-else=""><td t-att-colspan="6 if mat_discount else 5"><span t-field="line.name" t-options="{'widget':'text'}"/></td></tr>
+                        </t>
+                    </tbody>
+                </table>
+            </t>
+        </xpath>
+        <xpath expr="//table[@name='invoice_line_table']" position="attributes">
+            <attribute name="t-if">o.move_type != 'out_invoice'</attribute>
+        </xpath>
+        <xpath expr="//div[@id='right-elements']" position="before">
+            <t t-if="o.move_type == 'out_invoice'">
+                <t t-set="mat_summary" t-value="o._mat_invoice_discount_summary()"/>
+                <div class="mat-summary-block" style="display:block;width:100%;flex:0 0 100%;clear:both;">
+                <table class="mat-summary" name="mat_invoice_summary">
+                    <tbody>
+                        <tr t-if="mat_summary['discount'] or mat_summary['adjustments']"><td>Importe antes de descuentos y ajustes</td><td class="text-end"><span t-out="mat_summary['gross']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td></tr>
+                        <tr t-if="mat_summary['discount']"><td>Descuentos</td><td class="text-end"><span t-out="mat_summary['discount']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td></tr>
+                        <tr t-foreach="mat_summary['adjustments']" t-as="adjustment"><td><span t-out="adjustment['name']"/></td><td class="text-end"><span t-out="adjustment['amount']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td></tr>
+                        <tr><td>Importe sin impuestos</td><td class="text-end"><span t-field="o.amount_untaxed"/></td></tr>
+                        <t t-foreach="(o.tax_totals or {}).get('subtotals', [])" t-as="subtotal">
+                            <tr t-foreach="subtotal.get('tax_groups', [])" t-as="tax_group"><td><span t-out="tax_group['group_name']"/></td><td class="text-end"><span t-out="tax_group['tax_amount_currency']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td></tr>
+                        </t>
+                        <tr t-if="(o.tax_totals or {}).get('cash_rounding_base_amount_currency')"><td>Redondeo</td><td class="text-end"><span t-out="o.tax_totals['cash_rounding_base_amount_currency']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td></tr>
+                        <tr class="o_total"><td>Total</td><td class="text-end"><span t-field="o.amount_total"/></td></tr>
+                    </tbody>
+                </table>
+                <div t-if="o.amount_total_words" name="mat_amount_words" style="display:block;clear:both;width:100%;margin-top:8px;text-align:left;color:#24468d;font-weight:bold;">Importe con letra: <span t-field="o.amount_total_words"/></div>
+                <div class="mat-thanks" style="margin-top:6px;text-align:left;">Gracias por su preferencia.</div>
+                </div>
+            </t>
+        </xpath>
+        <xpath expr="//div[@id='total']" position="attributes">
+            <attribute name="t-if">o.move_type != 'out_invoice'</attribute>
+        </xpath>
+    </template>
+    <template id="report_invoice_mat_fiscal" inherit_id="l10n_mx_edi.report_invoice_document" priority="90">
+        <xpath expr="//div[@id='complement']//img" position="attributes">
+            <attribute name="t-att-src">o._mat_invoice_barcode(cfdi_values.get('barcode_src')) if o.move_type == 'out_invoice' else cfdi_values.get('barcode_src')</attribute>
+        </xpath>
+        <xpath expr="//t[@t-set='line_colspan']" position="attributes">
+            <attribute name="t-value" add="+ (1 if o.move_type == 'out_invoice' else 0)" separator=" "/>
+        </xpath>
+    </template>
+</odoo>

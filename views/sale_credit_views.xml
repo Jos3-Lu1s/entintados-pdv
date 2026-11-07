@@ -43,9 +43,20 @@
                 <field name="sale_credit_status" invisible="not sale_credit_status"/>
             </xpath>
             <xpath expr="//header" position="inside">
+                <field name="sale_credit_stage" widget="statusbar" statusbar_visible="draft,credit_pending,posted"
+                       invisible="sale_credit_stage != 'credit_pending'"/>
                 <field name="sale_credit_needs_review" invisible="1"/>
                 <button name="action_request_sale_credit" type="object" string="Solicitar autorización de crédito"
-                        invisible="state != 'draft' or not sale_credit_needs_review" groups="account.group_account_invoice"/>
+                        invisible="state != 'draft' or not sale_credit_needs_review or sale_credit_stage == 'credit_pending'" groups="account.group_account_invoice"/>
+            </xpath>
+            <xpath expr="//header/field[@name='state']" position="attributes">
+                <attribute name="invisible" add="sale_credit_stage == 'credit_pending'" separator=" or "/>
+            </xpath>
+            <xpath expr="//header/button[@name='action_post'][1]" position="attributes">
+                <attribute name="invisible" add="sale_credit_stage == 'credit_pending'" separator=" or "/>
+            </xpath>
+            <xpath expr="//header/button[@name='action_post'][2]" position="attributes">
+                <attribute name="invisible" add="sale_credit_stage == 'credit_pending'" separator=" or "/>
             </xpath>
         </field>
     </record>

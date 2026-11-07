@@ -1,8 +1,18 @@
 <templates xml:space="preserve">
     <t t-name="entintados_pdv.CreateSaleQuotation" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
         <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
+            <button t-if="printableSaleQuotations.length" t-att-class="buttonClass" t-on-click="onClickPrintSaleQuotation">
+                <i class="fa fa-print me-1"/>Imprimir cotización
+            </button>
             <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="() => this.onClickCreateSaleQuotation()">
                 <i class="fa fa-file-text-o me-1"/>Crear cotización
+            </button>
+        </xpath>
+        <xpath expr="//SelectPartnerButton" position="after">
+            <button t-if="!props.showRemainingButtons and printableSaleQuotations.length"
+                    class="btn btn-secondary btn-lg flex-shrink-0" title="Imprimir cotización"
+                    t-on-click="onClickPrintSaleQuotation">
+                <i class="fa fa-print" aria-label="Imprimir cotización"/>
             </button>
         </xpath>
     </t>

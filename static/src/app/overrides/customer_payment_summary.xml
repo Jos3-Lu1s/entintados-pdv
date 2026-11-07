@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
+    <t t-name="entintados_pdv.HidePaymentInvoiceToggle" t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//button[hasclass('js_invoice')]" position="attributes">
+            <attribute name="t-if">false</attribute>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.PaymentSummaryLayout" t-inherit="point_of_sale.PaymentScreen" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('center-content')]" position="attributes">
+            <attribute name="class" add="o-entintados-payment-layout" separator=" "/>
+        </xpath>
+    </t>
     <t t-name="entintados_pdv.CustomerPaymentSummary" t-inherit="point_of_sale.PaymentScreenDue" t-inherit-mode="extension">
         <xpath expr="//section" position="replace">
-            <section class="o-customer-payment-summary" aria-label="Resumen de compra">
+            <section t-if="currentOrder" class="o-customer-payment-summary" aria-label="Resumen de compra">
                 <t t-set="summary" t-value="customerPaymentSummary"/>
                 <header class="p-3 border-bottom">
                     <h4 class="mb-1">Resumen de compra</h4>
@@ -31,6 +41,24 @@
                 </div>
                 <footer class="p-3 border-top">
                     <small class="text-muted">Precios e importes de productos antes de impuestos.</small>
+                    <div t-if="showPaymentInvoiceOptions" class="o-customer-invoice-options table-responsive mt-2 mb-3">
+                        <table class="table table-sm table-bordered mb-0 align-middle" aria-label="Datos de facturación">
+                            <thead><tr><th><label for="payment_invoice_usage">Uso</label></th><th><label for="payment_invoice_public">Público en general</label></th><th><label for="payment_invoice_count">Número de facturas</label></th></tr></thead>
+                            <tbody><tr>
+                                <td><select id="payment_invoice_usage" class="form-select form-select-sm" t-on-change="changePaymentInvoiceUsage">
+                                    <option t-foreach="pos.config._l10n_mx_edi_usage || []" t-as="usage" t-key="usage.value"
+                                            t-att-value="usage.value" t-att-selected="usage.value === paymentInvoiceUsage" t-esc="usage.name"/>
+                                </select></td>
+                                <td><select id="payment_invoice_public" class="form-select form-select-sm" t-on-change="changePaymentInvoicePublic">
+                                    <option value="0" t-att-selected="!currentOrder.l10n_mx_edi_cfdi_to_public">No</option>
+                                    <option value="1" t-att-selected="!!currentOrder.l10n_mx_edi_cfdi_to_public">Sí</option>
+                                </select></td>
+                                <td><input id="payment_invoice_count" type="number" min="1" step="1"
+                                           class="form-control form-control-sm" t-att-value="paymentInvoiceSplitCount"
+                                           t-att-disabled="!canSplitPaymentInvoice" t-on-change="changePaymentInvoiceSplitCount"/></td>
+                            </tr></tbody>
+                        </table>
+                    </div>
                     <dl class="o-customer-price-breakdown mb-0 mt-2">
                         <dt>Importe antes de descuentos</dt><dd t-esc="env.utils.formatCurrency(summary.gross)"/>
                         <dt>Descuentos</dt><dd t-esc="env.utils.formatCurrency(-summary.discounts)"/>

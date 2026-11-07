@@ -37,7 +37,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
+    'depends': ['base', 'contacts', 'account', 'account_reports', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -55,6 +55,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_financing.xml",
             "entintados_pdv/static/src/app/overrides/pos_bank_payments.xml",
             "entintados_pdv/static/src/app/overrides/customer_payment_summary.js",
+            "entintados_pdv/static/src/app/components/customer_credit_badge.xml",
             "entintados_pdv/static/src/app/components/customer_contact_info.xml",
             "entintados_pdv/static/src/app/utils/customer_summary.js",
             "entintados_pdv/static/src/app/overrides/customer_payment_summary.xml",
@@ -77,6 +78,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/pricing_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
+            "entintados_pdv/static/src/app/utils/invoice_options.js",
+            "entintados_pdv/static/src/app/utils/quotation_print.js",
             # Pantalla de seleccion de color
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.js",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.xml",
@@ -107,9 +110,14 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/fields/pos_tint_grouped_lines.js",
+            "entintados_pdv/static/src/fields/pos_tint_grouped_lines.xml",
+            "entintados_pdv/static/src/reports/ppd_receivable_line_cell.xml",
             "entintados_pdv/static/src/fields/customer_payment_policy.js",
             "entintados_pdv/static/src/views/tint_sales_report.js",
             "entintados_pdv/static/src/views/tint_sales_report.xml",
+            "entintados_pdv/static/src/views/mat_invoice_preview.js",
+            "entintados_pdv/static/src/views/mat_invoice_preview.xml",
             "entintados_pdv/static/src/fields/financial_risk.css",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
             "entintados_pdv/static/src/fields/crm_material_product/merge_material_product.js",
@@ -192,6 +200,8 @@ Catálogo de entintado
         'views/tint_sales_report_views.xml',
         'report/tint_sales_report.xml',
         'report/invoice_tint.xml',
+        'report/invoice_mat.xml',
+        'report/sale_mat.xml',
         'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
@@ -244,6 +254,9 @@ Catálogo de entintado
         'wizards/product_stock_lookup_views.xml',
         'wizards/branch_cash_cut_views.xml',
         'report/branch_cash_cut.xml',
+        'views/ppd_receivable_report_views.xml',
+        'wizards/ppd_receivable_download_views.xml',
+        'report/ppd_customer_receivable.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',

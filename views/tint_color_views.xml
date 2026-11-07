@@ -18,6 +18,8 @@
                     optional="show"
                 />
                 <field name="formula_count" string="Fórmulas" />
+                <field name="sold_quantity" string="Total vendido" sum="Total vendido" optional="show"
+                       groups="point_of_sale.group_pos_manager,sales_team.group_sale_manager,account.group_account_readonly"/>
             </list>
         </field>
     </record>

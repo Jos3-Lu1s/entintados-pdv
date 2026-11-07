@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <function model="account.report" name="_setup_ppd_receivable_report"/>
+    <record id="action_ppd_receivable_report" model="ir.actions.client">
+        <field name="name">Cuentas por cobrar PPD</field>
+        <field name="tag">account_report</field>
+        <field name="context" eval="{'report_id': ref('ppd_receivable_report')}"/>
+    </record>
+    <menuitem id="menu_ppd_receivable_report" name="Cuentas por cobrar PPD"
+              parent="menu_osel_reports" action="action_ppd_receivable_report" sequence="30"
+              groups="account.group_account_readonly,account.group_account_basic"/>
+</odoo>

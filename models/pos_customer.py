@@ -1,5 +1,6 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.misc import format_amount
 
 
 class ResPartnerPosContactInfo(models.Model):
@@ -16,18 +17,23 @@ class ResPartnerPosContactInfo(models.Model):
                  'country_id.name', 'sale_owner_name', 'l10n_mx_edi_fiscal_regime',
                  'commercial_partner_id.ref', 'commercial_partner_id.vat',
                  'commercial_partner_id.l10n_mx_edi_fiscal_regime', 'child_ids',
+                 'commercial_partner_id.credit_limit', 'commercial_partner_id.is_credit',
                  'child_ids.type', 'child_ids.name', 'child_ids.street', 'child_ids.street2',
                  'child_ids.zip', 'child_ids.city', 'child_ids.state_id.name', 'child_ids.country_id.name')
-    @api.depends_context('lang')
+    @api.depends_context('lang', 'company')
     def _compute_pos_contact_info(self):
         regimes = dict(self._fields['l10n_mx_edi_fiscal_regime']._description_selection(self.env))
         for partner in self:
             commercial = partner.commercial_partner_id
+            credit = commercial.sudo()
             addresses = partner.address_get(['invoice', 'delivery'])
             invoice = self.browse(addresses.get('invoice'))
             delivery = self.browse(addresses.get('delivery'))
             partner.pos_contact_info = {
                 'reference': partner.ref or commercial.ref or '',
+                'credit_authorized': bool(credit.is_credit),
+                'credit_limit_text': format_amount(self.env, credit.credit_limit, credit.risk_currency_id),
+                'credit_currency': credit.risk_currency_id.name,
                 'vat': partner.vat or commercial.vat or '',
                 'salesperson': partner.sale_owner_name or '',
                 'address': partner._pos_contact_address(),

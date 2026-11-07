@@ -1,0 +1,66 @@
+<odoo>
+    <record id="paperformat_ppd_customer" model="report.paperformat">
+        <field name="name">Cuentas por cobrar PPD por cliente</field>
+        <field name="format">A4</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_top">20</field>
+        <field name="margin_bottom">18</field>
+        <field name="margin_left">12</field>
+        <field name="margin_right">12</field>
+        <field name="header_spacing">5</field>
+    </record>
+    <record id="action_ppd_customer_pdf" model="ir.actions.report">
+        <field name="name">Cuentas por cobrar PPD por cliente</field>
+        <field name="model">ppd.receivable.download</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.ppd_customer_receivable_pdf</field>
+        <field name="paperformat_id" ref="paperformat_ppd_customer"/>
+        <field name="print_report_name">'Cuentas por cobrar PPD - %s' % object.partner_id.display_name</field>
+    </record>
+    <template id="ppd_customer_receivable_pdf">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-set="data" t-value="o._get_report_data()"/>
+                <t t-call="web.basic_layout">
+                    <div class="header" style="font-family: Arial, sans-serif; font-size: 11px; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 6px;">
+                        <span t-esc="data['companies']"/>
+                    </div>
+                    <div class="footer" style="font-family: Arial, sans-serif; font-size: 10px; color: #666; text-align: right;">
+                        Página <span class="page"/> / <span class="topage"/>
+                    </div>
+                    <div class="page" style="font-family: Arial, sans-serif; font-size: 12px;">
+                        <h2 style="font-size: 22px; margin: 0 0 16px;">Cuentas por cobrar PPD</h2>
+                        <div style="border: 1px solid #ddd; background: #f8f9fa; padding: 10px; margin-bottom: 18px; line-height: 1.5;">
+                            <strong>Cliente: </strong><span t-esc="data['customer']"/><br/>
+                            <strong>Fecha de corte: </strong><span t-esc="data['date_to']" t-options="{'widget': 'date'}"/><br/>
+                            <strong>Compañía: </strong><span t-esc="data['companies']"/><br/>
+                            <strong>Crédito asignado: </strong><span t-esc="data['credit_limit']" t-options="{'widget': 'monetary', 'display_currency': data['currency']}"/>
+                        </div>
+                        <table class="table table-sm" style="font-size: 11px; width: 100%; border-collapse: collapse;">
+                            <thead style="display: table-header-group;">
+                                <tr style="background: #eee;">
+                                    <th style="text-align: left; padding: 7px 4px; width: 24%;">Factura</th>
+                                    <th style="text-align: left; padding: 7px 4px; width: 19%;">Fecha de factura</th>
+                                    <th style="text-align: left; padding: 7px 4px; width: 19%;">Fecha de vencimiento</th>
+                                    <th style="text-align: right; padding: 7px 4px; width: 16%;">Días de vencimiento</th>
+                                    <th style="text-align: right; padding: 7px 4px; width: 22%;">Total a deber</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="data['rows']" t-as="row" style="page-break-inside: avoid; border-bottom: 1px solid #ddd;">
+                                    <td style="padding: 6px 4px;" t-esc="row['invoice']"/>
+                                    <td style="padding: 6px 4px; white-space: nowrap;" t-esc="row['invoice_date']" t-options="{'widget': 'date'}"/>
+                                    <td style="padding: 6px 4px; white-space: nowrap;" t-esc="row['due_date']" t-options="{'widget': 'date'}"/>
+                                    <td style="padding: 6px 4px; text-align: right;" t-esc="row['days']"/>
+                                    <td style="padding: 6px 4px; text-align: right; white-space: nowrap;" t-esc="row['amount']" t-options="{'widget': 'monetary', 'display_currency': data['currency']}"/>
+                                </tr>
+                            <tr style="border-top: 2px solid #555; page-break-inside: avoid;"><td colspan="4" style="padding: 9px 4px;"><strong>Total a deber</strong></td>
+                                <td style="padding: 9px 4px; text-align: right; white-space: nowrap;"><strong t-esc="data['total']" t-options="{'widget': 'monetary', 'display_currency': data['currency']}"/></td>
+                            </tr></tbody>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

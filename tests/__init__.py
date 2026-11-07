@@ -57,3 +57,4 @@ from . import test_vendor_credit_summary
 from . import test_product_stock_lookup
 from . import test_pos_contact_info
 from . import test_sale_gift_promotion
+from . import test_ppd_receivable_report

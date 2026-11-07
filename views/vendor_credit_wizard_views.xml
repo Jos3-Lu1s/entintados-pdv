@@ -42,15 +42,16 @@
                         <field name="company_id" string="Compañía" readonly="state != 'draft'" groups="base.group_multi_company"/>
                         <field name="company_id" invisible="1"/>
                         <field name="currency_id" string="Moneda" readonly="state != 'draft'" options="{'no_create': True}"/>
-                        <field name="reason_id" required="1" readonly="state != 'draft'" options="{'no_create': True}"
-                               domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"/>
+                        <field name="reason_id" invisible="1"/>
                     </group>
                     <group string="Datos de la nota">
-                        <field name="supplier_reference" required="1" readonly="state != 'draft' and supplier_reference" placeholder="Folio de la nota del proveedor"/>
+                        <field name="supplier_reference_required" invisible="1"/>
+                        <field name="supplier_reference" required="supplier_reference_required" readonly="state != 'draft' and supplier_reference" placeholder="Folio de la nota del proveedor"/>
                         <field name="journal_id" readonly="state != 'draft'" domain="[('type', '=', 'purchase'), ('company_id', '=', company_id)]" options="{'no_create': True}"/>
                         <field name="date" readonly="state != 'draft'"/>
                         <field name="reason" readonly="1" invisible="1"/>
                         <field name="operation_type" invisible="1"/>
+                        <field name="has_material_returns" invisible="1"/>
                         <field name="return_picking_ids" invisible="1"/>
                     </group>
                 </group>
@@ -64,7 +65,8 @@
                     <i class="fa fa-info-circle mt-1" aria-hidden="true"/>
                     <div>
                         Se generará una nota por cada factura seleccionada, con contabilización y conciliación automáticas.
-                        Los importes incluyen impuestos. Al modificarlos se recalcula el pago registrado para liquidar la factura.
+                        Los importes incluyen impuestos. Si existe un pago ajustable, se recalcula para liquidar la factura.
+                        Si la factura no tiene pagos, la nota reduce su saldo pendiente.
                     </div>
                 </div>
                 <div class="alert alert-success" role="status" invisible="state != 'generated'">
@@ -75,7 +77,7 @@
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-4 mb-3">
                     <div>
                         <h3 class="mb-1">Facturas del proveedor</h3>
-                        <span class="text-muted">Facturas con pago parcial. Ajusta el importe de las que deseas incluir.</span>
+                        <span class="text-muted">Facturas pendientes o con pago parcial. Puedes agregar facturas y ajustar el importe de las que deseas incluir.</span>
                     </div>
                     <button name="action_toggle_invoice_selection" type="object" class="btn btn-secondary"
                             invisible="state != 'draft' or not line_ids">
@@ -84,10 +86,14 @@
                     </button>
                 </div>
                 <field name="line_ids" readonly="state != 'draft'">
-                    <list editable="bottom" create="0" delete="0" decoration-muted="not selected">
+                    <list editable="bottom" decoration-muted="not selected">
                         <field name="currency_id" column_invisible="True"/>
                         <field name="selected"/>
-                        <field name="invoice_id" readonly="1" force_save="1"/>
+                        <field name="invoice_id" force_save="1" options="{'no_create': True}"
+                               domain="[('move_type', '=', 'in_invoice'), ('state', '=', 'posted'), ('payment_state', 'in', ['not_paid', 'partial']), ('amount_residual', '&gt;', 0), ('partner_id', '=', parent.partner_id), ('company_id', '=', parent.company_id), ('currency_id', '=', parent.currency_id)]"/>
+                        <field name="effective_reason_id" required="selected" options="{'no_create': True}"
+                               domain="[('active', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]"/>
+                        <field name="operation_type" column_invisible="True"/>
                         <field name="residual"/>
                         <field name="amount" readonly="not selected" force_save="1"/>
                         <field name="payment_to_adjust_id" optional="show"/>
@@ -95,7 +101,7 @@
                         <field name="invoice_total" readonly="1"/>
                     </list>
                 </field>
-                <group string="Material a devolver" invisible="operation_type != 'return'">
+                <group string="Material a devolver" invisible="not has_material_returns">
                     <div class="alert alert-info" colspan="2">Selecciona el producto facturado, la cantidad y la recepción realizada. Las cantidades usan la unidad de la factura. El importe se distribuye entre estos productos y se crea una devolución para que Almacén valide la salida física.</div>
                     <field name="material_line_ids" nolabel="1" colspan="2" readonly="state != 'draft'" context="{'default_group_id': id}">
                         <list editable="bottom">

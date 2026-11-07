@@ -11,7 +11,7 @@ class VendorCreditGroupAdjustment(models.TransientModel):
     company_id = fields.Many2one(related='group_id.company_id')
     currency_id = fields.Many2one(related='group_id.currency_id')
     revision = fields.Integer(readonly=True)
-    reason_id = fields.Many2one('vendor.credit.reason', string='Motivo', required=True, check_company=True)
+    reason_id = fields.Many2one('vendor.credit.reason', string='Motivo anterior', check_company=True)
     explanation = fields.Text(string='Justificación del ajuste', required=True)
     line_ids = fields.One2many('vendor.credit.group.adjustment.line', 'wizard_id', string='Facturas')
 
@@ -22,7 +22,8 @@ class VendorCreditGroupAdjustment(models.TransientModel):
         if group:
             group.check_access('write')
             values.update(revision=group.adjustment_revision, reason_id=group.reason_id.id,
-                          line_ids=[Command.create({'source_line_id': line.id, 'amount': line.amount})
+                          line_ids=[Command.create({'source_line_id': line.id, 'amount': line.amount,
+                                                    'reason_id': line.effective_reason_id.id})
                                     for line in group.line_ids])
         return values
 
@@ -32,7 +33,9 @@ class VendorCreditGroupAdjustment(models.TransientModel):
             raise UserError(_('No puedes repetir una factura en el ajuste.'))
         return self.group_id._apply_amount_adjustment(
             {line.source_line_id.id: line.amount for line in self.line_ids},
-            self.reason_id, self.explanation or '', self.revision)
+            self.reason_id, self.explanation or '', self.revision,
+            line_reasons={line.source_line_id.id: (line.reason_id or self.reason_id or line.source_line_id.effective_reason_id).id
+                          for line in self.line_ids})
 
 
 class VendorCreditGroupAdjustmentLine(models.TransientModel):
@@ -42,6 +45,8 @@ class VendorCreditGroupAdjustmentLine(models.TransientModel):
     wizard_id = fields.Many2one('vendor.credit.group.adjustment', required=True, ondelete='cascade')
     source_line_id = fields.Many2one('vendor.credit.group.line', required=True, readonly=True, ondelete='cascade')
     invoice_id = fields.Many2one(related='source_line_id.invoice_id')
+    company_id = fields.Many2one(related='wizard_id.company_id')
+    reason_id = fields.Many2one('vendor.credit.reason', string='Motivo', check_company=True)
     currency_id = fields.Many2one(related='wizard_id.currency_id')
     old_amount = fields.Monetary(related='source_line_id.amount', string='Nota actual')
     payment_id = fields.Many2one(related='source_line_id.payment_to_adjust_id', string='Pago a ajustar')

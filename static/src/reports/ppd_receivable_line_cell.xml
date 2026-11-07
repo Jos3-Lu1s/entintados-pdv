@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.PpdReceivableLineCell"
+       t-inherit="account_reports.AccountReportLineCellCustomizable" t-inherit-mode="primary">
+        <xpath expr="//t[@t-if='!controller.filters.show_totals or !props.line.unfolded']" position="attributes">
+            <attribute name="t-if">props.cell.expression_label === 'ppd_credit_limit' or !controller.filters.show_totals or !props.line.unfolded</attribute>
+        </xpath>
+    </t>
+</templates>

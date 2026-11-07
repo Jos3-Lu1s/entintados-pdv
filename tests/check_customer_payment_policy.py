@@ -33,7 +33,9 @@ class CustomerPaymentPolicy(common.TransactionCase):
             with self.assertRaises(ValidationError), self.cr.savepoint():
                 order.write(values)
         customer.is_credit = True
-        order.l10n_mx_edi_payment_policy = 'PPD'
+        days = self.env['account.payment.term'].create({'name': '30 días política QA',
+            'line_ids': [(0, 0, {'value': 'percent', 'value_amount': 100, 'nb_days': 30})]})
+        order.write({'l10n_mx_edi_payment_policy': 'PPD', 'payment_term_id': days.id})
         customer.is_credit = False
         with self.assertRaises(ValidationError), self.cr.savepoint():
             order.action_confirm()

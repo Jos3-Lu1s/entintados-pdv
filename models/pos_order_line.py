@@ -9,6 +9,33 @@ class PosOrderLine(models.Model):
     _inherit = 'pos.order.line'
 
     tint_color_code = fields.Char(string='Código del color entintado', readonly=True, copy=False)
+    tint_group_key = fields.Char(compute='_compute_tint_order_group')
+    tint_group_name = fields.Char(string='Entintado', compute='_compute_tint_order_group')
+    tint_line_role = fields.Selection([
+        ('base', 'Base del entintado'), ('colorant', 'Colorante del entintado'),
+        ('regular', 'Producto independiente'),
+    ], string='Tipo', compute='_compute_tint_order_group')
+
+    @api.depends('product_id', 'product_id.tint_role', 'product_id.display_name',
+                 'tint_color_code', 'customer_note', 'sale_order_line_id.tint_snapshot',
+                 'combo_line_ids', 'combo_parent_id', 'combo_parent_id.tint_color_code',
+                 'combo_parent_id.customer_note', 'combo_parent_id.sale_order_line_id.tint_snapshot')
+    def _compute_tint_order_group(self):
+        for line in self:
+            base = line.combo_parent_id or line
+            description, _note = base._tint_invoice_description()
+            is_tint = base.product_id.tint_role == 'base' and (
+                description or base.tint_color_code or base.combo_line_ids.filtered(
+                    lambda item: item.product_id.tint_role == 'colorant'))
+            component = line != base and line.product_id.tint_role == 'colorant'
+            if is_tint and (line == base or component):
+                line.tint_group_key = base.uuid or str(base.id)
+                line.tint_group_name = description or base.product_id.display_name
+                line.tint_line_role = 'colorant' if component else 'base'
+            else:
+                line.tint_group_key = False
+                line.tint_group_name = False
+                line.tint_line_role = 'regular'
 
     def _tint_invoice_description(self):
         """Return the commercial base + color label and any unrelated customer notes."""

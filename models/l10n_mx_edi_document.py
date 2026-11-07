@@ -4,6 +4,11 @@ from odoo import models, _
 class L10nMxEdiDocument(models.Model):
     _inherit = 'l10n_mx_edi.document'
 
+    def _can_commit(self):
+        # Checkout owns one atomic transaction for the invoice and its cash receipt.
+        # A fiscal helper committing here would release its enclosing savepoint.
+        return not self.env.context.get('sale_auto_invoice_checkout') and super()._can_commit()
+
     def _cancel_api(self, company, cancel_reason, on_failure, on_success):
         self.ensure_one()
         root = self._get_company_cfdi_values(company)['root_company']

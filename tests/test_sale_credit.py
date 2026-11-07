@@ -72,16 +72,15 @@ class TestSaleCredit(TestAdvanceAccounting):
             invoice.with_context(bypass_risk=True)._post()
         with self.assertRaises(AccessError):
             request.approver_ids.filtered(lambda line: line.user_id == self.authorizer).with_user(self.outsider).write({'status': 'approved'})
-        request.with_user(self.authorizer).action_approve()
-        self.assertEqual(request.request_status, 'approved')
+        self.assertEqual(invoice.sale_credit_stage, 'credit_pending')
         invoice.invoice_line_ids.price_unit = 1200
         invoice.action_post()
         self.assertEqual(invoice.sale_credit_request_ids, request)
         self.assertEqual(request.amount, 1200)
         self.assertEqual(request.request_status, 'pending')
         request.with_user(self.authorizer).action_approve()
-        invoice.action_post()
         self.assertEqual(invoice.state, 'posted')
+        self.assertEqual(invoice.sale_credit_stage, 'posted')
         self.assertTrue(request.sale_credit_consumed)
 
     def test_sales_rejection_requires_explicit_new_folio(self):
@@ -96,6 +95,21 @@ class TestSaleCredit(TestAdvanceAccounting):
         replacement = invoice.sale_credit_request_ids - rejected
         self.assertEqual(replacement.request_status, 'pending')
         self.assertNotEqual(replacement.name, rejected.name)
+
+    def test_sales_approval_revalidates_changed_invoice(self):
+        invoice = self._sale_invoice(1100)
+        invoice.action_post()
+        request = invoice.sale_credit_request_ids
+        self.assertEqual(invoice.sale_credit_stage, 'credit_pending')
+        invoice.invoice_line_ids.price_unit = 1200
+        request.with_user(self.authorizer).action_approve()
+        self.assertEqual(invoice.state, 'draft')
+        self.assertEqual(request.request_status, 'pending')
+        self.assertEqual(request.amount, 1200)
+        self.assertFalse(request.sale_credit_consumed)
+        request.with_user(self.authorizer).action_approve()
+        self.assertEqual(invoice.state, 'posted')
+        self.assertTrue(request.sale_credit_consumed)
 
     def test_sales_ppd_requires_credit_and_preserves_cash_flow(self):
         self.partner.is_credit = False
@@ -126,7 +140,6 @@ class TestSaleCredit(TestAdvanceAccounting):
         invoice = self._sale_invoice(1100)
         invoice.action_post()
         request = invoice.sale_credit_request_ids
-        request.with_user(self.authorizer).action_approve()
         invoice.button_cancel()
         self.assertEqual(invoice.state, 'cancel')
         self.assertEqual(request.request_status, 'cancel')

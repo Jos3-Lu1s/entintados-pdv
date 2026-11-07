@@ -44,7 +44,7 @@
             <form string="Ajustar notas y pagos">
                 <group><field name="group_id"/><field name="company_id" invisible="1"/>
                     <field name="currency_id" invisible="1"/><field name="revision" invisible="1"/>
-                    <field name="reason_id" options="{'no_create': True}"
+                    <field name="reason_id" invisible="1" options="{'no_create': True}"
                            domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"/>
                     <field name="explanation"/>
                 </group>
@@ -53,6 +53,8 @@
                 <field name="line_ids"><list editable="bottom" create="0" delete="0">
                     <field name="source_line_id" column_invisible="True"/><field name="currency_id" column_invisible="True"/>
                     <field name="invoice_id"/><field name="old_amount"/><field name="amount"/>
+                    <field name="reason_id" required="1" options="{'no_create': True}"
+                           domain="[('active', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]"/>
                     <field name="payment_id"/><field name="payment_amount"/>
                 </list></field>
                 <footer><button name="action_apply" string="Aplicar ajuste y conciliar" type="object" class="btn-primary"/>
