@@ -508,3 +508,82 @@ class TestSaleTintSections(TransactionCase):
                     Command.update(t2.id, {'sequence': 11}),
                 ]
             })
+
+    def test_is_tint_section_flag_identification(self):
+        """Identificar correctamente el encabezado de entintado mediante is_tint_section."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+
+        sec = order.order_line.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+        children = order.order_line.filtered(lambda l: l.tint_section_id == sec)
+
+        self.assertTrue(sec.is_tint_section)
+        for child in children:
+            self.assertFalse(child.is_tint_section)
+
+        # Crear una sección regular y una partida ordinaria
+        regular_sec = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'name': 'Sección Regular',
+            'display_type': 'line_section',
+        })
+        regular_prod = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': self.base.id,
+            'product_uom_qty': 1,
+        })
+        self.assertFalse(regular_sec.is_tint_section)
+        self.assertFalse(regular_prod.is_tint_section)
+
+    def test_swap_tint_section_with_regular_product(self):
+        """Intercambiar la posición de una sección de entintado completa con una partida ordinaria."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+
+        tool = self.env['product.product'].create({
+            'name': 'Rodillo Profesional',
+            'list_price': 120.0,
+            'is_storable': True,
+        })
+        tool_line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': tool.id,
+            'product_uom_qty': 1,
+        })
+
+        sec = order.order_line.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+        base_line = order.order_line.filtered(lambda l: l.product_id == self.base and l.tint_section_id == sec)
+        colorant_lines = order.order_line.filtered(lambda l: l.tint_section_id == sec and l.product_id != self.base)
+        tint_block = sec | base_line | colorant_lines
+
+        # Inicialmente el entintado está antes de la herramienta
+        self.assertLess(sec.sequence, tool_line.sequence)
+
+        # Mover entintado hacia abajo (intercambiar bloque con tool_line)
+        # tool_line toma sequence = 10, y el bloque de entintado toma 11, 12, 13, 14
+        order.write({
+            'order_line': [
+                Command.update(tool_line.id, {'sequence': 10}),
+                Command.update(sec.id, {'sequence': 11}),
+                Command.update(base_line.id, {'sequence': 12}),
+            ] + [Command.update(c.id, {'sequence': 13 + idx}) for idx, c in enumerate(colorant_lines)]
+        })
+
+        self.assertEqual(tool_line.sequence, 10)
+        self.assertEqual(sec.sequence, 11)
+        self.assertEqual(base_line.sequence, 12)
+        for idx, c in enumerate(colorant_lines):
+            self.assertEqual(c.sequence, 13 + idx)
+
+        # Mover entintado hacia arriba de nuevo (bloque de entintado primero)
+        order.write({
+            'order_line': [
+                Command.update(sec.id, {'sequence': 10}),
+                Command.update(base_line.id, {'sequence': 11}),
+            ] + [Command.update(c.id, {'sequence': 12 + idx}) for idx, c in enumerate(colorant_lines)]
+            + [Command.update(tool_line.id, {'sequence': 12 + len(colorant_lines)})]
+        })
+
+        self.assertEqual(sec.sequence, 10)
+        self.assertEqual(base_line.sequence, 11)
+        self.assertEqual(tool_line.sequence, 12 + len(colorant_lines))

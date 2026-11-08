@@ -283,6 +283,12 @@ class SaleOrderLine(models.Model):
     tint_container_qty = fields.Float(string='Envases', copy=False, readonly=True)
     tint_display_name = fields.Char(string='Entintado', compute='_compute_tint_display_name')
     tint_color_description = fields.Char(string='Color del entintado', compute='_compute_tint_display_name')
+    is_tint_section = fields.Boolean(string='Es sección de entintado', compute='_compute_is_tint_section')
+
+    @api.depends('display_type', 'tint_snapshot')
+    def _compute_is_tint_section(self):
+        for line in self:
+            line.is_tint_section = bool(line.display_type == 'line_section' and line.tint_snapshot)
 
     @api.depends('order_id.order_line.sequence', 'order_id.order_line.display_type')
     def _compute_parent_id(self):

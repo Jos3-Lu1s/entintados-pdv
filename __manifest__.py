@@ -120,6 +120,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/views/mat_invoice_preview.xml",
             "entintados_pdv/static/src/fields/financial_risk.css",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
+            "entintados_pdv/static/src/fields/sale_tint/sale_tint_menu.xml",
+            "entintados_pdv/static/src/fields/sale_tint/sale_tint_menu.js",
             "entintados_pdv/static/src/fields/crm_material_product/merge_material_product.js",
             "entintados_pdv/static/src/fields/crm_material_product/crm_material_product.js",
             "entintados_pdv/static/src/fields/opportunity_relations/opportunity_relations.js",
