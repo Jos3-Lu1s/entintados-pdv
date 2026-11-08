@@ -52,6 +52,10 @@ class SaleOrder(models.Model):
             fiscal_position=self.fiscal_position_id)
 
     def _tint_display_title(self, snapshot):
+        base = self.env['product.product'].browse(snapshot.get('base_id')).exists()
+        color = self._tint_color_description(snapshot)
+        if base and color:
+            return '%s + %s' % (base.display_name, color)
         title = _('Entintado: %s') % snapshot.get('color_name', snapshot.get('name', ''))
         if snapshot.get('color_code'):
             title += ' [%s]' % snapshot['color_code']
@@ -92,7 +96,8 @@ class SaleOrder(models.Model):
         for order in orders:
             self.env['res.company']._with_locked_records(order)
             order.invalidate_recordset(['order_line'])
-            headers = order.order_line.filtered(lambda line: line.display_type and line.tint_snapshot)
+            headers = order.order_line.filtered(
+                lambda line: line.display_type and line.tint_snapshot and not line.tint_snapshot.get('is_section_layout'))
             for header in headers:
                 order.invalidate_recordset(['order_line'])
                 components = order.order_line.exists().filtered(lambda line: line.tint_section_id == header)
@@ -159,6 +164,13 @@ class SaleOrder(models.Model):
                                     order._stock_shortage_details(product, quantity, available))
         return result
 
+    def _get_invoiceable_lines(self, final=False):
+        lines = super()._get_invoiceable_lines(final=final)
+        return lines.filtered(lambda l: not (
+            (l.display_type == 'line_section' and l.tint_snapshot)
+            or (l.product_id and l.product_id.tint_role == 'colorant' and l.tint_section_id)
+        ))
+
     def _apply_tint(self, formula, base, quantity, section=None):
         self.ensure_one()
         self.check_access('write')
@@ -186,8 +198,9 @@ class SaleOrder(models.Model):
             'formula_id': formula.id, 'currency_id': self.currency_id.id,
             'base_id': base.id, 'unit_price': self._tint_unit_price(formula, base),
             'base_unit_price': self._tint_component_price(base),
-            'base_only': True, 'color_name': formula.color_id.name, 'color_code': formula.color_id.code,
+            'base_only': False, 'color_name': formula.color_id.name, 'color_code': formula.color_id.code,
             'size_name': formula.size_id.display_name,
+            'is_section_layout': True,
             'doses': [],
         }
         for dose in formula.line_ids.sorted('sequence'):
@@ -200,14 +213,54 @@ class SaleOrder(models.Model):
                                       'name': product.display_name, 'unit_price': self._tint_component_price(product, point)})
         sequence = max(self.order_line.mapped('sequence') or [0]) + 10
         base = self.env['product.product'].browse(snapshot['base_id'])
-        values = [{
-            'order_id': self.id, 'sequence': sequence, 'product_id': base.id,
-            'name': self._tint_base_description(snapshot), 'product_uom_qty': quantity,
-            'product_uom_id': base.uom_id.id, 'price_unit': snapshot['unit_price'],
-            'discount': 0, 'tint_snapshot': snapshot, 'tint_container_qty': quantity,
-            'price_origin': 'manual', 'technical_price_unit': snapshot['unit_price'],
-        }]
-        return lines.create(values).with_env(self.env)
+        header_vals = {
+            'order_id': self.id,
+            'sequence': sequence,
+            'display_type': 'line_section',
+            'name': self._tint_display_title(snapshot),
+            'tint_snapshot': snapshot,
+            'tint_container_qty': quantity,
+            'collapse_prices': False,
+            'collapse_composition': True,
+        }
+        header_line = lines.create([header_vals])
+
+        base_vals = {
+            'order_id': self.id,
+            'sequence': sequence + 1,
+            'product_id': base.id,
+            'name': base.display_name,
+            'product_uom_qty': quantity,
+            'product_uom_id': base.uom_id.id,
+            'price_unit': snapshot['base_unit_price'],
+            'discount': 0,
+            'tint_section_id': header_line.id,
+            'tint_container_qty': quantity,
+            'price_origin': 'manual',
+            'technical_price_unit': snapshot['base_unit_price'],
+        }
+
+        child_vals = [base_vals]
+        for idx, dose in enumerate(formula.line_ids.sorted('sequence')):
+            colorant = dose.colorant_id
+            dose_price = self._tint_component_price(colorant, point)
+            child_vals.append({
+                'order_id': self.id,
+                'sequence': sequence + 2 + idx,
+                'product_id': colorant.id,
+                'name': colorant.display_name,
+                'product_uom_qty': dose.points * quantity,
+                'product_uom_id': point.id,
+                'price_unit': dose_price,
+                'discount': 0,
+                'tint_section_id': header_line.id,
+                'tint_container_qty': quantity,
+                'price_origin': 'manual',
+                'technical_price_unit': dose_price,
+            })
+        child_lines = lines.create(child_vals)
+        base_line = child_lines.filtered(lambda l: l.product_id == base)
+        return base_line.with_env(self.env)
 
 
 class SaleOrderLine(models.Model):
@@ -227,16 +280,25 @@ class SaleOrderLine(models.Model):
     def _compute_tint_display_name(self):
         for line in self:
             recipe = line._tint_recipe()
-            is_base = recipe and line.product_id.id == recipe.get('base_id')
+            is_base = recipe and line.product_id.id == recipe.get('base_id') and not line.tint_section_id
             line.tint_display_name = line.product_id.display_name if is_base else False
             color = line.order_id._tint_color_description(recipe) if is_base else ''
             line.tint_color_description = '+ ' + color if color else False
 
+    @api.depends('tint_section_id', 'product_id', 'product_id.tint_role')
+    def _compute_qty_to_invoice(self):
+        super()._compute_qty_to_invoice()
+        for line in self:
+            if line.tint_section_id and line.product_id and line.product_id.tint_role == 'colorant':
+                line.qty_to_invoice = 0
+
     def _prepare_invoice_line(self, **optional_values):
         values = super()._prepare_invoice_line(**optional_values)
         recipe = self._tint_recipe()
-        if recipe.get('base_only') and self.product_id.id == recipe.get('base_id'):
+        is_base = recipe and self.product_id.id == recipe.get('base_id')
+        if is_base:
             values['name'] = self.order_id._tint_base_description(recipe).replace('\n', ' ')
+            values['price_unit'] = recipe.get('unit_price', self.price_unit)
         return values
 
     def _tint_recipe(self):
@@ -306,16 +368,15 @@ class SaleOrderLine(models.Model):
         if flat.filtered(lambda line: line.state not in ('draft', 'sent', 'cancel') or line.qty_invoiced or line.qty_delivered):
             raise ValidationError(_('No se puede eliminar una base entintada confirmada o con movimientos.'))
         sections = self.filtered(lambda line: line.display_type and line.tint_snapshot)
-        if sections.filtered(lambda l: l.order_id.state not in ('draft', 'sent', 'cancel')
+        child_sections = self.filtered('tint_section_id').mapped('tint_section_id')
+        all_sections = sections | child_sections
+        if all_sections.filtered(lambda l: l.order_id.state not in ('draft', 'sent', 'cancel')
                              or l.order_id.order_line.filtered(lambda c: c.tint_section_id == l and (c.qty_invoiced or c.qty_delivered))):
             raise ValidationError(_('No se puede eliminar un entintado confirmado o con movimientos.'))
-        if self.env.context.get('_tint_operation') is not _TINT_OPERATION:
-            for line in self.filtered('tint_section_id'):
-                if line.tint_section_id not in self:
-                    raise ValidationError(_('Elimina el encabezado completo para quitar un entintado.'))
-        children = sections.order_id.order_line.filtered(lambda l: l.tint_section_id in sections) - self
-        if children:
-            children.with_context(_tint_operation=_TINT_OPERATION).unlink()
+        if all_sections and self.env.context.get('_tint_operation') is not _TINT_OPERATION:
+            children = all_sections.order_id.order_line.filtered(lambda l: l.tint_section_id in all_sections)
+            full_group = (self | all_sections | children).exists()
+            return super(SaleOrderLine, full_group.with_context(_tint_operation=_TINT_OPERATION)).unlink()
         return super().unlink()
 
     def _get_section_lines(self):

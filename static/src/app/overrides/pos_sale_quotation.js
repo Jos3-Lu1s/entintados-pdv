@@ -10,9 +10,14 @@ import { printableQuotations } from "../utils/quotation_print";
 patch(PosStore.prototype, {
     async addLineToCurrentOrder(values, options = {}, configure = true) {
         const recipe = values.sale_order_line_id?.tint_snapshot;
-        if (recipe?.base_only) {
-            values = { ...values, is_tinted_base: true, tint_color_code: recipe.color_code || false,
-                       customer_note: values.sale_order_line_id.name };
+        if (recipe) {
+            values = {
+                ...values,
+                is_tinted_base: true,
+                tint_color_code: recipe.color_code || false,
+                customer_note: values.sale_order_line_id.name,
+                price_unit: recipe.unit_price || values.price_unit,
+            };
         }
         return super.addLineToCurrentOrder(values, options, configure);
     },

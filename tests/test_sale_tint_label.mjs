@@ -38,3 +38,9 @@ test('regular products retain the native label and behavior', () => {
     assert.equal(field.m2oProps.value, field.base);
     assert.equal(field.m2oProps.readonly, undefined);
 });
+
+test('section components retain native label and protect product selection', () => {
+    const field = fixture({ tint_section_id: [1, 'Section'], tint_display_name: false });
+    assert.equal(field.label, 'Descripción habitual');
+    assert.equal(field.m2oProps.readonly, true);
+});
