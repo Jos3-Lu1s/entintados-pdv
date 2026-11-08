@@ -140,7 +140,16 @@ patch(SaleOrderLineListRenderer.prototype, {
             } else if (blank) {
                 blank.colspan++;
             } else {
-                blank = { ...col, colspan: 1, invisible: "True" };
+                // Built as an invisible field cell whatever the skipped column is: widget and
+                // button columns are rendered without colspan and would shift the next cells.
+                blank = {
+                    ...title,
+                    id: `${col.id}_tint_blank`,
+                    widget: undefined,
+                    colspan: 1,
+                    invisible: "True",
+                    required: "False",
+                };
                 sectionCols.push(blank);
             }
         }
