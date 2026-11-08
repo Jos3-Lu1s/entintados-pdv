@@ -47,12 +47,7 @@ class SaleOrderLine(models.Model):
             product=self.product_id, partner=self.order_id.partner_id)['total_excluded']
 
     def _quotation_section_values(self):
-        """Total de una sección y, en un entintado, la cantidad de su base."""
+        """Total de una sección y, en un entintado, sus envases."""
         self.ensure_one()
-        qty = False
-        if self.tint_snapshot:
-            base = self.order_id.order_line.filtered(
-                lambda line: line.tint_section_id == self
-                and line.product_id.id == self.tint_snapshot.get('base_id'))[:1]
-            qty = base.product_uom_qty if base else False
+        qty = (self.tint_container_qty or False) if self.is_tint_section else False
         return {'total': self._get_section_totals('price_subtotal'), 'qty': qty}
