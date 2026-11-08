@@ -17,7 +17,6 @@ with Registry(database).cursor() as cr:
     env = api.Environment(cr, SUPERUSER_ID, {})
     try:
         convert_file(env, 'entintados_pdv', 'report/invoice_mat.xml', {}, mode='update')
-        convert_file(env, 'entintados_pdv', 'report/sale_mat.xml', {}, mode='update')
         if '--install' in sys.argv:
             cr.commit()
             print('Installed invoice templates in ' + database)
@@ -35,14 +34,6 @@ with Registry(database).cursor() as cr:
         assert '/entintados_pdv.report_invoice_live/' in preview['url']
         live, _ = env['ir.actions.report']._render_qweb_html('entintados_pdv.action_report_invoice_live', invoice.ids)
         assert b'mat_invoice_lines' in live
-        sale = env['sale.order'].search([('state','in',['draft','sent']), ('order_line','!=',False)], limit=1)
-        assert sale
-        assert sale._mat_report_header()['stage'] == 'Cotización'
-        sale_html, _ = env['ir.actions.report']._render_qweb_html('sale.action_report_saleorder', sale.ids)
-        assert b'mat_sale_lines' in sale_html
-        sale_pdf, _ = env['ir.actions.report']._render_qweb_pdf('sale.action_report_saleorder', sale.ids)
-        with open('/mnt/extra-addons/modules/entintados_pdv/tmp/pdfs/sale_mat_preview.pdf', 'wb') as stream:
-            stream.write(sale_pdf)
         html, _ = env['ir.actions.report']._render_qweb_html('account.account_invoices', invoice.ids)
         assert b'mat-invoice' in html
         assert b'invoice_logo_placeholder.png' in html

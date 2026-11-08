@@ -1,5 +1,16 @@
 <?xml version='1.0' encoding='utf-8'?>
 <odoo>
+    <template id="report_invoice_live">
+        <t t-call="account.report_invoice_with_payments"/>
+    </template>
+    <record id="action_report_invoice_live" model="ir.actions.report">
+        <field name="name">Vista previa de factura actual</field>
+        <field name="model">account.move</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.report_invoice_live</field>
+        <field name="report_file">entintados_pdv.report_invoice_live</field>
+        <field name="attachment_use" eval="False"/>
+    </record>
     <template id="mat_document_header">
     <t t-set="mat_header" t-value="o._mat_report_header()"/>
     <t t-set="mat_partner" t-value="mat_header['partner']"/>
@@ -32,7 +43,7 @@
                 <tr><th>Dirección:</th><td><div t-out="mat_partner" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/></td></tr>
                 <tr t-if="o.partner_shipping_id and o.partner_shipping_id != mat_partner"><th>Entrega a:</th><td><div t-field="o.partner_shipping_id" t-options="{'widget':'contact','fields':['name','address'],'no_marker':True}"/></td></tr>
                 <tr t-if="mat_header['origin']"><th>Origen:</th><td t-out="mat_header['origin']"/></tr></table>
-                <t t-if="not mat_header['sale']" t-call="l10n_mx_edi.l10n_mx_fiscal_regime_receptor"/>
+                <t t-call="l10n_mx_edi.l10n_mx_fiscal_regime_receptor"/>
             </div>
         </div></td>
         <td style="width:30%;"><div class="mat-panel" style="padding:12px;line-height:1.5;">
@@ -120,8 +131,8 @@
 
     <template id="invoice_mat_paper_margins" inherit_id="web.report_layout">
         <xpath expr="//html" position="attributes">
-            <attribute name="t-att-data-report-margin-top">10 if docs and (docs._name == 'sale.order' or docs._name == 'account.move' and all(move.move_type == 'out_invoice' for move in docs)) else None</attribute>
-            <attribute name="t-att-data-report-header-spacing">0 if docs and (docs._name == 'sale.order' or docs._name == 'account.move' and all(move.move_type == 'out_invoice' for move in docs)) else None</attribute>
+            <attribute name="t-att-data-report-margin-top">10 if docs and docs._name == 'account.move' and all(move.move_type == 'out_invoice' for move in docs) else None</attribute>
+            <attribute name="t-att-data-report-header-spacing">0 if docs and docs._name == 'account.move' and all(move.move_type == 'out_invoice' for move in docs) else None</attribute>
         </xpath>
     </template>
 

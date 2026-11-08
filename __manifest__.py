@@ -206,7 +206,6 @@ Catálogo de entintado
         'report/tint_sales_report.xml',
         'report/invoice_tint.xml',
         'report/invoice_mat.xml',
-        'report/sale_mat.xml',
         'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
