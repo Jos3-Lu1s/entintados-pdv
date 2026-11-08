@@ -221,6 +221,9 @@ class SaleOrder(models.Model):
             'base_unit_price': self._tint_component_price(base),
             'base_only': False, 'color_name': formula.color_id.name, 'color_code': formula.color_id.code,
             'size_name': formula.size_id.display_name,
+            'base_type_name': formula.base_type_id.display_name or '',
+            'line_name': base.lines_product_id.name or '',
+            'scheme_name': base.lines_product_id.scheme.display_name or '',
             'is_section_layout': True,
             'doses': [],
         }
@@ -297,11 +300,25 @@ class SaleOrderLine(models.Model):
     tint_display_name = fields.Char(string='Entintado', compute='_compute_tint_display_name')
     tint_color_description = fields.Char(string='Color del entintado', compute='_compute_tint_display_name')
     is_tint_section = fields.Boolean(string='Es sección de entintado', compute='_compute_is_tint_section')
+    tint_component_role = fields.Selection([('base', 'Base'), ('colorant', 'Colorante')],
+                                           string='Rol en el entintado', compute='_compute_tint_component_role')
 
     @api.depends('display_type', 'tint_snapshot')
     def _compute_is_tint_section(self):
         for line in self:
             line.is_tint_section = bool(line.display_type == 'line_section' and line.tint_snapshot)
+
+    @api.depends('tint_section_id', 'tint_section_id.tint_snapshot', 'product_id')
+    def _compute_tint_component_role(self):
+        # El rol sale de la fórmula cotizada, no de la clasificación actual del producto.
+        for line in self:
+            snapshot = line.tint_section_id.tint_snapshot
+            if not line.tint_section_id or not snapshot:
+                line.tint_component_role = False
+            elif line.product_id.id == snapshot.get('base_id'):
+                line.tint_component_role = 'base'
+            else:
+                line.tint_component_role = 'colorant'
 
     @api.depends('order_id.order_line.sequence', 'order_id.order_line.display_type')
     def _compute_parent_id(self):

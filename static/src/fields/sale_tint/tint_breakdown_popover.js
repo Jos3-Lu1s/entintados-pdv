@@ -1,4 +1,5 @@
 import { Component } from "@odoo/owl";
+import { _t } from "@web/core/l10n/translation";
 import { formatFloat, formatMonetary } from "@web/views/fields/formatters";
 
 function tintSectionId(record) {
@@ -65,6 +66,12 @@ export function buildTintBreakdown(record) {
         title: header.data.name,
         colorCode: snapshot.color_code || "",
         colorName: snapshot.color_name || "",
+        details: [
+            { label: _t("Presentación"), value: snapshot.size_name },
+            { label: _t("Tipo de base"), value: snapshot.base_type_name },
+            { label: _t("Línea de producto"), value: snapshot.line_name },
+            { label: _t("Esquema"), value: snapshot.scheme_name },
+        ].filter((detail) => detail.value),
         base: {
             name: base.data.product_id?.display_name || "",
             qty: formatTrimmed(base.data.product_uom_qty),
@@ -80,6 +87,26 @@ export function buildTintBreakdown(record) {
                 subtotal: money(line.data.price_subtotal),
             })),
         total: money(components.reduce((total, line) => total + line.data.price_subtotal, 0)),
+    };
+}
+
+const COMPONENT_ROLES = {
+    base: _t("Base"),
+    colorant: _t("Colorante"),
+};
+
+/**
+ * Rol de la base o de un colorante y el color de su entintado. El color queda vacío cuando el
+ * encabezado no está cargado en la lista; el rol llega resuelto desde el servidor.
+ */
+export function buildTintComponentInfo(record) {
+    const records = record._parentRecord?.data.order_line?.records || [];
+    const header = getTintHeader(records, record);
+    const snapshot = header?.data.tint_snapshot || {};
+    return {
+        title:
+            COMPONENT_ROLES[record.data.tint_component_role] || _t("Componente del entintado"),
+        color: [snapshot.color_code, snapshot.color_name].filter(Boolean).join(" "),
     };
 }
 

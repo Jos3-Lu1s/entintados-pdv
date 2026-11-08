@@ -688,3 +688,52 @@ class TestSaleTintSections(TransactionCase):
             red_line.write({'discount': 10})
         with self.assertRaises(ValidationError):
             base_line.write({'tint_snapshot': False})
+
+    def test_snapshot_keeps_base_details(self):
+        """La fórmula cotizada guarda tipo de base, línea y esquema, y no cambia si luego se reclasifica la base."""
+        scheme = self.env['tint.schema'].create({'name': 'Esquema Arquitectónico'})
+        product_line = self.env['lines.product'].create({'name': 'Vinílica Satin', 'scheme': scheme.id})
+        self.base.lines_product_id = product_line
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        header = order.order_line.filtered('is_tint_section')
+
+        snapshot = header.tint_snapshot
+        self.assertEqual(snapshot['base_type_name'], self.base_type.display_name)
+        self.assertEqual(snapshot['line_name'], 'Vinílica Satin')
+        self.assertEqual(snapshot['scheme_name'], 'Esquema Arquitectónico')
+
+        other_line = self.env['lines.product'].create({'name': 'Vinílica Mate', 'scheme': scheme.id})
+        self.base.lines_product_id = other_line
+        self.assertEqual(header.tint_snapshot['line_name'], 'Vinílica Satin')
+
+    def test_snapshot_without_product_line(self):
+        """Una base sin línea de producto deja vacíos la línea y el esquema de la fórmula cotizada."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        snapshot = order.order_line.filtered('is_tint_section').tint_snapshot
+
+        self.assertEqual(snapshot['line_name'], '')
+        self.assertEqual(snapshot['scheme_name'], '')
+
+    def test_component_role_follows_quoted_formula(self):
+        """El rol de cada línea sale de la fórmula cotizada: base, colorante o ninguno."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 2)
+        header, base_line, red_line, yellow_line = self._tint_lines(order)
+        product = self.env['product.product'].create({
+            'name': 'Brocha 2 pulgadas',
+            'default_code': 'BRO-SEC-01',
+            'list_price': 30.0,
+            'taxes_id': [Command.clear()],
+        })
+        ordinary_line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': product.id,
+        })
+
+        self.assertEqual(base_line.tint_component_role, 'base')
+        self.assertEqual(red_line.tint_component_role, 'colorant')
+        self.assertEqual(yellow_line.tint_component_role, 'colorant')
+        self.assertFalse(header.tint_component_role)
+        self.assertFalse(ordinary_line.tint_component_role)

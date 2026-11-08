@@ -16,6 +16,11 @@
                     <span>Color</span>
                     <span class="fw-bold"><t t-esc="b.colorCode"/> <t t-esc="b.colorName"/></span>
                 </div>
+                <div t-foreach="b.details" t-as="detail" t-key="detail.label"
+                     class="d-flex justify-content-between gap-2">
+                    <span t-esc="detail.label"/>
+                    <span class="text-end" t-esc="detail.value"/>
+                </div>
                 <div class="border-top mt-2 pt-1 fw-bold">Base</div>
                 <div class="d-flex justify-content-between gap-2">
                     <span><t t-esc="b.base.name"/> × <t t-esc="b.base.qty"/></span>
