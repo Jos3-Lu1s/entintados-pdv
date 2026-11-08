@@ -144,6 +144,7 @@ Catálogo de entintado
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.scss",
             # Promoción disponible en las líneas de venta
             "entintados_pdv/static/src/fields/promo_hint/promo_hint_text.js",
             "entintados_pdv/static/src/fields/promo_hint/promo_hint_field.js",

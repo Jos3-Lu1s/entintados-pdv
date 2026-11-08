@@ -1,0 +1,4 @@
+// En la lista, el icono de origen del precio va centrado en su columna.
+.o_list_renderer .o_data_cell:has(.o_price_origin_icon) {
+    text-align: center;
+}
