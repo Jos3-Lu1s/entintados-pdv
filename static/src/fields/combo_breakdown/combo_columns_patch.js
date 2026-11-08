@@ -47,6 +47,15 @@ patch(SaleOrderLineListRenderer.prototype, {
         return classNames;
     },
 
+    // Same rule as combo items: a read-only product cell renders as a link, which gives
+    // tint components the combo item color and keeps them apart from regular lines.
+    isCellReadonly(column, record) {
+        return super.isCellReadonly(column, record) || (
+            Boolean(record.data.tint_section_id)
+                && !["tax_ids", "qty_delivered"].includes(column.name)
+        );
+    },
+
     displayDeleteIcon(record) {
         if (record.data.tint_section_id) {
             return false;

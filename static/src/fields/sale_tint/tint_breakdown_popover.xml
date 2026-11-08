@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="entintados_pdv.TintBreakdownPopover">
+        <t t-set="b" t-value="props.breakdown"/>
+        <div class="o_tint_breakdown_popover p-2 small" style="max-width: 380px;">
+            <div class="fw-bold mb-1">
+                <i class="fa fa-tint text-info me-1"/>Desglose del entintado
+            </div>
+            <div t-if="b.title" class="mb-1" t-esc="b.title"/>
+            <div t-if="b.empty" class="text-muted">
+                Desglose no disponible: no hay componentes del entintado cargados en la orden.
+            </div>
+            <t t-else="">
+                <div class="d-flex justify-content-between">
+                    <span>Color</span>
+                    <span class="fw-bold"><t t-esc="b.colorCode"/> <t t-esc="b.colorName"/></span>
+                </div>
+                <div class="border-top mt-2 pt-1 fw-bold">Base</div>
+                <div class="d-flex justify-content-between gap-2">
+                    <span><t t-esc="b.base.name"/> × <t t-esc="b.base.qty"/></span>
+                    <span class="text-nowrap" t-esc="b.base.subtotal"/>
+                </div>
+                <t t-if="b.colorants.length">
+                    <div class="border-top mt-2 pt-1 fw-bold">Colorantes</div>
+                    <div t-foreach="b.colorants" t-as="colorant" t-key="colorant_index"
+                         class="d-flex justify-content-between gap-2">
+                        <span><t t-esc="colorant.name"/> × <t t-esc="colorant.qty"/></span>
+                        <span class="text-nowrap" t-esc="colorant.subtotal"/>
+                    </div>
+                </t>
+                <div class="border-top mt-2 pt-1 d-flex justify-content-between">
+                    <span>Total del entintado</span>
+                    <span class="fw-bold" t-esc="b.total"/>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>

@@ -144,6 +144,11 @@
             <xpath expr="//field[@name='order_line']/kanban//field[@name='price_unit']" position="attributes">
                 <attribute name="invisible">product_type == 'combo'</attribute>
             </xpath>
+            <!-- La tarjeta de una sección solo muestra su nombre: el encabezado del entintado
+                 agrega la gota que abre el desglose de la fórmula. -->
+            <xpath expr="//field[@name='order_line']/kanban//div/field[@name='name']" position="after">
+                <field name="price_origin" widget="price_origin_icon" class="ms-1" invisible="display_type != 'line_section' or not tint_snapshot"/>
+            </xpath>
             <xpath expr="//field[@name='order_line']/form//field[@name='product_uom_id']" position="attributes">
                 <attribute name="invisible">product_type == 'combo'</attribute>
                 <attribute name="readonly">product_uom_readonly or combo_item_id</attribute>

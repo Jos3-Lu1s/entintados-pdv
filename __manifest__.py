@@ -122,6 +122,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_menu.xml",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_menu.js",
+            "entintados_pdv/static/src/fields/sale_tint/tint_breakdown_popover.js",
+            "entintados_pdv/static/src/fields/sale_tint/tint_breakdown_popover.xml",
             "entintados_pdv/static/src/fields/crm_material_product/merge_material_product.js",
             "entintados_pdv/static/src/fields/crm_material_product/crm_material_product.js",
             "entintados_pdv/static/src/fields/opportunity_relations/opportunity_relations.js",

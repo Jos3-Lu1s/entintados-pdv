@@ -1,4 +1,5 @@
 import { patch } from "@web/core/utils/patch";
+import { registry } from "@web/core/registry";
 import { SaleOrderLineListRenderer } from "@sale/js/sale_order_line_field/sale_order_line_field";
 import {
     getParentSectionRecord,
@@ -93,8 +94,81 @@ patch(SaleOrderLineListRenderer.prototype, {
         );
     },
 
+    /**
+     * Tint headers also show the quantity and the price origin icon, like a combo package row.
+     * Every hidden column widens the visible cell before it, so the row keeps the table width;
+     * hidden columns placed before the title widen the title.
+     */
+    getSectionColumns(columns, record) {
+        if (!this.isTintSection(record)) {
+            return super.getSectionColumns(columns, record);
+        }
+        const keptNames = [this.titleField, ...this.props.aggregatedFields, "product_uom_qty", "price_origin"];
+        const sectionCols = [];
+        let title = null;
+        let pendingBeforeTitle = 0;
+        for (const col of columns) {
+            if (col.widget === "handle") {
+                sectionCols.push({ ...col });
+            } else if (keptNames.includes(col.name)) {
+                const kept = { ...col, colspan: 1 };
+                if (col.name === this.titleField) {
+                    kept.colspan += pendingBeforeTitle;
+                    title = kept;
+                }
+                sectionCols.push(kept);
+            } else if (!title) {
+                pendingBeforeTitle++;
+            } else {
+                sectionCols[sectionCols.length - 1].colspan++;
+            }
+        }
+        if (!title) {
+            return super.getSectionColumns(columns, record);
+        }
+        return sectionCols;
+    },
+
     getTintSectionRecords(record) {
         return getTintSectionRecords(this.props.list.records, record);
+    },
+
+    getTintBaseRecord(record) {
+        const components = this.getTintSectionRecords(record).slice(1);
+        const baseId = record.data.tint_snapshot?.base_id;
+        return components.find((r) => baseId && r.data.product_id?.id === baseId) || components[0] || null;
+    },
+
+    isTintHeaderQuantity(column, record) {
+        return column.name === "product_uom_qty" && this.isTintSection(record);
+    },
+
+    canUseFormatter(column, record) {
+        if (this.isTintHeaderQuantity(column, record)) {
+            return true;
+        }
+        return super.canUseFormatter(column, record);
+    },
+
+    // The header shows the quantity of its base line; the quantity only changes through the wizard.
+    getFormattedValue(column, record) {
+        if (this.isTintHeaderQuantity(column, record)) {
+            const base = this.getTintBaseRecord(record);
+            if (!base) {
+                return "";
+            }
+            const formatter = registry.category("formatters").get(column.fieldType, (val) => val);
+            return formatter(base.data.product_uom_qty, {
+                ...formatter.extractOptions?.(column),
+                data: base.data,
+                field: base.fields.product_uom_qty,
+            });
+        }
+        return super.getFormattedValue(column, record);
+    },
+
+    isCellReadonly(column, record) {
+        return super.isCellReadonly(column, record) || this.isTintHeaderQuantity(column, record);
     },
 
     canMoveTintUp(record) {
