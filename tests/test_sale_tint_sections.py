@@ -587,3 +587,104 @@ class TestSaleTintSections(TransactionCase):
         self.assertEqual(sec.sequence, 10)
         self.assertEqual(base_line.sequence, 11)
         self.assertEqual(tool_line.sequence, 12 + len(colorant_lines))
+
+    def _tint_lines(self, order):
+        header = order.order_line.filtered('is_tint_section')
+        base_line = order.order_line.filtered(lambda l: l.product_id == self.base)
+        red_line = order.order_line.filtered(lambda l: l.product_id == self.colorant_red)
+        yellow_line = order.order_line.filtered(lambda l: l.product_id == self.colorant_yellow)
+        return header, base_line, red_line, yellow_line
+
+    def test_header_containers_rescale_components(self):
+        """Cambiar los envases del encabezado escala la base y los colorantes con sus precios congelados."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        header, base_line, red_line, yellow_line = self._tint_lines(order)
+        prices = {line: line.price_unit for line in base_line | red_line | yellow_line}
+        total_before = order.amount_untaxed
+
+        header.tint_container_qty = 3
+
+        self.assertEqual(base_line.product_uom_qty, 3)
+        self.assertEqual(red_line.product_uom_qty, 60)
+        self.assertEqual(yellow_line.product_uom_qty, 30)
+        for line, price in prices.items():
+            self.assertEqual(line.price_unit, price)
+            self.assertEqual(line.tint_container_qty, 3)
+        self.assertAlmostEqual(order.amount_untaxed, total_before * 3, places=2)
+
+    def test_header_containers_from_order_form_save(self):
+        """Guardar la orden con el encabezado y sus componentes ya escalados se acepta en cualquier orden."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        header, base_line, red_line, yellow_line = self._tint_lines(order)
+
+        order.write({'order_line': [
+            Command.update(red_line.id, {'product_uom_qty': 40, 'tint_container_qty': 2}),
+            Command.update(base_line.id, {'product_uom_qty': 2, 'tint_container_qty': 2}),
+            Command.update(yellow_line.id, {'product_uom_qty': 20, 'tint_container_qty': 2}),
+            Command.update(header.id, {'tint_container_qty': 2}),
+        ]})
+
+        self.assertEqual(header.tint_container_qty, 2)
+        self.assertEqual(base_line.product_uom_qty, 2)
+        self.assertEqual(red_line.product_uom_qty, 40)
+        self.assertEqual(yellow_line.product_uom_qty, 20)
+
+    def test_header_containers_reject_invalid_values(self):
+        """Solo se aceptan números enteros de envases mayores que cero."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        header, base_line, _red, _yellow = self._tint_lines(order)
+
+        for value in (0, -1, 1.5):
+            with self.assertRaises(ValidationError):
+                header.tint_container_qty = value
+        self.assertEqual(header.tint_container_qty, 1)
+        self.assertEqual(base_line.product_uom_qty, 1)
+
+    def test_header_containers_locked_outside_quotation(self):
+        """Una orden confirmada o bloqueada no permite cambiar los envases."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        header, _base, _red, _yellow = self._tint_lines(order)
+        order.action_confirm()
+
+        with self.assertRaises(ValidationError):
+            header.tint_container_qty = 2
+
+        locked_order = self._order()
+        locked_order._apply_tint(self.formula, self.base, 1)
+        locked_header = self._tint_lines(locked_order)[0]
+        locked_order.locked = True
+        with self.assertRaises(ValidationError):
+            locked_header.tint_container_qty = 2
+
+    def test_component_quantity_must_match_header(self):
+        """Una cantidad de componente que no corresponde a los envases del encabezado se rechaza."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        header, base_line, red_line, _yellow = self._tint_lines(order)
+
+        with self.assertRaises(ValidationError):
+            red_line.write({'product_uom_qty': 25})
+        with self.assertRaises(ValidationError):
+            order.write({'order_line': [
+                Command.update(header.id, {'tint_container_qty': 2}),
+                Command.update(red_line.id, {'product_uom_qty': 25}),
+            ]})
+        self.assertEqual(base_line.product_uom_qty, 1)
+        self.assertEqual(red_line.product_uom_qty, 20)
+
+    def test_component_price_and_discount_stay_locked(self):
+        """Precio y descuento de los componentes siguen bloqueados aunque la cantidad sea editable."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        _header, base_line, red_line, _yellow = self._tint_lines(order)
+
+        with self.assertRaises(ValidationError):
+            base_line.write({'product_uom_qty': 1, 'price_unit': 1.0})
+        with self.assertRaises(ValidationError):
+            red_line.write({'discount': 10})
+        with self.assertRaises(ValidationError):
+            base_line.write({'tint_snapshot': False})

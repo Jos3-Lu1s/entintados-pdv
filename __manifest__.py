@@ -121,6 +121,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/financial_risk.css",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_label.js",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_menu.xml",
+            "entintados_pdv/static/src/fields/sale_tint/tint_container_qty_field.js",
             "entintados_pdv/static/src/fields/sale_tint/sale_tint_menu.js",
             "entintados_pdv/static/src/fields/sale_tint/tint_breakdown_popover.js",
             "entintados_pdv/static/src/fields/sale_tint/tint_breakdown_popover.xml",

@@ -7,6 +7,11 @@ from odoo.exceptions import UserError, ValidationError
 # An RPC context cannot impersonate an internal recipe operation.
 _TINT_OPERATION = object()
 _TINT_SYNC_SEQUENCE = object()
+_TINT_DEFER_QTY_CHECK = object()
+_TINT_QTY_FIELDS = {'product_uom_qty', 'tint_container_qty'}
+_TINT_CONTROLLED_FIELDS = {'product_id', 'product_uom_id', 'product_uom_qty', 'price_unit', 'discount', 'name',
+                           'tint_area', 'tint_section_id', 'tint_snapshot', 'tint_container_qty', 'order_id',
+                           'display_type'}
 
 
 class SaleOrder(models.Model):
@@ -14,8 +19,16 @@ class SaleOrder(models.Model):
 
     def write(self, vals):
         if 'order_line' in vals and self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
-            res = super(SaleOrder, self.with_context(_tint_sync_sequence=_TINT_SYNC_SEQUENCE)).write(vals)
+            # Header and components arrive as separate line commands in any order, so the
+            # quantity consistency is checked once all of them are written.
+            touched_ids = [cmd[1] for cmd in vals['order_line']
+                           if isinstance(cmd, (list, tuple)) and len(cmd) > 2 and cmd[0] == 1
+                           and isinstance(cmd[2], dict) and _TINT_QTY_FIELDS & cmd[2].keys()]
+            res = super(SaleOrder, self.with_context(
+                _tint_sync_sequence=_TINT_SYNC_SEQUENCE, _tint_defer_qty_check=_TINT_DEFER_QTY_CHECK)).write(vals)
             self.order_line._check_tint_sequence_integrity()
+            touched = self.env['sale.order.line'].browse(touched_ids).exists()
+            (touched.filtered('is_tint_section') | touched.tint_section_id)._check_tint_quantity_integrity()
             return res
         return super().write(vals)
 
@@ -280,7 +293,7 @@ class SaleOrderLine(models.Model):
     tint_section_id = fields.Many2one('sale.order.line', string='Encabezado del entintado',
                                     ondelete='cascade', copy=False, readonly=True, index=True)
     tint_snapshot = fields.Json(string='Fórmula cotizada', copy=False, readonly=True)
-    tint_container_qty = fields.Float(string='Envases', copy=False, readonly=True)
+    tint_container_qty = fields.Float(string='Envases', copy=False)
     tint_display_name = fields.Char(string='Entintado', compute='_compute_tint_display_name')
     tint_color_description = fields.Char(string='Color del entintado', compute='_compute_tint_display_name')
     is_tint_section = fields.Boolean(string='Es sección de entintado', compute='_compute_is_tint_section')
@@ -447,11 +460,14 @@ class SaleOrderLine(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        controlled = {'product_id', 'product_uom_id', 'product_uom_qty', 'price_unit', 'discount', 'name',
-                      'tint_area', 'tint_section_id', 'tint_snapshot', 'tint_container_qty', 'order_id', 'display_type'}
+        controlled = _TINT_CONTROLLED_FIELDS
+        qty_change = False
         if self.env.context.get('_tint_operation') is not _TINT_OPERATION:
-            if {'tint_area', 'tint_section_id', 'tint_snapshot', 'tint_container_qty'} & vals.keys() or (
-                    controlled & vals.keys() and self.filtered(lambda l: l.tint_area or l.tint_snapshot or l.tint_section_id)):
+            qty_change = self._tint_quantity_change_allowed(vals)
+            if {'tint_area', 'tint_section_id', 'tint_snapshot'} & vals.keys() or (
+                    'tint_container_qty' in vals and not qty_change) or (
+                    controlled & vals.keys() and not qty_change
+                    and self.filtered(lambda l: l.tint_area or l.tint_snapshot or l.tint_section_id)):
                 raise ValidationError(_('No se pueden modificar los envases ni los componentes de un entintado agregado.'))
             if 'sequence' in vals and self.filtered('tint_section_id') and self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
                 if any(vals['sequence'] != l.sequence for l in self.filtered('tint_section_id')):
@@ -483,7 +499,71 @@ class SaleOrderLine(models.Model):
                         ).write({'sequence': target_seq})
         if self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
             (self | self.order_id.order_line.filtered('tint_section_id'))._check_tint_sequence_integrity()
+        if qty_change:
+            headers = self.filtered('is_tint_section')
+            if 'tint_container_qty' in vals:
+                headers._tint_rescale_components()
+            if self.env.context.get('_tint_defer_qty_check') is not _TINT_DEFER_QTY_CHECK:
+                (headers | self.tint_section_id)._check_tint_quantity_integrity()
         return res
+
+    def _tint_quantity_change_allowed(self, vals):
+        """Only the number of containers of a sectioned tint may change, from its header or
+        as the matching quantities of its components, while the quotation is editable."""
+        keys = _TINT_CONTROLLED_FIELDS & vals.keys()
+        if not self or not keys or not keys <= _TINT_QTY_FIELDS:
+            return False
+        for line in self:
+            if line.is_tint_section and line.tint_snapshot.get('is_section_layout'):
+                if keys != {'tint_container_qty'}:
+                    return False
+            elif not (line.tint_section_id and line.tint_section_id.tint_snapshot.get('is_section_layout')):
+                return False
+        if any(order.state not in ('draft', 'sent') or order.locked for order in self.order_id):
+            raise ValidationError(_('Solo se puede cambiar la cantidad de un entintado en una cotización sin bloquear.'))
+        if 'tint_container_qty' in vals:
+            self._tint_check_container_qty(vals['tint_container_qty'])
+        return True
+
+    @api.model
+    def _tint_check_container_qty(self, quantity):
+        if (isinstance(quantity, bool) or not isinstance(quantity, (int, float)) or not math.isfinite(quantity)
+                or quantity <= 0 or quantity != int(quantity)):
+            raise ValidationError(_('Indica un número entero de envases mayor que cero.'))
+
+    def _tint_expected_component_qty(self, header):
+        """Quantity this component must have for the containers of its header."""
+        self.ensure_one()
+        snapshot = header.tint_snapshot
+        containers = header.tint_container_qty
+        if self.product_id.id == snapshot.get('base_id'):
+            return containers
+        points = sum(dose['points'] for dose in snapshot.get('doses', []) if dose['product_id'] == self.product_id.id)
+        return points * containers
+
+    def _tint_rescale_components(self):
+        for header in self:
+            components = header.order_id.order_line.filtered(lambda l: l.tint_section_id == header)
+            for component in components:
+                expected = component._tint_expected_component_qty(header)
+                values = {}
+                if component.product_uom_id.compare(component.product_uom_qty, expected):
+                    values['product_uom_qty'] = expected
+                if component.tint_container_qty != header.tint_container_qty:
+                    values['tint_container_qty'] = header.tint_container_qty
+                if values:
+                    component.with_context(_tint_operation=_TINT_OPERATION).write(values)
+
+    def _check_tint_quantity_integrity(self):
+        headers = self.filtered(lambda l: l.is_tint_section and l.tint_snapshot.get('is_section_layout'))
+        for header in headers:
+            self._tint_check_container_qty(header.tint_container_qty)
+            components = header.order_id.order_line.filtered(lambda l: l.tint_section_id == header)
+            for component in components:
+                expected = component._tint_expected_component_qty(header)
+                if (component.product_uom_id.compare(component.product_uom_qty, expected)
+                        or component.tint_container_qty != header.tint_container_qty):
+                    raise ValidationError(_('Las cantidades de la base y los colorantes deben corresponder a los envases del entintado.'))
 
     def unlink(self):
         if self.filtered('tint_area') and self.env.context.get('_tint_operation') is not _TINT_OPERATION:

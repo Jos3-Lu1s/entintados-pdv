@@ -78,6 +78,7 @@
                 <field name="tint_color_description" column_invisible="True"/>
                 <field name="tint_section_id" column_invisible="True"/>
                 <field name="tint_snapshot" column_invisible="True"/>
+                <field name="tint_container_qty" column_invisible="True"/>
                 <field name="is_tint_section" column_invisible="True"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form" position="inside">

@@ -1,6 +1,6 @@
 import { patch } from "@web/core/utils/patch";
-import { registry } from "@web/core/registry";
 import { SaleOrderLineListRenderer } from "@sale/js/sale_order_line_field/sale_order_line_field";
+import { tintContainerQtyField } from "./tint_container_qty_field";
 import {
     getParentSectionRecord,
     getSectionRecords,
@@ -96,20 +96,35 @@ patch(SaleOrderLineListRenderer.prototype, {
 
     /**
      * Tint headers also show the quantity and the price origin icon, like a combo package row.
-     * Every hidden column widens the visible cell before it, so the row keeps the table width;
-     * hidden columns placed before the title widen the title.
+     * Columns between the title and the quantity widen the title. Any other skipped column
+     * becomes an empty cell (merged with adjacent skipped ones), so each kept value stays under
+     * its own header and the row keeps the table width.
      */
     getSectionColumns(columns, record) {
         if (!this.isTintSection(record)) {
             return super.getSectionColumns(columns, record);
         }
-        const keptNames = [this.titleField, ...this.props.aggregatedFields, "product_uom_qty", "price_origin"];
+        const keptNames = [this.titleField, ...this.props.aggregatedFields, "price_origin"];
         const sectionCols = [];
         let title = null;
+        let blank = null;
         let pendingBeforeTitle = 0;
         for (const col of columns) {
             if (col.widget === "handle") {
                 sectionCols.push({ ...col });
+                blank = null;
+            } else if (col.name === "product_uom_qty") {
+                // The header edits its number of containers in the quantity column.
+                sectionCols.push({
+                    ...col,
+                    id: `${col.id}_tint_containers`,
+                    name: "tint_container_qty",
+                    widget: "tint_container_qty",
+                    field: tintContainerQtyField,
+                    colspan: 1,
+                    readonly: "False",
+                });
+                blank = null;
             } else if (keptNames.includes(col.name)) {
                 const kept = { ...col, colspan: 1 };
                 if (col.name === this.titleField) {
@@ -117,10 +132,16 @@ patch(SaleOrderLineListRenderer.prototype, {
                     title = kept;
                 }
                 sectionCols.push(kept);
+                blank = null;
             } else if (!title) {
                 pendingBeforeTitle++;
+            } else if (sectionCols[sectionCols.length - 1] === title) {
+                title.colspan++;
+            } else if (blank) {
+                blank.colspan++;
             } else {
-                sectionCols[sectionCols.length - 1].colspan++;
+                blank = { ...col, colspan: 1, invisible: "True" };
+                sectionCols.push(blank);
             }
         }
         if (!title) {
@@ -133,42 +154,20 @@ patch(SaleOrderLineListRenderer.prototype, {
         return getTintSectionRecords(this.props.list.records, record);
     },
 
-    getTintBaseRecord(record) {
-        const components = this.getTintSectionRecords(record).slice(1);
-        const baseId = record.data.tint_snapshot?.base_id;
-        return components.find((r) => baseId && r.data.product_id?.id === baseId) || components[0] || null;
-    },
-
     isTintHeaderQuantity(column, record) {
-        return column.name === "product_uom_qty" && this.isTintSection(record);
+        return column.name === "tint_container_qty" && this.isTintSection(record);
     },
 
-    canUseFormatter(column, record) {
-        if (this.isTintHeaderQuantity(column, record)) {
-            return true;
-        }
-        return super.canUseFormatter(column, record);
-    },
-
-    // The header shows the quantity of its base line; the quantity only changes through the wizard.
-    getFormattedValue(column, record) {
-        if (this.isTintHeaderQuantity(column, record)) {
-            const base = this.getTintBaseRecord(record);
-            if (!base) {
-                return "";
-            }
-            const formatter = registry.category("formatters").get(column.fieldType, (val) => val);
-            return formatter(base.data.product_uom_qty, {
-                ...formatter.extractOptions?.(column),
-                data: base.data,
-                field: base.fields.product_uom_qty,
-            });
-        }
-        return super.getFormattedValue(column, record);
+    isTintQuantityEditable(record) {
+        const parent = record.evalContextWithVirtualIds.parent || {};
+        return ["draft", "sent"].includes(parent.state) && !parent.locked;
     },
 
     isCellReadonly(column, record) {
-        return super.isCellReadonly(column, record) || this.isTintHeaderQuantity(column, record);
+        if (this.isTintHeaderQuantity(column, record)) {
+            return this.isRecordReadonly(record) || !this.isTintQuantityEditable(record);
+        }
+        return super.isCellReadonly(column, record);
     },
 
     canMoveTintUp(record) {
