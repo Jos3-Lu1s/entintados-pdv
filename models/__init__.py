@@ -84,5 +84,6 @@ from . import partner_payment_policy
 from . import sale_auto_delivery
 from . import sale_credit
 from . import mat_report
+from . import sale_quotation_report
 from . import sale_auto_invoice
 from . import ppd_receivable_report

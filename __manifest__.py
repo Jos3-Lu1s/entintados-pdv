@@ -154,6 +154,10 @@ Catálogo de entintado
             # Sin creación rápida de contactos: quedarían sin teléfono
             "entintados_pdv/static/src/fields/partner_no_quick_create/partner_no_quick_create.js",
         ],
+        "web.report_assets_common": [
+            # PDF de cotizaciones y órdenes de venta
+            "entintados_pdv/static/src/reports/sale_quotation.scss",
+        ],
     },
 
     # always loaded
@@ -206,6 +210,7 @@ Catálogo de entintado
         'report/tint_sales_report.xml',
         'report/invoice_tint.xml',
         'report/invoice_mat.xml',
+        'report/sale_quotation.xml',
         'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',
