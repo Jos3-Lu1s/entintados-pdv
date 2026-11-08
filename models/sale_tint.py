@@ -6,10 +6,18 @@ from odoo.exceptions import UserError, ValidationError
 
 # An RPC context cannot impersonate an internal recipe operation.
 _TINT_OPERATION = object()
+_TINT_SYNC_SEQUENCE = object()
 
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
+
+    def write(self, vals):
+        if 'order_line' in vals and self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
+            res = super(SaleOrder, self.with_context(_tint_sync_sequence=_TINT_SYNC_SEQUENCE)).write(vals)
+            self.order_line._check_tint_sequence_integrity()
+            return res
+        return super().write(vals)
 
     @api.constrains('currency_id', 'company_id')
     def _check_tint_currency(self):
@@ -276,6 +284,13 @@ class SaleOrderLine(models.Model):
     tint_display_name = fields.Char(string='Entintado', compute='_compute_tint_display_name')
     tint_color_description = fields.Char(string='Color del entintado', compute='_compute_tint_display_name')
 
+    @api.depends('order_id.order_line.sequence', 'order_id.order_line.display_type')
+    def _compute_parent_id(self):
+        super()._compute_parent_id()
+        for line in self:
+            if line.parent_id and line.parent_id.tint_snapshot and line.tint_section_id != line.parent_id:
+                line.parent_id = False
+
     @api.depends('tint_snapshot', 'tint_section_id.tint_snapshot', 'product_id', 'product_id.name', 'product_id.default_code')
     def _compute_tint_display_name(self):
         for line in self:
@@ -345,11 +360,84 @@ class SaleOrderLine(models.Model):
             line.pricing_rule_origin = False
             line.pricing_rule_id = False
 
+    @api.constrains('sequence', 'order_id')
+    def _check_tint_sequence_integrity(self):
+        if self.env.context.get('_tint_sync_sequence') is _TINT_SYNC_SEQUENCE:
+            return
+        orders = self.mapped('order_id')
+        for order in orders:
+            tint_sections = order.order_line.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+            for sec in tint_sections:
+                children = order.order_line.filtered(lambda l: l.tint_section_id == sec)
+                if not children:
+                    continue
+                sorted_children = children.sorted(lambda l: (0 if l.product_id.tint_role != 'colorant' else 1, l.sequence, l.id))
+                expected_seq = sec.sequence + 1
+                for child in sorted_children:
+                    if child.sequence != expected_seq:
+                        raise ValidationError(_('Las líneas de un entintado deben mantener secuencias consecutivas con su encabezado.'))
+                    expected_seq += 1
+                other_lines = order.order_line.filtered(lambda l: l != sec and l.tint_section_id != sec)
+                colliding = other_lines.filtered(lambda l: sec.sequence <= l.sequence < expected_seq)
+                if colliding:
+                    raise ValidationError(_('No se pueden intercalar productos ajenos dentro de una sección de entintado.'))
+
+    @api.model
+    def _prepare_foreign_lines_sequence(self, vals_list):
+        order_ids = set()
+        for v in vals_list:
+            oid = v.get('order_id') or self.env.context.get('default_order_id')
+            if isinstance(oid, models.BaseModel):
+                oid = oid.id
+            if oid and not v.get('tint_section_id'):
+                order_ids.add(oid)
+        if not order_ids:
+            return
+        orders = self.env['sale.order'].browse(order_ids)
+        order_next_seq = {}
+        for order in orders:
+            if order.order_line:
+                order_next_seq[order.id] = max(order.order_line.mapped('sequence') or [0]) + 10
+        for v in vals_list:
+            oid = v.get('order_id') or self.env.context.get('default_order_id')
+            if isinstance(oid, models.BaseModel):
+                oid = oid.id
+            if oid in order_next_seq and not v.get('tint_section_id'):
+                if v.get('sequence') is None:
+                    v['sequence'] = order_next_seq[oid]
+                    order_next_seq[oid] += 10
+                else:
+                    order_next_seq[oid] = max(order_next_seq[oid], v['sequence'] + 10)
+
+    @api.model
+    def _validate_foreign_lines_sequence(self, vals_list):
+        order_ids = {v['order_id'] for v in vals_list if v.get('order_id') and not v.get('tint_section_id')}
+        if not order_ids:
+            return
+        orders = self.env['sale.order'].browse(order_ids)
+        for order in orders:
+            tint_sections = order.order_line.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+            if not tint_sections:
+                continue
+            for sec in tint_sections:
+                children = order.order_line.filtered(lambda l: l.tint_section_id == sec)
+                if not children:
+                    continue
+                min_seq = sec.sequence
+                max_seq = max(children.mapped('sequence'))
+                for v in vals_list:
+                    if v.get('order_id') == order.id and not v.get('tint_section_id'):
+                        seq = v.get('sequence')
+                        if seq is not None and min_seq <= seq <= max_seq:
+                            raise ValidationError(_('No se pueden agregar productos ajenos dentro de una sección de entintado.'))
+
     @api.model_create_multi
     def create(self, vals_list):
-        if self.env.context.get('_tint_operation') is not _TINT_OPERATION and any(
-                v.get('tint_area') or v.get('tint_section_id') or v.get('tint_snapshot') or v.get('tint_container_qty') for v in vals_list):
-            raise ValidationError(_('Agrega los entintados desde el selector de fórmulas.'))
+        if self.env.context.get('_tint_operation') is not _TINT_OPERATION:
+            if any(v.get('tint_area') or v.get('tint_section_id') or v.get('tint_snapshot') or v.get('tint_container_qty') for v in vals_list):
+                raise ValidationError(_('Agrega los entintados desde el selector de fórmulas.'))
+            self._prepare_foreign_lines_sequence(vals_list)
+            self._validate_foreign_lines_sequence(vals_list)
         return super().create(vals_list)
 
     def write(self, vals):
@@ -357,9 +445,39 @@ class SaleOrderLine(models.Model):
                       'tint_area', 'tint_section_id', 'tint_snapshot', 'tint_container_qty', 'order_id', 'display_type'}
         if self.env.context.get('_tint_operation') is not _TINT_OPERATION:
             if {'tint_area', 'tint_section_id', 'tint_snapshot', 'tint_container_qty'} & vals.keys() or (
-                    controlled & vals.keys() and self.filtered(lambda l: l.tint_area or l.tint_section_id or l.tint_snapshot)):
+                    controlled & vals.keys() and self.filtered(lambda l: l.tint_area or l.tint_snapshot or l.tint_section_id)):
                 raise ValidationError(_('No se pueden modificar los envases ni los componentes de un entintado agregado.'))
-        return super().write(vals)
+            if 'sequence' in vals and self.filtered('tint_section_id') and self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
+                if any(vals['sequence'] != l.sequence for l in self.filtered('tint_section_id')):
+                    raise ValidationError(_('No se pueden modificar los envases ni los componentes de un entintado agregado.'))
+            if 'sequence' in vals and self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
+                target_seq = vals['sequence']
+                regular_lines = self.filtered(lambda l: not l.tint_section_id and not (l.display_type == 'line_section' and l.tint_snapshot))
+                if regular_lines:
+                    for order in regular_lines.order_id:
+                        tint_sections = order.order_line.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+                        for sec in tint_sections:
+                            children = order.order_line.filtered(lambda l: l.tint_section_id == sec)
+                            if not children:
+                                continue
+                            if sec.sequence <= target_seq <= max(children.mapped('sequence')):
+                                raise ValidationError(_('No se pueden mover productos dentro de una sección de entintado.'))
+        res = super(SaleOrderLine, self.with_context(_tint_sync_sequence=_TINT_SYNC_SEQUENCE)).write(vals)
+        if 'sequence' in vals:
+            sections = self.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+            for section in sections:
+                children = section.order_id.order_line.filtered(lambda l: l.tint_section_id == section)
+                sorted_children = children.sorted(lambda l: (0 if l.product_id.tint_role != 'colorant' else 1, l.sequence, l.id))
+                for idx, child in enumerate(sorted_children, start=1):
+                    target_seq = section.sequence + idx
+                    if child.sequence != target_seq:
+                        child.with_context(
+                            _tint_operation=_TINT_OPERATION,
+                            _tint_sync_sequence=_TINT_SYNC_SEQUENCE
+                        ).write({'sequence': target_seq})
+        if self.env.context.get('_tint_sync_sequence') is not _TINT_SYNC_SEQUENCE:
+            (self | self.order_id.order_line.filtered('tint_section_id'))._check_tint_sequence_integrity()
+        return res
 
     def unlink(self):
         if self.filtered('tint_area') and self.env.context.get('_tint_operation') is not _TINT_OPERATION:

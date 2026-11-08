@@ -1,0 +1,28 @@
+// Ocultar icono de reordenar y eliminar en secciones y componentes de entintado
+tr.o_tint_no_handle {
+    .o_handle_cell {
+        cursor: default !important;
+
+        .o_row_handle {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+    }
+
+    .o_row_handle {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .o_list_record_remove {
+        button[name="delete"],
+        .fa-trash-o,
+        .fa-times {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+    }
+}

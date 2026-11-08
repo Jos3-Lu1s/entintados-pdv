@@ -246,7 +246,12 @@ class TestSaleTintSections(TransactionCase):
         order = self._order()
         order._apply_tint(self.formula, self.base, 1)
 
-        pos_config = self.env['pos.config'].search([], limit=1)
+        session = self.env['pos.session'].search([('state', '=', 'opened')], limit=1)
+        if session:
+            pos_config = session.config_id
+        else:
+            pos_config = self.env['pos.config'].search([], limit=1) or self.env['pos.config'].create({'name': 'Test POS Config'})
+            session = self.env['pos.session'].create({'config_id': pos_config.id, 'user_id': self.env.uid})
         data = order.load_sale_order_from_pos(pos_config.id)
 
         line_records = data.get('sale.order.line', [])
@@ -278,3 +283,228 @@ class TestSaleTintSections(TransactionCase):
         self.assertEqual(section.tint_container_qty, 2)
         base_line = order.order_line.filtered(lambda l: l.product_id == self.base)
         self.assertEqual(base_line.product_uom_qty, 2)
+
+    def test_protection_against_manual_sequence_modification(self):
+        """Se impide modificar directamente la secuencia de las líneas hijas de un entintado."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+
+        base_line = order.order_line.filtered(lambda l: l.product_id == self.base)
+        red_line = order.order_line.filtered(lambda l: l.product_id == self.colorant_red)
+
+        with self.assertRaises(ValidationError):
+            base_line.write({'sequence': 999})
+
+        with self.assertRaises(ValidationError):
+            red_line.write({'sequence': 999})
+
+    def test_reorder_section_header_cascades_children(self):
+        """Al mover el encabezado de sección, las líneas hijas se reubican en bloque con secuencias consecutivas."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+
+        section = order.order_line.filtered(lambda l: l.display_type == 'line_section')
+        base_line = order.order_line.filtered(lambda l: l.product_id == self.base)
+        red_line = order.order_line.filtered(lambda l: l.product_id == self.colorant_red)
+        yellow_line = order.order_line.filtered(lambda l: l.product_id == self.colorant_yellow)
+
+        section.write({'sequence': 50})
+        self.assertEqual(section.sequence, 50)
+        self.assertEqual(base_line.sequence, 51)
+        self.assertEqual(red_line.sequence, 52)
+        self.assertEqual(yellow_line.sequence, 53)
+
+        # La paternidad visual debe mantenerse intacta
+        order.invalidate_recordset()
+        self.assertEqual(base_line.parent_id, section)
+        self.assertEqual(red_line.parent_id, section)
+        self.assertEqual(yellow_line.parent_id, section)
+
+    def test_prevent_inserting_foreign_line_in_tint_section(self):
+        """Se impide crear productos ordinarios con secuencias comprendidas en el bloque del entintado."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        section = order.order_line.filtered(lambda l: l.display_type == 'line_section')
+
+        tool_product = self.env['product.product'].create({
+            'name': 'Brocha para pintar',
+            'list_price': 100.0,
+            'is_storable': True,
+        })
+
+        # Intercalar entre encabezado y componentes
+        with self.assertRaises(ValidationError):
+            self.env['sale.order.line'].create({
+                'order_id': order.id,
+                'product_id': tool_product.id,
+                'product_uom_qty': 1,
+                'sequence': section.sequence + 1,
+            })
+
+        # Misma secuencia que el encabezado
+        with self.assertRaises(ValidationError):
+            self.env['sale.order.line'].create({
+                'order_id': order.id,
+                'product_id': tool_product.id,
+                'product_uom_qty': 1,
+                'sequence': section.sequence,
+            })
+
+    def test_prevent_reordering_foreign_line_into_tint_section(self):
+        """Se impide arrastrar o reordenar un producto ordinario dentro del rango de secuencia del entintado."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        section = order.order_line.filtered(lambda l: l.display_type == 'line_section')
+
+        tool_product = self.env['product.product'].create({
+            'name': 'Rodillo Felpa',
+            'list_price': 150.0,
+            'is_storable': True,
+        })
+
+        tool_line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': tool_product.id,
+            'product_uom_qty': 1,
+            'sequence': section.sequence + 50,
+        })
+
+        with self.assertRaises(ValidationError):
+            tool_line.write({'sequence': section.sequence + 1})
+
+    def test_foreign_product_parent_id_and_report_visibility(self):
+        """Líneas ordinarias ubicadas fuera del entintado no toman su parent_id y permanecen visibles en reportes."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        section = order.order_line.filtered(lambda l: l.display_type == 'line_section')
+
+        tool_product = self.env['product.product'].create({
+            'name': 'Cinta de Enmascarar',
+            'list_price': 80.0,
+            'taxes_id': [Command.clear()],
+            'is_storable': True,
+        })
+
+        tool_line = self.env['sale.order.line'].create({
+            'order_id': order.id,
+            'product_id': tool_product.id,
+            'product_uom_qty': 2,
+            'price_unit': 80.0,
+            'sequence': section.sequence + 50,
+        })
+        order.invalidate_recordset()
+
+        # No debe pertenecer a la sección de entintado
+        self.assertFalse(tool_line.parent_id)
+
+        # En el reporte a imprimir debe figurar la sección (con composición oculta) y la cinta visible
+        report_lines = order._get_order_lines_to_report()
+        self.assertIn(section, report_lines)
+        self.assertIn(tool_line, report_lines)
+        base_line = order.order_line.filtered(lambda l: l.product_id == self.base)
+        self.assertNotIn(base_line, report_lines)  # Por collapse_composition = True
+
+        # Los totales deben ser consistentes
+        section_total = section._get_section_totals('price_subtotal')
+        self.assertEqual(section_total, 555.0)
+        self.assertEqual(order.amount_untaxed, 555.0 + 160.0)
+
+    def test_add_foreign_product_without_sequence_to_tinted_order(self):
+        """Al agregar un producto ordinario sin secuencia a una orden con entintado, se ubica al final sin colisionar."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        section = order.order_line.filtered(lambda l: l.display_type == 'line_section')
+        tint_children = order.order_line.filtered(lambda l: l.tint_section_id == section)
+        max_tint_seq = max(tint_children.mapped('sequence'))
+
+        tool = self.env['product.product'].create({
+            'name': 'Espátula Metálica',
+            'list_price': 50.0,
+            'taxes_id': [Command.clear()],
+            'is_storable': True,
+        })
+
+        order.write({
+            'order_line': [
+                Command.create({'product_id': tool.id, 'product_uom_qty': 2})
+            ]
+        })
+
+        tool_line = order.order_line.filtered(lambda l: l.product_id == tool)
+        self.assertEqual(len(tool_line), 1)
+        self.assertGreater(tool_line.sequence, max_tint_seq)
+        self.assertFalse(tool_line.parent_id)
+
+        report_lines = order._get_order_lines_to_report()
+        self.assertIn(section, report_lines)
+        self.assertIn(tool_line, report_lines)
+        self.assertEqual(order.amount_untaxed, 555.0 + 100.0)
+
+    def test_rpc_spoofed_context_bypass_prevented(self):
+        """Llamadas RPC con _tint_sync_sequence externo no pueden romper la cascada secuencial."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+        section = order.order_line.filtered(lambda l: l.display_type == 'line_section')
+        children = order.order_line.filtered(lambda l: l.tint_section_id == section)
+
+        # Simular intento RPC externo enviando un valor booleano
+        section.with_context(_tint_sync_sequence=True).write({'sequence': 80})
+
+        self.assertEqual(section.sequence, 80)
+        sorted_children = children.sorted(lambda l: (0 if l.product_id.tint_role != 'colorant' else 1, l.sequence, l.id))
+        self.assertEqual(sorted_children[0].sequence, 81)
+        self.assertEqual(sorted_children[1].sequence, 82)
+        self.assertEqual(sorted_children[2].sequence, 83)
+
+    def test_reorder_loose_products_preserves_tint_integrity(self):
+        """Reordenar productos sueltos mediante order.write no afecta ni bloquea las líneas de entintado."""
+        order = self._order()
+        order._apply_tint(self.formula, self.base, 1)
+
+        tool1 = self.env['product.product'].create({
+            'name': 'Brocha A',
+            'list_price': 100.0,
+            'is_storable': True,
+        })
+        tool2 = self.env['product.product'].create({
+            'name': 'Brocha B',
+            'list_price': 150.0,
+            'is_storable': True,
+        })
+
+        order.write({
+            'order_line': [
+                Command.create({'product_id': tool1.id, 'product_uom_qty': 1}),
+                Command.create({'product_id': tool2.id, 'product_uom_qty': 1}),
+            ]
+        })
+
+        sec = order.order_line.filtered(lambda l: l.display_type == 'line_section' and l.tint_snapshot)
+        base_l = order.order_line.filtered(lambda l: l.product_id == self.base)
+        col_red = order.order_line.filtered(lambda l: l.product_id == self.colorant_red)
+        col_yel = order.order_line.filtered(lambda l: l.product_id == self.colorant_yellow)
+        t1 = order.order_line.filtered(lambda l: l.product_id == tool1)
+        t2 = order.order_line.filtered(lambda l: l.product_id == tool2)
+
+        # Reordenar productos sueltos (t2 antes de t1) simulando resecuenciación en lote de la grilla
+        order.write({
+            'order_line': [
+                Command.update(sec.id, {'sequence': 10}),
+                Command.update(base_l.id, {'sequence': 11}),
+                Command.update(col_red.id, {'sequence': 12}),
+                Command.update(col_yel.id, {'sequence': 13}),
+                Command.update(t2.id, {'sequence': 14}),
+                Command.update(t1.id, {'sequence': 15}),
+            ]
+        })
+
+        self.assertEqual(t2.sequence, 14)
+        self.assertEqual(t1.sequence, 15)
+
+        # Intentar intercalar un producto suelto dentro del bloque de entintado debe fallar
+        with self.assertRaises(ValidationError):
+            order.write({
+                'order_line': [
+                    Command.update(t2.id, {'sequence': 11}),
+                ]
+            })

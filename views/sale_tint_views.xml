@@ -76,6 +76,8 @@
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="tint_display_name" column_invisible="True"/>
                 <field name="tint_color_description" column_invisible="True"/>
+                <field name="tint_section_id" column_invisible="True"/>
+                <field name="tint_snapshot" column_invisible="True"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form" position="inside">
                 <field name="tint_display_name" invisible="1"/>
