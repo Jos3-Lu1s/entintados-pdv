@@ -185,15 +185,13 @@
                     <tr t-if="is_section"
                         t-att-class="'o_sq_section' + (' o_sq_subsection' if line.display_type == 'line_subsection' else '')"
                         name="sale_quotation_section">
-                        <t t-set="show_total" t-value="line.is_tint_section or line.collapse_composition or line.collapse_prices"/>
+                        <t t-set="show_total" t-value="line.collapse_composition or line.collapse_prices"/>
                         <t t-set="section" t-value="line._quotation_section_values() if show_total else {}"/>
                         <td t-att-colspan="2 if show_total else columns">
                             <span class="o_sq_marker"/><span t-out="line.name"/>
                         </td>
                         <t t-if="show_total">
-                            <td class="o_sq_num">
-                                <t t-if="section['qty']" t-out="section['qty']" t-options="{'widget': 'float', 'precision': 2}"/>
-                            </td>
+                            <td class="o_sq_num"/>
                             <td t-att-colspan="columns - 4"/>
                             <td class="o_sq_num" t-out="section['total']" t-options="money"/>
                         </t>

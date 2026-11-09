@@ -76,10 +76,6 @@
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="tint_display_name" column_invisible="True"/>
                 <field name="tint_color_description" column_invisible="True"/>
-                <field name="tint_section_id" column_invisible="True"/>
-                <field name="tint_snapshot" column_invisible="True"/>
-                <field name="tint_container_qty" column_invisible="True"/>
-                <field name="is_tint_section" column_invisible="True"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form" position="inside">
                 <field name="tint_display_name" invisible="1"/>
@@ -88,8 +84,6 @@
             <xpath expr="//field[@name='order_line']/kanban/field[@name='currency_id']" position="after">
                 <field name="tint_display_name"/>
                 <field name="tint_color_description"/>
-                <field name="tint_section_id"/>
-                <field name="tint_snapshot"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/kanban//field[@name='product_id'][not(@widget)]" position="before">
                 <field name="tint_display_name" class="fw-bold" invisible="not tint_display_name"/>

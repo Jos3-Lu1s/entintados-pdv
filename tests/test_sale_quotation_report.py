@@ -156,37 +156,54 @@ class TestSaleQuotationReport(TransactionCase):
         total = self._text(doc.xpath("//td[hasclass('o_sq_grand_value')]"))
         self.assertEqual(_digits(total), _digits('%.2f' % order.amount_total))
 
-    def test_tint_with_hidden_composition_prints_only_section(self):
+    def test_tint_prints_a_single_product_row(self):
         order = self._order()
-        order._apply_tint(self.formula, self.base, 3)
-        section = order.order_line.filtered('tint_snapshot')
-        self.assertTrue(section.collapse_composition)
+        line = order._apply_tint(self.formula, self.base, 3)
+        self.assertEqual(order.order_line, line)
         doc = self._render(order)
 
-        rows = doc.xpath("//tr[@name='sale_quotation_section']")
+        self.assertFalse(doc.xpath("//tr[@name='sale_quotation_section']"))
+        rows = doc.xpath("//tr[@name='sale_quotation_product']")
         self.assertEqual(len(rows), 1)
         cells = rows[0].xpath('./td')
-        self.assertIn(section.name, self._text(cells[:1]))
-        self.assertEqual(_digits(self._text(cells[1:2])), '300')
-        self.assertEqual(_digits(self._text(cells[-1:])), _digits('%.2f' % section._get_section_totals('price_subtotal')))
+        self.assertEqual(self._text(cells[:1]), 'BASE-REP-01')
+        self.assertIn(self.formula.color_id.name.upper(), self._text(cells[1:2]).upper())
+        self.assertEqual(_digits(self._text(cells[2:3])), '300')
+        self.assertEqual(_digits(self._text(cells[-1:])), _digits('%.2f' % line.price_subtotal))
+        self.assertNotIn('COL-REP-01', doc.text_content())
+
+    def _section_order(self, **section_values):
+        return self._order(order_line=[
+            Command.create({'display_type': 'line_section', 'name': 'Áreas comunes', **section_values}),
+            Command.create({'product_id': self.product.id, 'product_uom_qty': 2}),
+        ])
+
+    def test_section_with_hidden_composition_prints_total_without_children(self):
+        order = self._section_order(collapse_composition=True)
+        section = order.order_line.filtered('display_type')
+        doc = self._render(order)
+
+        cells = doc.xpath("//tr[@name='sale_quotation_section']")[0].xpath('./td')
+        self.assertEqual(self._text(cells[:1]), 'Áreas comunes')
+        self.assertFalse(self._text(cells[1:-1]))
+        self.assertEqual(_digits(self._text(cells[-1:])),
+                         _digits('%.2f' % section._get_section_totals('price_subtotal')))
         self.assertFalse(doc.xpath("//tr[@name='sale_quotation_product']"))
 
     def test_section_with_hidden_prices_prints_total_and_children_without_prices(self):
-        order = self._order()
-        order._apply_tint(self.formula, self.base, 1)
-        section = order.order_line.filtered('tint_snapshot')
-        section.write({'collapse_composition': False, 'collapse_prices': True})
+        order = self._section_order(collapse_prices=True)
+        section = order.order_line.filtered('display_type')
         doc = self._render(order)
 
-        section_row = doc.xpath("//tr[@name='sale_quotation_section']")[0]
-        self.assertEqual(_digits(self._text(section_row.xpath('./td')[-1:])),
+        cells = doc.xpath("//tr[@name='sale_quotation_section']")[0].xpath('./td')
+        self.assertFalse(self._text(cells[1:-1]))
+        self.assertEqual(_digits(self._text(cells[-1:])),
                          _digits('%.2f' % section._get_section_totals('price_subtotal')))
         children = doc.xpath("//tr[@name='sale_quotation_product']")
-        self.assertEqual(len(children), 2)
-        for row in children:
-            cells = row.xpath('./td')
-            self.assertTrue(self._text(cells[2:3]))
-            self.assertFalse(self._text(cells[3:]))
+        self.assertEqual(len(children), 1)
+        child_cells = children[0].xpath('./td')
+        self.assertTrue(self._text(child_cells[2:3]))
+        self.assertFalse(self._text(child_cells[3:]))
 
     def test_plain_section_prints_only_title(self):
         order = self._order(order_line=[
@@ -199,69 +216,3 @@ class TestSaleQuotationReport(TransactionCase):
         self.assertEqual(self._text(row.xpath('./td')), 'Áreas comunes')
         product_cells = doc.xpath("//tr[@name='sale_quotation_product']/td")
         self.assertTrue(self._text(product_cells[-1:]))
-
-    def _width(self, row):
-        return sum(int(cell.get('colspan') or 1) for cell in row.xpath('./td|./th'))
-
-    def _tint_order(self, quantity, **section_values):
-        order = self._order()
-        order._apply_tint(self.formula, self.base, quantity)
-        section = order.order_line.filtered('tint_snapshot')
-        if section_values:
-            section.write(section_values)
-        return order, section
-
-    def test_tint_header_prints_containers_and_total_without_hiding(self):
-        order, section = self._tint_order(2, collapse_composition=False, collapse_prices=False)
-        doc = self._render(order)
-
-        row = doc.xpath("//tr[@name='sale_quotation_section']")[0]
-        cells = row.xpath('./td')
-        self.assertIn(section.name, self._text(cells[:1]))
-        self.assertEqual(_digits(self._text(cells[1:2])), '200')
-        self.assertFalse(self._text(cells[2:-1]))
-        total = section._get_section_totals('price_subtotal')
-        self.assertEqual(_digits(self._text(cells[-1:])), _digits('%.2f' % total))
-
-        children = doc.xpath("//tr[@name='sale_quotation_product']")
-        self.assertEqual(len(children), 2)
-        for child in children:
-            self.assertTrue(self._text(child.xpath('./td')[3:4]))
-            self.assertTrue(self._text(child.xpath('./td')[-1:]))
-        components = order.order_line.filtered(lambda line: line.tint_section_id == section)
-        self.assertAlmostEqual(total, sum(components.mapped('price_subtotal')))
-
-    def test_tint_header_with_hidden_prices_prints_containers_and_total(self):
-        order, section = self._tint_order(2, collapse_composition=False, collapse_prices=True)
-        doc = self._render(order)
-
-        cells = doc.xpath("//tr[@name='sale_quotation_section']")[0].xpath('./td')
-        self.assertEqual(_digits(self._text(cells[1:2])), '200')
-        self.assertEqual(_digits(self._text(cells[-1:])),
-                         _digits('%.2f' % section._get_section_totals('price_subtotal')))
-        for child in doc.xpath("//tr[@name='sale_quotation_product']"):
-            self.assertFalse(self._text(child.xpath('./td')[3:]))
-
-    def test_tint_header_keeps_table_width_with_discount_column(self):
-        order, section = self._tint_order(1, collapse_composition=False, collapse_prices=False)
-        order.write({'order_line': [Command.create({'product_id': self.product.id, 'discount': 20})]})
-        doc = self._render(order)
-
-        header_width = self._width(doc.xpath("//table[@name='sale_quotation_lines']/thead/tr")[0])
-        self.assertEqual(header_width, 6)
-        row = doc.xpath("//tr[@name='sale_quotation_section']")[0]
-        self.assertEqual(self._width(row), header_width)
-        cells = row.xpath('./td')
-        self.assertEqual(_digits(self._text(cells[1:2])), '100')
-        self.assertFalse(self._text(cells[2:-1]))
-
-    def test_tint_header_without_containers_prints_empty_quantity(self):
-        order, section = self._tint_order(1, collapse_composition=False, collapse_prices=False)
-        self.env.cr.execute('UPDATE sale_order_line SET tint_container_qty = 0 WHERE id = %s', [section.id])
-        section.invalidate_recordset(['tint_container_qty'])
-        doc = self._render(order)
-
-        cells = doc.xpath("//tr[@name='sale_quotation_section']")[0].xpath('./td')
-        self.assertFalse(self._text(cells[1:2]))
-        self.assertEqual(_digits(self._text(cells[-1:])),
-                         _digits('%.2f' % section._get_section_totals('price_subtotal')))

@@ -7,11 +7,6 @@ import {
     buildComboBreakdown,
     ComboBreakdownPopover,
 } from "../combo_breakdown/combo_breakdown_popover";
-import {
-    buildTintBreakdown,
-    buildTintComponentInfo,
-    TintBreakdownPopover,
-} from "../sale_tint/tint_breakdown_popover";
 
 /** Icono y color por origen del precio de la línea de venta. */
 const PRICE_ORIGINS = {
@@ -23,7 +18,6 @@ const PRICE_ORIGINS = {
 };
 
 const COMBO_PACKAGE = { icon: "fa-cubes", color: "text-primary" };
-const TINT = { icon: "fa-tint", color: "text-info" };
 
 export class PriceOriginPopover extends Component {
     static template = "entintados_pdv.PriceOriginPopover";
@@ -38,8 +32,6 @@ export class PriceOriginPopover extends Component {
  * Indicador compacto del origen del precio: icono de color que abre un popover con el detalle
  * (`price_origin_label`) al hacer clic. Sin icono en líneas históricas sin origen.
  * En la línea de un paquete combo abre el desglose del reparto, sea cual sea su `price_origin`.
- * En el encabezado de un entintado abre el desglose de la fórmula; en su base y sus colorantes,
- * solo el rol y el color.
  */
 export class PriceOriginField extends Component {
     static template = "entintados_pdv.PriceOriginField";
@@ -48,25 +40,13 @@ export class PriceOriginField extends Component {
     setup() {
         this.popover = usePopover(PriceOriginPopover, { position: "left" });
         this.comboPopover = usePopover(ComboBreakdownPopover, { position: "left" });
-        this.tintPopover = usePopover(TintBreakdownPopover, { position: "left" });
     }
 
     get isComboPackage() {
         return this.props.record.data.product_type === "combo";
     }
 
-    /** Encabezado de entintado o uno de sus componentes (base o colorante). */
-    get isTint() {
-        const data = this.props.record.data;
-        return Boolean(
-            data.tint_section_id || (data.display_type === "line_section" && data.tint_snapshot)
-        );
-    }
-
     get origin() {
-        if (this.isTint) {
-            return TINT;
-        }
         if (this.isComboPackage) {
             return COMBO_PACKAGE;
         }
@@ -74,11 +54,6 @@ export class PriceOriginField extends Component {
     }
 
     get title() {
-        if (this.isTint) {
-            return this.props.record.data.tint_section_id
-                ? _t("Componente del entintado")
-                : _t("Desglose del entintado");
-        }
         if (this.isComboPackage) {
             return _t("Desglose del combo");
         }
@@ -89,25 +64,6 @@ export class PriceOriginField extends Component {
     }
 
     onClick(ev) {
-        if (this.props.record.data.tint_section_id) {
-            if (this.popover.isOpen) {
-                this.popover.close();
-                return;
-            }
-            const info = buildTintComponentInfo(this.props.record);
-            this.popover.open(ev.currentTarget, { title: info.title, detail: info.color || false });
-            return;
-        }
-        if (this.isTint) {
-            if (this.tintPopover.isOpen) {
-                this.tintPopover.close();
-                return;
-            }
-            this.tintPopover.open(ev.currentTarget, {
-                breakdown: buildTintBreakdown(this.props.record),
-            });
-            return;
-        }
         if (this.isComboPackage) {
             if (this.comboPopover.isOpen) {
                 this.comboPopover.close();
@@ -147,12 +103,6 @@ export const priceOriginField = {
         { name: "discount", type: "float" },
         { name: "price_subtotal", type: "monetary" },
         { name: "pricing_rule_origin", type: "char" },
-        // Entintado: la gota sustituye al origen del precio en el encabezado y sus componentes.
-        { name: "display_type", type: "selection" },
-        { name: "tint_snapshot", type: "json" },
-        { name: "tint_section_id", type: "many2one", relation: "sale.order.line" },
-        { name: "tint_component_role", type: "selection" },
-        { name: "product_uom_id", type: "many2one", relation: "uom.uom" },
     ],
 };
 

@@ -212,6 +212,4 @@ class TestSaleDiscountAndPriceConsistency(TransactionCase):
         self.assertEqual(plain_line.price_unit, 50.0)
         tint_base_line = order.order_line.filtered(lambda l: l.product_id == self.base_product)
         self.assertTrue(tint_base_line)
-        self.assertEqual(tint_base_line.price_unit, 200.0)  # Base 200 en sección jerárquica
-        colorant_lines = order.order_line.filtered(lambda l: l.tint_section_id == tint_base_line.tint_section_id and l != tint_base_line)
-        self.assertEqual(tint_base_line.price_subtotal + sum(colorant_lines.mapped('price_subtotal')), 224.0)
+        self.assertEqual(tint_base_line.price_unit, 224.0)  # Base 200 + 12 puntos * 2 = 224

@@ -359,7 +359,7 @@ class StockPickingPosQuotation(models.Model):
 
     def _create_move_from_pos_order_lines(self, lines):
         # Native POS groups equal products. Separate recipes that use the same base.
-        tinted = lines.filtered(lambda line: line.sale_order_line_id and bool(line.sale_order_line_id._tint_recipe()))
+        tinted = lines.filtered(lambda line: line.sale_order_line_id and line.sale_order_line_id._tint_recipe().get('base_only'))
         for sale_line in tinted.sale_order_line_id:
             super()._create_move_from_pos_order_lines(tinted.filtered(lambda line: line.sale_order_line_id == sale_line))
         if lines - tinted:
@@ -368,32 +368,10 @@ class StockPickingPosQuotation(models.Model):
     def _prepare_stock_move_vals(self, first_line, order_lines):
         values = super()._prepare_stock_move_vals(first_line, order_lines)
         sale_line = order_lines.sale_order_line_id
-        if len(sale_line) == 1 and bool(sale_line._tint_recipe()):
+        if len(sale_line) == 1 and sale_line._tint_recipe().get('base_only'):
             values['pos_tint_sale_line_id'] = sale_line.id
             values['description_picking'] = sale_line.tint_color_description or ''
         return values
-
-
-class SaleOrderPosQuotation(models.Model):
-    _inherit = 'sale.order'
-
-    def load_sale_order_from_pos(self, config_id):
-        res = super().load_sale_order_from_pos(config_id)
-        if 'sale.order.line' in res:
-            new_lines = []
-            for line_data in res['sale.order.line']:
-                line = self.env['sale.order.line'].browse(line_data['id'])
-                if line.tint_section_id and line.product_id and line.product_id.tint_role == 'colorant':
-                    continue
-                recipe = line._tint_recipe()
-                is_base = recipe and line.product_id.id == recipe.get('base_id')
-                if is_base:
-                    line_data['price_unit'] = recipe.get('unit_price', line_data.get('price_unit', 0))
-                    line_data['tint_snapshot'] = recipe
-                    line_data['name'] = line.order_id._tint_base_description(recipe).replace('\n', ' ')
-                new_lines.append(line_data)
-            res['sale.order.line'] = new_lines
-        return res
 
 
 class SaleOrderLinePosQuotation(models.Model):
