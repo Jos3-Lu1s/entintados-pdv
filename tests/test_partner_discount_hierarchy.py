@@ -1818,6 +1818,12 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(down_payment_line.pricing_rule_type, 'none')
         self.assertEqual(order.amount_total, 900.0)
 
+        # Solo se puede aplicar a la factura final lo que ya se cobró del anticipo.
+        self.env['account.payment.register'].with_context(
+            active_model='account.move', active_ids=down_payment_invoice.ids,
+        ).create({})._create_payments()
+        self.assertTrue(down_payment_invoice.currency_id.is_zero(down_payment_invoice.amount_residual))
+
         final_invoice = order._create_invoices(final=True)
         deduction = final_invoice.invoice_line_ids.filtered('is_downpayment')
         self.assertEqual(deduction.discount, 0.0)
