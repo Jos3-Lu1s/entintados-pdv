@@ -1245,6 +1245,78 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertNotIn(reward, available.get(line2, self.env['loyalty.reward']),
                          "La promoción no debe estar disponible porque ya alcanzó max_usage=1")
 
+    def _limited_program_used_by_other_salesman(self, rewards):
+        """Programa con un solo uso, ya consumido en la cotización del vendedor A.
+
+        Devuelve el programa, el vendedor B (mismo grupo que A, sin acceso a sus pedidos) y una
+        cotización propia de B con un producto sin acuerdo.
+        """
+        program = self._create_program(rewards)
+        program.write({'limit_usage': True, 'max_usage': 1})
+        salesman_a = new_test_user(self.env, login='vendedor_limite_a', groups='sales_team.group_sale_salesman')
+        salesman_b = new_test_user(self.env, login='vendedor_limite_b', groups='sales_team.group_sale_salesman')
+        orders = self.env['sale.order']
+        for salesman in (salesman_a, salesman_b):
+            partner = self.env['res.partner'].create({
+                'name': f'Cliente de {salesman.login}',
+                'is_customer': True,
+                'phone': '1234567890',
+                'user_id': salesman.id,
+            })
+            orders |= self.env['sale.order'].create({
+                'partner_id': partner.id,
+                'pricelist_id': self.pricelist.id,
+                'user_id': salesman.id,
+            })
+        order_a, order_b = orders
+        line_a = self._create_line(order_a, self.product_plain)
+        line_b = self._create_line(order_b, self.product_plain)
+        return program, salesman_b, order_a, line_a, order_b, line_b
+
+    def test_max_usage_not_exceeded_via_promotions_button(self):
+        program, salesman_b, __, line_a, order_b, line_b = self._limited_program_used_by_other_salesman(
+            [{'discount': 20.0}]
+        )
+        line_a._apply_line_promotion(program.reward_ids)
+        self.env.flush_all()
+        # El conteo se calcula por primera vez con el usuario que pulsa el botón.
+        self.env.invalidate_all()
+
+        order_b.with_user(salesman_b).action_open_reward_wizard()
+
+        self.assertFalse(line_b.promo_reward_id)
+        self.assertNotEqual(line_b.discount, 20.0)
+        self.env.invalidate_all()
+        self.assertEqual(program.sudo().total_order_count, 1)
+
+    def test_native_reward_max_usage_not_exceeded_by_restricted_salesman(self):
+        program, salesman_b, order_a, __, order_b, __ = self._limited_program_used_by_other_salesman(
+            [{'discount': 10.0, 'discount_max_amount': 5.0}]
+        )
+        native_reward = program.reward_ids
+        self.assertFalse(native_reward._is_line_promotion())
+        reward_product = self._create_product('Descuento Pedido Límite', 0.0)
+        self.lines.create({
+            'order_id': order_a.id,
+            'product_id': reward_product.id,
+            'name': 'Descuento Pedido Límite',
+            'product_uom_qty': 1.0,
+            'price_unit': -5.0,
+            'is_reward_line': True,
+            'reward_id': native_reward.id,
+        })
+        self.env.flush_all()
+        self.env.invalidate_all()
+
+        order_b_as_b = order_b.with_user(salesman_b)
+        order_b_as_b._update_programs_and_rewards()
+        claimable = order_b_as_b._get_claimable_rewards()
+
+        self.assertNotIn(native_reward, self.env['loyalty.reward'].union(*claimable.values()))
+        self.assertFalse(order_b.order_line.filtered(lambda line: line.reward_id.program_id == program))
+        self.env.invalidate_all()
+        self.assertEqual(program.sudo().total_order_count, 1)
+
     def test_order_discount_totals_include_fixed_reward_line(self):
         # Descuento total e Importe antes de descuento incluyen recompensas de importe fijo
         order = self._create_order()

@@ -57,9 +57,10 @@ class LoyaltyProgram(models.Model):
 
     def _compute_order_count(self):
         # Reemplaza al core para contar una sola vez el pedido que tiene líneas de recompensa
-        # nativas y líneas con promoción del mismo programa.
+        # nativas y líneas con promoción del mismo programa. Se cuenta con sudo: el límite de usos
+        # es global y las reglas de "solo sus documentos" ocultarían los pedidos de otros vendedores.
         reward_ids = self.reward_ids.ids
-        groups = self.env['sale.order.line']._read_group(
+        groups = self.env['sale.order.line'].sudo()._read_group(
             ['|', ('reward_id', 'in', reward_ids), ('promo_reward_id', 'in', reward_ids)],
             ['order_id'],
             ['reward_id:array_agg', 'promo_reward_id:array_agg'],

@@ -420,8 +420,7 @@ class SaleOrder(models.Model):
             ('program_type', 'in', LINE_PROMOTION_PROGRAM_TYPES),
         ])
         for program in programs:
-            prog_sudo = program.sudo()
-            if prog_sudo.limit_usage and prog_sudo.total_order_count >= prog_sudo.max_usage and program not in applied_programs:
+            if program.limit_usage and program.total_order_count >= program.max_usage and program not in applied_programs:
                 continue
             points = self._get_line_promotion_points(program)
             if points is None:
