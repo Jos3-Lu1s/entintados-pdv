@@ -130,7 +130,7 @@ class SaleOrderLine(models.Model):
 
     @api.depends(
         'display_type', 'pricing_rule_type', 'product_id', 'is_reward_line', 'is_downpayment',
-        'combo_item_id',
+        'combo_item_id', 'order_id.order_promo_reward_id',
     )
     def _compute_manual_discount_allowed(self):
         for line in self:
@@ -203,7 +203,20 @@ class SaleOrderLine(models.Model):
             or self.pricing_rule_type == 'fixed_price'
             or getattr(self, 'is_reward_line', False)
             or (self.product_id and self.product_id == self.company_id.sale_discount_product_id)
+            or self._has_order_promotion_lock()
         )
+
+    def _has_order_promotion_lock(self):
+        """Línea que lleva la promoción de pedido: su descuento no se cambia mientras esté activa."""
+        self.ensure_one()
+        return bool(self.order_id.order_promo_reward_id and self._admits_line_promotion())
+
+    def _order_promotion_lock_error(self):
+        return UserError(_(
+            "El pedido tiene la promoción %(program)s en todas sus líneas. Quítala del pedido "
+            "para cambiar el descuento.",
+            program=self.order_id.order_promo_reward_id.program_id.name,
+        ))
 
     @api.constrains('discount', 'pricing_rule_type', 'is_downpayment')
     def _check_manual_discount(self):
@@ -425,6 +438,18 @@ class SaleOrderLine(models.Model):
         return res
 
     def write(self, vals):
+        if (
+            'discount' in vals
+            and not self.env.context.get('skip_manual_discount_breakdown')
+            and not self.env.context.get('force_price_recomputation')
+        ):
+            digits = self.env['decimal.precision'].precision_get('Discount')
+            for line in self:
+                if (
+                    float_compare(line.discount, vals['discount'] or 0.0, precision_digits=digits)
+                    and line._has_order_promotion_lock()
+                ):
+                    raise line._order_promotion_lock_error()
         if 'product_id' in vals:
             # El configurador del núcleo borra y vuelve a crear los productos del combo: un cambio
             # de producto por `write` los separaría de lo que eligió el configurador.
@@ -1235,7 +1260,7 @@ class SaleOrderLine(models.Model):
         'order_id.order_line.price_unit', 'order_id.order_line.discount',
         'order_id.order_line.price_subtotal', 'order_id.order_line.price_total',
         'order_id.order_line.tax_ids', 'order_id.order_line.pricing_rule_type',
-        'order_id.order_line.promo_reward_id',
+        'order_id.order_line.promo_reward_id', 'order_id.order_promo_reward_id',
     )
     def _compute_promo_available(self):
         self.promo_available_info = False
@@ -1262,6 +1287,7 @@ class SaleOrderLine(models.Model):
                     'discount': reward.discount,
                     'difference': difference(reward.discount),
                     'applied': reward == applied,
+                    'scope': reward.discount_applicability,
                 } for reward in (rewards | applied).sorted(key=lambda reward: (-reward.discount, reward.id))]
                 fallback = False
                 if applied:
@@ -1279,6 +1305,10 @@ class SaleOrderLine(models.Model):
                             'label': rule.get('origin_label') or _("sin acuerdo"),
                             'difference': difference(agreement),
                         }
+                if fallback:
+                    # Quitar la promoción de pedido de una línea la quita de todo el pedido.
+                    order_reward = line.order_id.order_promo_reward_id.sudo()
+                    fallback['scope'] = 'order' if order_reward and applied == order_reward else 'specific'
                 line.promo_available_info = {'options': options, 'fallback': fallback}
 
     def action_set_line_promotion(self, reward_id=False):
@@ -1288,7 +1318,15 @@ class SaleOrderLine(models.Model):
         if self.order_id.state not in ('draft', 'sent'):
             raise UserError(_("Las promociones por línea solo se eligen en una cotización."))
         reward = self.env['loyalty.reward'].browse(reward_id).exists()
-        if reward:
+        order = self.order_id
+        if reward and reward.discount_applicability == 'order':
+            order._set_order_promotion(reward)
+        elif not reward and order.order_promo_reward_id and self.promo_reward_id == order.order_promo_reward_id:
+            # La promoción de pedido es de todo o nada: quitarla de una línea la quita del pedido.
+            order._remove_order_promotion()
+        elif reward:
+            if order.order_promo_reward_id:
+                raise self._order_promotion_lock_error()
             if reward != self.promo_reward_id:
                 self._apply_line_promotion(reward)
         else:

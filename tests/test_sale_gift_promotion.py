@@ -503,3 +503,31 @@ class TestSaleGiftPromotion(TransactionCase):
         order.action_confirm()
         self.assertEqual(gift.price_origin, 'list')
         self.assertAlmostEqual(gift.price_unit, 50.0)
+
+    def test_gift_badge_only_for_promotion(self):
+        self.program.active = False
+        buy_get = self.env['loyalty.program'].create({
+            'name': 'Compra2Lleva1',
+            'program_type': 'buy_x_get_y',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.clear(), Command.create({
+                'product_ids': [Command.set(self.product_p.ids)],
+                'minimum_qty': 2,
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.clear(), Command.create({
+                'reward_type': 'product',
+                'reward_product_id': self.product_q.id,
+                'reward_product_qty': 1,
+                'required_points': 1,
+            })],
+        })
+        order = self._create_order()
+        self._add_line(order, self.product_p, 2.0)
+        self._claim_gift(order, buy_get)
+        gift = order.order_line.filtered(lambda line: line.reward_id.program_id == buy_get)
+        self.assertEqual(len(gift), 1)
+        self.assertNotEqual(gift.pricing_rule_type, 'promo')
+        self.assertFalse((gift.pricing_rule_origin or '').startswith('Promoción:'))

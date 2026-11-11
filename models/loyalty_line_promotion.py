@@ -2,7 +2,7 @@
 
 from odoo import models
 
-LINE_PROMOTION_PROGRAM_TYPES = ('promotion', 'promo_code')
+LINE_PROMOTION_PROGRAM_TYPES = ('promotion',)
 LINE_PROMOTION_APPLICABILITIES = ('order', 'specific')
 
 
@@ -14,6 +14,7 @@ class LoyaltyReward(models.Model):
         # de eliminarse físicamente para mantener la integridad de los descuentos aplicados.
         rewards_in_use = self.filtered(
             lambda r: self.env['sale.order.line'].sudo().search_count([('promo_reward_id', '=', r.id)], limit=1)
+            or self.env['sale.order'].sudo().search_count([('order_promo_reward_id', '=', r.id)], limit=1)
         )
         if rewards_in_use:
             rewards_in_use.action_archive()
@@ -53,6 +54,12 @@ class LoyaltyProgram(models.Model):
         ])
         if lines_with_promo:
             lines_with_promo._drop_line_promotion()
+        orders_with_promo = self.env['sale.order'].sudo().search([
+            ('order_promo_reward_id', 'in', rewards.ids),
+            ('state', 'in', ('draft', 'sent')),
+        ])
+        if orders_with_promo:
+            orders_with_promo._clear_order_promotion()
         return super().unlink()
 
     def _compute_order_count(self):

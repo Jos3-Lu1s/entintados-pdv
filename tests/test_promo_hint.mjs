@@ -42,6 +42,36 @@ test('marks the applied reward and offers to return to the agreement', () => {
     });
 });
 
+test('labels order-wide promotions and leaves product promotions unchanged', () => {
+    const rows = promoHintLines({
+        options: [
+            { reward_id: 1, name: 'Promo Esp', discount: 20, difference: 20, applied: false, scope: 'specific' },
+            { reward_id: 2, name: 'Promo Pedido', discount: 10, difference: 10, applied: false, scope: 'order' },
+        ],
+        fallback: false,
+    }, identity, money);
+    assert.deepEqual(rows.map((row) => row.text), [
+        'Promo Esp - 20 %',
+        'Promo Pedido - 10 % (todo el pedido)',
+    ]);
+});
+
+test('offers to remove the order-wide promotion from the whole order', () => {
+    const rows = promoHintLines({
+        options: [
+            { reward_id: 2, name: 'Promo Pedido', discount: 10, difference: 0, applied: true, scope: 'order' },
+        ],
+        fallback: { label: 'Desc. Producto (15.0%)', difference: 5, scope: 'order' },
+    }, identity, money);
+    assert.deepEqual(rows.at(-1), {
+        key: 'fallback',
+        text: 'Quitar la promoción del pedido',
+        detail: 'ahorra $ 5.00 más',
+        rewardId: false,
+        applied: false,
+    });
+});
+
 test('handles a line without options', () => {
     assert.deepEqual(promoHintLines(false, identity, money), []);
     assert.deepEqual(promoHintLines({ options: [], fallback: false }, identity, money), []);

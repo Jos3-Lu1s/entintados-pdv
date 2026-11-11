@@ -26,6 +26,12 @@ class SaleOrder(models.Model):
         string='Líneas con promoción disponible',
         compute='_compute_promo_available_line_count',
     )
+    order_promo_reward_id = fields.Many2one(
+        comodel_name='loyalty.reward',
+        string='Promoción de pedido',
+        copy=False,
+        ondelete='set null',
+    )
     # Solo para la vista: el bloqueo de Ajustes no se aplica en el servidor.
     price_unit_edit_locked = fields.Boolean(compute='_compute_edit_locked')
     discount_edit_locked = fields.Boolean(compute='_compute_edit_locked')
@@ -338,7 +344,10 @@ class SaleOrder(models.Model):
 
     def _get_reward_values_product(self, reward, coupon, product=None, **kwargs):
         # Línea de recompensa del core, en su propia línea aunque el producto ya esté en el pedido.
+        # Solo el regalo de una promoción lleva la insignia: en los demás programas no lo es.
         values_list = super()._get_reward_values_product(reward, coupon, product=product, **kwargs)
+        if reward.program_id.program_type != 'promotion':
+            return values_list
         for values in values_list:
             values.update({
                 'pricing_rule_type': 'promo',
@@ -406,15 +415,25 @@ class SaleOrder(models.Model):
                 points += float_round(rule.reward_point_amount * taxed, precision_digits=2, rounding_method='DOWN')
         return points
 
-    def _get_line_promotion_rewards(self):
-        """Recompensas que cada línea del pedido puede elegir: {línea: loyalty.reward}."""
+    @api.constrains('order_promo_reward_id')
+    def _check_order_promotion(self):
+        for order in self.filtered('order_promo_reward_id'):
+            reward = order.order_promo_reward_id
+            if not reward._is_line_promotion() or reward.discount_applicability != 'order':
+                raise ValidationError(_(
+                    "La recompensa «%(reward)s» no es una promoción de pedido.",
+                    reward=reward.display_name,
+                ))
+
+    def _get_available_promotion_rewards(self):
+        """Recompensas por línea cuyo programa cumple sus condiciones en el pedido."""
         self.ensure_one()
-        no_reward = self.env['loyalty.reward']
-        result = {line: no_reward for line in self.order_line}
-        eligible_lines = self.order_line.filtered(lambda line: line._admits_line_promotion())
-        if not eligible_lines:
-            return result
-        applied_programs = (self.order_line.promo_reward_id.program_id | self.order_line.reward_id.program_id)
+        rewards = self.env['loyalty.reward']
+        applied_programs = (
+            self.order_line.promo_reward_id.program_id
+            | self.order_line.reward_id.program_id
+            | self.order_promo_reward_id.program_id
+        )
         programs = self.env['loyalty.program'].search([
             *self._get_program_domain(),
             ('program_type', 'in', LINE_PROMOTION_PROGRAM_TYPES),
@@ -425,16 +444,74 @@ class SaleOrder(models.Model):
             points = self._get_line_promotion_points(program)
             if points is None:
                 continue
-            for reward in program.reward_ids:
-                if not reward._is_line_promotion() or points < reward.required_points:
-                    continue
-                reward_lines = eligible_lines
-                if reward.discount_applicability == 'specific':
-                    domain = reward._get_discount_product_domain()
-                    reward_lines = eligible_lines.filtered(lambda line: line.product_id.filtered_domain(domain))
-                for line in reward_lines:
-                    result[line] |= reward
+            rewards |= program.reward_ids.filtered(
+                lambda reward: reward._is_line_promotion() and points >= reward.required_points
+            )
+        return rewards
+
+    def _get_order_promotion_rewards(self):
+        """Promociones de pedido disponibles, sin depender de una línea concreta."""
+        return self._get_available_promotion_rewards().filtered(
+            lambda reward: reward.discount_applicability == 'order'
+        )
+
+    def _get_line_promotion_rewards(self):
+        """Recompensas que cada línea del pedido puede elegir: {línea: loyalty.reward}."""
+        self.ensure_one()
+        no_reward = self.env['loyalty.reward']
+        result = {line: no_reward for line in self.order_line}
+        eligible_lines = self.order_line.filtered(lambda line: line._admits_line_promotion())
+        if not eligible_lines:
+            return result
+        rewards = self._get_available_promotion_rewards()
+        if self.order_promo_reward_id:
+            # La promoción de pedido es de todo o nada: no convive con la de un producto.
+            rewards = rewards.filtered(lambda reward: reward.discount_applicability == 'order')
+        for reward in rewards:
+            reward_lines = eligible_lines
+            if reward.discount_applicability == 'specific':
+                domain = reward._get_discount_product_domain()
+                reward_lines = eligible_lines.filtered(lambda line: line.product_id.filtered_domain(domain))
+            for line in reward_lines:
+                result[line] |= reward
         return result
+
+    def _set_order_promotion(self, reward):
+        """Activa `reward` como promoción de pedido: todas las líneas elegibles la reciben y
+        pierden su acuerdo, su descuento manual o la promoción de su producto."""
+        self.ensure_one()
+        if self.order_promo_reward_id != reward:
+            self.order_promo_reward_id = reward
+        return self._apply_order_promotion_to_lines()
+
+    def _apply_order_promotion_to_lines(self):
+        """Aplica la promoción de pedido a las líneas elegibles que aún no la tienen. Devuelve las
+        líneas que cambiaron."""
+        changed = self.env['sale.order.line']
+        for order in self:
+            reward = order.order_promo_reward_id
+            if not reward:
+                continue
+            available = order._get_line_promotion_rewards()
+            lines = order.order_line.filtered(
+                lambda line: line.promo_reward_id != reward and reward in available[line]
+            )
+            if lines:
+                lines._apply_line_promotion(reward)
+                changed |= lines
+        return changed
+
+    def _remove_order_promotion(self):
+        """Quita la promoción de pedido de todas las líneas, que vuelven a su acuerdo."""
+        for order in self:
+            reward = order.order_promo_reward_id
+            if reward:
+                order.order_line.filtered(lambda line: line.promo_reward_id == reward)._drop_line_promotion()
+        self._clear_order_promotion()
+
+    def _clear_order_promotion(self):
+        """Vacía la promoción de pedido."""
+        self.write({'order_promo_reward_id': False})
 
     def _get_line_promotion_loss_reason(self, line, reward):
         self.ensure_one()
@@ -449,14 +526,25 @@ class SaleOrder(models.Model):
         return _("el pedido ya no cumple la condición")
 
     def _reevaluate_line_promotions(self):
-        """Quita las promociones por línea que ya no proceden y actualiza el % de las vigentes."""
+        """Quita las promociones que ya no proceden, actualiza el % de las vigentes y extiende la
+        promoción de pedido a las líneas que pueden recibirla."""
         digits = self.env['decimal.precision'].precision_get('Discount')
         for order in self.filtered(lambda order: order.state in ('draft', 'sent')):
             orphaned = order.order_line.filtered(lambda l: not l.promo_reward_id and l.pricing_rule_type == 'promo')
             if orphaned:
                 orphaned._drop_line_promotion()
-            promo_lines = order.order_line.filtered('promo_reward_id')
             notices = []
+            order_reward = order.order_promo_reward_id
+            if order_reward and order_reward not in order._get_order_promotion_rewards():
+                reason = order._get_order_promotion_loss_reason(order_reward)
+                order.order_line.filtered(lambda line: line.promo_reward_id == order_reward)._drop_line_promotion()
+                order._clear_order_promotion()
+                notices.append(_(
+                    "El pedido dejó la promoción %(program)s: %(reason)s. Sus líneas volvieron a su acuerdo.",
+                    program=order_reward.program_id.name,
+                    reason=reason,
+                ))
+            promo_lines = order.order_line.filtered('promo_reward_id')
             # Al volver al acuerdo, una línea puede dejar a otro programa debajo de su mínimo.
             while promo_lines:
                 available = order._get_line_promotion_rewards()
@@ -488,7 +576,14 @@ class SaleOrder(models.Model):
                 elif line.pricing_rule_origin == values['pricing_rule_origin']:
                     continue
                 line.with_context(skip_manual_discount_breakdown=True).write(values)
+            order._apply_order_promotion_to_lines()
             order._notify_promotion_changes(notices)
+
+    def _get_order_promotion_loss_reason(self, reward):
+        self.ensure_one()
+        if not reward.active or not reward.program_id.filtered_domain(self._get_program_domain()):
+            return _("ya no está vigente")
+        return _("el pedido ya no cumple la condición")
 
     def _notify_promotion_changes(self, notices):
         self.ensure_one()
@@ -574,15 +669,23 @@ class SaleOrder(models.Model):
         return res
 
     def _apply_best_line_promotions(self):
-        """Aplica a cada línea su promoción de mayor %, solo si supera su descuento actual.
-        Devuelve las líneas que cambiaron."""
+        """«Promociones»: si hay una promoción de pedido disponible, activa la de mayor % en todas
+        las líneas. Si no, aplica a cada línea la promoción de su producto de mayor %, solo si
+        supera su descuento actual. Devuelve las líneas que cambiaron."""
         self.ensure_one()
+        by_discount = lambda reward: (-reward.discount, reward.id)
+        candidate = self._get_order_promotion_rewards().sorted(key=by_discount)[:1]
+        if candidate:
+            changed = self._set_order_promotion(candidate)
+            self._reevaluate_line_promotions()
+            return changed
         digits = self.env['decimal.precision'].precision_get('Discount')
         lines_by_reward = defaultdict(lambda: self.env['sale.order.line'])
         for line, rewards in self._get_line_promotion_rewards().items():
-            if not rewards:
+            options = rewards.filtered(lambda reward: reward.discount_applicability == 'specific')
+            if not options:
                 continue
-            best = rewards.sorted(key=lambda reward: (-reward.discount, reward.id))[0]
+            best = options.sorted(key=by_discount)[0]
             if best != line.promo_reward_id and float_compare(best.discount, line.discount, precision_digits=digits) > 0:
                 lines_by_reward[best] |= line
         for reward, lines in lines_by_reward.items():

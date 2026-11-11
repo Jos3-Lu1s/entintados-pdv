@@ -12,6 +12,12 @@ class SaleOrderDiscount(models.TransientModel):
         self.ensure_one()
         if self.discount_type != 'sol_discount':
             raise UserError(_("El descuento solo puede aplicarse en las líneas de la orden."))
+        order_reward = self.sale_order_id.order_promo_reward_id
+        if order_reward:
+            raise UserError(_(
+                "El pedido tiene la promoción %(program)s. Quítala antes de aplicar otro descuento.",
+                program=order_reward.program_id.name,
+            ))
         self = self.with_company(self.company_id)
         commercial_lines = self.sale_order_id.order_line.filtered(
             lambda line: not line.display_type and not line.is_downpayment

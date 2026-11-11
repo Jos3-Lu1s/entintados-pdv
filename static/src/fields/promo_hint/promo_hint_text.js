@@ -4,7 +4,8 @@
  * Sin dependencias de Odoo: `translate` y `formatAmount` llegan como parámetros.
  *
  * @param {{options: {reward_id: number, name: string, discount: number, difference: number,
- *          applied: boolean}[], fallback: {label: string, difference: number}|false}|false} info
+ *          applied: boolean, scope: 'order'|'specific'}[],
+ *          fallback: {label: string, difference: number, scope: 'order'|'specific'}|false}|false} info
  * @param {(text: string) => string} translate
  * @param {(amount: number) => string} formatAmount
  * @returns {{key: string, text: string, detail: string, rewardId: number|false, applied: boolean}[]}
@@ -23,9 +24,11 @@ export function promoHintLines(info, translate, formatAmount) {
         }
         return translate("da lo mismo que el descuento actual");
     };
+    // La promoción de pedido se aplica a todas las líneas, no solo a esta.
+    const scopeLabel = (option) => (option.scope === "order" ? ` ${translate("(todo el pedido)")}` : "");
     const rows = (info.options || []).map((option) => ({
         key: `reward-${option.reward_id}`,
-        text: `${option.name} - ${option.discount} %`,
+        text: `${option.name} - ${option.discount} %${scopeLabel(option)}`,
         detail: option.applied ? translate("aplicada") : describe(option.difference),
         rewardId: option.reward_id,
         applied: option.applied,
@@ -33,7 +36,10 @@ export function promoHintLines(info, translate, formatAmount) {
     if (info.fallback) {
         rows.push({
             key: "fallback",
-            text: translate("Sin promoción: vuelve a %(label)s").replace("%(label)s", info.fallback.label),
+            // La promoción de pedido es de todo o nada: se quita de todas las líneas.
+            text: info.fallback.scope === "order"
+                ? translate("Quitar la promoción del pedido")
+                : translate("Sin promoción: vuelve a %(label)s").replace("%(label)s", info.fallback.label),
             detail: describe(info.fallback.difference),
             rewardId: false,
             applied: false,
