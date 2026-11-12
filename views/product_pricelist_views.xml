@@ -74,14 +74,6 @@
             </form>
         </field>
     </record>
-    <record id="action_pricelist_product_wizard" model="ir.actions.act_window">
-
-        <field name="name">Agregar productos</field>
-        <field name="res_model">product.pricelist.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
-
-    </record>
 
 
 </odoo>

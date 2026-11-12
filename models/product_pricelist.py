@@ -13,10 +13,6 @@ class ProductPricelist(models.Model):
         compute='_compute_partner_ids',
         inverse='_inverse_partner_ids',
     )
-    partner_count = fields.Integer(
-        string="Núm. de contactos",
-        compute='_compute_partner_ids',
-    )
 
     show_in_pos = fields.Boolean(
         string="Disponible en Punto de Venta",
@@ -32,7 +28,6 @@ class ProductPricelist(models.Model):
                 lambda p: p.property_product_pricelist == pricelist
             )
             pricelist.partner_ids = partners
-            pricelist.partner_count = len(partners)
 
     def _inverse_partner_ids(self):
         pass

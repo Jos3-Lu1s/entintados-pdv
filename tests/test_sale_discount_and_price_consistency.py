@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import Command
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase, tagged
 
 

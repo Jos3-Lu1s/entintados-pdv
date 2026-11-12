@@ -1237,7 +1237,7 @@ class SaleOrderLine(models.Model):
             return _("Precio fijo de acuerdo")
         if self.product_type == 'combo':
             return _("Combo")
-        if self.tint_area or self.tint_section_id or self.tint_snapshot:
+        if self.tint_section_id or self.tint_snapshot:
             return _("Entintado")
         if self.qty_invoiced > 0:
             return _("Ya facturada")

@@ -511,7 +511,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(ending_line.promo_reward_id)
         self.assertFalse(lower_line.promo_reward_id)
 
-    def _code_program(self, code='PROMO34', minimum=1000.0, program_type='promotion'):
+    def _code_program(self, code='PROMO34', minimum=1000.0, program_type='promo_code'):
         return self.env['loyalty.program'].create({
             'name': 'Código Línea',
             'program_type': program_type,
@@ -532,24 +532,6 @@ class TestSaleLinePromotion(TransactionCase):
                 'required_points': 1,
             })],
         })
-
-    def test_promo_code_minimum_not_self_cancelling(self):
-        program = self._code_program()
-        order = self._create_order()
-        line = self._create_line(order, qty=12.0)
-        self.assertFalse(order._get_line_promotion_rewards()[line])
-        self.assertNotIn('error', order._try_apply_code('PROMO34'))
-        self.assertEqual(order.code_enabled_rule_ids, program.rule_ids)
-
-        line._apply_line_promotion(program.reward_ids)
-        order._update_programs_and_rewards()
-        self.assertEqual(line.promo_reward_id, program.reward_ids)
-        self.assertEqual(order.code_enabled_rule_ids, program.rule_ids)
-
-        self._save_line(order, line, product_uom_qty=9.0)
-        order._update_programs_and_rewards()
-        self.assertFalse(line.promo_reward_id)
-        self.assertFalse(order.code_enabled_rule_ids)
 
     def test_archived_program_returns_to_agreement(self):
         order, line, reward = self._promo_line()
@@ -830,34 +812,6 @@ class TestSaleLinePromotion(TransactionCase):
         order.action_open_reward_wizard()
         self.assertEqual(line.promo_reward_id, program.reward_ids.sorted('id')[0])
 
-    def test_promo_code_shows_notice(self):
-        program = self._code_program(minimum=0.0)
-        order = self._create_order()
-        line = self._create_line(order)
-        action = self.env['sale.loyalty.coupon.wizard'].create({
-            'order_id': order.id,
-            'coupon_code': 'PROMO34',
-        }).action_apply()
-        self.assertEqual(action['tag'], 'display_notification')
-        self.assertEqual(action['params']['next']['tag'], 'soft_reload')
-        self.assertEqual(order._get_line_promotion_rewards()[line], program.reward_ids)
-        self.assertEqual(line.promo_available_count, 1)
-
-    def test_promo_code_with_other_rewards_opens_native(self):
-        program = self._code_program(minimum=0.0)
-        program.reward_ids = [Command.create({
-            'reward_type': 'product',
-            'reward_product_id': self.product_plain.id,
-            'required_points': 1,
-        })]
-        order = self._create_order()
-        self._create_line(order)
-        action = self.env['sale.loyalty.coupon.wizard'].create({
-            'order_id': order.id,
-            'coupon_code': 'PROMO34',
-        }).action_apply()
-        self.assertEqual(action['res_model'], 'sale.loyalty.reward.wizard')
-
     def test_open_without_line_rewards_is_native(self):
         order = self._create_order()
         self._create_line(order)
@@ -1060,9 +1014,15 @@ class TestSaleLinePromotion(TransactionCase):
         first.promo_reward_id = offered[0]
         self.assertEqual(order._get_line_promotion_rewards()[second], offered)
 
-    def test_confirm_keeps_code_promo_with_minimum(self):
-        # Código con importe mínimo y promoción automática en el pedido: la promoción de línea se conserva al confirmar.
-        code_prog = self._code_program(code='PROMO194', minimum=1000.0)
+    def test_confirm_keeps_promo_with_minimum(self):
+        # Promoción con importe mínimo que solo se cumple antes de su propio descuento, junto a una
+        # promoción nativa en el pedido: la promoción de línea se conserva al confirmar.
+        paint_no_agree = self._create_product('Pintura Sin Acuerdo', 100.0)
+        line_prog = self._create_program([{
+            'discount': 10.0,
+            'discount_applicability': 'specific',
+            'discount_product_ids': [Command.set(paint_no_agree.ids)],
+        }], name='Promo Mínimo', minimum_amount=1000.0)
         native_prog = self.env['loyalty.program'].create({
             'name': 'Nativa Barato',
             'program_type': 'promotion',
@@ -1081,11 +1041,8 @@ class TestSaleLinePromotion(TransactionCase):
             })],
         })
         order = self._create_order()
-        paint_no_agree = self._create_product('Pintura Sin Acuerdo', 100.0)
         line_paint = self._create_line(order, paint_no_agree, qty=10.0)  # 10 x 100 = 1000
         self._create_line(order, self.product_plain, qty=1.0)           # 1 x 50 = 50
-        res = order._try_apply_code('PROMO194')
-        self.assertNotIn('error', res)
         order._update_programs_and_rewards()
 
         claimable = order._get_claimable_rewards()
@@ -1095,14 +1052,14 @@ class TestSaleLinePromotion(TransactionCase):
                     order._apply_program_reward(reward, coupon)
 
         order._update_programs_and_rewards()
-        line_paint._apply_line_promotion(code_prog.reward_ids)
-        self.assertEqual(line_paint.promo_reward_id, code_prog.reward_ids)
+        line_paint._apply_line_promotion(line_prog.reward_ids)
+        self.assertEqual(line_paint.promo_reward_id, line_prog.reward_ids)
         self.assertEqual(line_paint.discount, 10.0)
 
         order.action_confirm()
 
         self.assertEqual(order.state, 'sale')
-        self.assertEqual(line_paint.promo_reward_id, code_prog.reward_ids)
+        self.assertEqual(line_paint.promo_reward_id, line_prog.reward_ids)
         self.assertEqual(line_paint.discount, 10.0)
         self.assertEqual(line_paint.pricing_rule_type, 'promo')
 
@@ -1437,7 +1394,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertTrue(line_b.promo_available_info)
 
     def test_promo_code_is_native(self):
-        program = self._code_program(minimum=0.0, program_type='promo_code')
+        program = self._code_program(minimum=0.0)
         reward = program.reward_ids
         self.assertFalse(reward._is_line_promotion())
         order = self._native_reward_order()

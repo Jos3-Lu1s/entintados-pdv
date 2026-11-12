@@ -110,7 +110,7 @@ class ResPartner(models.Model):
           5. Descuento global del cliente (fallback res.partner.discount)
           Fallback: sin descuento (0.0).
 
-        :param product: recordset de product.product o product.template
+        :param product: recordset de product.product
         :return: dict con {'type': 'fixed_price'|'discount'|'none', 'price': float|False, 'discount': float, 'rule': recordset|False}
         """
         self.ensure_one()
@@ -124,46 +124,40 @@ class ResPartner(models.Model):
                 'rule': False,
             }
 
-        product_product = product if product._name == 'product.product' else False
-        product_template = product if product._name == 'product.template' else product.product_tmpl_id
-
-        if not product_product and product_template and len(product_template.product_variant_ids) == 1:
-            product_product = product_template.product_variant_ids[0]
+        product_template = product.product_tmpl_id
 
         # 1. Precio fijo por Producto
-        if product_product:
-            fixed_rule = self.discount_rule_ids.filtered(
-                lambda r: r.rule_type == 'fixed_price'
-                and r.applied_on == '0_product'
-                and r.product_id == product_product
-            )
-            if fixed_rule:
-                return {
-                    'type': 'fixed_price',
-                    'origin_type': 'fixed_price',
-                    'origin_label': 'Precio Fijo',
-                    'price': fixed_rule[0].fixed_price,
-                    'discount': 0.0,
-                    'rule': fixed_rule[0],
-                }
+        fixed_rule = self.discount_rule_ids.filtered(
+            lambda r: r.rule_type == 'fixed_price'
+            and r.applied_on == '0_product'
+            and r.product_id == product
+        )
+        if fixed_rule:
+            return {
+                'type': 'fixed_price',
+                'origin_type': 'fixed_price',
+                'origin_label': 'Precio Fijo',
+                'price': fixed_rule[0].fixed_price,
+                'discount': 0.0,
+                'rule': fixed_rule[0],
+            }
 
         # 2. Descuento por Producto
-        if product_product:
-            prod_discount_rule = self.discount_rule_ids.filtered(
-                lambda r: r.rule_type == 'discount'
-                and r.applied_on == '0_product'
-                and r.product_id == product_product
-            )
-            if prod_discount_rule:
-                rule_rec = prod_discount_rule[0]
-                return {
-                    'type': 'discount',
-                    'origin_type': 'product',
-                    'origin_label': f"Desc. Producto ({rule_rec.discount:.1f}%)",
-                    'price': False,
-                    'discount': rule_rec.discount,
-                    'rule': rule_rec,
-                }
+        prod_discount_rule = self.discount_rule_ids.filtered(
+            lambda r: r.rule_type == 'discount'
+            and r.applied_on == '0_product'
+            and r.product_id == product
+        )
+        if prod_discount_rule:
+            rule_rec = prod_discount_rule[0]
+            return {
+                'type': 'discount',
+                'origin_type': 'product',
+                'origin_label': f"Desc. Producto ({rule_rec.discount:.1f}%)",
+                'price': False,
+                'discount': rule_rec.discount,
+                'rule': rule_rec,
+            }
 
         # 3. Descuento por Línea de producto
         line = product_template.lines_product_id

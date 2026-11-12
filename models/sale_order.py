@@ -3,11 +3,9 @@ from odoo.exceptions import ValidationError, UserError
 from odoo.tools import float_compare, float_round
 from collections import defaultdict
 from markupsafe import Markup
-import logging
 
 from .loyalty_line_promotion import LINE_PROMOTION_PROGRAM_TYPES
 
-_logger = logging.getLogger(__name__)
 CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
 CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_quotation'
 
@@ -328,7 +326,6 @@ class SaleOrder(models.Model):
         if self.env.context.get('exclude_protected_discount_lines'):
             protected = self.order_line.filtered(
                 lambda l: l.pricing_rule_type == 'fixed_price'
-                or getattr(l, 'is_tint_colorant', False)
                 or getattr(l.product_id, 'tint_role', False) == 'colorant'
             )
             return lines | protected
@@ -623,11 +620,6 @@ class SaleOrder(models.Model):
                 line.price_tax = tax
 
     def _update_programs_and_rewards(self):
-        # El core mide el mínimo con el neto: quitaría el código de una promoción por línea que lo
-        # cumple sin su propio descuento. Lo decide la reevaluación, que lo mide sin él.
-        line_rules = self.code_enabled_rule_ids.filtered(
-            lambda rule: any(reward._is_line_promotion() for reward in rule.program_id.reward_ids)
-        )
         # Restaurar % de promociones antes de que el core evalúe puntos y recompensas
         for order in self:
             for line in order.order_line.filtered('promo_reward_id'):
@@ -657,15 +649,7 @@ class SaleOrder(models.Model):
             for reward, products in gifts_before.items() if reward not in remaining_rewards
             for product in products
         ])
-        removed_rules = line_rules - self.code_enabled_rule_ids
-        if removed_rules:
-            self.code_enabled_rule_ids |= removed_rules
         self._reevaluate_line_promotions()
-        unmet_rules = line_rules.filtered(
-            lambda rule: self._get_line_promotion_points(rule.program_id) is None
-        )
-        if unmet_rules:
-            self.code_enabled_rule_ids -= unmet_rules
         return res
 
     def _apply_best_line_promotions(self):
