@@ -1234,8 +1234,6 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         if self.pricing_rule_type == 'fixed_price':
             return _("Precio fijo de acuerdo")
-        if self.product_type == 'combo':
-            return _("Combo")
         if self.tint_snapshot:
             return _("Entintado")
         if self.qty_invoiced > 0:
@@ -1274,7 +1272,9 @@ class SaleOrderLine(models.Model):
                 rewards = available.get(line, self.env['loyalty.reward']) - applied
                 if not rewards and not applied:
                     continue
-                base_amount = line._get_amount_without_discount()
+                # El paquete de un combo vale 0: su importe es el de sus productos.
+                price_lines = line._get_lines_with_price()
+                base_amount = sum(price_line._get_amount_without_discount() for price_line in price_lines)
 
                 def difference(discount):
                     return line.currency_id.round(base_amount * (discount - line.discount) / 100)
@@ -1293,7 +1293,7 @@ class SaleOrderLine(models.Model):
                     rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
                     if rule.get('type') == 'fixed_price':
                         fixed_subtotal = line.currency_id.round(rule['price'] * line.product_uom_qty)
-                        fallback_diff = line.currency_id.round(line.price_subtotal - fixed_subtotal)
+                        fallback_diff = line.currency_id.round(sum(price_lines.mapped('price_subtotal')) - fixed_subtotal)
                         fallback = {
                             'label': rule.get('origin_label') or _("Precio Fijo"),
                             'difference': fallback_diff,
@@ -1348,10 +1348,12 @@ class SaleOrderLine(models.Model):
         """Importe sin IVA y con IVA con el que la línea cuenta para el mínimo de un programa.
 
         El de la línea en promoción se mide sin ese descuento, igual que el core no cuenta su
-        propia línea de recompensa: si no, aplicar la promoción podría cancelarla.
+        propia línea de recompensa: si no, aplicar la promoción podría cancelarla. Un producto de
+        combo lleva la promoción de su paquete y se mide igual.
         """
         self.ensure_one()
-        if not self.promo_reward_id:
+        promo_line = self._get_combo_package_line() if self.combo_item_id else self
+        if not promo_line.promo_reward_id:
             return self.price_subtotal, self.price_total
         taxes = self._get_taxes_without_discount()
         return taxes['total_excluded'], taxes['total_included']
@@ -1384,7 +1386,17 @@ class SaleOrderLine(models.Model):
         lines = self.filtered('promo_reward_id')
         if not lines:
             return
-        for line in lines:
+        # El paquete vuelve a su acuerdo con el cálculo del combo: su precio vale 0 y un precio
+        # fijo se reparte entre sus productos, que copian el descuento.
+        packages = lines.filtered(lambda line: line.product_type == 'combo')
+        if packages:
+            packages.with_context(skip_manual_discount_breakdown=True).write({'promo_reward_id': False})
+            combo_lines = (packages | packages.linked_line_ids.filtered('combo_item_id')).with_context(
+                force_price_recomputation=True, reset_manual_pricing=True,
+            )
+            combo_lines._compute_price_unit()
+            combo_lines._compute_discount()
+        for line in lines - packages:
             rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
             rule_type = rule.get('type')
             if rule_type == 'fixed_price':

@@ -527,7 +527,9 @@ class SaleOrder(models.Model):
         promoción de pedido a las líneas que pueden recibirla."""
         digits = self.env['decimal.precision'].precision_get('Discount')
         for order in self.filtered(lambda order: order.state in ('draft', 'sent')):
-            orphaned = order.order_line.filtered(lambda l: not l.promo_reward_id and l.pricing_rule_type == 'promo')
+            orphaned = order.order_line.filtered(
+                lambda l: not l.promo_reward_id and not l.combo_item_id and l.pricing_rule_type == 'promo'
+            )
             if orphaned:
                 orphaned._drop_line_promotion()
             notices = []

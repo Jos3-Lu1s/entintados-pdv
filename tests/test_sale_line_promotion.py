@@ -168,7 +168,7 @@ class TestSaleLinePromotion(TransactionCase):
         })
         package = self._create_product('Paquete Promo', 40.0, type='combo', combo_ids=[Command.set(combo.ids)])
         package_line = self._create_line(order, package)
-        self.assertFalse(package_line._admits_line_promotion())
+        self.assertTrue(package_line._admits_line_promotion())
         item_line = self.lines.create({
             'order_id': order.id,
             'product_id': item_product.id,
@@ -1566,3 +1566,239 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(copy.order_promo_reward_id)
         self.assertFalse(copy.order_line.promo_reward_id)
         self.assertEqual(sorted(copy.order_line.mapped('discount')), [0.0, 0.0, 15.0])
+
+
+@tagged('post_install', '-at_install')
+class TestSaleComboPromotion(TransactionCase):
+    """El paquete de un combo admite promociones como cualquier línea: el dominio se evalúa con
+    el producto combo y sus productos copian el descuento del paquete."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.env.user.group_ids |= (
+            cls.env.ref('product.group_product_pricelist')
+            | cls.env.ref('sale.group_discount_per_so_line')
+            | cls.env.ref('entintados_pdv.group_sale_edit_price_unit')
+            | cls.env.ref('entintados_pdv.group_sale_edit_discount')
+        )
+        cls.env['loyalty.program'].search([]).active = False
+        cls.lines = cls.env['sale.order.line']
+        products = cls.env['product.product']
+
+        def product(name, price, **values):
+            return products.create({
+                'name': name,
+                'list_price': price,
+                'invoice_policy': 'order',
+                'taxes_id': [Command.clear()],
+                **values,
+            })
+
+        cls.vinilica = product('Vinílica Combo Promo', 500.0)
+        cls.rodillo = product('Rodillo Combo Promo', 150.0)
+        cls.brocha = product('Brocha Combo Promo', 50.0)
+        cls.suelto = product('Suelto Combo Promo', 100.0)
+        cls.extra = product('Extra Combo Promo', 100.0)
+        cls.combos = cls.env['product.combo'].create([
+            {'name': name, 'combo_item_ids': [Command.create({'product_id': item.id})]}
+            for name, item in (('Pintura', cls.vinilica), ('Rodillo', cls.rodillo), ('Brocha', cls.brocha))
+        ])
+        cls.package = product(
+            'Paquete Combo Promo', 1000.0, type='combo', combo_ids=[Command.set(cls.combos.ids)],
+        )
+        cls.pricelist = cls.env['product.pricelist'].create({
+            'name': 'Tarifa Combo Promo',
+            'currency_id': cls.env.company.currency_id.id,
+        })
+        cls.partner = cls.env['res.partner'].create({
+            'name': 'Cliente Combo Promo',
+            'is_customer': True,
+            'phone': '1234567890',
+        })
+        cls.partner.property_product_pricelist = cls.pricelist
+        cls.package_rule = cls.env['res.partner.discount.rule'].create({
+            'partner_id': cls.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': cls.package.id,
+            'discount': 15.0,
+        })
+
+    @classmethod
+    def _create_program(cls, discount, name, products=None, **rule):
+        reward = {
+            'reward_type': 'discount',
+            'discount_mode': 'percent',
+            'discount': discount,
+            'discount_applicability': 'specific' if products else 'order',
+            'required_points': 1,
+        }
+        if products:
+            reward['discount_product_ids'] = [Command.set(products.ids)]
+        return cls.env['loyalty.program'].create({
+            'name': name,
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.clear(), Command.create({
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+                **rule,
+            })],
+            'reward_ids': [Command.clear(), Command.create(reward)],
+        }).reward_ids
+
+    def _create_order(self):
+        return self.env['sale.order'].create({
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+        })
+
+    def _quote(self, order=None, qty=1.0):
+        """Paquete y productos en un solo `write`, como el guardado del formulario."""
+        order = order or self._create_order()
+        order.write({'order_line': [
+            Command.create({'product_id': self.package.id, 'product_uom_qty': qty, 'virtual_id': 'combo-1'}),
+            *[Command.create({
+                'product_id': combo.combo_item_ids.product_id.id,
+                'product_uom_qty': qty,
+                'combo_item_id': combo.combo_item_ids.id,
+                'linked_virtual_id': 'combo-1',
+            }) for combo in self.combos],
+        ]})
+        package_line = order.order_line.filtered(lambda line: line.product_id == self.package)
+        return order, package_line, package_line.linked_line_ids.filtered('combo_item_id')
+
+    def _assert_combo(self, package_line, items, discount, rule_type, origin, reward=None):
+        self.assertEqual(
+            (package_line.discount, package_line.pricing_rule_type, package_line.pricing_rule_origin),
+            (discount, rule_type, origin),
+        )
+        self.assertEqual(package_line.promo_reward_id, reward or self.env['loyalty.reward'])
+        self.assertEqual(len(items), 3)
+        for line in items:
+            self.assertEqual(
+                (line.discount, line.technical_discount, line.pricing_rule_type, line.pricing_rule_origin),
+                (discount, discount, rule_type, f'Del paquete: {origin}'),
+                line.product_id.name,
+            )
+            self.assertFalse(line.promo_reward_id)
+
+    def test_specific_promo_on_combo_package(self):
+        reward = self._create_program(10.0, 'Esp', self.package)
+        order, package_line, items = self._quote()
+        self._assert_combo(package_line, items, 15.0, 'product', 'Desc. Producto (15.0%)')
+        self.assertEqual(order._get_line_promotion_rewards()[package_line], reward)
+        package_line.action_set_line_promotion(reward.id)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self.assertAlmostEqual(order.amount_untaxed, 900.0, places=2)
+        for line in items:
+            self.assertFalse(line._is_listed_for_line_promotion())
+            self.assertFalse(line.promo_available_info)
+
+    def test_specific_promo_on_combo_item_not_offered(self):
+        reward = self._create_program(10.0, 'Esp Vinílica', self.vinilica)
+        order, package_line, items = self._quote()
+        self.assertTrue(package_line._admits_line_promotion())
+        available = order._get_line_promotion_rewards()
+        for line in package_line | items:
+            self.assertNotIn(reward, available[line])
+        with self.assertRaises(ValidationError):
+            package_line._apply_line_promotion(reward)
+
+    def test_order_promo_reaches_combo(self):
+        reward = self._create_program(10.0, 'Pedido')
+        order, package_line, items = self._quote()
+        loose = self.lines.create({'order_id': order.id, 'product_id': self.suelto.id, 'product_uom_qty': 1.0})
+        loose.action_set_line_promotion(reward.id)
+        self.assertEqual(order.order_promo_reward_id, reward)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+
+        # El combo agregado después la recibe al guardar.
+        other = self._create_order()
+        other_loose = self.lines.create({'order_id': other.id, 'product_id': self.suelto.id, 'product_uom_qty': 1.0})
+        other_loose.action_set_line_promotion(reward.id)
+        __, new_package, new_items = self._quote(other)
+        self._assert_combo(new_package, new_items, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+
+    def test_bulk_button_applies_to_combo_where_better(self):
+        self._create_program(10.0, 'Esp Diez', self.package)
+        order, package_line, items = self._quote()
+        order.action_open_reward_wizard()
+        self._assert_combo(package_line, items, 15.0, 'product', 'Desc. Producto (15.0%)')
+
+        better = self._create_program(20.0, 'Esp Veinte', self.package)
+        order.action_open_reward_wizard()
+        self._assert_combo(package_line, items, 20.0, 'promo', 'Promo: Esp Veinte (20.0%)', better)
+
+    def test_drop_combo_promo_restores_agreement(self):
+        reward = self._create_program(10.0, 'Esp', self.package)
+        __, package_line, items = self._quote()
+        package_line.action_set_line_promotion(reward.id)
+        package_line.action_set_line_promotion(False)
+        self._assert_combo(package_line, items, 15.0, 'product', 'Desc. Producto (15.0%)')
+
+    def test_drop_combo_promo_with_new_fixed_price(self):
+        reward = self._create_program(10.0, 'Esp', self.package)
+        order, package_line, items = self._quote(qty=3.0)
+        package_line.action_set_line_promotion(reward.id)
+        self.package_rule.write({'rule_type': 'fixed_price', 'fixed_price': 200.0, 'discount': 0.0})
+        package_line.action_set_line_promotion(False)
+        self.assertFalse(package_line.promo_reward_id)
+        self.assertEqual(package_line.price_unit, 0.0)
+        self.assertEqual(package_line.combo_package_price, 200.0)
+        self.assertEqual(package_line.pricing_rule_type, 'fixed_price')
+        self.assertEqual(items.mapped('discount'), [0.0] * 3)
+        self.assertEqual(items.mapped('pricing_rule_type'), ['fixed_price'] * 3)
+        self.assertAlmostEqual(sum(items.mapped('price_unit')), 200.0, places=2)
+        self.assertAlmostEqual(order.amount_untaxed, 600.0, places=2)
+
+    def test_combo_fixed_price_still_blocked(self):
+        self.package_rule.write({'rule_type': 'fixed_price', 'fixed_price': 200.0, 'discount': 0.0})
+        reward = self._create_program(10.0, 'Esp', self.package)
+        order, package_line, __ = self._quote()
+        self.assertEqual(package_line._get_line_promotion_block_reason(), 'Precio fijo de acuerdo')
+        self.assertNotIn(reward, order._get_line_promotion_rewards()[package_line])
+
+    def test_combo_promo_survives_save(self):
+        reward = self._create_program(10.0, 'Esp', self.package)
+        order, package_line, items = self._quote()
+        package_line.action_set_line_promotion(reward.id)
+        order.write({'order_line': [Command.create({'product_id': self.suelto.id, 'product_uom_qty': 1.0})]})
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+
+    def test_combo_promo_minimum_not_self_cancelling(self):
+        # Sin acuerdo, el combo vale 1,000: alcanza el mínimo de 950 solo si se mide sin su 10 %.
+        self.package_rule.unlink()
+        reward = self._create_program(10.0, 'Esp', self.package, minimum_amount=950.0)
+        order, package_line, items = self._quote()
+        package_line.action_set_line_promotion(reward.id)
+        order.write({'order_line': [Command.create({'product_id': self.extra.id, 'product_uom_qty': 0.0})]})
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+
+    def test_combo_order_promo_blocks_typed_discount(self):
+        reward = self._create_program(10.0, 'Pedido')
+        __, package_line, items = self._quote()
+        package_line.action_set_line_promotion(reward.id)
+        self.assertFalse(package_line.manual_discount_allowed)
+        with self.assertRaises(UserError):
+            package_line.discount = 5.0
+        with self.assertRaises(ValidationError):
+            items[0].discount = 5.0
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+
+    def test_combo_promo_hint_difference(self):
+        # El paquete vale 0: la diferencia del selector sale del importe de sus productos.
+        reward = self._create_program(10.0, 'Esp', self.package)
+        __, package_line, __ = self._quote()
+        option = package_line.promo_available_info['options'][0]
+        self.assertEqual((option['reward_id'], option['difference']), (reward.id, -50.0))
+
+        package_line.action_set_line_promotion(reward.id)
+        package_line.invalidate_recordset(['promo_available_info'])
+        self.assertEqual(package_line.promo_available_info['fallback']['difference'], 50.0)
+
+        self.package_rule.write({'rule_type': 'fixed_price', 'fixed_price': 200.0, 'discount': 0.0})
+        package_line.invalidate_recordset(['promo_available_info'])
+        self.assertEqual(package_line.promo_available_info['fallback']['difference'], 700.0)
