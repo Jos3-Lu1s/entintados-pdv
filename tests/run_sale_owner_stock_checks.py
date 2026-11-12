@@ -63,13 +63,14 @@ def checks(env):
         sale.order_line = [Command.clear()] + [Command.create({'product_id': item.id,
             'product_uom_qty': qty, 'product_uom_id': (uom or item.uom_id).id}) for qty in quantities]
         return sale
-    def pos_stock(qty, item=product):
+    def pos_order(qty, item=product):
         return env['pos.order'].new({'config_id': config.id, 'company_id': config.company_id.id,
-            'lines': [Command.create({'product_id': item.id, 'qty': qty})]})._check_pos_stock()
+            'lines': [Command.create({'product_id': item.id, 'qty': qty})]})
     rejected(lambda: lines([1]).action_confirm())
-    rejected(lambda: pos_stock(1))
+    rejected(lambda: pos_order(1)._check_pos_stock())
+    rejected(lambda: pos_order(1)._process_saved_order(draft=False))
     # Fractional quantities must not round zero inventory into an allowed sale.
-    rejected(lambda: pos_stock(0.01))
+    rejected(lambda: pos_order(0.01)._check_pos_stock())
     env['stock.quant']._update_available_quantity(product, location, -1)
     rejected(lambda: lines([1])._check_stock_availability())
     env['stock.quant']._update_available_quantity(product, location, 4)
@@ -84,7 +85,7 @@ def checks(env):
     rejected(lambda: lines([2])._check_stock_availability())
     lines([1])._check_stock_availability()
     lines([100], item=service)._check_stock_availability()
-    pos_stock(100, service)
+    pos_order(100, service)._check_pos_stock()
     income = env['account.account'].search([('account_type', '=', 'income'), ('company_ids', 'in', env.company.ids)], limit=1)
     invoice = env['account.move'].create({'move_type': 'out_invoice', 'partner_id': partner.id,
         'invoice_user_id': cashier.id, 'invoice_line_ids': [Command.create({'product_id': service.id,

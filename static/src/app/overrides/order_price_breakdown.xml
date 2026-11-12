@@ -6,8 +6,8 @@
                 <t t-set="summary" t-value="orderPriceBreakdown"/>
                 <dl class="o-order-price-breakdown mb-0">
                     <dt>Importe antes de descuentos</dt><dd t-esc="formatCurrency(summary.gross)"/>
-                    <dt>Descuentos</dt><dd t-esc="formatCurrency(-summary.discounts)"/>
-                    <dt>Promociones</dt><dd t-esc="formatCurrency(-summary.promotions)"/>
+                    <dt>Descuentos <small t-if="summary.discountRates" class="text-muted">(<t t-esc="summary.discountRates"/> por producto)</small></dt><dd t-esc="formatCurrency(-summary.discounts)"/>
+                    <dt>Promociones <small t-if="summary.promotionRates" class="text-muted">(<t t-esc="summary.promotionRates"/> por producto)</small></dt><dd t-esc="formatCurrency(-summary.promotions)"/>
                     <dt>Subtotal</dt><dd class="subtotal" t-esc="formatCurrency(summary.subtotal)"/>
                     <t t-foreach="summary.taxes" t-as="tax" t-key="tax_index">
                         <dt t-esc="tax.name"/><dd class="tax" t-esc="formatCurrency(tax.amount)"/>

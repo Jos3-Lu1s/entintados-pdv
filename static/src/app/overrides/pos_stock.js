@@ -1,20 +1,14 @@
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
-import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
+import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { stockError, requiresPosStock } from "@entintados_pdv/app/utils/pos_stock";
-import { Mutex } from "@web/core/utils/concurrency";
 import OrderPaymentValidation from "@point_of_sale/app/utils/order_payment_validation";
-
-const stockMutexes = new WeakMap();
-let stockNotification;
 
 patch(PosStore.prototype, {
     async addLineToOrder(vals, order, opts = {}, configure = true) {
-        // Va antes de consultar existencias para que el cajero vea este aviso
-        // y no el de existencias. Los colorantes hijos de una base entintada
-        // llegan en combo_line_ids del padre y no pasan por aquí.
+        // Los colorantes hijos llegan en combo_line_ids de la base.
         if (this._isColorantLine(vals)) {
             this.notification.add(
                 _t("Los colorantes solo se venden dentro de un producto entintado."),
@@ -22,37 +16,7 @@ patch(PosStore.prototype, {
             );
             return;
         }
-        let mutex = stockMutexes.get(this);
-        if (!mutex) {
-            mutex = new Mutex();
-            stockMutexes.set(this, mutex);
-        }
-        return mutex.exec(async () => {
-            stockNotification = this.notification;
-            const template = typeof vals.product_tmpl_id === "number"
-                ? this.models["product.template"].get(vals.product_tmpl_id) : vals.product_tmpl_id;
-            const explicitProduct = typeof vals.product_id === "number"
-                ? this.models["product.product"].get(vals.product_id) : vals.product_id;
-            const products = explicitProduct ? [explicitProduct] : template?.product_variant_ids || [];
-            const qty = vals.qty ?? (order.preset_id?.is_return ? -1 : 1);
-            if (qty > 0 && products.some(requiresPosStock)) {
-                try {
-                    await this.refreshProductStock(products);
-                } catch {
-                    this.dialog.add(AlertDialog, {
-                        title: "No se pudieron consultar las existencias",
-                        body: "Revisa la conexión antes de vender este producto.",
-                    });
-                    return;
-                }
-                const errors = products.map((product) => stockError(order, product, qty));
-                if (errors.length && errors.every(Boolean)) {
-                    this.notification.add(errors[0], { type: "warning" });
-                    return;
-                }
-            }
-            return super.addLineToOrder(vals, order, opts, configure);
-        });
+        return super.addLineToOrder(vals, order, opts, configure);
     },
 
     _isColorantLine(vals) {
@@ -64,30 +28,6 @@ patch(PosStore.prototype, {
         const product = typeof vals.product_id === "number"
             ? this.models["product.product"].get(vals.product_id) : vals.product_id;
         return product?.product_tmpl_id?.tint_role === "colorant";
-    },
-
-    async handleConfigurableProduct(values, template, opts, configure) {
-        const result = await super.handleConfigurableProduct(values, template, opts, configure);
-        if (result === false) {
-            return false;
-        }
-        if (requiresPosStock(values.product_id) && values.qty > 0) {
-            try {
-                await this.refreshProductStock([values.product_id]);
-            } catch {
-                this.dialog.add(AlertDialog, {
-                    title: "No se pudieron consultar las existencias",
-                    body: "Revisa la conexión antes de vender este producto.",
-                });
-                return false;
-            }
-            const error = stockError(values.order_id, values.product_id, values.qty);
-            if (error) {
-                this.dialog.add(AlertDialog, { title: "Existencias insuficientes", body: error });
-                return false;
-            }
-        }
-        return result;
     },
 
     async refreshProductStock(products) {
@@ -108,50 +48,58 @@ patch(PosStore.prototype, {
         }
     },
 
-});
-
-patch(OrderPaymentValidation.prototype, {
-    async isOrderValid(...args) {
-        const lines = this.order.lines.filter((line) => line.qty > 0 && requiresPosStock(line.product_id));
+    async checkStockForPayment(order) {
+        const lines = (order?.lines || []).filter((line) => line.qty > 0 && requiresPosStock(line.product_id));
+        if (!lines.length) {
+            return true;
+        }
         try {
-            await this.pos.refreshProductStock(lines.map((line) => line.product_id));
+            await this.refreshProductStock(lines.map((line) => line.product_id));
         } catch {
-            this.pos.dialog.add(AlertDialog, {
-                title: "No se pudieron consultar las existencias",
-                body: "Revisa la conexión antes de confirmar la venta.",
+            this.dialog.add(AlertDialog, {
+                title: _t("No se pudieron consultar las existencias"),
+                body: _t("Revisa la conexión antes de cobrar la venta."),
             });
             return false;
         }
         for (const line of lines) {
-            const error = stockError(this.order, line.product_id, line.qty, line);
+            const error = stockError(order, line.product_id, line.qty, line);
             if (error) {
-                this.pos.dialog.add(AlertDialog, { title: "Existencias insuficientes", body: error });
+                this.dialog.add(AlertDialog, { title: _t("Existencias insuficientes"), body: error });
                 return false;
             }
         }
-        return super.isOrderValid(...args);
+        return true;
+    },
+    async pay(...args) {
+        const order = this.getOrder();
+        if (!await this.checkStockForPayment(order) || order !== this.getOrder()) {
+            return false;
+        }
+        return super.pay(...args);
     },
 });
 
-patch(PosOrderline.prototype, {
-    merge(line) {
-        // Ambas líneas siguen en el ticket durante la fusión del core.
-        this._stockMergeSource = line;
-        try {
-            return super.merge(line);
-        } finally {
-            this._stockMergeSource = null;
-        }
-    },
-
-    setQuantity(quantity, keepPrice = false) {
-        const error = stockError(this.order_id, this.product_id, Number(quantity), this);
-        if (error) {
-            const notification = this.env?.services?.notification ||
-                this.models?.env?.services?.notification || stockNotification;
-            notification?.add(error, { type: "warning" });
+patch(PaymentScreen.prototype, {
+    async addNewPaymentLine(...args) {
+        if (!await this.pos.checkStockForPayment(this.currentOrder)) {
             return false;
         }
-        return super.setQuantity(quantity, keepPrice);
+        return super.addNewPaymentLine(...args);
+    },
+    async sendPaymentRequest(...args) {
+        if (!await this.pos.checkStockForPayment(this.currentOrder)) {
+            return false;
+        }
+        return super.sendPaymentRequest(...args);
+    },
+});
+
+patch(OrderPaymentValidation.prototype, {
+    async isOrderValid(...args) {
+        if (!await this.pos.checkStockForPayment(this.order)) {
+            return false;
+        }
+        return super.isOrderValid(...args);
     },
 });

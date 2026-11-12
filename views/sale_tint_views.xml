@@ -70,8 +70,8 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//button[@name='%(sale_loyalty.sale_loyalty_coupon_wizard_action)d'][not(@disabled)]" position="before">
-                <button name="action_add_tint" type="object" string="Agregar entintado" class="btn btn-secondary" invisible="state not in ['draft', 'sent'] or locked"/>
+            <xpath expr="//page[@name='order_lines']/field[@name='order_line']" position="before">
+                <button name="action_add_tint" type="object" string="Agregar entintado" class="btn btn-secondary mb-2" invisible="state not in ['draft', 'sent'] or locked"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="tint_display_name" column_invisible="True"/>

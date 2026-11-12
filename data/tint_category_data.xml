@@ -1,0 +1,29 @@
+<odoo noupdate="1">
+    <record id="product_category_tints" model="product.category">
+        <field name="name">Entintados</field>
+    </record>
+    <record id="tint_category_vinyl" model="tint.category">
+        <field name="name">Vinílicas</field>
+    </record>
+    <record id="tint_category_acrylic" model="tint.category">
+        <field name="name">Acrílicas</field>
+    </record>
+    <record id="tint_category_enamel" model="tint.category">
+        <field name="name">Esmaltes</field>
+    </record>
+    <record id="product_category_tint_vinyl" model="product.category">
+        <field name="name">Vinílicas</field>
+        <field name="parent_id" ref="product_category_tints"/>
+        <field name="tint_category_id" ref="tint_category_vinyl"/>
+    </record>
+    <record id="product_category_tint_acrylic" model="product.category">
+        <field name="name">Acrílicas</field>
+        <field name="parent_id" ref="product_category_tints"/>
+        <field name="tint_category_id" ref="tint_category_acrylic"/>
+    </record>
+    <record id="product_category_tint_enamel" model="product.category">
+        <field name="name">Esmaltes</field>
+        <field name="parent_id" ref="product_category_tints"/>
+        <field name="tint_category_id" ref="tint_category_enamel"/>
+    </record>
+</odoo>

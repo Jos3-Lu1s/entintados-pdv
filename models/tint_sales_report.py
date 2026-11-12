@@ -21,6 +21,7 @@ class TintSalesReport(models.Model):
         string='Documento', compute='_compute_document')
     document_url = fields.Char(compute='_compute_document')
     base_id = fields.Many2one('product.product', string='Base', readonly=True)
+    tint_category_id = fields.Many2one('tint.category', string='Categoría de entintado', readonly=True)
     color = fields.Char(string='Color', readonly=True)
     color_id = fields.Many2one('tint.color', readonly=True)
     partner_id = fields.Many2one('res.partner', string='Cliente', readonly=True)
@@ -66,6 +67,7 @@ class TintSalesReport(models.Model):
     def _export_selection(self, extension):
         self.check_access('read')
         params = urlencode({
+            'report_model': self._name,
             'domain': json.dumps([('id', 'in', self.ids)]),
             'companies': json.dumps(self.env.context.get('allowed_company_ids', [])),
             'show_margin': '1' if self.env.context.get('tint_show_margin') else '0',
@@ -213,7 +215,8 @@ class TintSalesReport(models.Model):
                    tint.unit_cost IS NOT NULL AND revenue.amount IS NOT NULL AS has_margin,
                    tint.order_id AS sale_order_id, NULL::integer AS pos_order_id,
                    COALESCE(formula.color_id, catalog_color.id) AS color_id,
-                   orders.partner_id, orders.user_id AS salesperson_id
+                   orders.partner_id, orders.user_id AS salesperson_id,
+                   COALESCE(template.tint_category_id, formula.tint_category_id) AS tint_category_id
               FROM sale_quantities tint
               JOIN sale_order orders ON orders.id = tint.order_id
          LEFT JOIN tint_color_formula formula ON formula.id::text = tint.recipe->>'formula_id'
@@ -242,7 +245,8 @@ class TintSalesReport(models.Model):
                          ELSE amounts.subtotal END) - amounts.cost,
                    amounts.cost IS NOT NULL AND (invoiced.order_id IS NULL OR amounts.invoiced_amount IS NOT NULL),
                    NULL::integer, orders.id, COALESCE(linked_formula.color_id, catalog_color.id),
-                   orders.partner_id, orders.user_id
+                   orders.partner_id, orders.user_id,
+                   COALESCE(template.tint_category_id, linked_formula.tint_category_id)
               FROM pos_order_line line
               JOIN pos_order orders ON orders.id = line.order_id
               JOIN pos_tint_amounts amounts ON amounts.line_id = line.id
@@ -264,4 +268,22 @@ class TintSalesReport(models.Model):
                          WHERE component.combo_parent_id = line.id
                     )))
                AND (line.qty < 0 OR linked.state IS DISTINCT FROM 'sale')
+        """)
+
+
+class TintCategorySalesReport(models.Model):
+    _name = 'tint.category.sales.report'
+    _inherit = 'tint.sales.report'
+    _description = 'Ventas de entintados por categoría'
+    _auto = False
+
+    def init(self):
+        tools.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute("""
+            CREATE VIEW tint_category_sales_report AS
+            SELECT * FROM tint_sales_report
+             WHERE tint_category_id IS NOT NULL
+               AND NULLIF(BTRIM(color), '') IS NOT NULL
+               AND color <> 'Sin identificar'
+               AND status IN ('pending', 'invoiced')
         """)

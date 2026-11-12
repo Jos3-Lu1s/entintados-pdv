@@ -22,7 +22,7 @@ class SalePaymentDays(common.TransactionCase):
         self.days = self.env['account.payment.term'].create({'name': '15 días QA',
             'line_ids': [Command.create({'value': 'percent', 'value_amount': 100, 'nb_days': 15})]})
         self.partner = self.env['res.partner'].create({'name': 'Plazo Ventas QA',
-            'phone': '5551234567', 'is_customer': True, 'is_credit': True})
+            'phone': '5551234567', 'is_customer': True, 'is_credit': True, 'credit_limit': 1000})
 
     def test_cash_default_does_not_modify_contact(self):
         self.partner.property_payment_term_id = self.days

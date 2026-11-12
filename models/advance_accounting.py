@@ -542,6 +542,8 @@ class ResPartner(models.Model):
         rate_date = fields.Date.context_today(self)
         def convert(amount):
             return partner.risk_currency_id._convert(amount, config.currency_id, config.company_id, rate_date)
+        exposure = partner._pos_credit_exposure()
+        overdue = partner._pos_has_overdue_balance()
         return {
             'has_outstanding_invoices': bool(self.env['account.move'].sudo().search_count([
                 ('company_id', '=', config.company_id.id), ('commercial_partner_id', '=', partner.id),
@@ -552,7 +554,10 @@ class ResPartner(models.Model):
             'advance_available': sum(sources.mapped('advance_available')), 'credit_limited': bool(partner.credit_limit),
             'credit_limit': convert(partner.credit_limit), 'risk': convert(partner.risk_total),
             'credit_authorized': bool(partner.is_credit), 'risk_exception': bool(partner.risk_exception),
-            'purchase_power': convert(max(partner.credit_limit - partner._pos_credit_exposure(), 0)),
+            'purchase_power': convert(max(partner.credit_limit - exposure, 0)),
+            'has_overdue_balance': overdue,
+            'cash_requires_approval': overdue or partner.risk_currency_id.compare_amounts(
+                exposure, max(partner.credit_limit, 0)) > 0,
             'sources': [{'id': source.id, 'name': source.name, 'available': source.advance_available,
                          'fiscal_kind': source.advance_fiscal_kind, 'total': source.amount_total,
                          'lines': [{'quantity': line.quantity, 'price_unit': line.price_unit,

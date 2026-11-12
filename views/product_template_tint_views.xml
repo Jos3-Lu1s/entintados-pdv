@@ -15,6 +15,7 @@
                     <group>
                         <group name="tint_role" string="Rol">
                             <field name="tint_role" />
+                            <field name="tint_category_id" readonly="1"/>
                         </group>
                         <group name="tint_prices" string="Esquemas" invisible="tint_role != 'base'">
                             <field name="scheme_filter_id" options="{'no_create': True}" />

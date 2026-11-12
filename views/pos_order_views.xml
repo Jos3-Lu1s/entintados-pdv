@@ -45,7 +45,9 @@
         <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
         <field name="arch" type="xml">
             <xpath expr="//group[@name='order_fields']" position="inside">
-                <field name="invoice_status" string="Estado de facturación" widget="badge"/>
+                <field name="invoice_status" string="Estado de facturación" widget="badge"
+                       decoration-success="invoice_status == 'invoiced'"
+                       decoration-warning="invoice_status == 'to_invoice'"/>
             </xpath>
         </field>
     </record>
@@ -54,8 +56,12 @@
         <field name="model">pos.order</field>
         <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
         <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='state']" position="attributes">
+                <attribute name="decoration-danger">state == 'cancel'</attribute>
+            </xpath>
             <xpath expr="//field[@name='invoice_status']" position="attributes">
                 <attribute name="invisible">False</attribute>
+                <attribute name="decoration-warning">invoice_status == 'to_invoice'</attribute>
             </xpath>
         </field>
     </record>
@@ -66,6 +72,10 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='pos_reference']" position="after">
                 <field name="generated_quotation_id" readonly="1" invisible="not generated_quotation_id"/>
+                <field name="reopened_move_ids" string="Documentos contables de reaperturas" widget="many2many_tags"
+                       readonly="1" invisible="not reopened_move_ids" groups="account.group_account_invoice,account.group_account_readonly"/>
+                <field name="reopened_picking_ids" string="Movimientos de almacén de reaperturas" widget="many2many_tags"
+                       readonly="1" invisible="not reopened_picking_ids" groups="stock.group_stock_user"/>
             </xpath>
         </field>
     </record>

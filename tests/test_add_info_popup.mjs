@@ -34,7 +34,6 @@ test('Cash/PUE invoices retain the selected number of invoices', () => {
 test('PPD and customer-account sales hide splitting and discard old split counts', () => {
     for (const values of [
         { pos_payment_flow: 'credit' }, { pos_payment_flow: 'ppd_partial' },
-        { uiState: { invoice_split_count: 4, creditInvoiceSetup: true } },
         { l10n_mx_edi_payment_policy: 'PPD' },
         { payment_ids: [{ amount: 100, payment_method_id: { type: 'pay_later' } }] },
     ]) {

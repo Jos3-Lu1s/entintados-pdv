@@ -10,7 +10,7 @@
         <field name="active" eval="True"/>
         <field name="inherit_id" ref="entintados_pdv.sale_order_form_tint"/>
         <field name="arch" type="xml">
-            <xpath expr="//button[@name='action_add_tint']" position="after">
+            <xpath expr="//button[@name='%(sale_loyalty.sale_loyalty_coupon_wizard_action)d'][not(@disabled)]" position="before">
                 <button name="action_sale_cash_advance" type="object" string="Recibir anticipo"
                         class="btn btn-secondary" groups="account.group_account_invoice"
                         invisible="state not in ['draft', 'sent'] or locked"/>

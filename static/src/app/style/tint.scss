@@ -65,6 +65,11 @@ $tint-breakpoint-xs: 575.98px;
         table { width: 100%; }
         th:nth-child(1) { width: 50%; }
         th:nth-child(2), th:nth-child(3) { width: 25%; }
+        .o-has-payment-term {
+            th:nth-child(1) { width: 34%; }
+            th:nth-child(2), th:nth-child(3) { width: 19%; }
+            th:nth-child(4) { width: 28%; }
+        }
         th, td { padding: .35rem .5rem; }
         thead { position: static; }
         label { margin: 0; }

@@ -1,0 +1,41 @@
+<odoo>
+    <record id="tint_category_list" model="ir.ui.view">
+        <field name="name">tint.category.list</field>
+        <field name="model">tint.category</field>
+        <field name="arch" type="xml">
+            <list><field name="name"/></list>
+        </field>
+    </record>
+    <record id="tint_category_form" model="ir.ui.view">
+        <field name="name">tint.category.form</field>
+        <field name="model">tint.category</field>
+        <field name="arch" type="xml">
+            <form><sheet>
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_open_sales" type="object" class="oe_stat_button"
+                            icon="fa-bar-chart" string="Ventas con color"
+                            groups="sales_team.group_sale_manager,point_of_sale.group_pos_manager"/>
+                </div>
+                <group><field name="name"/><field name="active"/></group>
+                <field name="product_category_ids" readonly="1">
+                    <list><field name="complete_name"/></list>
+                </field>
+            </sheet></form>
+        </field>
+    </record>
+    <record id="tint_category_action" model="ir.actions.act_window">
+        <field name="name">Categorías de entintado</field>
+        <field name="res_model">tint.category</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="product_category_form_tint" model="ir.ui.view">
+        <field name="name">product.category.form.entintado</field>
+        <field name="model">product.category</field>
+        <field name="inherit_id" ref="product.product_category_form_view"/>
+        <field name="arch" type="xml">
+            <field name="parent_id" position="after">
+                <field name="tint_category_id" options="{'no_create': True}"/>
+            </field>
+        </field>
+    </record>
+</odoo>

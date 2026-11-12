@@ -684,24 +684,6 @@ export class TintPanel extends Component {
     }
 
     async addCard(card) {
-        if (this.isBaseOutOfStock(card.baseProduct)) {
-            try {
-                await this.pos.refreshProductStock([card.baseProduct]);
-            } catch {
-                this.notification.add(
-                    _t("No se pudieron consultar las existencias. Revisa la conexión."),
-                    { type: "warning" }
-                );
-                return;
-            }
-            if (this.isBaseOutOfStock(card.baseProduct)) {
-                this.notification.add(
-                    _t("Esta base no tiene existencias disponibles."),
-                    { type: "warning" }
-                );
-                return;
-            }
-        }
         await addTintedFromCard(this, {
             baseProduct: card.baseProduct,
             formula: card.formula,

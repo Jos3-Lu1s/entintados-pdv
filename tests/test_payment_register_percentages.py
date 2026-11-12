@@ -37,30 +37,30 @@ class TestPaymentRegisterPercentages(TransactionCase):
         ).create({'journal_id': self.bank.id, **values})
         return wizard, invoice
 
-    def test_payment_and_remaining_percentages_match_contact(self):
+    def test_payment_defaults_to_full_balance_despite_contact_percentage(self):
         wizard, _ = self._wizard()
         self.assertTrue(wizard.distributed_notes)
-        self.assertAlmostEqual(wizard.payment_percentage, 0.8)
-        self.assertAlmostEqual(wizard.discount_percentage, 0.2)
-        self.assertEqual(wizard.amount, 800)
-        self.assertEqual(wizard.payment_difference, 200)
+        self.assertEqual(wizard.payment_percentage, 1)
+        self.assertEqual(wizard.discount_percentage, 0)
+        self.assertEqual(wizard.amount, 1000)
+        self.assertEqual(wizard.payment_difference, 0)
 
     def test_disabled_distributed_notes_keeps_normal_payment(self):
         self.partner.distributed_notes = False
         wizard, _ = self._wizard()
         self.assertFalse(wizard.distributed_notes)
-        self.assertEqual(wizard.payment_percentage, 0)
+        self.assertEqual(wizard.payment_percentage, 1)
         self.assertEqual(wizard.discount_percentage, 0)
         self.assertEqual(wizard.amount, 1000)
 
-    def test_zero_percent_is_not_treated_as_disabled(self):
+    def test_zero_contact_percentage_does_not_reduce_payment(self):
         self.partner.percentage_patyc = 0
         wizard, _ = self._wizard()
         self.assertTrue(wizard.distributed_notes)
-        self.assertEqual(wizard.payment_percentage, 0)
-        self.assertEqual(wizard.discount_percentage, 1)
-        self.assertEqual(wizard.amount, 0)
-        self.assertEqual(wizard.payment_difference, 1000)
+        self.assertEqual(wizard.payment_percentage, 1)
+        self.assertEqual(wizard.discount_percentage, 0)
+        self.assertEqual(wizard.amount, 1000)
+        self.assertEqual(wizard.payment_difference, 0)
 
     def test_full_payment_has_zero_remaining_percentage(self):
         self.partner.percentage_patyc = 100
@@ -88,10 +88,11 @@ class TestPaymentRegisterPercentages(TransactionCase):
         })
         wizard, _ = self._wizard(currency=currency, currency_id=company_currency.id)
         converted = currency._convert(1000, company_currency, self.env.company, wizard.payment_date)
-        self.assertEqual(wizard.amount, company_currency.round(converted * 0.8))
+        self.assertEqual(wizard.amount, company_currency.round(converted))
 
     def test_registers_actual_payment_and_keeps_remaining_bill_open(self):
         wizard, invoice = self._wizard()
+        wizard.payment_percentage = 0.8
         payments = wizard._create_payments()
         self.assertEqual(payments.amount, 800)
         self.assertEqual(invoice.amount_residual, 200)
@@ -105,4 +106,4 @@ class TestPaymentRegisterPercentages(TransactionCase):
         self.assertEqual(len(remaining), 1)
         for field in payment + remaining:
             self.assertEqual(field.get('widget'), 'percentage')
-            self.assertEqual(field.getparent().get('invisible'), 'not distributed_notes')
+            self.assertEqual(field.getparent().get('invisible'), 'not vendor_percentage_editable')

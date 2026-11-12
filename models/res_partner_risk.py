@@ -11,6 +11,13 @@ from odoo.tools.misc import str2bool
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
+    @api.constrains("is_credit", "credit_limit")
+    def _check_enabled_credit_limit(self):
+        for partner in self.filtered("is_credit").sudo():
+            currency = partner.risk_currency_id or partner.env.company.currency_id
+            if currency.compare_amounts(partner.credit_limit, 0) <= 0:
+                raise ValidationError(self.env._("Para habilitar el crédito, captura un límite de crédito mayor que cero."))
+
     move_line_ids = fields.One2many(
         comodel_name="account.move.line",
         inverse_name="partner_id",

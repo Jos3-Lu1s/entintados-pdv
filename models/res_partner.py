@@ -493,7 +493,12 @@ class ResPartner(models.Model):
             'is_distributor',
             'is_supplier',
             'is_creditor',
+            'property_payment_term_id',
         ]
+
+    @api.model
+    def _load_pos_data_read(self, records, config):
+        return super()._load_pos_data_read(records.with_company(config.company_id) if config else records, config)
 
     @api.model
     def _load_pos_data_domain(self, data, config):

@@ -4,14 +4,8 @@
         <xpath expr="//li[@t-if='vals.discount']" position="replace">
             <li t-if="vals.pricingRuleType === 'promo'" class="price-per-unit pricing-rule-indicator promo-indicator" t-att-class="{'text-success': vals.isDisplay}">
                 <i class="fa fa-tag pe-1"/>
-                <t t-if="vals.isReceipt">
-                    <t t-esc="vals.pricingRuleOrigin"/><span t-if="vals.discount"> -<t t-esc="vals.discount"/>%</span>
-                </t>
-                <t t-else="">
-                    <t t-esc="vals.pricingRuleOrigin"/>
-                    <span t-if="vals.discount"> (-<t t-esc="vals.discount"/>%)</span>
-                    <span> sobre </span><t t-esc="vals.noDiscountPrice"/>
-                </t>
+                <t t-esc="vals.pricingRuleOrigin"/>
+                <span t-if="vals.isReceipt and vals.discount"> -<t t-esc="vals.discount"/>%</span>
             </li>
             <li t-elif="vals.pricingRuleOrigin and vals.pricingRuleType === 'fixed_price'" class="price-per-unit pricing-rule-indicator">
                 <i class="fa fa-tag pe-1"/>
@@ -19,9 +13,10 @@
             </li>
             <li t-elif="vals.pricingRuleOrigin and vals.discount" class="price-per-unit pricing-rule-indicator">
                 <i class="fa fa-tag pe-1"/>
-                <t t-esc="vals.pricingRuleOrigin"/> <span>sobre</span> <t t-esc="vals.noDiscountPrice"/>
+                <t t-esc="vals.pricingRuleOrigin"/>
+                <t t-if="vals.isReceipt"> <span>sobre</span> <t t-esc="vals.noDiscountPrice"/></t>
             </li>
-            <li t-elif="vals.discount" class="price-per-unit">
+            <li t-elif="vals.isReceipt and vals.discount" class="price-per-unit">
                 <i class="fa fa-tag pe-1"/><em><t t-esc="vals.discount"/>% </em> discount off on <t t-esc="vals.noDiscountPrice"/>
             </li>
         </xpath>

@@ -133,6 +133,92 @@
     <menuitem id="menu_tint_sales_report_sale" name="Entintados vendidos"
               parent="sale.menu_sale_report" action="action_tint_sales_report_sale"
               groups="sales_team.group_sale_manager" sequence="75"/>
+    <record id="access_tint_category_sales_sale" model="ir.model.access">
+        <field name="name">Entintados por categoría (Ventas)</field>
+        <field name="model_id" ref="model_tint_category_sales_report"/>
+        <field name="group_id" ref="sales_team.group_sale_manager"/>
+        <field name="perm_read" eval="True"/>
+    </record>
+    <record id="access_tint_category_sales_pos" model="ir.model.access">
+        <field name="name">Entintados por categoría (PdV)</field>
+        <field name="model_id" ref="model_tint_category_sales_report"/>
+        <field name="group_id" ref="point_of_sale.group_pos_manager"/>
+        <field name="perm_read" eval="True"/>
+    </record>
+    <record id="rule_tint_category_sales_company" model="ir.rule">
+        <field name="name">Entintados por categoría y compañía</field>
+        <field name="model_id" ref="model_tint_category_sales_report"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="view_tint_category_sales_list" model="ir.ui.view">
+        <field name="name">tint.category.sales.report.list</field>
+        <field name="model">tint.category.sales.report</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0" js_class="tint_sales_report_list">
+                <field name="date_order" widget="date"/>
+                <field name="document_id" widget="tint_document_link"/>
+                <field name="source"/>
+                <field name="tint_category_id"/>
+                <field name="color"/>
+                <field name="base_id"/>
+                <field name="partner_id" optional="show"/>
+                <field name="status"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="invoiced" column_invisible="True"/>
+                <field name="has_margin" column_invisible="True"/>
+                <field name="margin" optional="hide" invisible="not has_margin"/>
+                <field name="sale_price"/>
+                <field name="invoiced_amount" invisible="not invoiced"/>
+                <field name="quantity" sum="Total de entintados"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_tint_category_sales_search" model="ir.ui.view">
+        <field name="name">tint.category.sales.report.search</field>
+        <field name="model">tint.category.sales.report</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="tint_category_id"/><field name="color"/><field name="reference"/>
+                <field name="base_id"/><field name="partner_id"/>
+                <filter name="date_order" string="Fecha" date="date_order"/>
+                <group>
+                    <filter name="by_tint_category" string="Categoría de entintado" context="{'group_by': 'tint_category_id'}"/>
+                    <filter name="by_color" string="Color" context="{'group_by': 'color'}"/>
+                    <filter name="by_source" string="Origen" context="{'group_by': 'source'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="view_tint_category_sales_pivot" model="ir.ui.view">
+        <field name="name">tint.category.sales.report.pivot</field>
+        <field name="model">tint.category.sales.report</field>
+        <field name="arch" type="xml">
+            <pivot string="Entintados por categoría">
+                <field name="tint_category_id" type="row"/><field name="color" type="row"/>
+                <field name="quantity" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+    <record id="action_tint_sales_by_category" model="ir.actions.act_window">
+        <field name="name">Ventas de entintados por categoría</field>
+        <field name="res_model">tint.category.sales.report</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="search_view_id" ref="view_tint_category_sales_search"/>
+        <field name="context">{'search_default_by_tint_category': 1, 'search_default_by_color': 2}</field>
+    </record>
+    <menuitem id="menu_tint_sales_by_category_sale" name="Entintados por categoría"
+              parent="sale.menu_sale_report" action="action_tint_sales_by_category"
+              groups="sales_team.group_sale_manager" sequence="76"/>
+    <menuitem id="menu_tint_sales_by_category_pos" name="Entintados por categoría"
+              parent="point_of_sale.menu_point_rep" action="action_tint_sales_by_category"
+              groups="point_of_sale.group_pos_manager" sequence="76"/>
+    <menuitem id="menu_tint_reports" name="Reportes" parent="menu_tint_root" sequence="30"/>
+    <menuitem id="menu_tint_sales_report_catalog" name="Entintados vendidos"
+              parent="menu_tint_reports" action="action_tint_sales_report_sale" sequence="10"
+              groups="sales_team.group_sale_manager,point_of_sale.group_pos_manager,account.group_account_readonly"/>
+    <menuitem id="menu_tint_sales_by_category_catalog" name="Ventas por categoría y color"
+              parent="menu_tint_reports" action="action_tint_sales_by_category" sequence="20"
+              groups="sales_team.group_sale_manager,point_of_sale.group_pos_manager"/>
     <record id="action_tint_sales_report_account" model="ir.actions.act_window">
         <field name="name">Entintados vendidos</field>
         <field name="res_model">tint.sales.report</field>

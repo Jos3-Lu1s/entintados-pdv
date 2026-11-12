@@ -9,7 +9,9 @@ from odoo.http import content_disposition, request
 
 
 class TintSalesExport(http.Controller):
-    def _filtered_rows(self, domain, companies):
+    def _filtered_rows(self, domain, companies, report_model='tint.sales.report'):
+        if report_model not in ('tint.sales.report', 'tint.category.sales.report'):
+            raise BadRequest('Reporte inválido')
         try:
             domain = json.loads(domain)
             companies = json.loads(companies)
@@ -18,16 +20,18 @@ class TintSalesExport(http.Controller):
         except ValueError:
             raise BadRequest('Filtros del reporte inválidos') from None
 
-        report = request.env['tint.sales.report']
+        report = request.env[report_model]
         if companies:
             report = report.with_context(allowed_company_ids=companies)
         return report.search(domain)
 
     @http.route('/entintados_pdv/tint-sales/pdf', type='http', auth='user', methods=['GET', 'POST'])
-    def download_tint_sales_pdf(self, domain='[]', companies='[]', show_margin='0'):
-        rows = self._filtered_rows(domain, companies)
+    def download_tint_sales_pdf(self, domain='[]', companies='[]', show_margin='0', report_model='tint.sales.report'):
+        rows = self._filtered_rows(domain, companies, report_model)
+        action = ('entintados_pdv.action_tint_category_sales_pdf' if report_model == 'tint.category.sales.report'
+                  else 'entintados_pdv.action_tint_sales_pdf')
         content, _ = rows.env['ir.actions.report'].with_context(tint_show_margin=show_margin == '1')._render_qweb_pdf(
-            'entintados_pdv.action_tint_sales_pdf', res_ids=rows.ids)
+            action, res_ids=rows.ids)
         return request.make_response(content, headers=[
             ('Content-Type', 'application/pdf'),
             ('Content-Disposition', content_disposition('Reporte de entintados.pdf').replace('attachment;', 'inline;', 1)),
@@ -35,8 +39,9 @@ class TintSalesExport(http.Controller):
         ])
 
     @http.route('/entintados_pdv/tint-sales/xlsx', type='http', auth='user', methods=['GET', 'POST'])
-    def download_tint_sales(self, domain='[]', companies='[]', show_margin='0'):
-        rows = self._filtered_rows(domain, companies)
+    def download_tint_sales(self, domain='[]', companies='[]', show_margin='0', report_model='tint.sales.report'):
+        rows = self._filtered_rows(domain, companies, report_model)
+        by_category = report_model == 'tint.category.sales.report'
         include_margin = show_margin == '1'
         amount_column = 9 if include_margin else 8
         quantity_column = amount_column + 2
@@ -66,6 +71,9 @@ class TintSalesExport(http.Controller):
                 widths.append(19)
             labels += ['Importe', 'Total', 'Entintados']
             widths += [24, 24, 13]
+            if by_category:
+                labels.append('Categoría de entintado')
+                widths.append(26)
             sheet.write_row(0, 0, labels, header)
             sheet.set_row(0, 32)
             for index, width in enumerate(widths):
@@ -85,6 +93,8 @@ class TintSalesExport(http.Controller):
                 if row.document_url:
                     sheet.write_url(index, 1, row.document_url, link, row.reference or '')
                 sheet.write_number(index, quantity_column, row.quantity, body)
+                if by_category:
+                    sheet.write(index, quantity_column + 1, row.tint_category_id.display_name or '', body)
                 digits = row.currency_id.decimal_places
                 if digits not in money_formats:
                     pattern = '#,##0' + ('.' + '0' * digits if digits else '')

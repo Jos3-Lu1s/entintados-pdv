@@ -2,7 +2,7 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
-from odoo.tools import float_compare
+from odoo.tools import float_compare, format_amount
 
 AGREEMENT_DISCOUNT_TYPES = ('product', 'line', 'scheme', 'global')
 # Campos del acuerdo que los productos de un combo copian de su paquete.
@@ -116,6 +116,28 @@ class SaleOrderLine(models.Model):
         compute='_compute_discount_amount',
         currency_field='currency_id',
     )
+    sale_tax_amount_detail = fields.Char(string='Importe por impuesto', compute='_compute_sale_tax_amount_detail')
+    sale_amount_before_discount = fields.Monetary(
+        string='Importe antes de descuento', compute='_compute_discount_amount', currency_field='currency_id',
+    )
+
+    @api.depends('tax_ids', 'tax_ids.amount', 'price_unit', 'discount',
+                 'product_uom_qty', 'currency_id', 'company_id', 'product_id',
+                 'order_id.partner_shipping_id', 'display_type')
+    @api.depends_context('lang')
+    def _compute_sale_tax_amount_detail(self):
+        for line in self:
+            line.sale_tax_amount_detail = False
+            if line.display_type or not line.tax_ids or not line.currency_id:
+                continue
+            taxes = line.tax_ids.with_company(line.company_id).compute_all(
+                line.price_unit * (1 - line.discount / 100), line.currency_id,
+                line.product_uom_qty, product=line.product_id, partner=line.order_id.partner_shipping_id,
+            )['taxes']
+            line.sale_tax_amount_detail = ' · '.join(
+                format_amount(line.env, tax['amount'], line.currency_id)
+                for tax in taxes
+            )
     # Último descuento asignado por el cálculo. El onchange de `discount` también se dispara
     # cuando lo cambia el cálculo: solo es manual si difiere de este valor.
     technical_discount = fields.Float(
@@ -148,7 +170,8 @@ class SaleOrderLine(models.Model):
 
     @api.depends(
         'product_type', 'virtual_id', 'currency_id', 'price_subtotal', 'price_unit',
-        'product_uom_qty', 'discount', 'order_id.order_line.price_subtotal',
+        'product_uom_qty', 'discount', 'tax_ids', 'order_id.partner_shipping_id',
+        'order_id.order_line.tax_ids', 'order_id.order_line.price_subtotal',
         'order_id.order_line.price_unit', 'order_id.order_line.product_uom_qty',
         'order_id.order_line.discount', 'order_id.order_line.linked_line_id',
         'order_id.order_line.linked_virtual_id',
@@ -158,16 +181,17 @@ class SaleOrderLine(models.Model):
             if line.product_type == 'combo':
                 items = line._get_linked_lines().filtered('combo_item_id')
                 line.discount_amount = sum(item._get_own_discount_amount() for item in items)
+                subtotal = sum(items.mapped('price_subtotal'))
             else:
                 line.discount_amount = line._get_own_discount_amount()
+                subtotal = line.price_subtotal
+            line.sale_amount_before_discount = subtotal + line.discount_amount
 
     def _get_own_discount_amount(self):
-        # Misma fórmula que `amount_undiscounted`: partir del subtotal excluye el IVA incluido en el precio.
         self.ensure_one()
-        if self.discount == 100:
-            amount = self.price_unit * self.product_uom_qty
-        else:
-            amount = self.price_subtotal * self.discount / (100 - self.discount)
+        if not self.discount or self.display_type:
+            return 0.0
+        amount = self._get_amount_without_discount() - self.price_subtotal
         return self.currency_id.round(amount) if self.currency_id else amount
 
     @api.depends('product_id')

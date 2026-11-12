@@ -1,11 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="entintados_pdv.BankPaymentLabels" t-inherit="point_of_sale.PaymentScreenMethods" t-inherit-mode="extension">
+        <xpath expr="//t[@t-foreach='payment_methods_from_config']" position="attributes">
+            <attribute name="t-foreach">terminalBankPaymentMethods</attribute>
+        </xpath>
         <xpath expr="//span[hasclass('payment-name')]" position="replace">
             <span class="payment-name">
                 <t t-esc="paymentMethod.name"/>
-                <small t-if="paymentMethod.collection_type === 'card' and paymentMethod.terminal_label" class="d-block text-muted">Terminal: <t t-esc="paymentMethod.terminal_label"/></small>
+                <small t-if="paymentMethod.collection_type === 'card' and (paymentMethod.card_bank_name or paymentMethod.terminal_label)" class="d-block text-muted">
+                    <t t-esc="paymentMethod.card_bank_name or paymentMethod.terminal_label"/>
+                </small>
             </span>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.TerminalBankPaymentLines" t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension">
+        <xpath expr="//t[@t-esc='line.payment_method_id.name']" position="after">
+            <t t-if="line.terminal_bank_id?.name" t-esc="' (' + line.terminal_bank_id.name + ')'"/>
+        </xpath>
+        <xpath expr="//t[@t-esc='line.payment_method_id?.name']" position="after">
+            <t t-if="line.terminal_bank_id?.name" t-esc="' (' + line.terminal_bank_id.name + ')'"/>
         </xpath>
     </t>
 </templates>

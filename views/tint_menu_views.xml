@@ -60,6 +60,9 @@
         sequence="90"
     />
 
+    <menuitem id="menu_tint_category" name="Categorías de entintado" parent="menu_tint_config"
+              action="tint_category_action" sequence="5"/>
+
     <menuitem
         id="menu_tint_base_type"
         name="Tipos de base"

@@ -30,6 +30,7 @@ class TintColorFormula(models.Model):
         comodel_name='tint.size', string="Presentación",
         required=True, ondelete='restrict', index=True,
         help="Presentación de envase para la que se calculan las dosis.")
+    tint_category_id = fields.Many2one('tint.category', string='Categoría de entintado', ondelete='restrict', index=True)
     active = fields.Boolean(
         string="Activo", default=True,
         help="Si se desmarca, la fórmula se archiva y deja de ofrecerse.")
@@ -252,6 +253,7 @@ class TintColorFormula(models.Model):
                     procesadas |= self.create({
                         'color_id': formula.color_id.id,
                         'base_type_id': formula.base_type_id.id,
+                        'tint_category_id': formula.tint_category_id.id,
                         'size_id': size.id,
                         'line_scheme_id': formula.line_scheme_id.id,
                         'line_ids': lineas,
