@@ -32,7 +32,7 @@ class CustomerPaymentPolicy(common.TransactionCase):
                        {'l10n_mx_edi_payment_policy': 'PPD'}):
             with self.assertRaises(ValidationError), self.cr.savepoint():
                 order.write(values)
-        customer.is_credit = True
+        customer.write({'is_credit': True, 'credit_limit': 1000})
         days = self.env['account.payment.term'].create({'name': '30 días política QA',
             'line_ids': [(0, 0, {'value': 'percent', 'value_amount': 100, 'nb_days': 30})]})
         order.write({'l10n_mx_edi_payment_policy': 'PPD', 'payment_term_id': days.id})
@@ -86,7 +86,7 @@ class CustomerPaymentPolicy(common.TransactionCase):
             customer.write(values)
         order = self.env['sale.order'].create({'partner_id': customer.id})
         self.assertEqual(order.l10n_mx_edi_payment_policy, 'PUE')
-        customer.write({'is_credit': True, 'l10n_mx_edi_payment_policy': 'PPD'})
+        customer.write({'is_credit': True, 'credit_limit': 1000, 'l10n_mx_edi_payment_policy': 'PPD'})
         self.assertTrue(customer.payment_credit_authorized)
         customer.is_credit = False
         customer.write({'is_credit': False, 'l10n_mx_edi_payment_policy': 'PUE'})
@@ -94,7 +94,7 @@ class CustomerPaymentPolicy(common.TransactionCase):
 
     def test_parent_credit_and_view(self):
         parent = self.env['res.partner'].create({'name': 'Crédito comercial QA',
-            'phone': '5551234567', 'is_company': True, 'is_customer': True, 'is_credit': True})
+            'phone': '5551234567', 'is_company': True, 'is_customer': True, 'is_credit': True, 'credit_limit': 1000})
         child = self.env['res.partner'].create({'name': 'Contacto crédito QA', 'phone': '5551234567',
             'parent_id': parent.id, 'is_customer': True, 'l10n_mx_edi_payment_policy': 'PPD'})
         self.assertTrue(child.payment_credit_authorized)

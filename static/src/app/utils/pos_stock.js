@@ -5,11 +5,11 @@ export function requiresPosStock(product) {
 
 /** Total de salidas del ticket; las devoluciones no habilitan stock aún no recibido. */
 export function stockError(order, product, quantity, excludedLine = null) {
-    if (!requiresPosStock(product) || quantity <= 0 || order?.preset_id?.is_return) {
+    if (!requiresPosStock(product) || quantity <= 0) {
         return null;
     }
     const used = (order?.lines || []).reduce((total, line) =>
-        total + (line !== excludedLine && line !== excludedLine?._stockMergeSource && line.product_id?.id === product.id
+        total + (line !== excludedLine && line.product_id?.id === product.id
             ? Math.max(0, Number(line.qty) || 0) : 0), 0);
     const available = Number(product.pos_stock_qty) || 0;
     const rounding = product.uom_id?.rounding || 0.00001;

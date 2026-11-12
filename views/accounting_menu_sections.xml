@@ -64,6 +64,9 @@
         <field name="parent_id" ref="account_vendor_invoices_section"/>
         <field name="sequence">20</field>
     </record>
+    <menuitem id="vendor_payment_group_menu" name="Pagos agrupados"
+              parent="account_vendor_invoices_section" action="vendor_payment_group_action"
+              sequence="30" groups="account.group_account_invoice"/>
     <record id="account.menu_action_move_in_refund_type" model="ir.ui.menu">
         <field name="parent_id" ref="account_vendor_credits_section"/>
         <field name="sequence">10</field>

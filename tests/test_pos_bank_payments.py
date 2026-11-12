@@ -90,10 +90,9 @@ class TestPosBankPayments(TransactionCase):
         with self.assertRaises(ValidationError), self.cr.savepoint():
             method.journal_id = cash
 
-    def test_requires_terminal_name_and_respects_open_session_lock(self):
+    def test_generic_card_and_open_session_lock(self):
         method = self._prepare().filtered(lambda item: item.collection_type == 'card')[:1]
-        with self.assertRaises(ValidationError), self.cr.savepoint():
-            method.terminal_label = False
+        method.terminal_label = False
         self.env['pos.session'].create({'config_id': self.config.id, 'state': 'opened'})
         with self.assertRaises(UserError):
             self.config.action_prepare_bank_payments()

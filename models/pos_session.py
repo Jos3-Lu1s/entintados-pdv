@@ -12,6 +12,10 @@ class PosSession(models.Model):
 
         if 'res.partner.discount.rule' not in models_to_load:
             models_to_load.append('res.partner.discount.rule')
+        if 'pos.card.bank' not in models_to_load:
+            models_to_load.append('pos.card.bank')
+        if 'account.payment.term' not in models_to_load:
+            models_to_load.append('account.payment.term')
 
         if config and config.module_pos_restaurant:
             return models_to_load

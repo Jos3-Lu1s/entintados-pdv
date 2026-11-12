@@ -4,7 +4,8 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { CustomSelectCreateDialog } from "@pos_settle_due/app/views/view_dialogs/select_create_dialog";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
-import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
+import { ask, makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
+import OrderPaymentValidation from "@point_of_sale/app/utils/order_payment_validation";
 import { useEffect, useState } from "@odoo/owl";
 
 patch(PaymentScreen.prototype, {
@@ -30,7 +31,7 @@ patch(PaymentScreen.prototype, {
         useEffect(() => {
             const order = this.currentOrder;
             if (!Number.isInteger(order?.id) || order.finalized || order.state === 'cancel' ||
-                !['pending', 'approved'].includes(order.uiState.creditApproval?.state)) {
+                !['pending', 'approved'].includes((order.uiState.creditApproval || order.uiState.cashApproval)?.state)) {
                 return;
             }
             let busy = false;
@@ -47,7 +48,21 @@ patch(PaymentScreen.prototype, {
             }, 5000);
             return () => clearInterval(timer);
         }, () => [this.currentOrder?.id, this.currentOrder?.state,
-            this.currentOrder?.uiState.creditApproval?.id, this.currentOrder?.uiState.creditApproval?.state]);
+            this.currentOrder?.uiState.creditApproval?.id, this.currentOrder?.uiState.creditApproval?.state,
+            this.currentOrder?.uiState.cashApproval?.id, this.currentOrder?.uiState.cashApproval?.state]);
+    },
+    get cashApproval() {
+        const order = this.currentOrder;
+        const request = order.uiState.cashApproval;
+        if (order.getPartner() && !order.uiState.creditApproval &&
+            !order.payment_ids.some((line) => line.amount && line.payment_method_id.type === 'pay_later') &&
+            ['pending', 'approved', 'refused'].includes(request?.state)) {
+            return request;
+        }
+    },
+    get cashApprovalAmountChanged() {
+        const request = this.cashApproval;
+        return Boolean(request && this.pos.currency.round(this.currentOrder.priceIncl - request.total_amount));
     },
     get requestedCreditAmount() {
         const order = this.currentOrder;
@@ -71,12 +86,19 @@ patch(PaymentScreen.prototype, {
         }
         const partnerId = order.getPartner()?.id;
         const previousApproval = order.uiState.creditApproval;
+        const previousCashApproval = order.uiState.cashApproval;
         try {
             const request = await this.pos.data.call("pos.config", "get_order_credit_approval", [
                 [this.pos.config.id], order.id,
             ]);
             if (this.currentOrder === order && order.getPartner()?.id === partnerId &&
-                order.uiState.creditApproval === previousApproval) {
+                order.uiState.creditApproval === previousApproval && order.uiState.cashApproval === previousCashApproval) {
+                if (request?.credit_amount === 0) {
+                    order.uiState.cashApproval = request;
+                    order.uiState.creditApproval = undefined;
+                    return;
+                }
+                order.uiState.cashApproval = undefined;
                 order.uiState.creditApproval = request || undefined;
                 if (request?.state === 'refused') {
                     this.clearDeferredPayment();
@@ -141,23 +163,6 @@ patch(PaymentScreen.prototype, {
         const order = this.currentOrder;
         if (paymentMethod.type === "pay_later" && !order.is_settling_account && !order.isRefund &&
             !order.lines.some((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.())) {
-            if (this.canOfferDeferredPayment && this.pos.company?.country_id?.code === "MX") {
-                if (this.isMxEdiPopupOpen) {
-                    return false;
-                }
-                const partnerId = order.getPartner()?.id;
-                this.isMxEdiPopupOpen = true;
-                order.uiState.creditInvoiceSetup = true;
-                try {
-                    const confirmed = await this.pos.addL10nMxEdiFields(order);
-                    if (!confirmed || this.currentOrder !== order || order.getPartner()?.id !== partnerId) {
-                        return false;
-                    }
-                } finally {
-                    this.isMxEdiPopupOpen = false;
-                    delete order.uiState.creditInvoiceSetup;
-                }
-            }
             return (await this.setDeferredPayment("credit", true)) === true;
         }
         return await super.addNewPaymentLine(...arguments);
@@ -318,7 +323,8 @@ patch(PaymentScreen.prototype, {
             order.uiState.invoice_split_count = 1;
             order.invoice_split_count = 1;
             const applied = this.appliedCustomerAdvance;
-            if (!info.credit_limited || info.risk_exception || pending > info.purchase_power ||
+            if (!info.credit_limited || info.risk_exception || info.has_overdue_balance ||
+                this.pos.currency.round(pending - info.purchase_power) > 0 ||
                 ['pending', 'approved', 'refused'].includes(order.uiState.creditApproval?.state)) {
                 order.setToInvoice(true);
                 await this.pos.syncAllOrders({ orders: [order], force: true, throw: true });
@@ -378,6 +384,52 @@ patch(PaymentScreen.prototype, {
         const pending = order.payment_ids.filter((line) => line.payment_method_id.type === "pay_later")
             .reduce((total, line) => total + line.amount, 0);
         return _t("Factura completa PPD · Saldo pendiente: %s", this.env.utils.formatCurrency(pending));
+    },
+});
+
+patch(OrderPaymentValidation.prototype, {
+    async isOrderValid(...args) {
+        if (!await super.isOrderValid(...args)) {
+            return false;
+        }
+        const order = this.order;
+        const partner = order.getPartner();
+        if (!partner || order.priceIncl <= 0 || order.isRefund || order.is_settling_account ||
+            order.lines.every((line) => line.isSettleDueLine?.() || line.isSettleInvoiceLine?.()) ||
+            order.payment_ids.some((line) => line.amount && line.payment_method_id.type === "pay_later")) {
+            return true;
+        }
+        const notify = (message) => this.pos.notification.add(message, { type: "warning" });
+        try {
+            const info = await this.pos.data.call("res.partner", "get_advance_pos_info", [[partner.id], this.pos.config.id]);
+            if (this.order !== order || order.getPartner()?.id !== partner.id) {
+                return false;
+            }
+            if (!info.cash_requires_approval) {
+                order.uiState.cashApproval = undefined;
+                return true;
+            }
+            await this.pos.syncAllOrders({ orders: [order], force: true, throw: true });
+            if (this.order !== order || order.getPartner()?.id !== partner.id || !Number.isInteger(order.id)) {
+                return false;
+            }
+            const requestArgs = [[this.pos.config.id], partner.id, order.uuid, order.priceIncl, 0, 0, order.id];
+            let request = await this.pos.data.call("pos.config", "request_credit_approval", requestArgs);
+            if (request.state === "refused" && await ask(this.pos.dialog, {
+                title: _t("Autorización rechazada"),
+                body: _t("¿Quieres enviar una nueva solicitud para esta venta de contado?"),
+            })) {
+                request = await this.pos.data.call("pos.config", "request_credit_approval", [...requestArgs, true]);
+            }
+            order.uiState.cashApproval = request;
+            order.uiState.creditApproval = undefined;
+            if (request.state === "approved") {
+                return true;
+            }
+        } catch (error) {
+            notify(error.data?.message || error.message || _t("No se pudo consultar la autorización. Revisa la conexión."));
+        }
+        return false;
     },
 });
 

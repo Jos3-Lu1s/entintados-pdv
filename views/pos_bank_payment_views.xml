@@ -1,12 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="pos_card_bank_company_rule" model="ir.rule">
+        <field name="name">Bancos de tarjeta por compañía</field>
+        <field name="model_id" ref="model_pos_card_bank"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="pos_card_bank_list" model="ir.ui.view">
+        <field name="name">pos.card.bank.list</field>
+        <field name="model">pos.card.bank</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+    <record id="pos_card_bank_form" model="ir.ui.view">
+        <field name="name">pos.card.bank.form</field>
+        <field name="model">pos.card.bank</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <widget name="web_ribbon" title="Archivado" bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <field name="active" invisible="1"/>
+                        <field name="name"/>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                    </group>
+                    <div class="text-muted">Los bancos activos aparecen al seleccionar un método de tarjeta en la caja.</div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_pos_card_bank" model="ir.actions.act_window">
+        <field name="name">Bancos de tarjeta</field>
+        <field name="res_model">pos.card.bank</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="menu_pos_card_bank" name="Bancos de tarjeta" parent="point_of_sale.menu_point_config_product"
+              action="action_pos_card_bank" groups="point_of_sale.group_pos_manager" sequence="4"/>
+    <record id="pos_card_bank_settings" model="ir.ui.view">
+        <field name="name">res.config.settings.pos.card.bank</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='pos_interface_section']" position="after">
+                <block title="Cobros con tarjeta" id="pos_card_bank_section">
+                    <setting company_dependent="1" help="Diario que se propone al configurar un método de cobro con tarjeta nuevo.">
+                        <field name="pos_card_default_journal_id" domain="[('type', '=', 'bank'), ('company_id', '=', company_id)]"
+                               options="{'no_create': True}"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
     <record id="pos_bank_payment_method_form" model="ir.ui.view">
         <field name="name">pos.payment.method.bank.collection</field><field name="model">pos.payment.method</field>
         <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='journal_id']" position="before">
                 <field name="collection_type"/>
-                <field name="terminal_label" invisible="collection_type == 'standard'" required="collection_type == 'card'"/>
+                <field name="card_bank_id" invisible="not card_bank_id" readonly="1"/>
+                <field name="terminal_label" invisible="collection_type == 'standard' or (collection_type == 'card' and card_bank_id)"
+                       readonly="collection_type == 'card'"/>
             </xpath>
             <xpath expr="//field[@name='outstanding_account_id']" position="attributes"><attribute name="string">Cuenta contable de cobros pendientes</attribute></xpath>
             <xpath expr="//field[@name='outstanding_account_id']" position="after">
@@ -17,6 +73,16 @@
     <record id="pos_bank_payment_method_list" model="ir.ui.view">
         <field name="name">pos.payment.method.bank.collection.list</field><field name="model">pos.payment.method</field>
         <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_tree"/>
-        <field name="arch" type="xml"><xpath expr="//field[@name='name']" position="after"><field name="collection_type" optional="show"/><field name="terminal_label" optional="show"/></xpath></field>
+        <field name="arch" type="xml"><xpath expr="//field[@name='name']" position="after"><field name="collection_type" optional="show"/><field name="card_bank_id" optional="show"/><field name="terminal_label" optional="show"/></xpath></field>
+    </record>
+    <record id="pos_order_terminal_bank_form" model="ir.ui.view">
+        <field name="name">pos.order.terminal.bank</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_ids']//field[@name='payment_method_id']" position="after">
+                <field name="terminal_bank_id" readonly="1" optional="show"/>
+            </xpath>
+        </field>
     </record>
 </odoo>

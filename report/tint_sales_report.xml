@@ -15,8 +15,17 @@
         <field name="report_name">entintados_pdv.tint_sales_pdf</field>
         <field name="paperformat_id" ref="tint_sales_paperformat"/>
     </record>
+    <record id="action_tint_category_sales_pdf" model="ir.actions.report">
+        <field name="name">Ventas de entintados por categoría</field>
+        <field name="model">tint.category.sales.report</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.tint_category_sales_pdf</field>
+        <field name="paperformat_id" ref="tint_sales_paperformat"/>
+    </record>
+    <template id="tint_category_sales_pdf"><t t-call="entintados_pdv.tint_sales_pdf"/></template>
     <template id="tint_sales_pdf">
         <t t-call="web.html_container">
+            <t t-set="by_category" t-value="docs._name == 'tint.category.sales.report'"/>
             <t t-set="show_margin" t-value="docs.env.context.get('tint_show_margin', False)"/>
             <div class="article">
                 <div class="page">
@@ -40,7 +49,8 @@
                         .tint-sales-grid tr { page-break-inside: avoid; }
                         .tint-sales-total { font-size: 13pt; margin-top: 12px; }
                     </style>
-                    <h2>Reporte de entintados</h2>
+                    <h2 t-if="by_category">Ventas de entintados por categoría</h2>
+                    <h2 t-else="">Reporte de entintados</h2>
                     <p>Importe: venta neta antes de impuestos. Total: venta facturada con impuestos incluidos.
                         <t t-if="show_margin">Margen sobre el importe facturado o, en pendientes y cotizaciones,
                         sobre la venta neta.</t> — indica que el dato no está disponible.</p>
@@ -49,7 +59,7 @@
                         <colgroup>
                             <col style="width: 7%;"/><col style="width: 10%;"/>
                             <col style="width: 6%;"/><col style="width: 20%;"/>
-                            <col style="width: 13%;"/><col style="width: 6%;"/>
+                            <col style="width: 13%;"/><col t-if="by_category" style="width: 9%;"/><col style="width: 6%;"/>
                             <col style="width: 7%;"/><col t-if="show_margin" style="width: 8%;"/>
                             <col style="width: 9%;"/><col style="width: 8%;"/>
                             <col style="width: 6%;"/>
@@ -57,7 +67,7 @@
                         <thead>
                             <tr>
                                 <th>Fecha</th><th>Documento</th><th>Origen</th>
-                                <th>Base + color</th><th>Color</th><th>Tipo de base</th>
+                                <th>Base + color</th><th>Color</th><th t-if="by_category">Categoría</th><th>Tipo de base</th>
                                 <th>Estado</th>
                                 <th t-if="show_margin" class="text-end">Margen</th>
                                 <th class="text-end">Importe</th>
@@ -72,6 +82,7 @@
                                 <td><span t-field="row.source"/></td>
                                 <td><span t-field="row.base_color"/></td>
                                 <td><span t-field="row.color"/></td>
+                                <td t-if="by_category"><span t-field="row.tint_category_id"/></td>
                                 <td><span t-field="row.base_type_id"/></td>
                                 <td><span t-field="row.status"/></td>
                                 <td t-if="show_margin" class="text-end"><span t-if="row.has_margin" t-field="row.margin"/><span t-else="">—</span></td>

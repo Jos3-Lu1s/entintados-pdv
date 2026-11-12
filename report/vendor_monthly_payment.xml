@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="action_vendor_monthly_payment_pdf" model="ir.actions.report">
+        <field name="name">Pagos mensuales a proveedores</field>
+        <field name="model">account.payment</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.vendor_monthly_payment_pdf</field>
+        <field name="paperformat_id" ref="paperformat_vendor_payment_group"/>
+    </record>
+    <template id="vendor_monthly_payment_pdf">
+        <t t-call="web.html_container">
+            <div class="article">
+                <div class="page" style="font: 10px Arial, sans-serif;">
+                    <style>
+                        .monthly-payments { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                        .monthly-payments thead { display: table-header-group; }
+                        .monthly-payments td, .monthly-payments th {
+                            padding: 4px; border-bottom: 1px solid #ddd;
+                            vertical-align: top; text-align: left; word-wrap: break-word;
+                        }
+                        .monthly-payments th, .monthly-payments .month { background: #e3edf6; }
+                        .monthly-payments tr { page-break-inside: avoid; }
+                    </style>
+                    <h2>Pagos a proveedores</h2>
+                    <t t-call="entintados_pdv.vendor_monthly_payment_table"/>
+                </div>
+            </div>
+        </t>
+    </template>
+    <template id="vendor_monthly_payment_table">
+        <t t-set="months" t-value="docs._monthly_payment_rows()"/>
+        <p t-if="not months">No hay pagos para el período seleccionado.</p>
+        <table t-if="months" class="monthly-payments table table-sm table-hover align-middle">
+            <thead><tr><th t-foreach="docs._monthly_payment_headers()" t-as="heading" t-out="heading"/></tr></thead>
+            <tbody t-foreach="months.items()" t-as="month">
+                <tr class="month table-active"><td colspan="11"><strong t-out="month[0]"/></td></tr>
+                <tr t-foreach="month[1]['rows']" t-as="row">
+                    <td t-foreach="row[:-1]" t-as="value" t-out="value or ''"/>
+                    <td style="text-align: right;" t-out="'{:,.2f}'.format(row[-1])"/>
+                </tr>
+                <tr t-foreach="month[1]['totals'].items()" t-as="total">
+                    <td colspan="9"><strong>Total <span t-out="total[0][1]"/></strong></td>
+                    <td t-out="total[0][0]"/>
+                    <td style="text-align: right;"><strong t-out="'{:,.2f}'.format(total[1])"/></td>
+                </tr>
+            </tbody>
+        </table>
+    </template>
+    <record id="view_monthly_vendor_payment_list" model="ir.ui.view">
+        <field name="name">account.payment.vendor.monthly.list</field>
+        <field name="model">account.payment</field>
+        <field name="arch" type="xml">
+            <list string="Pagos mensuales a proveedores" create="0" edit="0" delete="0"
+                  default_order="date desc, id desc" expand="0">
+                <header>
+                    <button name="action_monthly_vendor_payment_pdf" type="object" string="PDF"/>
+                    <button name="action_monthly_vendor_payment_xlsx" type="object" string="Excel"/>
+                </header>
+                <field name="partner_id" string="Proveedor"/>
+                <field name="name" string="Pago"/>
+                <field name="date" string="Fecha de pago"/>
+                <field name="monthly_vendor_payment_kind" optional="show"/>
+                <field name="journal_id"/>
+                <field name="payment_method_line_id" string="Método del diario" optional="hide"/>
+                <field name="l10n_mx_edi_payment_method_id" string="Forma SAT"/>
+                <field name="monthly_vendor_bill_ids" widget="many2many_tags"/>
+                <field name="monthly_vendor_group_ids" widget="many2many_tags"/>
+                <field name="currency_id" string="Moneda"/>
+                <field name="amount" string="Importe"/>
+                <field name="company_currency_id" column_invisible="True"/>
+                <field name="amount_company_currency_signed" string="Total en moneda de compañía" sum="Total en moneda de compañía"/>
+                <field name="state" widget="badge" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_monthly_vendor_payment_search" model="ir.ui.view">
+        <field name="name">account.payment.vendor.monthly.search</field>
+        <field name="model">account.payment</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="journal_id"/>
+                <filter name="month_to_date" string="Mes en curso hasta hoy"
+                        domain="[('date', '&gt;=', context_today().strftime('%Y-%m-01')), ('date', '&lt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="payment_date" string="Fecha de pago" date="date"/>
+                <group>
+                    <filter name="by_month" string="Mes de pago" context="{'group_by': 'date:month'}"/>
+                    <filter name="by_vendor" string="Proveedor" context="{'group_by': 'partner_id'}"/>
+                    <filter name="by_currency" string="Moneda" context="{'group_by': 'currency_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="action_vendor_monthly_payment_report" model="ir.actions.act_window">
+        <field name="name">Pagos mensuales a proveedores</field>
+        <field name="res_model">account.payment</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_monthly_vendor_payment_list"/>
+        <field name="search_view_id" ref="view_monthly_vendor_payment_search"/>
+        <field name="domain">[('partner_type', '=', 'supplier'), ('payment_type', '=', 'outbound'), ('state', 'in', ['in_process', 'paid'])]</field>
+        <field name="context">{'search_default_month_to_date': 1, 'search_default_by_vendor': 1}</field>
+        <field name="target">current</field>
+    </record>
+    <record id="vendor_monthly_payment_account_report" model="account.report">
+        <field name="name">Pagos mensuales a proveedores</field>
+        <field name="custom_handler_model_id" ref="model_account_vendor_monthly_payment_report_handler"/>
+        <field name="filter_date_range" eval="True"/>
+        <field name="filter_partner" eval="True"/>
+        <field name="filter_unfold_all" eval="True"/>
+        <field name="filter_period_comparison" eval="False"/>
+        <field name="column_ids">
+            <record id="vendor_monthly_payment_column_date" model="account.report.column">
+                <field name="name">Fecha de pago</field><field name="expression_label">date</field><field name="figure_type">date</field>
+            </record>
+            <record id="vendor_monthly_payment_column_kind" model="account.report.column">
+                <field name="name">Tipo</field><field name="expression_label">kind</field><field name="figure_type">string</field>
+            </record>
+            <record id="vendor_monthly_payment_column_journal" model="account.report.column">
+                <field name="name">Diario</field><field name="expression_label">journal</field><field name="figure_type">string</field>
+            </record>
+            <record id="vendor_monthly_payment_column_sat" model="account.report.column">
+                <field name="name">Forma SAT</field><field name="expression_label">sat</field><field name="figure_type">string</field>
+            </record>
+            <record id="vendor_monthly_payment_column_bills" model="account.report.column">
+                <field name="name">Facturas</field><field name="expression_label">bills</field><field name="figure_type">string</field>
+            </record>
+            <record id="vendor_monthly_payment_column_groups" model="account.report.column">
+                <field name="name">Pagos agrupados</field><field name="expression_label">groups</field><field name="figure_type">string</field>
+            </record>
+            <record id="vendor_monthly_payment_column_amount" model="account.report.column">
+                <field name="name">Importe</field><field name="expression_label">amount</field><field name="figure_type">monetary</field>
+            </record>
+        </field>
+    </record>
+    <record id="action_vendor_monthly_payment_dashboard" model="ir.actions.client">
+        <field name="name">Pagos mensuales a proveedores</field>
+        <field name="tag">account_report</field>
+        <field name="context" eval="{'report_id': ref('vendor_monthly_payment_account_report')}"/>
+    </record>
+    <menuitem id="menu_vendor_monthly_payment_report" name="Reporte mensual de pagos"
+              parent="account_vendor_invoices_section" action="action_vendor_monthly_payment_dashboard"
+              sequence="40" groups="account.group_account_invoice"/>
+    <record id="customer_monthly_payment_account_report" model="account.report">
+        <field name="name">Pagos mensuales de clientes</field>
+        <field name="custom_handler_model_id" ref="model_account_vendor_monthly_payment_report_handler"/>
+        <field name="filter_date_range" eval="True"/>
+        <field name="filter_partner" eval="True"/>
+        <field name="filter_unfold_all" eval="True"/>
+        <field name="filter_period_comparison" eval="False"/>
+        <field name="column_ids">
+            <record id="customer_monthly_payment_column_date" model="account.report.column">
+                <field name="name">Fecha de pago</field><field name="expression_label">date</field><field name="figure_type">date</field>
+            </record>
+            <record id="customer_monthly_payment_column_kind" model="account.report.column">
+                <field name="name">Tipo</field><field name="expression_label">kind</field><field name="figure_type">string</field>
+            </record>
+            <record id="customer_monthly_payment_column_journal" model="account.report.column">
+                <field name="name">Diario</field><field name="expression_label">journal</field><field name="figure_type">string</field>
+            </record>
+            <record id="customer_monthly_payment_column_sat" model="account.report.column">
+                <field name="name">Forma SAT</field><field name="expression_label">sat</field><field name="figure_type">string</field>
+            </record>
+            <record id="customer_monthly_payment_column_bills" model="account.report.column">
+                <field name="name">Facturas</field><field name="expression_label">bills</field><field name="figure_type">string</field>
+            </record>
+            <record id="customer_monthly_payment_column_amount" model="account.report.column">
+                <field name="name">Importe</field><field name="expression_label">amount</field><field name="figure_type">monetary</field>
+            </record>
+        </field>
+    </record>
+    <record id="action_customer_monthly_payment_dashboard" model="ir.actions.client">
+        <field name="name">Pagos mensuales de clientes</field>
+        <field name="tag">account_report</field>
+        <field name="context" eval="{'report_id': ref('customer_monthly_payment_account_report')}"/>
+    </record>
+    <menuitem id="menu_customer_monthly_payment_report" name="Reporte mensual de pagos de clientes"
+              parent="account_customer_invoices_section" action="action_customer_monthly_payment_dashboard"
+              sequence="40" groups="account.group_account_invoice"/>
+</odoo>

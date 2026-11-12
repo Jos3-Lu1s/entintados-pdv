@@ -23,7 +23,7 @@ class TintDocumentLink extends Component {
             return;
         }
         event.preventDefault();
-        const action = await this.orm.call("tint.sales.report", "action_open_document", [
+        const action = await this.orm.call(this.props.record.resModel, "action_open_document", [
             [this.props.record.resId],
         ]);
         await this.action.doAction(action);
@@ -72,6 +72,7 @@ class TintSalesReportExport extends Component {
 
     get exportData() {
         return {
+            report_model: this.env.model.root.resModel,
             domain: JSON.stringify(this.env.searchModel.domain),
             companies: JSON.stringify(this.env.model.root.context.allowed_company_ids || []),
             show_margin: this.env.tintShowMargin?.() ? "1" : "0",
@@ -108,5 +109,5 @@ registry.category("cogMenu").add("entintados-sales-export", {
     Component: TintSalesReportExport,
     groupNumber: STATIC_ACTIONS_GROUP_NUMBER,
     isDisplayed: (env) => env.config.viewType === "list" &&
-        env.model.root.resModel === "tint.sales.report" && !env.model.root.selection.length,
+        ["tint.sales.report", "tint.category.sales.report"].includes(env.model.root.resModel) && !env.model.root.selection.length,
 }, { sequence: 20 });

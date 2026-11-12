@@ -19,7 +19,7 @@ function fixture({ paid = 300, authorized = true, limit = 1000, approvalState = 
     vm.runInNewContext(source, { patch: (target, extension) => {
         Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));
         Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
-    }, PaymentScreen: Screen, ControlButtons: Controls,
+    }, PaymentScreen: Screen, ControlButtons: Controls, OrderPaymentValidation: class {},
         CustomSelectCreateDialog: class {}, _t: (value) => value,
         useEffect: (fn, dependencies) => effects.push({ fn, dependencies }),
         setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
@@ -130,36 +130,17 @@ test('Customer account button applies authorized credit to the unpaid balance wi
     assert.equal(screen.addedMethod, undefined);
 });
 
-test('Customer account opens CFDI options before configuring PPD financing', async () => {
+test('Customer account preserves inline CFDI options without opening the popup', async () => {
     const { screen, order, deferred } = fixture();
     screen.pos.company = { country_id: { code: 'MX' } };
-    let opened = 0;
-    screen.pos.addL10nMxEdiFields = async (ticket) => {
-        opened++;
-        assert.equal(ticket, order);
-        assert.equal(ticket.uiState.creditInvoiceSetup, true);
-        assert.equal(ticket.pos_payment_flow, 'standard');
-        ticket.l10n_mx_edi_usage = 'G03';
-        return true;
-    };
+    order.l10n_mx_edi_usage = 'G03';
+    order.l10n_mx_edi_cfdi_to_public = false;
+    screen.pos.addL10nMxEdiFields = async () => assert.fail('Unexpected CFDI popup');
     assert.equal(await screen.addNewPaymentLine(deferred), true);
-    assert.equal(opened, 1);
     assert.equal(order.l10n_mx_edi_usage, 'G03');
+    assert.equal(order.l10n_mx_edi_cfdi_to_public, false);
     assert.equal(order.pos_payment_flow, 'credit');
     assert.equal(order.to_invoice, true);
-    assert.equal(order.uiState.creditInvoiceSetup, undefined);
-});
-
-test('Cancelling CFDI options leaves credit and authorization unrequested', async () => {
-    const { screen, order, deferred } = fixture({ limit: 100 });
-    screen.pos.company = { country_id: { code: 'MX' } };
-    screen.pos.addL10nMxEdiFields = async () => false;
-    screen.pos.data.call = async () => { assert.fail('Credit must not be requested after cancelling the popup'); };
-    assert.equal(await screen.addNewPaymentLine(deferred), false);
-    assert.equal(order.payment_ids.length, 1);
-    assert.equal(order.pos_payment_flow, 'standard');
-    assert.equal(order.uiState.creditInvoiceSetup, undefined);
-    assert.equal(screen.isMxEdiPopupOpen, false);
 });
 
 test('Customer account button requests approval and adds debt only after approval', async () => {
@@ -281,6 +262,29 @@ test('Approval polling automatically adds only the authorized remainder and neve
     assert.equal(approvalsChecked, 1);
     cleanup();
     assert.deepEqual(clearedIntervals, [1]);
+});
+
+test('Polling a PUE authorization updates its banner and preserves the selected payments', async () => {
+    const { screen, order, effects, intervals } = fixture({ paid: 1000 });
+    order.id = 42;
+    order.state = 'draft';
+    const pending = { id: 17, state: 'pending', credit_amount: 0, total_amount: 1000 };
+    order.uiState.cashApproval = pending;
+    screen.pos.data.call = async (model, method) => {
+        assert.equal(method, 'get_order_credit_approval');
+        return { ...pending, state: 'approved' };
+    };
+    screen.setup();
+    const cleanup = effects[2].fn();
+    await intervals[0].fn();
+    assert.equal(screen.cashApproval.state, 'approved');
+    assert.equal(screen.cashApprovalAmountChanged, false);
+    assert.equal(order.pos_payment_flow, 'standard');
+    assert.deepEqual(order.payment_ids.map((line) => line.amount), [1000]);
+    assert.equal(screen.validated, undefined);
+    order.priceIncl = 1000.01;
+    assert.equal(screen.cashApprovalAmountChanged, true);
+    cleanup();
 });
 
 test('A temporary status lookup failure keeps the request available for the next automatic check', async () => {

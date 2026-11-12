@@ -231,7 +231,7 @@ class PosCreditApproval(models.Model):
         category = self._native_category(self.company_id)
         native = self.env['approval.request'].sudo().create({
             'name': self.name, 'category_id': category.id, 'request_owner_id': self.requester_id.id,
-            'partner_id': self.partner_id.id, 'amount': self.credit_amount,
+            'partner_id': self.partner_id.id, 'amount': self.credit_amount or self.total_amount,
             'reference': self.order_id.pos_reference or self.order_uuid,
             'pos_credit_approval_id': self.id,
             'approver_ids': [Command.create({'user_id': user.id, 'required': False}) for user in self.approver_user_ids],
@@ -317,7 +317,7 @@ class PosCreditApproval(models.Model):
         self.write(values)
         native = self.approval_request_id.sudo()
         native._cancel_activities()
-        native.write({'amount': credit, 'approver_ids': [Command.clear()] + [
+        native.write({'amount': credit or total, 'approver_ids': [Command.clear()] + [
             Command.create({'user_id': user.id, 'required': False}) for user in users]})
         native.action_confirm()
         native.message_post(body=_(
@@ -349,13 +349,13 @@ class PosConfigCreditApproval(models.Model):
             raise UserError(_('El ticket no tiene un identificador válido.'))
         if not all(isinstance(value, (int, float)) and math.isfinite(value) for value in (total, credit, applied)):
             raise UserError(_('Los importes de la solicitud no son válidos.'))
-        if total <= 0 or credit <= 0 or credit > total or applied < 0:
+        if total <= 0 or credit < 0 or credit > total or applied < 0:
             raise UserError(_('Revisa el total, el saldo pendiente y los anticipos del ticket.'))
         partner = self.env['res.partner'].browse(partner_id).exists()
         partner.check_access('read')
         partner = partner.commercial_partner_id.sudo().with_company(self.company_id).with_context(
             allowed_company_ids=self.company_id.ids)
-        if not partner or not partner.is_credit:
+        if not partner or (credit and not partner.is_credit):
             raise UserError(_('El cliente necesita la condición Crédito habilitada.'))
         order = self.env['pos.order'].browse(order_id).exists() if order_id else self.env['pos.order'].search([
             ('uuid', '=', order_uuid), ('config_id', '=', self.id)], limit=1)
@@ -371,6 +371,10 @@ class PosConfigCreditApproval(models.Model):
             raise UserError(_('El total de la solicitud no coincide con el ticket guardado. Sincroniza la orden.'))
         self.env.cr.execute('SELECT id FROM res_partner WHERE id = %s FOR UPDATE', [partner.id])
         partner.invalidate_recordset()
+        if not credit and (not order._is_pos_cash_sale() or not partner._pos_cash_requires_approval()):
+            raise UserError(_('La venta de contado no requiere autorización por saldo vencido o límite excedido.'))
+        if not credit:
+            applied = -sum(order.lines.filtered(lambda line: line._accounting_advance_source()).mapped('price_subtotal_incl'))
         projected = self._credit_projection(partner, credit, applied)
         Approval = self.env['pos.credit.approval'].sudo()
         request = Approval.search([
@@ -481,7 +485,7 @@ class PosOrderCreditApproval(models.Model):
             ('partner_id', '=', partner.id), ('state', 'in', ['pending', 'approved', 'refused', 'used']),
         ], limit=1)
         if not request or request.state not in ('approved', 'used'):
-            raise UserError(_('El crédito disponible fue excedido. Solicita autorización desde Cuenta de cliente y espera la aprobación.'))
+            raise UserError(_('La venta requiere autorización por crédito o saldo vencido. Solicítala desde el Punto de Venta y espera la aprobación.'))
         self.env.cr.execute('SELECT id FROM pos_credit_approval WHERE id = %s FOR UPDATE', [request.id])
         request.invalidate_recordset()
         projected = self.config_id._credit_projection(partner, credit, applied, order=self)

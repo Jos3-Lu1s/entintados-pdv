@@ -1,4 +1,4 @@
-from odoo import fields, models, _
+from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 
 
@@ -19,6 +19,41 @@ class ResConfigSettings(models.TransientModel):
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
+
+    can_prepare_reinvoice = fields.Boolean(compute='_compute_can_prepare_reinvoice')
+
+    def _normal_customer_invoices(self):
+        return self.invoice_ids.filtered(lambda invoice:
+            invoice.move_type == 'out_invoice' and not invoice.is_advance_invoice)
+
+    def _has_only_cancelled_customer_invoices(self):
+        invoices = self._normal_customer_invoices()
+        return bool(invoices) and all(
+            invoice.state == 'cancel'
+            and invoice.l10n_mx_edi_cfdi_state not in ('sent', 'global_sent', 'cancel_requested')
+            for invoice in invoices
+        )
+
+    @api.depends('state', 'invoice_status', 'invoice_ids.state', 'invoice_ids.l10n_mx_edi_cfdi_state',
+                 'invoice_ids.is_advance_invoice', 'invoice_ids.move_type')
+    def _compute_can_prepare_reinvoice(self):
+        for order in self:
+            order.can_prepare_reinvoice = (order.state == 'sale' and order.invoice_status == 'to invoice'
+                                           and order._has_only_cancelled_customer_invoices())
+
+    def action_prepare_reinvoice(self):
+        self.ensure_one()
+        self.check_access('write')
+        self.env['res.company']._with_locked_records(self)
+        self.invalidate_recordset(['state', 'invoice_ids', 'invoice_status', 'can_prepare_reinvoice'])
+        invoices = self._normal_customer_invoices()
+        self.env['res.company']._with_locked_records(invoices)
+        invoices.invalidate_recordset(['state', 'l10n_mx_edi_cfdi_state'])
+        if not self.can_prepare_reinvoice:
+            raise UserError(_('La orden debe estar confirmada, tener líneas facturables y tener canceladas sus facturas anteriores.'))
+        self._check_sale_payment_policy()
+        drafts = self.with_context(sale_auto_invoice_checkout=True)._create_invoices(final=True)
+        return self.action_view_invoice(invoices=drafts)
 
     def _sale_cash_journal(self, invoice):
         journal = invoice.company_id.sale_cash_payment_journal_id

@@ -147,25 +147,6 @@ patch(ProductScreen.prototype, {
         if (!this.pos.requireCustomer()) {
             return;
         }
-        if (this.isProductOutOfStock(productTmpl)) {
-            try {
-                await this.pos.refreshProductStock(productTmpl.product_variant_ids || []);
-            } catch {
-                this.pos.notification.add("No se pudieron consultar las existencias. Revisa la conexión.",
-                    { type: "warning" });
-                return;
-            }
-            if (this.isProductOutOfStock(productTmpl)) {
-                const inOrder = Number(this.state.quantityByProductTmplId?.[productTmpl.id] || 0);
-                this.pos.notification.add(
-                    inOrder > 0
-                        ? `Ya agregaste todas las existencias disponibles (${inOrder}).`
-                        : "Este producto no tiene existencias disponibles.",
-                    { type: "warning" }
-                );
-                return;
-            }
-        }
         if (!this.isTintEnabled) {
             return super.addProductToOrder(productTmpl);
         }

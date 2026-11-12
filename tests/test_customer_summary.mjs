@@ -5,9 +5,9 @@ const source = fs.readFileSync(new URL('../static/src/app/utils/customer_summary
 const { customerSummary } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
 test('separates discounts and rewards, groups tint and reconciles tax-inclusive total', () => {
-    const color = { uuid: 'color', qty: 1, priceExclNoDiscount: 20, priceExcl: 18, combo_parent_id: {} };
-    const base = { uuid: 'base', qty: 2, priceExclNoDiscount: 100, priceExcl: 90, combo_line_ids: [color] };
-    const promo = { uuid: 'promo', qty: 1, priceExclNoDiscount: 50, priceExcl: 40, pricing_rule_type: 'promo' };
+    const color = { uuid: 'color', qty: 1, priceExclNoDiscount: 20, priceExcl: 18, discount: 10, combo_parent_id: {} };
+    const base = { uuid: 'base', qty: 2, priceExclNoDiscount: 100, priceExcl: 90, discount: 10, combo_line_ids: [color] };
+    const promo = { uuid: 'promo', qty: 1, priceExclNoDiscount: 50, priceExcl: 40, discount: 20, pricing_rule_type: 'promo' };
     const reward = { uuid: 'reward', qty: 1, priceExclNoDiscount: -8, priceExcl: -8, is_reward_line: true };
     const result = customerSummary({ lines: [base, color, promo, reward], priceExcl: 140,
         priceIncl: 162.4, totalDue: 162.4, amountTaxes: 22.4,
@@ -17,6 +17,8 @@ test('separates discounts and rewards, groups tint and reconciles tax-inclusive 
     assert.equal(result.rows[0].unitPrice, 60);
     assert.equal(result.discounts, 12);
     assert.equal(result.promotions, 18);
+    assert.equal(result.discountRates, '10%');
+    assert.equal(result.promotionRates, '20%');
     assert.equal(result.gross, 170);
     assert.equal(result.gross - result.discounts - result.promotions + result.tax + result.rounding, result.total);
     assert.equal(result.taxes[0].name, 'IVA 16%');

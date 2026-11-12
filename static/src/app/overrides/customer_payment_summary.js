@@ -50,6 +50,24 @@ patch(PaymentScreen.prototype, {
     changePaymentInvoiceSplitCount(event) {
         event.target.value = String(setInvoiceSplitCount(this.currentOrder, event.target.value));
     },
+    get showPaymentTerm() {
+        return this.currentOrder.payment_ids.some((line) =>
+            line.payment_method_id.type === "pay_later" && line.amount > 0);
+    },
+    get paymentTermOptions() {
+        return this.pos.models["account.payment.term"].getAll();
+    },
+    get defaultPaymentTerm() {
+        const partnerTerm = this.currentOrder.getPartner()?.property_payment_term_id;
+        const configTerm = this.pos.config.ppd_payment_term_id;
+        const options = this.paymentTermOptions;
+        return options.find((term) => term.id === partnerTerm?.id) ||
+            options.find((term) => term.id === configTerm?.id);
+    },
+    changePaymentTerm(event) {
+        const term = this.pos.models["account.payment.term"].get(Number(event.target.value));
+        this.currentOrder.update({ pos_payment_term_id: term || false });
+    },
     formatMarginPercent(percent) {
         return formatFloat(percent, { digits: [16, 2] });
     },

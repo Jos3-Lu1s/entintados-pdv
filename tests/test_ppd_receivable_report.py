@@ -158,7 +158,7 @@ class TestPpdReceivableReport(AccountTestInvoicingCommon):
     def test_customer_download_wizard_filters_and_historical_balance(self):
         invoice = self._invoice(1000)
         self._invoice(200, policy='PUE')
-        self.partner_b.is_credit = True
+        self.partner_b.write({'is_credit': True, 'credit_limit': 5000})
         self._invoice(700, partner=self.partner_b)
         credit = self._invoice(250, move_type='out_refund')
         credit.button_draft()

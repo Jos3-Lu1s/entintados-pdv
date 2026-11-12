@@ -8,9 +8,18 @@ const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_sale_quo
 
 function fixture(fail = false) {
     class ControlButtons {}
-    class PosStore {}
-    vm.runInNewContext(source, { ControlButtons, PosStore, useService() {}, ask: async () => true,
-        _t: (text) => text, patch: (target, extension) => Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension)) });
+    class NativePosStore {
+        pay() {
+            assert.ok(this.getOrder().lines.some((line) => line.refunded_orderline_id));
+            return 'payment';
+        }
+    }
+    class PosStore extends NativePosStore {}
+    vm.runInNewContext(source, { ControlButtons, PosStore, PosOrder: class {}, PaymentScreen: class {}, useService() {}, ask: async () => true,
+        _t: (text) => text, patch: (target, extension) => {
+            Object.setPrototypeOf(extension, Object.getPrototypeOf(target));
+            Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
+        } });
     const calls = [];
     const order = { id: 'local', uuid: 'ticket', state: 'draft', payment_ids: [],
         getPartner: () => ({ id: 1 }), lines: [{ uuid: 'line', product_id: { id: 2 }, qty: 1, price_unit: 100, discount: 0 }],
@@ -27,8 +36,24 @@ function fixture(fail = false) {
             } },
             removePendingOrder() { calls.push('removePending'); }, removeOrder() { calls.push('remove'); },
             navigate() {}, addNewOrder() {} } });
-    return { button, calls };
+    return { button, calls, PosStore };
 }
+
+test('loads missing original lines before the native refund payment validation', async () => {
+    const { PosStore } = fixture();
+    const store = new PosStore();
+    const order = { id: 10, uuid: 'refund', isRefund: true, lines: [{}] };
+    const calls = [];
+    store.getOrder = () => order;
+    store.data = { async callRelated(model, method) {
+        calls.push(method);
+        if (method === 'read_pos_data_uuid') {
+            order.lines[0].refunded_orderline_id = { id: 9 };
+        }
+    } };
+    assert.equal(await store.pay(), 'payment');
+    assert.deepEqual(calls, ['read_refund_origin_for_payment', 'read_pos_data_uuid']);
+});
 
 test('creates quotation using one atomic RPC before removing the ticket', async () => {
     const { button, calls } = fixture();

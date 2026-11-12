@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="vendor_payment_group_company_rule" model="ir.rule">
+        <field name="name">Pagos agrupados por compañías permitidas</field>
+        <field name="model_id" ref="model_vendor_payment_group"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="vendor_payment_group_line_company_rule" model="ir.rule">
+        <field name="name">Facturas de pagos agrupados por compañías permitidas</field>
+        <field name="model_id" ref="model_vendor_payment_group_line"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="vendor_payment_group_view_list" model="ir.ui.view">
+        <field name="name">vendor.payment.group.list</field>
+        <field name="model">vendor.payment.group</field>
+        <field name="arch" type="xml">
+            <list>
+                <header>
+                    <button name="action_print_payment_group" type="object" string="PDF de selección"/>
+                    <button name="action_export_payment_group" type="object" string="Excel de selección"/>
+                    <button name="action_print_payment_group" type="object" string="PDF de todos" display="always"
+                            context="{'all_payment_groups': True}"/>
+                    <button name="action_export_payment_group" type="object" string="Excel de todos" display="always"
+                            context="{'all_payment_groups': True}"/>
+                </header>
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="currency_id"/>
+                <field name="invoice_count"/>
+                <field name="payment_count"/>
+                <field name="state" widget="badge" decoration-success="state == 'registered'"/>
+                <button name="action_print_payment_group" type="object" string="PDF" invisible="state != 'registered'"/>
+                <button name="action_export_payment_group" type="object" string="Excel" invisible="state != 'registered'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="vendor_payment_group_view_form" model="ir.ui.view">
+        <field name="name">vendor.payment.group.form</field>
+        <field name="model">vendor.payment.group</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_print_payment_group" type="object" string="PDF" invisible="state != 'registered'"/>
+                    <button name="action_export_payment_group" type="object" string="Excel" invisible="state != 'registered'"/>
+                    <button name="action_open_payment_wizard" type="object" string="Pagar"
+                            class="btn-primary" invisible="state != 'draft' or not invoice_count"/>
+                    <button name="action_refresh_invoices" type="object" string="Actualizar facturas"
+                            invisible="state != 'draft'"/>
+                    <field name="has_pending_balance" invisible="1"/>
+                    <button name="action_prepare_followup_payment" type="object" string="Preparar otro abono"
+                            class="btn-primary" invisible="not has_pending_balance"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_invoices" type="object" class="oe_stat_button"
+                                icon="fa-file-text-o" invisible="not invoice_count">
+                            <field name="invoice_count" widget="statinfo"/>
+                        </button>
+                        <button name="action_view_payments" type="object" class="oe_stat_button"
+                                icon="fa-money" invisible="not payment_count">
+                            <field name="payment_count" widget="statinfo"/>
+                        </button>
+                    </div>
+                    <div class="oe_title mb-4">
+                        <div class="text-muted mb-1">PAGO AGRUPADO DE PROVEEDOR</div>
+                        <h1><field name="name" placeholder="Nuevo"/></h1>
+                        <p class="text-muted">Consulta las facturas y los pagos de esta agrupación.</p>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="company_id" invisible="1"/>
+                            <field name="country_code" invisible="1"/>
+                            <field name="currency_id" readonly="state != 'draft' or previous_group_id" options="{'no_create': True}"/>
+                            <field name="payment_method_line_id" readonly="state != 'draft'" required="state == 'draft'"
+                                   invisible="state == 'registered' and not payment_method_line_id"
+                                   placeholder="Selecciona una forma de pago"
+                                   domain="[('payment_type', '=', 'outbound'), ('journal_id.company_id', '=', company_id),
+                                            ('journal_id.type', 'in', ['bank', 'cash', 'credit']),
+                                            ('journal_id.currency_id', 'in', [False, currency_id])]"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                        </group>
+                        <group string="Datos del pago">
+                            <field name="previous_group_id" invisible="not previous_group_id"/>
+                            <field name="payment_date" readonly="state != 'draft'" required="state == 'draft'"/>
+                            <field name="amount_total" class="fw-bold" invisible="state != 'draft'"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="status" invisible="state != 'draft'">
+                        <i class="fa fa-info-circle me-1" aria-hidden="true"/>
+                        Selecciona las facturas y pulsa Pagar para revisar los montos en el asistente.
+                        Si haces un abono, el resto quedará como saldo pendiente.
+                    </div>
+                    <div class="alert alert-success" role="status" invisible="state != 'registered'">
+                        <i class="fa fa-check-circle me-1" aria-hidden="true"/>
+                        Los pagos se registraron y se aplicaron a las facturas seleccionadas.
+                        <span invisible="not has_pending_balance">Puedes preparar otro abono para las facturas con saldo pendiente.</span>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-4 mb-3">
+                        <div>
+                            <h3 class="mb-1">Facturas de proveedores</h3>
+                            <span class="text-muted" invisible="state != 'draft'">Facturas pendientes o con pago parcial.</span>
+                            <span class="text-muted" invisible="state != 'registered'">Facturas incluidas y su saldo pendiente actual.</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2" invisible="state != 'draft' or not line_ids">
+                            <button name="action_select_all" type="object" string="Seleccionar todas"
+                                    class="btn btn-secondary" icon="fa-check-square-o"/>
+                            <button name="action_deselect_all" type="object" string="Deseleccionar todas"
+                                    class="btn btn-secondary" icon="fa-square-o"/>
+                        </div>
+                    </div>
+                    <field name="line_ids" readonly="state != 'draft'">
+                        <list editable="bottom" create="0" delete="0" decoration-muted="not selected">
+                            <field name="selected"/>
+                            <field name="invoice_id" readonly="1" force_save="1"/>
+                            <field name="partner_id"/>
+                            <field name="invoice_date"/>
+                            <field name="due_date"/>
+                            <field name="currency_id" column_invisible="True"/>
+                            <field name="amount_to_pay" readonly="not selected" force_save="1"/>
+                            <field name="payment_method_line_id" readonly="1" column_invisible="parent.state == 'draft'"/>
+                            <field name="sat_payment_method_id" readonly="not selected"
+                                   column_invisible="parent.country_code != 'MX'"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="amount_residual"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="vendor_payment_group_action" model="ir.actions.act_window">
+        <field name="name">Pagos agrupados</field>
+        <field name="res_model">vendor.payment.group</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

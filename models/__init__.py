@@ -10,6 +10,7 @@ from . import tint_base_capacity
 from . import product_template
 from . import product_product
 from . import tint_gallery
+from . import tint_category
 from . import tint_color
 from . import tint_color_formula
 from . import tint_color_formula_line
@@ -48,6 +49,8 @@ from . import vendor_credit_wizard
 from . import vendor_credit_reason
 from . import vendor_credit_material
 from . import account_payment_register
+from . import vendor_payment_group
+from . import vendor_monthly_payment_report
 from . import account_move
 from . import advance_accounting
 from . import advance_pos
@@ -86,4 +89,5 @@ from . import sale_credit
 from . import mat_report
 from . import sale_quotation_report
 from . import sale_auto_invoice
+from . import pos_reinvoice
 from . import ppd_receivable_report

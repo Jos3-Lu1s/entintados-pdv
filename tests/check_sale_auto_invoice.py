@@ -98,6 +98,22 @@ class SaleAutoInvoice(TestSaleCredit):
         self.assertFalse(order.invoice_ids)
         self.assertEqual(order.invoice_status, 'to invoice')
 
+    def test_reinvoice_requires_cancellation_and_prepares_one_draft(self):
+        order = self.order()
+        original = order.with_context(sale_auto_invoice_checkout=True)._create_invoices()
+        self.assertFalse(order.can_prepare_reinvoice)
+        with self.assertRaises(UserError):
+            order.action_prepare_reinvoice()
+        original.button_cancel()
+        self.assertTrue(order.can_prepare_reinvoice)
+        order.action_prepare_reinvoice()
+        replacement = order.invoice_ids - original
+        self.assertEqual(replacement.state, 'draft')
+        self.assertFalse(replacement.reconciled_payment_ids)
+        with self.assertRaises(UserError):
+            order.action_prepare_reinvoice()
+        self.assertEqual(order.invoice_ids - original, replacement)
+
     def test_native_regular_wizard_and_form_buttons(self):
         order = self.order()
         wizard = self.env['sale.advance.payment.inv'].create({'sale_order_ids':[Command.set(order.ids)],
@@ -127,7 +143,8 @@ class SaleAutoInvoice(TestSaleCredit):
 
 names = ['test_cash_paid_normal_and_retry_no_duplicate', 'test_ppd_posted_unpaid_and_approval_preserved',
          'test_fiscal_commit_is_disabled_only_for_checkout',
-         'test_invalid_cash_configuration_rolls_back_invoice', 'test_native_regular_wizard_and_form_buttons',
+         'test_invalid_cash_configuration_rolls_back_invoice', 'test_reinvoice_requires_cancellation_and_prepares_one_draft',
+         'test_native_regular_wizard_and_form_buttons',
          'test_sales_native_down_payment_stays_pue_on_credit_order']
 result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(SaleAutoInvoice(name) for name in names))
 raise SystemExit(0 if result.wasSuccessful() else 1)

@@ -81,3 +81,8 @@ class PosOrder(models.Model):
         if not self.picking_ids:
             self._check_pos_stock()
         return super().action_pos_order_paid()
+
+    def _process_saved_order(self, draft):
+        if not draft and not self.picking_ids:
+            self._check_pos_stock()
+        return super()._process_saved_order(draft)

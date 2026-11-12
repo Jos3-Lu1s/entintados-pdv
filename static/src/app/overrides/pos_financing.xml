@@ -15,6 +15,29 @@
                 <strong>Recibir anticipo del cliente</strong>
                 <div>El dinero cobrado quedará como saldo a su favor para próximas compras.</div>
             </div>
+            <t t-set="cashRequest" t-value="cashApproval"/>
+            <div t-if="cashRequest" class="alert mb-0 mt-2" role="status"
+                 t-att-class="cashApprovalAmountChanged ? 'alert-warning' : (cashRequest.state === 'approved' ? 'alert-success' : (cashRequest.state === 'refused' ? 'alert-danger' : 'alert-warning'))">
+                <t t-if="cashApprovalAmountChanged">
+                    El importe de la venta de contado cambió. Pulsa <strong>Validar</strong> para actualizar la solicitud
+                    <strong t-esc="cashRequest.name"/>.
+                </t>
+                <t t-elif="cashRequest.state === 'approved'">
+                    <strong>Aprobada</strong> · Autorización de contado <span t-esc="cashRequest.name"/>. Pulsa <strong>Validar</strong> para continuar.
+                </t>
+                <t t-elif="cashRequest.state === 'refused'">
+                    <strong>Rechazada</strong> · Autorización de contado <span t-esc="cashRequest.name"/>. Pulsa <strong>Validar</strong> para solicitarla de nuevo.
+                </t>
+                <t t-else="">
+                    El cliente <strong t-esc="currentOrder.getPartner()?.name || currentOrder.getPartner()?.display_name || ''"/>
+                    requiere autorización para el pago de contado por saldo vencido o límite de crédito excedido.
+                    La solicitud <strong t-esc="cashRequest.name"/> por
+                    <strong t-esc="env.utils.formatCurrency(cashRequest.total_amount)"/> está pendiente.
+                    <div>
+                        <button type="button" class="btn btn-secondary mt-2" t-on-click="() => this.restoreCreditApproval()">Revisar autorización</button>
+                    </div>
+                </t>
+            </div>
             <div class="d-flex flex-column gap-2 mt-2" t-if="canOfferDeferredPayment">
                 <t t-set="creditApproval" t-value="currentOrder.uiState.creditApproval"/>
                 <t t-set="creditApproved" t-value="creditApproval and !creditApprovalAmountsChanged and ['approved', 'used'].includes(creditApproval.state)"/>
@@ -38,7 +61,7 @@
                                 a <strong t-esc="env.utils.formatCurrency(creditApproval.credit_amount)"/>.
                             </div>
                             El cliente <strong t-esc="currentOrder.getPartner()?.name || currentOrder.getPartner()?.display_name || ''"/>
-                            excede el límite de crédito permitido. El departamento correspondiente debe autorizar la solicitud
+                            requiere autorización por saldo vencido o riesgo de crédito. El departamento correspondiente debe autorizar la solicitud
                             <strong t-esc="creditApproval.name"/> con un monto de
                             <strong t-esc="env.utils.formatCurrency(creditApproval.credit_amount)"/>.
                         </t>

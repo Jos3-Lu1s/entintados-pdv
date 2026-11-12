@@ -21,6 +21,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="pos_payment_flow" readonly="1"/>
+                <field name="pos_payment_term_id" readonly="1" invisible="not pos_payment_term_id"/>
             </xpath>
         </field>
     </record>

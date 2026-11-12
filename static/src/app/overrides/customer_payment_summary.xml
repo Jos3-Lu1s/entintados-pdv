@@ -42,8 +42,8 @@
                 <footer class="p-3 border-top">
                     <small class="text-muted">Precios e importes de productos antes de impuestos.</small>
                     <div t-if="showPaymentInvoiceOptions" class="o-customer-invoice-options table-responsive mt-2 mb-3">
-                        <table class="table table-sm table-bordered mb-0 align-middle" aria-label="Datos de facturación">
-                            <thead><tr><th><label for="payment_invoice_usage">Uso</label></th><th><label for="payment_invoice_public">Público en general</label></th><th><label for="payment_invoice_count">Número de facturas</label></th></tr></thead>
+                        <table class="table table-sm table-bordered mb-0 align-middle" t-att-class="{'o-has-payment-term': showPaymentTerm}" aria-label="Datos de facturación">
+                            <thead><tr><th><label for="payment_invoice_usage">Uso</label></th><th><label for="payment_invoice_public">Público en general</label></th><th><label for="payment_invoice_count">Número de facturas</label></th><th t-if="showPaymentTerm"><label for="payment_invoice_term">Términos de pago</label></th></tr></thead>
                             <tbody><tr>
                                 <td><select id="payment_invoice_usage" class="form-select form-select-sm" t-on-change="changePaymentInvoiceUsage">
                                     <option t-foreach="pos.config._l10n_mx_edi_usage || []" t-as="usage" t-key="usage.value"
@@ -56,13 +56,22 @@
                                 <td><input id="payment_invoice_count" type="number" min="1" step="1"
                                            class="form-control form-control-sm" t-att-value="paymentInvoiceSplitCount"
                                            t-att-disabled="!canSplitPaymentInvoice" t-on-change="changePaymentInvoiceSplitCount"/></td>
+                                <td t-if="showPaymentTerm">
+                                    <select id="payment_invoice_term" class="form-select form-select-sm" t-on-change="changePaymentTerm">
+                                        <option value="" t-att-selected="!currentOrder.pos_payment_term_id">
+                                            <t t-esc="defaultPaymentTerm?.name || 'Plazo predeterminado'"/>
+                                        </option>
+                                        <option t-foreach="paymentTermOptions" t-as="term" t-key="term.id" t-att-value="term.id"
+                                                t-att-selected="term.id === currentOrder.pos_payment_term_id?.id" t-esc="term.name"/>
+                                    </select>
+                                </td>
                             </tr></tbody>
                         </table>
                     </div>
                     <dl class="o-customer-price-breakdown mb-0 mt-2">
                         <dt>Importe antes de descuentos</dt><dd t-esc="env.utils.formatCurrency(summary.gross)"/>
-                        <dt>Descuentos</dt><dd t-esc="env.utils.formatCurrency(-summary.discounts)"/>
-                        <dt>Promociones</dt><dd t-esc="env.utils.formatCurrency(-summary.promotions)"/>
+                        <dt>Descuentos <small t-if="summary.discountRates" class="text-muted">(<t t-esc="summary.discountRates"/> por producto)</small></dt><dd t-esc="env.utils.formatCurrency(-summary.discounts)"/>
+                        <dt>Promociones <small t-if="summary.promotionRates" class="text-muted">(<t t-esc="summary.promotionRates"/> por producto)</small></dt><dd t-esc="env.utils.formatCurrency(-summary.promotions)"/>
                         <dt>Subtotal</dt><dd t-esc="env.utils.formatCurrency(summary.subtotal)"/>
                         <t t-foreach="summary.taxes" t-as="tax" t-key="tax_index">
                             <dt t-esc="tax.name"/><dd t-esc="env.utils.formatCurrency(tax.amount)"/>

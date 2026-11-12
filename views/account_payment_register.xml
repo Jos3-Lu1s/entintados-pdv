@@ -5,19 +5,65 @@
         <field name="name">account.payment.register.form.discount</field>
         <field name="model">account.payment.register</field>
         <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+        <field name="priority">90</field>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <field name="distributed_notes" invisible="1"/>
+                <field name="vendor_percentage_editable" invisible="1"/>
+            </xpath>
+            <xpath expr="//footer" position="before">
+                <field name="vendor_allocation_available" invisible="1"/>
+                <field name="vendor_payment_group_id" invisible="1"/>
+                <group invisible="vendor_payment_group_id or (not vendor_allocation_available and not vendor_allocate)">
+                    <field name="vendor_allocate"/>
+                </group>
+                <div invisible="not vendor_allocate">
+                    <h4>Facturas seleccionadas</h4>
+                    <p class="text-muted" invisible="vendor_payment_group_id">Indica cuánto aplicar a cada factura. Odoo registra un pago por cada monto asignado.</p>
+                    <p class="text-muted" invisible="not vendor_payment_group_id">Con Agrupar pagos, las liquidaciones compatibles se reúnen por proveedor y forma de pago. Los abonos parciales se aplican por factura.</p>
+                    <field name="vendor_allocation_ids" nolabel="1" force_save="1">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="currency_id" column_invisible="True"/>
+                            <field name="invoice_id" force_save="1"/>
+                            <field name="partner_id"/>
+                            <field name="balance"/>
+                            <field name="amount"/>
+                            <field name="sat_payment_method_id"
+                                   column_invisible="not parent.vendor_payment_group_id or parent.country_code != 'MX'"
+                                   required="amount &gt; 0" options="{'no_create': True, 'no_open': True}"/>
+                        </list>
+                    </field>
+                    <group>
+                        <field name="vendor_allocated_amount"/>
+                    </group>
+                    <div class="alert alert-warning" role="status" invisible="vendor_allocated_amount &lt;= amount">
+                        El total asignado supera el importe del encabezado.
+                    </div>
+                </div>
             </xpath>
             <xpath expr="//div[@name='amount_div']/field[@name='amount']" position="after">
-                <span class="d-inline-flex align-items-center gap-1 text-nowrap" invisible="not distributed_notes">
-                    <field name="payment_percentage" widget="percentage" readonly="1" nolabel="1" class="oe_inline"/>
+                <span class="d-inline-flex align-items-center gap-1 text-nowrap" invisible="not vendor_percentage_editable">
+                    <field name="payment_percentage" widget="percentage"
+                           readonly="not vendor_percentage_editable or (not vendor_allocate and (not can_edit_wizard or (can_group_payments and not group_payment)))"
+                           nolabel="1" class="oe_inline"/>
                 </span>
+            </xpath>
+            <xpath expr="//div[@name='amount_div']/field[@name='amount']" position="attributes">
+                <attribute name="readonly">not vendor_allocate and (not can_edit_wizard or can_group_payments and not group_payment)</attribute>
+            </xpath>
+            <xpath expr="//field[@name='journal_id']" position="attributes">
+                <attribute name="readonly" add="vendor_payment_group_id" separator=" or "/>
+            </xpath>
+            <xpath expr="//field[@name='l10n_mx_edi_payment_method_id']" position="attributes">
+                <attribute name="invisible" add="vendor_payment_group_id" separator=" or "/>
+                <attribute name="required">country_code == 'MX' and not vendor_payment_group_id</attribute>
+            </xpath>
+            <xpath expr="//field[@name='payment_method_line_id']" position="attributes">
+                <attribute name="readonly" add="vendor_payment_group_id" separator=" or "/>
             </xpath>
             <xpath expr="//field[@name='payment_difference_handling']/preceding-sibling::field[@name='payment_difference']" position="replace">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <field name="payment_difference"/>
-                    <span class="d-inline-flex align-items-center gap-1 text-nowrap" invisible="not distributed_notes">
+                    <span class="d-inline-flex align-items-center gap-1 text-nowrap" invisible="not vendor_percentage_editable">
                         <field name="discount_percentage" widget="percentage" readonly="1" nolabel="1" class="oe_inline"/>
                     </span>
                 </div>

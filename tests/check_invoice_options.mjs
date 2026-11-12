@@ -28,7 +28,7 @@ assert.equal(saved.uiState.invoice_split_count, 4);
 assert.equal(saved.invoice_split_count, 4);
 for (const values of [
     { pos_payment_flow: "credit" }, { pos_payment_flow: "ppd_partial" },
-    { l10n_mx_edi_payment_policy: "PPD" }, { uiState: { creditInvoiceSetup: true } },
+    { l10n_mx_edi_payment_policy: "PPD" },
     { payment_ids: [{ amount: 10, payment_method_id: { type: "pay_later" } }] },
 ]) {
     const credit = makeOrder(values);

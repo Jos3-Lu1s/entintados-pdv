@@ -3,14 +3,18 @@ export function customerSummary(order, showMargins = false) {
     const lines = order.lines || [];
     let discounts = 0;
     let promotions = 0;
+    const discountRates = new Set();
+    const promotionRates = new Set();
     for (const line of lines) {
         const saving = line.priceExclNoDiscount - line.priceExcl;
         if (line.is_reward_line && line.priceExcl < 0) {
             promotions -= line.priceExcl;
         } else if (line.pricing_rule_type === "promo") {
             promotions += saving;
+            if (saving > 0 && line.discount > 0) promotionRates.add(line.discount);
         } else {
             discounts += saving;
+            if (saving > 0 && line.discount > 0) discountRates.add(line.discount);
         }
     }
     const rows = lines.filter((line) => !line.combo_parent_id &&
@@ -40,6 +44,8 @@ export function customerSummary(order, showMargins = false) {
         })));
     return {
         rows, discounts, promotions, taxes, showMargins,
+        discountRates: Array.from(discountRates, (rate) => `${rate}%`).join(", "),
+        promotionRates: Array.from(promotionRates, (rate) => `${rate}%`).join(", "),
         gross: order.priceExcl + discounts + promotions,
         subtotal: order.priceExcl,
         tax: order.amountTaxes,

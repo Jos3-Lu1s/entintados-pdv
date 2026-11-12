@@ -8,6 +8,7 @@
             <list string="Fórmulas" decoration-danger="not fits">
                 <field name="color_id" />
                 <field name="gallery_id" />
+                <field name="tint_category_id" optional="show" />
                 <field name="base_type_id" />
                 <field name="size_id" />
                 <field name="total_points" sum="Total puntos" />
@@ -46,6 +47,7 @@
                         <group string="Combinación">
                             <field name="color_id" options="{'no_create': True}" />
                             <field name="gallery_id" readonly="1" />
+                            <field name="tint_category_id" options="{'no_create': True}" />
                             <field
                                 name="base_type_id"
                                 options="{'no_create': True}"
@@ -154,6 +156,7 @@
         <field name="model">tint.color.formula</field>
         <field name="arch" type="xml">
             <search string="Buscar fórmula">
+                <field name="tint_category_id" />
                 <field name="color_id" />
                 <field name="gallery_id" />
                 <field name="base_type_id" />

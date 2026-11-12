@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="paperformat_vendor_payment_group" model="report.paperformat">
+        <field name="name">Pagos agrupados horizontal</field>
+        <field name="format">A4</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_left">8</field>
+        <field name="margin_right">8</field>
+        <field name="margin_top">10</field>
+        <field name="margin_bottom">10</field>
+    </record>
+    <record id="action_report_vendor_payment_group" model="ir.actions.report">
+        <field name="name">Pago agrupado</field>
+        <field name="model">vendor.payment.group</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.vendor_payment_group_report</field>
+        <field name="paperformat_id" ref="paperformat_vendor_payment_group"/>
+        <field name="print_report_name">object.name</field>
+    </record>
+    <template id="vendor_payment_group_report">
+        <t t-call="web.html_container">
+            <div class="article">
+              <div class="page" style="font-family: Arial, sans-serif; font-size: 10px;">
+                <style>
+                    .vendor-payment-report { width: 100%; table-layout: fixed; border-collapse: collapse; }
+                    .vendor-payment-report thead { display: table-header-group; }
+                    .vendor-payment-report tr { page-break-inside: avoid; }
+                    .vendor-payment-report th, .vendor-payment-report td {
+                        padding: 4px 3px; border-bottom: 1px solid #ddd;
+                        text-align: left; vertical-align: top; white-space: normal; word-wrap: break-word;
+                    }
+                    .vendor-payment-report th { background-color: #e3edf6; }
+                    .vendor-payment-report .amount { text-align: right; }
+                    .vendor-payment-report .group-heading td {
+                        background-color: #edf3f8; border-top: 8px solid white;
+                        padding: 7px 6px; color: #16324f;
+                    }
+                    .vendor-payment-report .group-heading strong { font-size: 12px; }
+                    .vendor-payment-report .payment-row td { background-color: #f5f8fb; }
+                    .vendor-payment-report .group-heading { page-break-after: avoid; }
+                </style>
+                <h2>Reporte de pagos agrupados</h2>
+                <table class="vendor-payment-report">
+                    <colgroup>
+                        <col style="width: 8%"/><col style="width: 17%"/><col style="width: 21%"/>
+                        <col style="width: 9%"/><col style="width: 10%"/><col style="width: 14%"/>
+                        <col style="width: 5%"/><col style="width: 8%"/><col style="width: 8%"/>
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th t-foreach="docs._payment_group_report_headers()[3:]" t-as="header">
+                                <span t-out="header"/>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody t-foreach="docs" t-as="group">
+                        <tr class="group-heading">
+                            <td colspan="7">
+                                <strong t-field="group.name"/>
+                                <span> · </span><span t-field="group.company_id.name"/>
+                                <span> · </span><span t-field="group.state"/>
+                                <t t-if="group.payment_date"><span> · </span><span t-field="group.payment_date"/></t>
+                            </td>
+                            <td class="amount" colspan="2">
+                                <strong>Total registrado</strong><br/>
+                                <span t-out="sum(group.payment_ids.mapped('amount'))"
+                                      t-options="{'widget': 'monetary', 'display_currency': group.currency_id}"/>
+                            </td>
+                        </tr>
+                        <tr t-foreach="list(group._payment_group_report_rows())[1:]" t-as="row"
+                            t-att-class="'payment-row' if row[11] is None else ''">
+                            <td t-foreach="row[3:10]" t-as="value"><span t-out="value or ''"/></td>
+                            <td class="amount"><span t-out="'{:,.2f}'.format(row[10])"/></td>
+                            <td class="amount"><span t-if="row[11] is not None" t-out="'{:,.2f}'.format(row[11])"/></td>
+                        </tr>
+                    </tbody>
+                </table>
+              </div>
+            </div>
+        </t>
+    </template>
+</odoo>

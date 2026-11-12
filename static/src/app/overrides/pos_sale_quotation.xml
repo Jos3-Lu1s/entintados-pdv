@@ -7,6 +7,9 @@
             <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="() => this.onClickCreateSaleQuotation()">
                 <i class="fa fa-file-text-o me-1"/>Crear cotización
             </button>
+            <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="onClickReinvoiceSaleOrder">
+                <i class="fa fa-repeat me-1"/>Refacturar venta
+            </button>
         </xpath>
         <xpath expr="//SelectPartnerButton" position="after">
             <button t-if="!props.showRemainingButtons and printableSaleQuotations.length"
@@ -14,6 +17,12 @@
                     t-on-click="onClickPrintSaleQuotation">
                 <i class="fa fa-print" aria-label="Imprimir cotización"/>
             </button>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.CancelReinvoiceRefund" t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('payment-buttons')]" position="inside">
+            <button t-if="canCancelReinvoiceRefund" class="btn btn-outline-danger w-100 mt-2"
+                    t-on-click="cancelReinvoiceRefund">Deshacer refacturación</button>
         </xpath>
     </t>
 </templates>

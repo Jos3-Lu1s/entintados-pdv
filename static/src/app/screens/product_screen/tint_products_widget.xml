@@ -95,7 +95,6 @@
                         <tr t-foreach="filteredList" t-as="product" t-key="product.id"
                             class="o-tint-row-tr"
                             t-att-class="isProductOutOfStock(product) ? 'opacity-50' : ''"
-                            t-att-aria-disabled="isProductOutOfStock(product) ? 'true' : 'false'"
                             t-att-title="isProductOutOfStock(product) ? 'Sin existencias disponibles' : ''"
                             t-on-click="() => this.addProductToOrder(product)">
                             <td class="py-2 text-nowrap">

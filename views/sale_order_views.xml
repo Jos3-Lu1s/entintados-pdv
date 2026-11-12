@@ -32,11 +32,19 @@
             <xpath expr="//button[@id='create_invoice']" position="attributes">
                 <attribute name="name">action_generate_validated_invoice</attribute>
                 <attribute name="type">object</attribute>
+                <attribute name="invisible" add="can_prepare_reinvoice" separator=" or "/>
             </xpath>
             <xpath expr="//button[@id='create_invoice_percentage']" position="attributes">
                 <attribute name="name">action_generate_validated_invoice</attribute>
                 <attribute name="type">object</attribute>
                 <attribute name="context">{}</attribute>
+                <attribute name="invisible" add="can_prepare_reinvoice" separator=" or "/>
+            </xpath>
+            <xpath expr="//button[@id='create_invoice']" position="after">
+                <field name="can_prepare_reinvoice" invisible="1"/>
+                <button name="action_prepare_reinvoice" type="object" string="Preparar nueva factura"
+                        class="oe_highlight" invisible="not can_prepare_reinvoice"
+                        confirm="Se creará una factura en borrador para revisar los cambios de la orden."/>
             </xpath>
             <xpath expr="//div[hasclass('oe_title')]" position="attributes">
                 <attribute name="class" add="w-100" separator=" "/>
@@ -223,17 +231,47 @@
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="attributes">
                 <attribute name="readonly">not manual_discount_allowed or parent.discount_edit_locked</attribute>
+                <attribute name="string">Desc. %</attribute>
+                <attribute name="width">75px</attribute>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="before">
+                <field name="sale_amount_before_discount" optional="hide"/>
                 <field name="manual_discount_allowed" column_invisible="True"/>
                 <field name="technical_discount" column_invisible="True"/>
             </xpath>
             <xpath expr="//list/field[@name='discount']" position="after">
-                <field name="discount_amount" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
+                <field name="discount_amount" string="Desc. importe" readonly="1" optional="show" groups="sale.group_discount_per_so_line"/>
                 <field name="pricing_rule_type" column_invisible="True"/>
                 <field name="pricing_rule_id" column_invisible="True"/>
-                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="show" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'manual'" decoration-primary="pricing_rule_type == 'promo'"/>
+                <field name="pricing_rule_origin" string="Origen Acuerdo" readonly="1" force_save="1" optional="hide" widget="badge" decoration-success="pricing_rule_type == 'fixed_price'" decoration-info="pricing_rule_type in ('product', 'line', 'scheme', 'global')" decoration-warning="pricing_rule_type == 'manual'" decoration-primary="pricing_rule_type == 'promo'"/>
                 <field name="promo_available_info" string=" " widget="promo_hint" readonly="1" nolabel="1" width="32px"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='tax_ids']" position="after">
+                <field name="sale_tax_amount_detail" string="Impuesto importe" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="attributes">
+                <attribute name="string">Descripción</attribute>
+                <attribute name="width">220px</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_subtotal'][1]" position="attributes">
+                <attribute name="string">Subtotal</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_subtotal'][2]" position="attributes">
+                <attribute name="string">Subtotal</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_total'][1]" position="before">
+                <xpath expr="//field[@name='order_line']/list/field[@name='price_subtotal'][2]" position="move"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_total'][2]" position="attributes">
+                <attribute name="string">Total</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='price_total'][1]" position="attributes">
+                <attribute name="string">Total</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/form//field[@name='tax_ids']" position="after">
+                <field name="sale_tax_amount_detail" invisible="not sale_tax_amount_detail"/>
             </xpath>
         </field>
     </record>

@@ -1,5 +1,5 @@
 export function canSplitInvoice(order) {
-    return !!order && !order.uiState?.creditInvoiceSetup && !["credit", "ppd_partial"].includes(order.pos_payment_flow) &&
+    return !!order && !["credit", "ppd_partial"].includes(order.pos_payment_flow) &&
         order.l10n_mx_edi_payment_policy !== "PPD" &&
         !order.payment_ids?.some((line) => line.amount > 0 && line.payment_method_id?.type === "pay_later");
 }
