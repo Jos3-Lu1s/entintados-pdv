@@ -121,28 +121,18 @@ class ProductStockLookup(models.TransientModel):
             color = self.sale_order_id._tint_color_description(recipe)
             if color not in components[self.product_id]['colors']:
                 components[self.product_id]['colors'].append(color)
-            if recipe.get('base_only') or not line.tint_section_id:
-                pending = max(line.product_uom_qty - line.qty_delivered, 0)
-                for dose in recipe.get('doses', []):
-                    product = self.env['product.product'].browse(dose['product_id']).exists()
-                    if not product:
-                        raise UserError(_('No se encontró un colorante de la receta guardada.'))
-                    add(product, point._compute_quantity(dose['points'] * pending, product.uom_id, round=False), color)
-            else:
-                # Historical orders keep actual colorant sale lines; use their remaining quantities.
-                for component in self.sale_order_id.order_line.filtered(
-                        lambda item: item.tint_section_id == line.tint_section_id and item.product_id
-                        and item.product_id != self.product_id):
-                    add(component.product_id, component.product_uom_id._compute_quantity(
-                        max(component.product_uom_qty - component.qty_delivered, 0),
-                        component.product_id.uom_id, round=False), color)
+            pending = max(line.product_uom_qty - line.qty_delivered, 0)
+            for dose in recipe.get('doses', []):
+                product = self.env['product.product'].browse(dose['product_id']).exists()
+                if not product:
+                    raise UserError(_('No se encontró un colorante de la receta guardada.'))
+                add(product, point._compute_quantity(dose['points'] * pending, product.uom_id, round=False), color)
         return True, components
 
     @api.depends('product_id', 'company_id', 'warehouse_id', 'sale_order_id', 'sale_line_id',
                  'sale_order_id.order_line.product_id', 'sale_order_id.order_line.product_uom_qty',
                  'sale_order_id.order_line.product_uom_id',
-                 'sale_order_id.order_line.qty_delivered', 'sale_order_id.order_line.tint_snapshot',
-                 'sale_order_id.order_line.tint_section_id.tint_snapshot')
+                 'sale_order_id.order_line.qty_delivered', 'sale_order_id.order_line.tint_snapshot')
     @api.depends_context('allowed_company_ids')
     def _compute_stock(self):
         for wizard in self:
@@ -243,7 +233,7 @@ class ProductStockLookupSaleLine(models.Model):
 
     @api.depends_context('stock_lookup_order_line')
     @api.depends('name', 'product_id', 'product_id.name', 'product_id.default_code',
-                 'tint_snapshot', 'tint_section_id.tint_snapshot', 'sequence', 'order_id.order_line')
+                 'tint_snapshot', 'sequence', 'order_id.order_line')
     def _compute_display_name(self):
         if not self.env.context.get('stock_lookup_order_line'):
             return super()._compute_display_name()

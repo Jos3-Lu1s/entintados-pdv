@@ -134,20 +134,11 @@ class TestSaleTint(TransactionCase):
         self.assertAlmostEqual(colorant.required_qty, 0.25)
         self.assertEqual(colorant.product_uom_id, self.colorant.uom_id)
 
-    def test_stock_lookup_historical_components_are_not_counted_twice(self):
-        order = self._order()
-        self._legacy_layout(order, quantity=2, with_colorant_lines=True)
-        wizard = self._stock_lookup(order, warehouse_id=order.warehouse_id.id)
-        self.assertEqual(len(wizard.line_ids), 2)
-        colorant = wizard.line_ids.filtered(lambda row: row.product_id == self.colorant)
-        self.assertEqual(colorant.required_qty, 24)
-
     def test_only_base_product_with_notes_and_full_price(self):
         order = self._order()
         line = order._apply_tint(self.formula, self.base, 2)
         self.assertEqual(order.order_line, line)
         self.assertFalse(line.display_type)
-        self.assertFalse(line.tint_section_id)
         self.assertEqual(line.product_id, self.base)
         self.assertEqual(line.price_unit, 224)
         self.assertEqual(line.price_subtotal, 448)
@@ -166,7 +157,6 @@ class TestSaleTint(TransactionCase):
                                                    'sequence': first.sequence + 1})
         second = order._apply_tint(self.formula, self.base, 2)
         self.assertFalse(order.order_line.filtered('display_type'))
-        self.assertFalse(order.order_line.filtered('tint_area'))
         self.assertEqual(order.order_line.sorted('sequence'), first | regular | second)
         self.assertEqual(order.amount_untaxed, 722)
 
@@ -187,8 +177,6 @@ class TestSaleTint(TransactionCase):
         self.assertEqual(line._tint_recipe()['doses'][0]['points'], 12)
         with self.assertRaises(ValidationError), self.cr.savepoint():
             line.product_uom_qty = 3
-        with self.assertRaises(ValidationError), self.cr.savepoint():
-            order._apply_tint(self.formula, self.base, 3, line)
 
     def test_loose_colorants_and_forged_recipe_blocked(self):
         order = self._order()
@@ -267,83 +255,6 @@ class TestSaleTint(TransactionCase):
             'order_id': order.id, 'formula_id': self.formula.id, 'base_id': self.base.id, 'quantity': 1}).action_apply()
         self.assertEqual(order.amount_untaxed, 224)
         self.assertEqual(len(order.order_line), 1)
-
-    def _legacy_layout(self, order, quantity=1, with_colorant_lines=False):
-        from ..models.sale_tint import _TINT_OPERATION
-        internal = {'_tint_operation': _TINT_OPERATION}
-        base_line = order._apply_tint(self.formula, self.base, quantity)
-        snapshot = dict(base_line.tint_snapshot)
-        snapshot['base_only'] = not with_colorant_lines
-        header = self.env['sale.order.line'].with_context(**internal).create({
-            'order_id': order.id, 'display_type': 'line_subsection', 'name': 'Entintado anterior',
-            'tint_snapshot': snapshot, 'tint_container_qty': quantity})
-        base_line.with_context(**internal).write({'tint_section_id': header.id,
-            'tint_snapshot': False, 'tint_container_qty': 0,
-            'price_unit': 200 if with_colorant_lines else 224,
-            'technical_price_unit': 200 if with_colorant_lines else 224})
-        if with_colorant_lines:
-            self.env['sale.order.line'].with_context(**internal).create({
-                'order_id': order.id, 'product_id': self.colorant.id, 'product_uom_qty': 12 * quantity,
-                'product_uom_id': self.point.id, 'price_unit': 2, 'tint_section_id': header.id})
-        return base_line, header
-
-    def test_upgrade_multiple_headers_preserves_base_ids_recipe_and_total(self):
-        from ..models.sale_tint import _TINT_OPERATION
-        order = self._order()
-        first, _h1 = self._legacy_layout(order, 1)
-        second, _h2 = self._legacy_layout(order, 2)
-        for area in ('tints', 'products'):
-            self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION).create({
-                'order_id': order.id, 'display_type': 'line_section', 'name': area, 'tint_area': area})
-        self.env['sale.order']._setup_sale_tint_layout()
-        self.env['sale.order']._setup_sale_tint_layout()
-        self.assertEqual(set(order.order_line.ids), set((first | second).ids))
-        self.assertFalse(order.order_line.filtered('display_type'))
-        self.assertFalse(order.order_line.filtered('tint_section_id'))
-        self.assertEqual(first._tint_recipe()['doses'][0]['points'], 12)
-        self.assertEqual(order.amount_untaxed, 672)
-
-    def test_upgrade_old_component_lines_into_flat_base(self):
-        order = self._order()
-        base_line, _header = self._legacy_layout(order, with_colorant_lines=True)
-        self.assertEqual(order.amount_untaxed, 224)
-        self.env['sale.order']._setup_sale_tint_layout()
-        self.assertEqual(order.order_line, base_line)
-        self.assertTrue(base_line.tint_snapshot['base_only'])
-        self.assertEqual(order.amount_untaxed, 224)
-        self.assertFalse(base_line.tint_section_id)
-
-    def test_upgrade_keeps_manually_created_sections(self):
-        order = self._order()
-        self._legacy_layout(order)
-        manual = self.env['sale.order.line'].create({'order_id': order.id, 'display_type': 'line_section',
-                                                    'name': 'Sección del usuario'})
-        self.env['sale.order']._setup_sale_tint_layout()
-        self.assertTrue(manual.exists())
-        self.assertEqual(order.order_line.filtered('display_type'), manual)
-
-    def test_description_upgrade_preserves_recipe_price_and_confirmed_documents(self):
-        from ..models.sale_tint import _TINT_OPERATION
-        order = self._order()
-        line = order._apply_tint(self.formula, self.base, 2)
-        line.with_context(_tint_operation=_TINT_OPERATION).write({'name': 'Entintado anterior\nFórmula por envase: 12 Pts.'})
-        snapshot = dict(line.tint_snapshot)
-        self.env['sale.order']._setup_sale_tint_layout()
-        self.assertEqual(line.name, self.base.display_name + '\n+ [%s] %s' % (self.color.code, self.color.name))
-        self.assertEqual(line.tint_snapshot, snapshot)
-        self.assertEqual(line.price_unit, 224)
-        self.assertEqual(line.product_uom_qty, 2)
-        confirmed, _location = self._prepare_delivery()
-        old_name = confirmed.order_line.name
-        self.env['sale.order']._setup_sale_tint_layout()
-        self.assertEqual(confirmed.order_line.name, old_name)
-
-    def test_legacy_color_description_tolerates_missing_fields(self):
-        order = self._order()
-        self.assertEqual(order._tint_color_description({'name': '[OLD-01] Color anterior — Base anterior'}),
-                         '[OLD-01] Color anterior')
-        self.assertEqual(order._tint_color_description({'color_name': 'Solo nombre'}), 'Solo nombre')
-        self.assertEqual(order._tint_color_description({}), '')
 
     def test_flat_base_can_be_reordered_without_changing_recipe(self):
         order = self._order()

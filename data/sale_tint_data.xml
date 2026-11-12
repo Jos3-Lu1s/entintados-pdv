@@ -1,6 +1,5 @@
 <odoo>
     <function model="sale.order" name="_redact_private_chatter_details"/>
     <function model="sale.order" name="_setup_sale_payment_defaults"/>
-    <function model="sale.order" name="_setup_sale_tint_layout"/>
     <function model="stock.move" name="_setup_tint_delivery_components"/>
 </odoo>

@@ -62,10 +62,7 @@ class AccountMove(models.Model):
             and line.combo_parent_id.product_id.tint_role == 'base'
         ).product_id.ids
         return lines.filtered(lambda line: not (
-            line.product_id.tint_role == 'colorant' and (
-                line.product_id.id in products or line.sale_line_ids.filtered(
-                    lambda sale: sale.tint_section_id and sale._tint_recipe())
-            )
+            line.product_id.tint_role == 'colorant' and line.product_id.id in products
         ))
 
     def _get_move_lines_to_report(self):

@@ -174,10 +174,9 @@ class TintSalesReport(models.Model):
                        line.product_id, line.product_uom_qty, orders.state, orders.currency_id,
                        line.price_unit, line.price_subtotal,
                        (to_jsonb(line)->>'purchase_price')::numeric AS unit_cost,
-                       COALESCE(NULLIF(line.tint_snapshot, 'false'::jsonb), header.tint_snapshot) AS recipe
+                       NULLIF(line.tint_snapshot, 'false'::jsonb) AS recipe
                   FROM sale_order_line line
                   JOIN sale_order orders ON orders.id = line.order_id
-             LEFT JOIN sale_order_line header ON header.id = line.tint_section_id
                  WHERE line.display_type IS NULL
             ), tint_bases AS (
                 SELECT *, COALESCE(NULLIF(CONCAT_WS(' ',
