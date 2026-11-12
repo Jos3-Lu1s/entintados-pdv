@@ -1,0 +1,433 @@
+// PDF de cotizaciones y órdenes de venta. wkhtmltopdf no soporta grid ni
+// flexbox moderno: la maquetación usa tablas y bloques.
+
+@mixin o-sq-font($family, $file, $weight) {
+    @font-face {
+        font-family: $family;
+        font-style: normal;
+        font-weight: $weight;
+        src: url('/entintados_pdv/static/src/fonts/ibm_plex/#{$file}.woff') format('woff');
+    }
+}
+
+@include o-sq-font('IBM Plex Sans', 'IBMPlexSans-400', 400);
+@include o-sq-font('IBM Plex Sans', 'IBMPlexSans-500', 500);
+@include o-sq-font('IBM Plex Sans', 'IBMPlexSans-600', 600);
+@include o-sq-font('IBM Plex Sans', 'IBMPlexSans-700', 700);
+@include o-sq-font('IBM Plex Mono', 'IBMPlexMono-400', 400);
+@include o-sq-font('IBM Plex Mono', 'IBMPlexMono-500', 500);
+
+$o-sq-accent: #2c4f8f;
+$o-sq-cream: #f3ead6;
+$o-sq-cream-line: #e2d5b8;
+$o-sq-ink: #1d1d1b;
+$o-sq-text: #3a3936;
+$o-sq-muted: #5f5d58;
+$o-sq-soft: #6f6c66;
+$o-sq-rule: #e2e0db;
+$o-sq-row-rule: #ebe9e4;
+$o-sq-section-rule: #d6d3cc;
+$o-sq-panel: #f6f5f2;
+$o-sq-sans: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+$o-sq-mono: 'IBM Plex Mono', 'DejaVu Sans Mono', monospace;
+
+.o_sale_quotation {
+    font-family: $o-sq-sans;
+    font-size: 12px;
+    line-height: 1.45;
+    color: $o-sq-ink;
+    -webkit-font-smoothing: antialiased;
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        border-spacing: 0;
+    }
+
+    // wkhtmltopdf pinta bordes en las celdas con el reset del bundle de
+    // reportes; los bordes del diseño se declaran en cada bloque.
+    table, thead, tbody, tr, td, th {
+        border: 0 none;
+    }
+
+    td, th {
+        padding: 0;
+        vertical-align: top;
+    }
+
+    p {
+        margin: 0;
+    }
+
+    .o_sq_num {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .o_sq_mono {
+        font-family: $o-sq-mono;
+    }
+
+    .o_sq_soft {
+        color: $o-sq-soft;
+    }
+
+    .o_sq_muted {
+        color: $o-sq-muted;
+    }
+
+    .o_sq_eyebrow {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: $o-sq-soft;
+    }
+
+    // Encabezado repetido en cada hoja.
+    .o_sq_header {
+        border-bottom: 1px solid $o-sq-ink;
+
+        td {
+            vertical-align: bottom;
+            padding-bottom: 18px;
+        }
+
+        .o_sq_logo {
+            width: 154px;
+            vertical-align: middle;
+
+            img {
+                max-width: 136px;
+                max-height: 52px;
+            }
+        }
+
+        .o_sq_company {
+            vertical-align: middle;
+            padding-left: 18px;
+            border-left: 1px solid $o-sq-rule;
+            font-size: 11px;
+            line-height: 1.45;
+            color: $o-sq-muted;
+
+            .o_sq_company_name {
+                font-size: 12.5px;
+                font-weight: 600;
+                color: $o-sq-ink;
+                letter-spacing: 0.01em;
+            }
+        }
+
+        .o_sq_title_cell {
+            text-align: right;
+        }
+
+        .o_sq_title {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: $o-sq-accent;
+        }
+
+        .o_sq_folio {
+            font-size: 21px;
+            font-weight: 600;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+        }
+
+        .o_sq_date {
+            font-size: 11px;
+            color: $o-sq-muted;
+        }
+    }
+
+    // Pie repetido en cada hoja.
+    .o_sq_footer {
+        border-top: 1px solid $o-sq-rule;
+        font-size: 10.5px;
+        line-height: 1.5;
+        color: $o-sq-muted;
+
+        td {
+            padding-top: 12px;
+            vertical-align: baseline;
+        }
+
+        .o_sq_footer_page {
+            text-align: right;
+            white-space: nowrap;
+            padding-left: 24px;
+        }
+
+        .o_sq_footer_folio {
+            color: $o-sq-ink;
+            font-weight: 500;
+        }
+    }
+
+    // Bloques de datos de la primera hoja.
+    .o_sq_info {
+        margin-bottom: 22px;
+
+        > tbody > tr > td {
+            padding-right: 28px;
+
+            &:last-child {
+                padding-right: 0;
+            }
+        }
+
+        .o_sq_info_label {
+            display: block;
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background: $o-sq-cream;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: $o-sq-muted;
+        }
+
+        .o_sq_partner_name {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.35;
+        }
+
+        .o_sq_address {
+            font-size: 11.5px;
+            line-height: 1.5;
+        }
+
+        .o_sq_pairs {
+            width: auto;
+            font-size: 11.5px;
+            line-height: 1.45;
+
+            td {
+                padding-bottom: 3px;
+            }
+
+            .o_sq_pair_key {
+                padding-right: 10px;
+                white-space: nowrap;
+                color: $o-sq-soft;
+            }
+        }
+    }
+
+    .o_sq_intro {
+        margin-bottom: 22px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: $o-sq-text;
+    }
+
+    // Tabla de líneas.
+    .o_sq_lines {
+        table-layout: fixed;
+
+        thead {
+            display: table-header-group;
+
+            th {
+                padding: 8px 6px;
+                background: $o-sq-cream;
+                border-bottom: 1px solid $o-sq-cream-line;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                color: $o-sq-muted;
+                text-align: left;
+
+                &.o_sq_num {
+                    text-align: right;
+                }
+            }
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
+        .o_sq_col_code { width: 96px; }
+        .o_sq_col_qty { width: 58px; }
+        .o_sq_col_price { width: 88px; }
+        .o_sq_col_disc { width: 52px; }
+        .o_sq_col_total { width: 96px; }
+
+        .o_sq_product td {
+            padding: 9px 6px;
+            border-bottom: 1px solid $o-sq-row-rule;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .o_sq_code {
+            font-family: $o-sq-mono;
+            font-size: 11px;
+            line-height: 1.55;
+            word-wrap: break-word;
+        }
+
+        .o_sq_desc {
+            word-wrap: break-word;
+        }
+
+        .o_sq_disc {
+            color: $o-sq-muted;
+        }
+
+        .o_sq_amount {
+            font-weight: 500;
+        }
+
+        .o_sq_section td {
+            padding: 16px 6px 7px;
+            border-bottom: 1px solid $o-sq-section-rule;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .o_sq_subsection td {
+            padding-top: 12px;
+            font-size: 11.5px;
+        }
+
+        .o_sq_marker {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-right: 10px;
+            vertical-align: middle;
+            background: $o-sq-accent;
+        }
+
+        .o_sq_note td {
+            padding: 8px 6px;
+            border-bottom: 1px solid $o-sq-row-rule;
+            font-size: 11.5px;
+            line-height: 1.5;
+            font-style: italic;
+            color: $o-sq-muted;
+        }
+    }
+
+    // Totales e importe con letra.
+    .o_sq_totals {
+        margin-top: 22px;
+        page-break-inside: avoid;
+
+        .o_sq_totals_notes {
+            padding-right: 40px;
+            padding-top: 2px;
+        }
+
+        .o_sq_totals_block {
+            margin-bottom: 16px;
+            font-size: 11.5px;
+            line-height: 1.5;
+
+            .o_sq_eyebrow {
+                display: block;
+                margin-bottom: 4px;
+            }
+        }
+
+        .o_sq_totals_amounts {
+            width: 272px;
+        }
+
+        .o_sq_amounts {
+            font-size: 12px;
+
+            td {
+                padding: 5px 0;
+            }
+
+            .o_sq_amount_label {
+                color: $o-sq-muted;
+            }
+
+            .o_sq_untaxed td {
+                padding-top: 7px;
+                border-top: 1px solid $o-sq-rule;
+            }
+
+            .o_sq_grand td {
+                padding: 10px 10px;
+                background: $o-sq-cream;
+                border-top: 1.5px solid $o-sq-ink;
+                vertical-align: baseline;
+            }
+
+            .o_sq_grand_label {
+                font-weight: 600;
+
+                span {
+                    font-weight: 400;
+                    font-size: 10.5px;
+                    letter-spacing: 0.06em;
+                    color: $o-sq-soft;
+                }
+            }
+
+            .o_sq_grand_value {
+                font-size: 17px;
+                font-weight: 700;
+                color: $o-sq-accent;
+            }
+        }
+    }
+
+    // Condiciones y firma.
+    .o_sq_closing {
+        margin-top: 36px;
+        page-break-inside: avoid;
+
+        > tbody > tr > td {
+            vertical-align: bottom;
+        }
+
+        .o_sq_terms {
+            vertical-align: middle;
+            padding: 12px 14px;
+            background: $o-sq-panel;
+            font-size: 11.5px;
+            line-height: 1.5;
+
+            .o_sq_eyebrow {
+                display: block;
+                margin-bottom: 4px;
+            }
+        }
+
+        .o_sq_gap {
+            width: 40px;
+        }
+
+        .o_sq_signature {
+            width: 240px;
+            font-size: 11.5px;
+            line-height: 1.45;
+
+            .o_sq_sign_line {
+                height: 34px;
+                margin: 4px 0;
+                border-bottom: 1px solid $o-sq-ink;
+            }
+
+            .o_sq_signer {
+                padding-top: 4px;
+                font-weight: 600;
+            }
+        }
+    }
+}

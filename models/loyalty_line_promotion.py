@@ -9,6 +9,20 @@ LINE_PROMOTION_APPLICABILITIES = ('order', 'specific')
 class LoyaltyReward(models.Model):
     _inherit = 'loyalty.reward'
 
+    def unlink(self):
+        # Si la recompensa está referenciada por líneas de pedido activas, se archiva en lugar
+        # de eliminarse físicamente para mantener la integridad de los descuentos aplicados.
+        rewards_in_use = self.filtered(
+            lambda r: self.env['sale.order.line'].sudo().search_count([('promo_reward_id', '=', r.id)], limit=1)
+        )
+        if rewards_in_use:
+            rewards_in_use.action_archive()
+            remaining = self - rewards_in_use
+            if not remaining:
+                return True
+            return super(LoyaltyReward, remaining).unlink()
+        return super().unlink()
+
     def _is_line_promotion(self):
         """Recompensa que se elige por línea y vive en su `discount`, sin línea de recompensa.
 
@@ -27,6 +41,19 @@ class LoyaltyReward(models.Model):
 
 class LoyaltyProgram(models.Model):
     _inherit = 'loyalty.program'
+
+    def unlink(self):
+        # Si el programa se elimina (directamente o tras archivarse), se retira la promoción
+        # de cualquier línea de cotización activa para que vuelva a su acuerdo vigente
+        # antes de que la cascada de base de datos elimine las recompensas.
+        rewards = self.with_context(active_test=False).reward_ids
+        lines_with_promo = self.env['sale.order.line'].sudo().search([
+            ('promo_reward_id', 'in', rewards.ids),
+            ('order_id.state', 'in', ('draft', 'sent')),
+        ])
+        if lines_with_promo:
+            lines_with_promo._drop_line_promotion()
+        return super().unlink()
 
     def _compute_order_count(self):
         # Reemplaza al core para contar una sola vez el pedido que tiene líneas de recompensa

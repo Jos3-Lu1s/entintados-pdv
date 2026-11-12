@@ -3,6 +3,8 @@ from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.tests import tagged
 from odoo.exceptions import UserError
 
+from .common_pdf import offline_wkhtmltopdf, render_offline_pdf
+
 
 @tagged('post_install', '-at_install')
 class TestPpdReceivableReport(AccountTestInvoicingCommon):
@@ -82,7 +84,8 @@ class TestPpdReceivableReport(AccountTestInvoicingCommon):
                                   if c['expression_label'] == 'total'), expected)
         options = self._options('2026-02-28', unfold=True)
         self.assertTrue(self.report.export_to_xlsx(options)['file_content'])
-        self.assertTrue(self.report.export_to_pdf(options)['file_content'].startswith(b'%PDF'))
+        with offline_wkhtmltopdf(self.env):
+            self.assertTrue(self.report.export_to_pdf(options)['file_content'].startswith(b'%PDF'))
 
     def test_setup_idempotent(self):
         counts = (len(self.report.line_ids), len(self.report.column_ids))
@@ -181,8 +184,8 @@ class TestPpdReceivableReport(AccountTestInvoicingCommon):
         wizard.date_to = '2026-02-28'
         self.assertEqual(wizard._get_report_data()['total'], 750)
         self.assertEqual(wizard.action_download()['report_type'], 'qweb-pdf')
-        pdf, _kind = self.env['ir.actions.report'].with_context(force_report_rendering=True)._render_qweb_pdf(
-            'entintados_pdv.action_ppd_customer_pdf', res_ids=wizard.ids)
+        pdf, _kind = render_offline_pdf(
+            self.env['ir.actions.report'], 'entintados_pdv.action_ppd_customer_pdf', wizard.ids)
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.partner_b.is_credit = False
         wizard.partner_id = self.partner_b

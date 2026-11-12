@@ -2,19 +2,17 @@ from pathlib import Path
 from io import BytesIO
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
-import re
 from urllib.parse import urlsplit, parse_qs
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
-
-from lxml import html as lxml_html
 
 from odoo import Command
 from odoo.http import Response
 from odoo.tests.common import TransactionCase, tagged
 from odoo.tools.convert import convert_file
 
+from .common_pdf import render_offline_pdf
 from .test_vendor_credit_group import TestVendorCreditGroup
 from ..controllers import distributed_credit_report as report_controller
 
@@ -25,35 +23,7 @@ class TestDistributedCreditReport(TransactionCase):
     _group = TestVendorCreditGroup._group
 
     def _render_offline_pdf(self, renderer, ids, data=None):
-        """Inline assets created in this test transaction, invisible to HTTP workers."""
-        native = renderer._run_wkhtmltopdf
-
-        def inline(source):
-            if not source:
-                return source
-            root = lxml_html.fromstring(source)
-            for link in root.xpath('//link[@href]'):
-                asset = self.env['ir.attachment'].search([('url', '=', urlsplit(link.get('href')).path)], limit=1)
-                if asset and asset.raw:
-                    style = lxml_html.Element('style')
-                    style.text = re.sub(r'url\([^)]*\)', 'none', asset.raw.decode('utf-8'))
-                    link.addprevious(style)
-                link.drop_tree()
-            for node in root.xpath('//script[@src] | //base'):
-                node.drop_tree()
-            for image in root.xpath('//img[@src]'):
-                if not image.get('src').startswith('data:'):
-                    image.drop_tree()
-            return lxml_html.tostring(root, encoding='unicode')
-
-        def offline(bodies, *args, **kwargs):
-            for key in ('header', 'footer'):
-                if key in kwargs:
-                    kwargs[key] = inline(kwargs[key])
-            return native([inline(body) for body in bodies], *args, **kwargs)
-
-        with patch.object(type(renderer), '_run_wkhtmltopdf', side_effect=offline):
-            return renderer._render_qweb_pdf(renderer.report_name, ids, data=data)
+        return render_offline_pdf(renderer, renderer.report_name, ids, data=data)
 
     @classmethod
     def setUpClass(cls):

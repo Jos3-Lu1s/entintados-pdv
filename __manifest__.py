@@ -139,6 +139,7 @@ Catálogo de entintado
             # Indicador del origen del precio en las líneas de venta
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.js",
             "entintados_pdv/static/src/fields/price_origin/price_origin_field.xml",
+            "entintados_pdv/static/src/fields/price_origin/price_origin_field.scss",
             # Promoción disponible en las líneas de venta
             "entintados_pdv/static/src/fields/promo_hint/promo_hint_text.js",
             "entintados_pdv/static/src/fields/promo_hint/promo_hint_field.js",
@@ -149,6 +150,10 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/product_no_quick_create/product_no_quick_create.js",
             # Sin creación rápida de contactos: quedarían sin teléfono
             "entintados_pdv/static/src/fields/partner_no_quick_create/partner_no_quick_create.js",
+        ],
+        "web.report_assets_common": [
+            # PDF de cotizaciones y órdenes de venta
+            "entintados_pdv/static/src/reports/sale_quotation.scss",
         ],
     },
 
@@ -205,7 +210,7 @@ Catálogo de entintado
         'report/tint_sales_report.xml',
         'report/invoice_tint.xml',
         'report/invoice_mat.xml',
-        'report/sale_mat.xml',
+        'report/sale_quotation.xml',
         'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/product_supplierinfo_views.xml',

@@ -1054,3 +1054,309 @@ class TestSaleLinePromotion(TransactionCase):
 
         first.promo_reward_id = offered[0]
         self.assertEqual(order._get_line_promotion_rewards()[second], offered)
+
+    def test_confirm_keeps_code_promo_with_minimum(self):
+        # Código con importe mínimo y promoción automática en el pedido: la promoción de línea se conserva al confirmar.
+        code_prog = self._code_program(code='PROMO194', minimum=1000.0)
+        native_prog = self.env['loyalty.program'].create({
+            'name': 'Nativa Barato',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.create({
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'percent',
+                'discount': 10.0,
+                'discount_applicability': 'cheapest',
+                'required_points': 1,
+            })],
+        })
+        order = self._create_order()
+        paint_no_agree = self._create_product('Pintura Sin Acuerdo', 100.0)
+        line_paint = self._create_line(order, paint_no_agree, qty=10.0)  # 10 x 100 = 1000
+        self._create_line(order, self.product_plain, qty=1.0)           # 1 x 50 = 50
+        res = order._try_apply_code('PROMO194')
+        self.assertNotIn('error', res)
+        order._update_programs_and_rewards()
+
+        claimable = order._get_claimable_rewards()
+        for coupon, rewards in claimable.items():
+            for reward in rewards:
+                if reward == native_prog.reward_ids:
+                    order._apply_program_reward(reward, coupon)
+
+        order._update_programs_and_rewards()
+        line_paint._apply_line_promotion(code_prog.reward_ids)
+        self.assertEqual(line_paint.promo_reward_id, code_prog.reward_ids)
+        self.assertEqual(line_paint.discount, 10.0)
+
+        order.action_confirm()
+
+        self.assertEqual(order.state, 'sale')
+        self.assertEqual(line_paint.promo_reward_id, code_prog.reward_ids)
+        self.assertEqual(line_paint.discount, 10.0)
+        self.assertEqual(line_paint.pricing_rule_type, 'promo')
+
+    def test_unlink_reward_in_use_protected(self):
+        # Programa con múltiples recompensas: borrar una recompensa en uso la archiva y conserva la referencia en la línea.
+        prog = self._create_program([{'discount': 20.0}, {'discount': 5.0}])
+        twenty = prog.reward_ids.filtered(lambda r: r.discount == 20.0)
+        order = self._create_order()
+        line = self._create_line(order)
+        line.action_set_line_promotion(twenty.id)
+        self.assertEqual(line.promo_reward_id, twenty)
+        self.assertEqual(line.discount, 20.0)
+        self.assertEqual(line.pricing_rule_type, 'promo')
+
+        twenty.unlink()
+
+        self.assertTrue(twenty.exists(), "La recompensa no debe eliminarse físicamente de la base de datos si está en uso")
+        self.assertFalse(twenty.active, "La recompensa en uso debe quedar archivada")
+        self.assertEqual(line.promo_reward_id, twenty)
+
+    def test_unlink_archived_program_in_use_cleans_lines(self):
+        # Al archivar y borrar un programa, las líneas con su promoción deben volver a su acuerdo vigente.
+        prog = self._create_program([{'discount': 20.0}])
+        order = self._create_order()
+        line = self._create_line(order)
+        line.action_set_line_promotion(prog.reward_ids.id)
+        self.assertEqual(line.promo_reward_id, prog.reward_ids)
+        self.assertEqual(line.discount, 20.0)
+
+        prog.action_archive()
+        prog.unlink()
+
+        self.assertFalse(line.promo_reward_id)
+        self.assertEqual(line.discount, 10.0)
+        self.assertEqual(line.pricing_rule_type, 'product')
+
+    def test_change_partner_with_discount_rule_no_phantom_promo(self):
+        # Al cambiar de cliente a uno con acuerdo comercial de porcentaje, la línea conserva su promoción válida sin degradar a promoción fantasma.
+        order, line, reward = self._promo_line()
+        self.assertEqual(line.promo_reward_id, reward)
+        self.assertEqual(line.discount, 20.0)
+
+        partner_b = self.env['res.partner'].create({
+            'name': 'Cliente B con Acuerdo 15%',
+            'is_customer': True,
+            'phone': '1234567895',
+            'property_product_pricelist': self.pricelist.id,
+        })
+        self.env['res.partner.discount.rule'].create({
+            'partner_id': partner_b.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': self.product_agreement.id,
+            'discount': 15.0,
+        })
+
+        order.write({'partner_id': partner_b.id})
+
+        if line.pricing_rule_type == 'promo':
+            self.assertTrue(line.promo_reward_id, "La línea en promo debe conservar promo_reward_id, no ser una promo fantasma")
+            self.assertEqual(line.promo_reward_id, reward)
+            self.assertEqual(line.discount, 20.0)
+        else:
+            self.assertEqual(line.pricing_rule_type, 'product')
+            self.assertEqual(line.discount, 15.0)
+            self.assertFalse(line.promo_reward_id)
+
+    def test_promo_code_minimum_threshold_deterministic(self):
+        # El umbral de compra mínima de un código se evalúa sin el descuento de la promoción de línea, garantizando determinismo.
+        auto_prog = self._create_program([{'discount': 20.0}])
+        code_prog = self._code_program(code='CODE199', minimum=1000.0)
+
+        order = self._create_order()
+        line = self._create_line(order, qty=10.0)  # 10 x 100 = 1000
+
+        line._apply_line_promotion(auto_prog.reward_ids)
+        self.assertEqual(line.discount, 20.0)
+        self.assertEqual(line.price_subtotal, 800.0)
+
+        res = order._try_apply_code('CODE199')
+        self.assertNotIn('error', res, f"El código debió aceptarse pero dio error: {res}")
+        self.assertIn(code_prog.rule_ids.id, order.code_enabled_rule_ids.ids)
+
+    def test_drop_promotion_restores_custom_or_agreement_price(self):
+        # Quitar la promoción no debe forzar precio de lista general
+        prod = self._create_product('Producto Acuerdo 120', 120.0)
+        self._create_rule(prod, discount=10.0)
+        order = self._create_order()
+        line = self._create_line(order, prod)
+        line.price_unit = 100.0  # precio personalizado
+        self.assertEqual(line.discount, 10.0)
+        self.assertEqual(line.pricing_rule_type, 'product')
+
+        reward = self._create_program([{'discount': 20.0}]).reward_ids
+        line._apply_line_promotion(reward)
+        self.assertEqual(line.discount, 20.0)
+        self.assertEqual(line.pricing_rule_type, 'promo')
+
+        # Popover simulation
+        order.invalidate_recordset()
+        line.invalidate_recordset(['promo_available_info'])
+        info = line.promo_available_info
+        self.assertTrue(info and info.get('fallback'))
+
+        # Quitar la promoción
+        line._drop_line_promotion()
+        self.assertEqual(line.price_unit, 100.0, "El precio unitario no debe saltar a 120.0 (precio de lista)")
+        self.assertEqual(line.discount, 10.0)
+        self.assertEqual(line.pricing_rule_type, 'product')
+
+        # Popover con regla de precio fijo calcula la diferencia exacta contra el subtotal real
+        prod_fixed = self._create_product('Producto Fixed 100', 100.0)
+        self._create_rule(prod_fixed, fixed_price=70.0)
+        order_fixed = self._create_order()
+        line_fixed = self._create_line(order_fixed, prod_fixed)
+        line_fixed.with_context(skip_manual_discount_breakdown=True).write({
+            'promo_reward_id': reward.id,
+            'discount': 20.0,
+            'price_unit': 100.0,
+            'pricing_rule_type': 'promo',
+        })
+        line_fixed.invalidate_recordset(['promo_available_info', 'price_subtotal'])
+        info_fixed = line_fixed.promo_available_info
+        self.assertEqual(info_fixed['fallback']['difference'], 10.0)
+        line_fixed._drop_line_promotion()
+        self.assertEqual(line_fixed.price_unit, 70.0)
+        self.assertEqual(line_fixed.discount, 0.0)
+        self.assertEqual(line_fixed.pricing_rule_type, 'fixed_price')
+
+    def test_program_max_usage_enforced_strictly_under_all_roles(self):
+        # El límite de usos se evalúa bajo sudo() para todos los roles
+        program = self._create_program([{'discount': 20.0}])
+        program.write({'limit_usage': True, 'max_usage': 1})
+        reward = program.reward_ids
+
+        order1 = self._create_order()
+        line1 = self._create_line(order1)
+        line1._apply_line_promotion(reward)
+        self.env.flush_all()
+
+        user_salesman = new_test_user(self.env, login='salesman_promo_test', groups='sales_team.group_sale_salesman')
+        order2 = self._create_order()
+        line2 = self._create_line(order2, self.product_plain)
+        available = order2.with_user(user_salesman)._get_line_promotion_rewards()
+        self.assertNotIn(reward, available.get(line2, self.env['loyalty.reward']),
+                         "La promoción no debe estar disponible porque ya alcanzó max_usage=1")
+
+    def test_order_discount_totals_include_fixed_reward_line(self):
+        # Descuento total e Importe antes de descuento incluyen recompensas de importe fijo
+        order = self._create_order()
+        prod_line = self._create_line(order, qty=1.0)  # 1 x 100.0 = 100.0 con 10% acuerdo = 90.0
+        self.assertEqual(order.amount_untaxed, 90.0)
+
+        # Simular línea de recompensa de importe fijo
+        program = self._create_program([{'discount': 10.0}])
+        reward = program.reward_ids[0]
+        reward_prod = self._create_product('Recompensa $10', 0.0)
+        reward_line = self.lines.create({
+            'order_id': order.id,
+            'product_id': reward_prod.id,
+            'name': 'Recompensa $10',
+            'product_uom_qty': 1.0,
+            'price_unit': -10.0,
+            'price_subtotal': -10.0,
+            'reward_id': reward.id,
+            'is_reward_line': True,
+        })
+        self.env.flush_all()
+        order.invalidate_recordset()
+        self.assertEqual(order.amount_discount, 20.0)
+        self.assertEqual(order.amount_before_discount, 100.0)
+
+    def test_action_update_prices_no_spurious_chatter_warning(self):
+        # Actualizar precios no debe generar aviso falso en el chatter
+        order, line, reward = self._promo_line(discount=20.0)
+        initial_msg_count = len(order.message_ids)
+
+        order.action_update_prices()
+        new_msgs = order.message_ids - order.message_ids.browse([m.id for m in order.message_ids[:initial_msg_count]])
+        spurious = any("dejó la promoción" in (m.body or '') or "0 %" in (m.body or '') for m in new_msgs)
+        self.assertFalse(spurious, "No debe publicarse aviso de pérdida de promoción o 0% en el chatter")
+
+    def test_applied_programs_includes_native_reward_program(self):
+        # Pedido que ya usa el programa con recompensa nativa puede usar la promo de línea si el límite está lleno
+        program = self._create_program([{'discount': 20.0}])
+        program.write({'limit_usage': True, 'max_usage': 1})
+        line_reward = program.reward_ids[0]
+        native_reward = self.env['loyalty.reward'].create({
+            'program_id': program.id,
+            'reward_type': 'discount',
+            'discount_mode': 'percent',
+            'discount': 10.0,
+            'discount_applicability': 'order',
+            'required_points': 1,
+        })
+
+        order = self._create_order()
+        line = self._create_line(order)
+        reward_prod = self._create_product('Descuento Orden 10%', 0.0)
+        self.lines.create({
+            'order_id': order.id,
+            'product_id': reward_prod.id,
+            'name': 'Descuento Orden 10%',
+            'product_uom_qty': 1.0,
+            'price_unit': -9.0,
+            'price_subtotal': -9.0,
+            'is_reward_line': True,
+            'reward_id': native_reward.id,
+        })
+
+        available = order._get_line_promotion_rewards()
+        self.assertIn(line_reward, available.get(line, self.env['loyalty.reward']),
+                      "La línea debe poder usar la recompensa de línea porque la orden ya participa en el programa")
+
+    def test_money_points_exact_thousand_float_round(self):
+        # Con puntos por dinero, suma exacta de 1,000.00 con decimales califica
+        program = self.env['loyalty.program'].create({
+            'name': 'Puntos Dinero 1000',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.create({
+                'reward_point_mode': 'money',
+                'reward_point_amount': 1,
+            })],
+            'reward_ids': [Command.create({
+                'reward_type': 'discount',
+                'discount_mode': 'percent',
+                'discount': 20.0,
+                'discount_applicability': 'order',
+                'required_points': 1000,
+            })],
+        })
+        order = self._create_order()
+        p1 = self._create_product('P1', 32.91)
+        p2 = self._create_product('P2', 257.28)
+        p3 = self._create_product('P3', 709.81)
+        self._create_line(order, p1)
+        self._create_line(order, p2)
+        line3 = self._create_line(order, p3)
+
+        points = order._get_line_promotion_points(program)
+        self.assertEqual(points, 1000.0, f"Los puntos deberían ser 1000.0 pero dieron {points}")
+        available = order._get_line_promotion_rewards()
+        self.assertIn(program.reward_ids, available.get(line3, self.env['loyalty.reward']))
+
+    def test_promo_available_count_matches_unapplied_lines(self):
+        # promo_available_line_count cuenta sólo líneas pendientes
+        program = self._create_program([{'discount': 20.0}])
+        reward = program.reward_ids
+        order = self._create_order()
+        line_a = self._create_line(order)
+        line_b = self._create_line(order, self.product_plain)
+
+        self.assertEqual(order.promo_available_line_count, 2)
+        line_a._apply_line_promotion(reward)
+        self.assertEqual(order.promo_available_line_count, 1)
+
+        self.assertTrue(line_a.promo_available_info)
+        self.assertTrue(line_b.promo_available_info)
+
+

@@ -9,7 +9,7 @@
               t-att-aria-label="title"
               t-att-title="title"
               t-on-click.stop="onClick">
-            <i role="img" t-attf-class="fa {{origin.icon}} {{origin.color}}"/>
+            <i role="img" t-attf-class="fa fa-fw {{origin.icon}} {{origin.color}}"/>
         </span>
     </t>
 
