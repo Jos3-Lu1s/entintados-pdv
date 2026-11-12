@@ -13,3 +13,4 @@ GEMINI.md
 backups/
 migrations/
 *.md
+.archify/
