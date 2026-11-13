@@ -177,13 +177,17 @@ class SaleOrderLine(models.Model):
         'order_id.order_line.linked_virtual_id',
     )
     def _compute_discount_amount(self):
+        # Los productos de un combo que también se calculan aquí no repiten su cálculo de impuestos.
+        own = {line: line._get_own_discount_amount() for line in self if line.product_type != 'combo'}
         for line in self:
             if line.product_type == 'combo':
                 items = line._get_linked_lines().filtered('combo_item_id')
-                line.discount_amount = sum(item._get_own_discount_amount() for item in items)
+                line.discount_amount = sum(
+                    own[item] if item in own else item._get_own_discount_amount() for item in items
+                )
                 subtotal = sum(items.mapped('price_subtotal'))
             else:
-                line.discount_amount = line._get_own_discount_amount()
+                line.discount_amount = own[line]
                 subtotal = line.price_subtotal
             line.sale_amount_before_discount = subtotal + line.discount_amount
 
@@ -216,7 +220,7 @@ class SaleOrderLine(models.Model):
             or self.is_downpayment
             or self.combo_item_id
             or self.pricing_rule_type == 'fixed_price'
-            or getattr(self, 'is_reward_line', False)
+            or self.is_reward_line
             or (self.product_id and self.product_id == self.company_id.sale_discount_product_id)
             or self._has_order_promotion_lock()
         )
@@ -321,37 +325,42 @@ class SaleOrderLine(models.Model):
     def _manual_price_values(self):
         return {'price_origin': 'manual', 'price_origin_label': 'Modificado de forma manual'}
 
-    def _keeps_manual_price(self):
-        """Precio manual que sobrevive a cantidad/UdM, "Actualizar precios" y cambio de cliente.
-
-        Se pierde al cambiar de producto (`reset_manual_pricing`).
+    def _keeps_manual_values(self):
+        """Lo tecleado en la línea (precio, descuento o promoción) sobrevive a cantidad/UdM,
+        "Actualizar precios" y cambio de cliente; se pierde al cambiar de producto
+        (`reset_manual_pricing`).
         """
         self.ensure_one()
         return bool(
-            self.price_origin == 'manual'
-            and not self.env.context.get('reset_manual_pricing')
+            not self.env.context.get('reset_manual_pricing')
             and (not self._origin.id or self.product_id == self._origin.product_id)
         )
+
+    def _keeps_manual_price(self):
+        self.ensure_one()
+        return self.price_origin == 'manual' and self._keeps_manual_values()
 
     def _set_price_origin(self):
         """Origen de un precio recién calculado con la tarifa: regla aplicada o precio de venta."""
         for line in self:
-            pricelist = line.order_id.pricelist_id
-            item = self.env['product.pricelist.item']
-            if line.product_id and pricelist:
-                item = item.browse(pricelist._get_product_rule(
-                    product=line.product_id, **line._get_pricelist_kwargs()))
-            combo_line = line.combo_item_id and line._get_linked_line()
             if not line.product_id or line.display_type:
                 line.price_origin = False
                 line.price_origin_label = False
-            elif combo_line:
+                continue
+            combo_line = line.combo_item_id and line._get_linked_line()
+            if combo_line:
                 # La tarifa se aplica al paquete, no a este producto.
                 line.price_origin = 'combo'
                 line.price_origin_label = (
                     f"Parte del combo «{combo_line.product_id.name}»: {line.combo_item_id.combo_id.name}"
                 )
-            elif item:
+                continue
+            pricelist = line.order_id.pricelist_id
+            item = self.env['product.pricelist.item']
+            if pricelist:
+                item = item.browse(pricelist._get_product_rule(
+                    product=line.product_id, **line._get_pricelist_kwargs()))
+            if item:
                 line.price_origin = 'pricelist'
                 line.price_origin_label = f"Tarifa: {pricelist.name} — {item.name}: {item.price}"
             else:
@@ -373,10 +382,7 @@ class SaleOrderLine(models.Model):
         `None` con precio fijo: su acuerdo es un precio, no un % con el que comparar un descuento.
         """
         self.ensure_one()
-        product = product or self.product_id
-        if not product or not self._admits_partner_agreement(product):
-            return 0.0
-        rule = self.order_id.partner_id._get_partner_pricing_rule(product)
+        rule = self._get_agreement_rule(product)
         if rule.get('type') == 'fixed_price':
             return None
         return rule['discount'] if rule.get('type') == 'discount' else 0.0
@@ -485,6 +491,7 @@ class SaleOrderLine(models.Model):
             return True
         # Se inyectan valores del acuerdo: no deben volver al llamador, que puede reutilizar `vals`.
         vals = dict(vals)
+        new_product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
         split_price_lines = self.browse()
         if (
             'price_unit' in vals
@@ -510,22 +517,23 @@ class SaleOrderLine(models.Model):
         explicit_price = 'price_unit' in vals
         if update_pricing_rule:
             for line in self:
-                product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else line.product_id
+                product = new_product or line.product_id
                 if line._admits_partner_agreement(product):
                     rule = line.order_id.partner_id._get_partner_pricing_rule(product)
                     # El precio fijo de un paquete no va en su precio: lo reparten sus productos.
                     if rule.get('type') == 'fixed_price' and product.type != 'combo':
                         if not explicit_price:
                             fixed_price_by_line[line] = rule['price']
+                        _discount, (rule_type, origin, rule_id) = line._agreement_discount_badge(rule)
                         vals.setdefault('price_unit', rule['price'])
                         vals['technical_price_unit'] = rule['price']
                         vals['discount'] = 0.0
                         vals['technical_discount'] = 0.0
-                        vals['pricing_rule_type'] = 'fixed_price'
-                        vals['pricing_rule_origin'] = rule.get('origin_label') or 'Precio Fijo'
-                        vals['pricing_rule_id'] = rule.get('rule') and rule['rule'].id or False
+                        vals['pricing_rule_type'] = rule_type
+                        vals['pricing_rule_origin'] = origin
+                        vals['pricing_rule_id'] = rule_id
                         vals['price_origin'] = 'fixed_price'
-                        vals['price_origin_label'] = vals['pricing_rule_origin']
+                        vals['price_origin_label'] = origin
                     else:
                         # Descuento o sin acuerdo: tras el write, el compute forzado resuelve el
                         # acuerdo del producto nuevo (sin forzar se quedaría el congelado).
@@ -536,10 +544,9 @@ class SaleOrderLine(models.Model):
         # En un recálculo forzado el `discount` lo escribe el propio `_compute_discount` del core.
         agreement_discount_lines = self.browse()
         if self._is_untracked_discount_vals(vals) and not self.env.context.get('force_price_recomputation'):
-            product = self.env['product.product'].browse(vals['product_id']) if vals.get('product_id') else None
             agreement_discount_lines = (self - manual_discount_lines).filtered(
                 lambda line: line.pricing_rule_type != 'fixed_price'
-                and line._admits_partner_agreement(product)
+                and line._admits_partner_agreement(new_product)
             )
         # Precio tecleado (no recalculado): `technical_price_unit` no acompaña al nuevo precio.
         manual_price = (
@@ -554,8 +561,7 @@ class SaleOrderLine(models.Model):
             # llega redondeado a sus dígitos y `technical_price_unit` no (una tarifa de -10 % sobre
             # 12.25 da 11.03 frente a 11.025), y esa diferencia no es un precio tecleado.
             manual_price = any(
-                (line.currency_id or line.company_id.currency_id or self.env.company.currency_id)
-                .compare_amounts(vals['technical_price_unit'], vals['price_unit'])
+                line._get_price_currency().compare_amounts(vals['technical_price_unit'], vals['price_unit'])
                 for line in self
             )
         # Cambio de UdM sin precio (código, RPC, importación o el formulario, donde `price_unit` es de
@@ -584,8 +590,7 @@ class SaleOrderLine(models.Model):
             manual_price_lines = (
                 self - fixed_lines - self.filtered('is_downpayment') - self.filtered('reward_id')
             ).filtered(
-                lambda line: (line.currency_id or line.company_id.currency_id or self.env.company.currency_id)
-                .compare_amounts(line.price_unit, vals['price_unit'])
+                lambda line: line._get_price_currency().compare_amounts(line.price_unit, vals['price_unit'])
             )
         if (
             'discount' in vals
@@ -608,8 +613,7 @@ class SaleOrderLine(models.Model):
                     lambda line: line.combo_item_id and line.product_uom_qty != package.product_uom_qty
                 ).write({'product_uom_qty': package.product_uom_qty})
         for line, base_price in fixed_price_by_line.items():
-            price = line.product_id.uom_id._compute_price(base_price, line.product_uom_id)
-            price = line._convert_price_currency(price, line._get_fixed_price_company().currency_id)
+            price = line._fixed_price_in_line_units(base_price)
             if line.currency_id.compare_amounts(line.price_unit, price):
                 line.with_context(skip_manual_discount_breakdown=True).write({
                     'price_unit': price,
@@ -743,15 +747,12 @@ class SaleOrderLine(models.Model):
         # depende de ella) puede ser la de la tarifa anterior: como `_recompute_prices` del core.
         self.invalidate_recordset(['pricelist_item_id'])
         # Líneas que el core no recalcula: conservan su origen tal cual.
-        previous = {
+        core_skipped = {
             line: (
                 line.price_origin, line.price_origin_label,
                 line.combo_price_snapshot, line.combo_package_price,
             )
             for line in self
-        }
-        core_skipped = {
-            line for line in self
             if not line.order_id
             or line.is_downpayment
             or line._is_global_discount()
@@ -765,14 +766,15 @@ class SaleOrderLine(models.Model):
                 (
                     line.price_origin, line.price_origin_label,
                     line.combo_price_snapshot, line.combo_package_price,
-                ) = previous[line]
+                ) = core_skipped[line]
                 continue
             if not force_recompute and (line._keeps_saved_pricing() or line._keeps_manual_price()):
                 continue
-            if line.product_type != 'combo' and line._admits_partner_agreement():
-                rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
-                if rule.get('type') == 'fixed_price':
-                    line._apply_fixed_price_agreement(rule)
+            if line.product_type == 'combo':
+                continue
+            rule = line._get_agreement_rule()
+            if rule.get('type') == 'fixed_price':
+                line._apply_fixed_price_agreement(rule)
         # Cambio de moneda en el formulario: la tarifa recalcula las demás líneas en la moneda
         # nueva, pero las que conservan su precio (manual, descuento global…) se convierten aquí.
         # Por código, `_origin` ya trae la moneda nueva: lo convierte `SaleOrder.write`.
@@ -796,8 +798,11 @@ class SaleOrderLine(models.Model):
     def _has_core_manual_price(self):
         """Mismo criterio que el core: `price_unit` distinto del último precio calculado."""
         self.ensure_one()
-        currency = self.currency_id or self.company_id.currency_id or self.env.company.currency_id
-        return bool(currency.compare_amounts(self.technical_price_unit, self.price_unit))
+        return bool(self._get_price_currency().compare_amounts(self.technical_price_unit, self.price_unit))
+
+    def _get_price_currency(self):
+        self.ensure_one()
+        return self.currency_id or self.company_id.currency_id or self.env.company.currency_id
 
     def _get_display_price_ignore_combo(self):
         # La tarifa siempre va dentro de `price_unit`, también las reglas de porcentaje: `discount`
@@ -828,23 +833,21 @@ class SaleOrderLine(models.Model):
         """
         self.ensure_one()
         pricelist_price = self._get_pricelist_price()
+        no_agreement = {'price': pricelist_price, 'pricelist_price': pricelist_price, 'agreement': False}
         origin = self._origin
         if not self.env.context.get('force_price_recomputation') and self._keeps_saved_pricing():
             if origin.pricing_rule_type != 'fixed_price':
-                return {'price': pricelist_price, 'pricelist_price': pricelist_price, 'agreement': False}
+                return no_agreement
             price = origin.product_uom_id._compute_price(origin.combo_package_price, self.product_uom_id)
             if origin.currency_id != self.currency_id:
                 price = self._convert_price_currency(price, origin.currency_id)
             label = origin.pricing_rule_origin or 'Precio Fijo'
         else:
-            rule = {}
-            if self._admits_partner_agreement():
-                rule = self.order_id.partner_id._get_partner_pricing_rule(self.product_id)
+            rule = self._get_agreement_rule()
             if rule.get('type') != 'fixed_price':
-                return {'price': pricelist_price, 'pricelist_price': pricelist_price, 'agreement': False}
-            price = self.product_id.uom_id._compute_price(rule['price'], self.product_uom_id)
-            price = self._convert_price_currency(price, self._get_fixed_price_company().currency_id)
-            label = rule.get('origin_label') or 'Precio Fijo'
+                return no_agreement
+            price = self._fixed_price_in_line_units(rule['price'])
+            label = self._agreement_discount_badge(rule)[1][1]
         return {
             'price': price,
             'pricelist_price': pricelist_price,
@@ -969,9 +972,7 @@ class SaleOrderLine(models.Model):
                 continue
             super(SaleOrderLine, line)._reset_price_unit()
             line.combo_price_snapshot = line._get_combo_price_breakdown()
-            rule = {}
-            if line._admits_partner_agreement():
-                rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
+            rule = line._get_agreement_rule()
             if rule.get('type') == 'fixed_price':
                 line._apply_fixed_price_agreement(rule)
             else:
@@ -986,14 +987,13 @@ class SaleOrderLine(models.Model):
     def _compute_discount(self):
         # Las líneas de recompensa conservan su descuento, como en el core: lo decide `sale_loyalty`.
         rewards = self.filtered('reward_id')
-        if rewards:
-            for line in rewards:
-                # Sin acuerdo; el regalo conserva la insignia de su promoción.
-                line.technical_discount = line.discount
-                line.pricing_rule_type = line.pricing_rule_type or 'none'
-                line.pricing_rule_origin = line.pricing_rule_origin or ''
-                line.pricing_rule_id = False
-            return (self - rewards)._compute_discount()
+        for line in rewards:
+            # Sin acuerdo; el regalo conserva la insignia de su promoción.
+            line.technical_discount = line.discount
+            line.pricing_rule_type = line.pricing_rule_type or 'none'
+            line.pricing_rule_origin = line.pricing_rule_origin or ''
+            line.pricing_rule_id = False
+        self -= rewards
         # El acuerdo congelado se lee antes del super(): el core reescribe `discount`.
         force_recompute = self.env.context.get('force_price_recomputation')
         frozen = {
@@ -1008,13 +1008,10 @@ class SaleOrderLine(models.Model):
         }
         # Descuento manual: sobrevive a cantidad/UdM, "Actualizar precios" y cambio de cliente;
         # se pierde al cambiar de producto (`reset_manual_pricing`) o ante un precio fijo.
-        reset_manual = self.env.context.get('reset_manual_pricing')
         manual = {
             line: (line.discount, line.pricing_rule_origin)
             for line in self
-            if line.pricing_rule_type == 'manual'
-            and not reset_manual
-            and (not line._origin.id or line.product_id == line._origin.product_id)
+            if line.pricing_rule_type == 'manual' and line._keeps_manual_values()
         }
         # Promoción por línea: la misma regla que el descuento manual. Un precio fijo vigente solo
         # gana en un recálculo forzado: en una línea guardada se aplica con «Actualizar precios».
@@ -1022,8 +1019,7 @@ class SaleOrderLine(models.Model):
             line: (line.discount, line.pricing_rule_origin, line.promo_reward_id)
             for line in self
             if line.promo_reward_id
-            and not reset_manual
-            and (not line._origin.id or line.product_id == line._origin.product_id)
+            and line._keeps_manual_values()
             and (line in frozen or not line._has_fixed_price_agreement())
         }
         # El % que deja el core es el de la tarifa, que ya va en el precio: se descarta siempre.
@@ -1049,19 +1045,7 @@ class SaleOrderLine(models.Model):
                     discount = 0.0
                 badge = (rule_type, origin, rule_id)
             else:
-                rule = {}
-                if line._admits_partner_agreement():
-                    rule = line.order_id.partner_id._get_partner_pricing_rule(line.product_id)
-                rule_id = rule.get('rule') and rule['rule'].id or False
-                if rule.get('type') == 'fixed_price':
-                    discount = 0.0
-                    badge = ('fixed_price', rule.get('origin_label') or 'Precio Fijo', rule_id)
-                elif rule.get('type') == 'discount':
-                    discount = rule['discount']
-                    badge = (rule.get('origin_type') or 'product', rule.get('origin_label') or '', rule_id)
-                else:
-                    discount = 0.0
-                    badge = ('none', '', False)
+                discount, badge = line._agreement_discount_badge(line._get_agreement_rule())
             # En una línea guardada cada asignación es un write y la restricción de precio fijo
             # vería el valor intermedio: hacia precio fijo, `discount` (= 0) antes que el badge;
             # en otro caso, el badge antes que `discount`, para no dejar precio fijo con descuento.
@@ -1115,8 +1099,7 @@ class SaleOrderLine(models.Model):
         check_price = 'price_unit' in vals and 'product_id' not in vals
         digits = self.env['decimal.precision'].precision_get('Discount')
         for line in self:
-            currency = line.currency_id or line.company_id.currency_id or self.env.company.currency_id
-            price_changed = check_price and currency.compare_amounts(line.price_unit, vals['price_unit'] or 0.0)
+            price_changed = check_price and line._get_price_currency().compare_amounts(line.price_unit, vals['price_unit'] or 0.0)
             if price_changed and line.product_type == 'combo':
                 raise ValidationError(_(
                     "El paquete «%(package)s» no lleva precio propio: su precio lo reparten sus productos.",
@@ -1169,17 +1152,24 @@ class SaleOrderLine(models.Model):
         """
         self.ensure_one()
         line = self.with_context(skip_manual_discount_breakdown=True)
-        price = self.product_id.uom_id._compute_price(rule['price'], self.product_uom_id)
-        price = self._convert_price_currency(price, self._get_fixed_price_company().currency_id)
+        price = self._fixed_price_in_line_units(rule['price'])
+        _discount, (rule_type, origin, rule_id) = self._agreement_discount_badge(rule)
         line.discount = 0.0
         line.technical_discount = 0.0
         line.price_unit = price
         line.technical_price_unit = price
-        line.pricing_rule_type = 'fixed_price'
-        line.pricing_rule_origin = rule.get('origin_label') or 'Precio Fijo'
-        line.pricing_rule_id = rule.get('rule') and rule['rule'].id or False
+        line.pricing_rule_type = rule_type
+        line.pricing_rule_origin = origin
+        line.pricing_rule_id = rule_id
         line.price_origin = 'fixed_price'
-        line.price_origin_label = line.pricing_rule_origin
+        line.price_origin_label = origin
+
+    def _fixed_price_in_line_units(self, base_price):
+        """Precio de acuerdo, en la UdM del producto y la moneda de la compañía, llevado a la UdM y
+        la moneda de la línea."""
+        self.ensure_one()
+        price = self.product_id.uom_id._compute_price(base_price, self.product_uom_id)
+        return self._convert_price_currency(price, self._get_fixed_price_company().currency_id)
 
     def _get_fixed_price_company(self):
         self.ensure_one()
@@ -1227,10 +1217,28 @@ class SaleOrderLine(models.Model):
             and not self.display_type
             and not self.combo_item_id
             and self.order_id.partner_id
-            and not getattr(self, 'is_reward_line', False)
+            and not self.is_reward_line
             and not self.is_downpayment
             and not self._is_global_discount()
         )
+
+    def _get_agreement_rule(self, product=None):
+        """Acuerdo del cliente para `product` (por omisión, el de la línea); `{}` si la línea no lo
+        admite."""
+        self.ensure_one()
+        product = product or self.product_id
+        if not self._admits_partner_agreement(product):
+            return {}
+        return self.order_id.partner_id._get_partner_pricing_rule(product)
+
+    def _agreement_discount_badge(self, rule):
+        """Descuento y badge (tipo, origen, regla) que da el acuerdo `rule`."""
+        rule_id = rule.get('rule') and rule['rule'].id or False
+        if rule.get('type') == 'fixed_price':
+            return 0.0, ('fixed_price', rule.get('origin_label') or 'Precio Fijo', rule_id)
+        if rule.get('type') == 'discount':
+            return rule['discount'], (rule.get('origin_type') or 'product', rule.get('origin_label') or '', rule_id)
+        return 0.0, ('none', '', False)
 
     def _is_listed_for_line_promotion(self):
         """Línea que el selector de promociones muestra, elegible o no."""
@@ -1275,6 +1283,16 @@ class SaleOrderLine(models.Model):
         'order_id.order_line.promo_reward_id', 'order_id.order_promo_reward_id',
     )
     def _compute_promo_available(self):
+        def option(reward, difference, applied):
+            return {
+                'reward_id': reward.id,
+                'name': reward.program_id.name,
+                'discount': reward.discount,
+                'difference': difference,
+                'applied': applied,
+                'scope': reward.discount_applicability,
+            }
+
         self.promo_available_info = False
         self.promo_available_count = 0
         for order, lines in self.grouped('order_id').items():
@@ -1288,14 +1306,7 @@ class SaleOrderLine(models.Model):
                     package_reward = line._get_combo_package_line().promo_reward_id.sudo()
                     if package_reward:
                         line.promo_available_info = {
-                            'options': [{
-                                'reward_id': package_reward.id,
-                                'name': package_reward.program_id.name,
-                                'discount': package_reward.discount,
-                                'difference': 0.0,
-                                'applied': True,
-                                'scope': package_reward.discount_applicability,
-                            }],
+                            'options': [option(package_reward, 0.0, True)],
                             'fallback': False,
                             'from_package': True,
                         }
@@ -1312,17 +1323,13 @@ class SaleOrderLine(models.Model):
                     return line.currency_id.round(base_amount * (discount - line.discount) / 100)
 
                 line.promo_available_count = len(rewards)
-                options = [{
-                    'reward_id': reward.id,
-                    'name': reward.program_id.name,
-                    'discount': reward.discount,
-                    'difference': difference(reward.discount),
-                    'applied': reward == applied,
-                    'scope': reward.discount_applicability,
-                } for reward in (rewards | applied).sorted(key=lambda reward: (-reward.discount, reward.id))]
+                options = [
+                    option(reward, difference(reward.discount), reward == applied)
+                    for reward in (rewards | applied).sorted(key=lambda reward: (-reward.discount, reward.id))
+                ]
                 fallback = False
                 if applied:
-                    rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
+                    rule = line._get_agreement_rule()
                     if rule.get('type') == 'fixed_price':
                         fixed_subtotal = line.currency_id.round(rule['price'] * line.product_uom_qty)
                         fallback_diff = line.currency_id.round(sum(price_lines.mapped('price_subtotal')) - fixed_subtotal)
@@ -1331,7 +1338,7 @@ class SaleOrderLine(models.Model):
                             'difference': fallback_diff,
                         }
                     else:
-                        agreement = line._agreement_discount() or 0.0
+                        agreement = rule['discount'] if rule.get('type') == 'discount' else 0.0
                         fallback = {
                             'label': rule.get('origin_label') or _("sin acuerdo"),
                             'difference': difference(agreement),
@@ -1429,39 +1436,19 @@ class SaleOrderLine(models.Model):
             combo_lines._compute_price_unit()
             combo_lines._compute_discount()
         for line in lines - packages:
-            rule = line._admits_partner_agreement() and line.order_id.partner_id._get_partner_pricing_rule(line.product_id) or {}
-            rule_type = rule.get('type')
+            rule = line._get_agreement_rule()
+            discount, (rule_type, origin, rule_id) = line._agreement_discount_badge(rule)
+            values = {
+                'promo_reward_id': False,
+                'discount': discount,
+                'technical_discount': discount,
+                'pricing_rule_type': rule_type,
+                'pricing_rule_origin': origin,
+                'pricing_rule_id': rule_id,
+            }
             if rule_type == 'fixed_price':
-                price = rule['price']
-                line.with_context(skip_manual_discount_breakdown=True).write({
-                    'promo_reward_id': False,
-                    'price_unit': price,
-                    'technical_price_unit': price,
-                    'discount': 0.0,
-                    'technical_discount': 0.0,
-                    'pricing_rule_type': 'fixed_price',
-                    'pricing_rule_origin': rule.get('origin_label') or 'Precio Fijo',
-                    'pricing_rule_id': rule.get('rule') and rule['rule'].id or False,
-                })
-            elif rule_type == 'discount':
-                disc = rule['discount']
-                line.with_context(skip_manual_discount_breakdown=True).write({
-                    'promo_reward_id': False,
-                    'discount': disc,
-                    'technical_discount': disc,
-                    'pricing_rule_type': rule.get('origin_type') or 'product',
-                    'pricing_rule_origin': rule.get('origin_label') or '',
-                    'pricing_rule_id': rule.get('rule') and rule['rule'].id or False,
-                })
-            else:
-                line.with_context(skip_manual_discount_breakdown=True).write({
-                    'promo_reward_id': False,
-                    'discount': 0.0,
-                    'technical_discount': 0.0,
-                    'pricing_rule_type': 'none',
-                    'pricing_rule_origin': '',
-                    'pricing_rule_id': False,
-                })
+                values.update(price_unit=rule['price'], technical_price_unit=rule['price'])
+            line.with_context(skip_manual_discount_breakdown=True).write(values)
 
     @api.constrains('promo_reward_id')
     def _check_line_promotion(self):
@@ -1479,7 +1466,4 @@ class SaleOrderLine(models.Model):
 
     def _has_fixed_price_agreement(self):
         self.ensure_one()
-        if not self._admits_partner_agreement():
-            return False
-        rule = self.order_id.partner_id._get_partner_pricing_rule(self.product_id)
-        return rule.get('type') == 'fixed_price'
+        return self._get_agreement_rule().get('type') == 'fixed_price'
