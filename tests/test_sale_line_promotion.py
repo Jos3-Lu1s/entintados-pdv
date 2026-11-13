@@ -1695,6 +1695,34 @@ class TestSaleComboPromotion(TransactionCase):
         self.assertAlmostEqual(order.amount_untaxed, 900.0, places=2)
         for line in items:
             self.assertFalse(line._is_listed_for_line_promotion())
+
+    def test_combo_items_show_package_promo(self):
+        reward = self._create_program(10.0, 'Esp', self.package)
+        __, package_line, items = self._quote()
+        self.assertTrue(package_line.promo_available_info)
+        for line in items:
+            self.assertFalse(line.promo_available_info)
+
+        package_line.action_set_line_promotion(reward.id)
+        (package_line | items).invalidate_recordset(['promo_available_info'])
+        for line in items:
+            self.assertEqual(line.promo_available_info, {
+                'options': [{
+                    'reward_id': reward.id,
+                    'name': 'Esp',
+                    'discount': 10.0,
+                    'difference': 0.0,
+                    'applied': True,
+                    'scope': 'specific',
+                }],
+                'fallback': False,
+                'from_package': True,
+            })
+            self.assertEqual(line.promo_available_count, 0)
+
+        package_line.action_set_line_promotion(False)
+        items.invalidate_recordset(['promo_available_info'])
+        for line in items:
             self.assertFalse(line.promo_available_info)
 
     def test_specific_promo_on_combo_item_not_offered(self):

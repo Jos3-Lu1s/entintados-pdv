@@ -1283,6 +1283,23 @@ class SaleOrderLine(models.Model):
             # Es solo informativo: quien lee el pedido puede no tener acceso a lealtad.
             available = order.sudo()._get_line_promotion_rewards()
             for line in lines:
+                if line.combo_item_id:
+                    # Un producto del combo solo informa la promoción de su paquete: se elige allá.
+                    package_reward = line._get_combo_package_line().promo_reward_id.sudo()
+                    if package_reward:
+                        line.promo_available_info = {
+                            'options': [{
+                                'reward_id': package_reward.id,
+                                'name': package_reward.program_id.name,
+                                'discount': package_reward.discount,
+                                'difference': 0.0,
+                                'applied': True,
+                                'scope': package_reward.discount_applicability,
+                            }],
+                            'fallback': False,
+                            'from_package': True,
+                        }
+                    continue
                 applied = line.promo_reward_id.sudo()
                 rewards = available.get(line, self.env['loyalty.reward']) - applied
                 if not rewards and not applied:

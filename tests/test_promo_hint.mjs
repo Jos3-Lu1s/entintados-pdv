@@ -72,6 +72,23 @@ test('offers to remove the order-wide promotion from the whole order', () => {
     });
 });
 
+test('describes the promotion a combo product takes from its package', () => {
+    const rows = promoHintLines({
+        options: [
+            { reward_id: 4, name: 'Promo Esp', discount: 10, difference: 0, applied: true, scope: 'specific' },
+        ],
+        fallback: false,
+        from_package: true,
+    }, identity, money);
+    assert.deepEqual(rows, [{
+        key: 'reward-4',
+        text: 'Promo Esp - 10 %',
+        detail: 'aplicada en el paquete',
+        rewardId: 4,
+        applied: true,
+    }]);
+});
+
 test('handles a line without options', () => {
     assert.deepEqual(promoHintLines(false, identity, money), []);
     assert.deepEqual(promoHintLines({ options: [], fallback: false }, identity, money), []);

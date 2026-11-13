@@ -5,7 +5,9 @@
  *
  * @param {{options: {reward_id: number, name: string, discount: number, difference: number,
  *          applied: boolean, scope: 'order'|'specific'}[],
- *          fallback: {label: string, difference: number, scope: 'order'|'specific'}|false}|false} info
+ *          fallback: {label: string, difference: number, scope: 'order'|'specific'}|false,
+ *          from_package?: boolean}|false} info  `from_package`: producto de un combo que solo
+ *          informa la promoción de su paquete.
  * @param {(text: string) => string} translate
  * @param {(amount: number) => string} formatAmount
  * @returns {{key: string, text: string, detail: string, rewardId: number|false, applied: boolean}[]}
@@ -29,7 +31,9 @@ export function promoHintLines(info, translate, formatAmount) {
     const rows = (info.options || []).map((option) => ({
         key: `reward-${option.reward_id}`,
         text: `${option.name} - ${option.discount} %${scopeLabel(option)}`,
-        detail: option.applied ? translate("aplicada") : describe(option.difference),
+        detail: option.applied
+            ? (info.from_package ? translate("aplicada en el paquete") : translate("aplicada"))
+            : describe(option.difference),
         rewardId: option.reward_id,
         applied: option.applied,
     }));
