@@ -187,7 +187,8 @@ class TestSaleLinePromotion(TransactionCase):
         line = self._create_line(order, self.product_plain)
         self.assertTrue(line._admits_line_promotion())
         line.with_context(_tint_operation=_TINT_OPERATION).write({'tint_snapshot': {'base_only': True}})
-        self.assertFalse(line._admits_line_promotion())
+        self.assertTrue(line._admits_line_promotion())
+        self.assertFalse(line._get_line_promotion_block_reason())
 
     def test_constraint_rejects_scope_and_line(self):
         program = self._create_program([{'discount': 20.0}, {'discount': 5.0, 'discount_applicability': 'cheapest'}])
@@ -789,21 +790,21 @@ class TestSaleLinePromotion(TransactionCase):
         return order._apply_tint(formula, base, 1)
 
 
-    def test_bulk_button_with_tint_applies_to_others(self):
+    def test_bulk_button_with_tint_applies_to_all(self):
         reward = self._create_program([{'discount': 10.0}]).reward_ids
         order = self._create_order()
         tint_line = self._tint_line(order)
         brush_line = self._create_line(order, self.product_plain, qty=2.0)
-        self.assertFalse(tint_line._admits_line_promotion())
-        self.assertFalse(tint_line.promo_available_info)
-        tint_values = (tint_line.discount, tint_line.price_unit)
+        self.assertTrue(tint_line._admits_line_promotion())
+        self.assertTrue(tint_line.promo_available_info)
+        tint_price = tint_line.price_unit
 
         order.action_open_reward_wizard()
 
         self.assertEqual(brush_line.promo_reward_id, reward)
         self.assertEqual(brush_line.discount, 10.0)
-        self.assertEqual((tint_line.discount, tint_line.price_unit), tint_values)
-        self.assertFalse(tint_line.promo_reward_id)
+        self.assertEqual(tint_line.promo_reward_id, reward)
+        self.assertEqual((tint_line.discount, tint_line.price_unit), (10.0, tint_price))
 
     def test_bulk_button_tie_takes_lowest_id(self):
         program = self._create_program([{'discount': 15.0}, {'discount': 15.0}])
@@ -1830,3 +1831,252 @@ class TestSaleComboPromotion(TransactionCase):
         self.package_rule.write({'rule_type': 'fixed_price', 'fixed_price': 200.0, 'discount': 0.0})
         package_line.invalidate_recordset(['promo_available_info'])
         self.assertEqual(package_line.promo_available_info['fallback']['difference'], 700.0)
+
+
+@tagged('post_install', '-at_install')
+class TestSaleTintPromotion(TransactionCase):
+    """La línea entintada admite promociones: el dominio se evalúa con la base, el % cubre el
+    precio completo y al quitarla vuelve al descuento del Punto de Venta o a 0."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.env.user.group_ids |= (
+            cls.env.ref('product.group_product_pricelist')
+            | cls.env.ref('sale.group_discount_per_so_line')
+            | cls.env.ref('entintados_pdv.group_sale_edit_price_unit')
+            | cls.env.ref('entintados_pdv.group_sale_edit_discount')
+        )
+        cls.env['loyalty.program'].search([]).active = False
+        cls.lines = cls.env['sale.order.line']
+        products = cls.env['product.product']
+        base_type = cls.env['tint.base.type'].search([('code', '=', 'W')], limit=1)
+        size = cls.env['tint.size'].search([('code', '=', 'G')], limit=1)
+        cls.base = products.create({
+            'name': 'Base Tinta Promo',
+            'default_code': 'TEST-TINT-PROMO-BASE',
+            'tint_role': 'base',
+            'tint_base_type_id': base_type.id,
+            'tint_size_id': size.id,
+            'list_price': 200.0,
+            'taxes_id': [Command.clear()],
+            'is_storable': True,
+            'invoice_policy': 'order',
+        })
+        cls.colorant = products.create({
+            'name': 'Colorante Tinta Promo',
+            'default_code': 'TEST-TINT-PROMO-RED',
+            'tint_role': 'colorant',
+            'uom_id': cls.env.ref('entintados_pdv.uom_tint_point').id,
+            'list_price': 2.0,
+            'taxes_id': [Command.clear()],
+            'is_storable': True,
+            'invoice_policy': 'order',
+        })
+        cls.plain = products.create({
+            'name': 'Brocha Tinta Promo',
+            'list_price': 100.0,
+            'taxes_id': [Command.clear()],
+            'invoice_policy': 'order',
+        })
+        color = cls.env['tint.color'].create({
+            'name': 'Color Tinta Promo',
+            'gallery_id': cls.env['tint.gallery'].search([], limit=1).id,
+            'code_number': '9876',
+        })
+        cls.formula = cls.env['tint.color.formula'].create({
+            'color_id': color.id,
+            'base_type_id': base_type.id,
+            'size_id': size.id,
+            'line_ids': [Command.create({'colorant_id': cls.colorant.id, 'points': 12})],
+        })
+        cls.pricelist = cls.env['product.pricelist'].create({
+            'name': 'Tarifa Tinta Promo',
+            'currency_id': cls.env.company.currency_id.id,
+        })
+        cls.partner = cls.env['res.partner'].create({
+            'name': 'Cliente Tinta Promo',
+            'is_customer': True,
+            'phone': '1234567890',
+        })
+        cls.partner.property_product_pricelist = cls.pricelist
+
+    @classmethod
+    def _create_program(cls, discount, name, products=None, **rule):
+        reward = {
+            'reward_type': 'discount',
+            'discount_mode': 'percent',
+            'discount': discount,
+            'discount_applicability': 'specific' if products else 'order',
+            'required_points': 1,
+        }
+        if products:
+            reward['discount_product_ids'] = [Command.set(products.ids)]
+        return cls.env['loyalty.program'].create({
+            'name': name,
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [Command.clear(), Command.create({
+                'reward_point_mode': 'order',
+                'reward_point_amount': 1,
+                **rule,
+            })],
+            'reward_ids': [Command.clear(), Command.create(reward)],
+        }).reward_ids
+
+    def _create_order(self):
+        return self.env['sale.order'].create({
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+        })
+
+    def _tint(self, order, pos_discount=0.0):
+        """Entintado del asistente o, con `pos_discount`, como llega de un ticket del PDV."""
+        from ..models.sale_tint import _TINT_OPERATION
+        line = order._apply_tint(self.formula, self.base, 1)
+        if pos_discount:
+            line.with_context(_tint_operation=_TINT_OPERATION).write(
+                {'tint_snapshot': {**line.tint_snapshot, 'pos_discount': pos_discount}})
+        return line
+
+    def _plain(self, order):
+        return self.lines.create({'order_id': order.id, 'product_id': self.plain.id, 'product_uom_qty': 1.0})
+
+    def _assert_tint(self, line, discount, rule_type='none', origin=False, reward=None):
+        self.assertEqual(
+            (line.discount, line.technical_discount, line.pricing_rule_type, line.pricing_rule_origin),
+            (discount, discount, rule_type, origin),
+        )
+        self.assertEqual(line.promo_reward_id, reward or self.env['loyalty.reward'])
+        self.assertEqual(line.price_unit, 224.0)
+        self.assertEqual(line.price_origin, 'tint')
+        self.assertTrue(line.tint_snapshot)
+
+    def test_specific_promo_on_tint_line(self):
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        line = self._tint(order)
+        self._assert_tint(line, 0.0)
+        self.assertTrue(line._admits_line_promotion())
+        self.assertEqual(order._get_line_promotion_rewards()[line], reward)
+        line.action_set_line_promotion(reward.id)
+        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self.assertAlmostEqual(order.amount_untaxed, 201.6, places=2)
+
+    def test_specific_promo_on_colorant_not_offered(self):
+        reward = self._create_program(10.0, 'Esp Colorante', self.colorant)
+        order = self._create_order()
+        line = self._tint(order)
+        self.assertTrue(line._admits_line_promotion())
+        self.assertNotIn(reward, order._get_line_promotion_rewards()[line])
+        with self.assertRaises(ValidationError):
+            line._apply_line_promotion(reward)
+
+    def test_order_promo_reaches_tint_line(self):
+        reward = self._create_program(10.0, 'Pedido')
+        order = self._create_order()
+        tint_line = self._tint(order, pos_discount=5.0)
+        self._plain(order).action_set_line_promotion(reward.id)
+        self.assertEqual(order.order_promo_reward_id, reward)
+        self._assert_tint(tint_line, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+
+        # El entintado agregado después la recibe al guardar.
+        other = self._create_order()
+        other_plain = self._plain(other)
+        other_plain.action_set_line_promotion(reward.id)
+        new_tint = self._tint(other)
+        other.write({'order_line': [Command.update(other_plain.id, {'product_uom_qty': 2.0})]})
+        self._assert_tint(new_tint, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+
+    def test_bulk_button_applies_to_tint_where_better(self):
+        reward = self._create_program(3.0, 'Esp', self.base)
+        order = self._create_order()
+        wizard_line = self._tint(order)
+        pos_line = self._tint(order, pos_discount=5.0)
+        order.action_open_reward_wizard()
+        self._assert_tint(wizard_line, 3.0, 'promo', 'Promo: Esp (3.0%)', reward)
+        self._assert_tint(pos_line, 5.0)
+
+    def test_drop_tint_promo_restores_pos_discount(self):
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        wizard_line = self._tint(order)
+        pos_line = self._tint(order, pos_discount=5.0)
+        for line in wizard_line | pos_line:
+            line.action_set_line_promotion(reward.id)
+            line.action_set_line_promotion(False)
+        self._assert_tint(wizard_line, 0.0)
+        self._assert_tint(pos_line, 5.0)
+
+    def test_tint_promo_survives_update_prices(self):
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        line = self._tint(order)
+        line.action_set_line_promotion(reward.id)
+        order.action_update_prices()
+        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+
+    def test_tint_promo_survives_partner_change(self):
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        line = self._tint(order, pos_discount=5.0)
+        line.action_set_line_promotion(reward.id)
+        order.partner_id = self.env['res.partner'].create({
+            'name': 'Otro Cliente Tinta Promo',
+            'is_customer': True,
+            'phone': '1234567891',
+            'property_product_pricelist': self.pricelist.id,
+        })
+        order._recompute_pricing_rules()
+        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+
+    def test_tint_promo_minimum_not_self_cancelling(self):
+        # El entintado vale 224: alcanza el mínimo de 220 solo si se mide sin su 10 %.
+        reward = self._create_program(10.0, 'Esp', self.base, minimum_amount=220.0)
+        order = self._create_order()
+        line = self._tint(order)
+        line.action_set_line_promotion(reward.id)
+        order.write({'order_line': [Command.create({'product_id': self.plain.id, 'product_uom_qty': 0.0})]})
+        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+
+    def test_tint_order_promo_blocks_typed_discount(self):
+        reward = self._create_program(10.0, 'Pedido')
+        order = self._create_order()
+        line = self._tint(order)
+        line.action_set_line_promotion(reward.id)
+        self.assertFalse(line.manual_discount_allowed)
+        with self.assertRaises(UserError):
+            line.discount = 5.0
+        self._assert_tint(line, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+
+    def test_tint_direct_discount_write_still_rejected(self):
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        line = self._tint(order)
+        with self.assertRaises(ValidationError):
+            line.write({'discount': 20.0})
+        line.action_set_line_promotion(reward.id)
+        with self.assertRaises(ValidationError):
+            line.write({'discount': 20.0})
+        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+
+    def test_tint_promo_follows_reward_change(self):
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        line = self._tint(order)
+        line.action_set_line_promotion(reward.id)
+        reward.discount = 15.0
+        order._update_programs_and_rewards()
+        self._assert_tint(line, 15.0, 'promo', 'Promo: Esp (15.0%)', reward)
+
+    def test_tint_promo_hint_fallback(self):
+        # «Sin promoción» devuelve el entintado a su descuento del PDV o a 0, no a un acuerdo.
+        reward = self._create_program(10.0, 'Esp', self.base)
+        order = self._create_order()
+        wizard_line = self._tint(order)
+        pos_line = self._tint(order, pos_discount=5.0)
+        for line, difference in ((wizard_line, -22.4), (pos_line, -11.2)):
+            line.action_set_line_promotion(reward.id)
+            line.invalidate_recordset(['promo_available_info'])
+            self.assertAlmostEqual(line.promo_available_info['fallback']['difference'], difference, places=2)

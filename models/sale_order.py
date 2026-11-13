@@ -49,10 +49,9 @@ class SaleOrder(models.Model):
         for order in self:
             # El paquete de combo solo repite lo que ya suman sus productos.
             lines = order.order_line.filtered(lambda line: line.product_type != 'combo')
-            standard_lines = lines.filtered(lambda line: not getattr(line, 'is_reward_line', False) and not line.reward_id)
+            standard_lines = lines.filtered(lambda line: not line.reward_id)
             fixed_reward_lines = lines.filtered(
-                lambda line: (getattr(line, 'is_reward_line', False) or bool(line.reward_id))
-                and (line.price_subtotal < 0 or line.price_unit < 0)
+                lambda line: line.reward_id and (line.price_subtotal < 0 or line.price_unit < 0)
             )
             order.amount_discount = (
                 sum(standard_lines.mapped('discount_amount'))
@@ -160,14 +159,11 @@ class SaleOrder(models.Model):
             if old_currency.compare_amounts(package.combo_package_price, old_price):
                 continue
             package.combo_package_price = package._convert_price_currency(old_price, old_currency)
-            package.order_id.order_line.filtered(
-                lambda line: line.combo_item_id and line._get_linked_line() == package
-            )._reset_price_unit()
+            package._get_linked_lines().filtered('combo_item_id')._reset_price_unit()
         if vals.keys() & {'order_line', 'partner_id', 'pricelist_id'}:
             if not self.env.context.get('in_loyalty_update') and not self.env.context.get('gift_reevaluation'):
                 self._reevaluate_line_promotions()
-            # El core solo reevalúa los regalos al confirmar o con «Promociones».
-            if not self.env.context.get('gift_reevaluation') and not self.env.context.get('in_loyalty_update'):
+                # El core solo reevalúa los regalos al confirmar o con «Promociones».
                 for order in self.filtered(
                     lambda order: order.state in ('draft', 'sent') and order._gift_reward_lines()
                 ):
@@ -191,12 +187,6 @@ class SaleOrder(models.Model):
         self.order_line.filtered('combo_item_id')._sync_combo_package_agreement()
         return res
 
-    def _get_update_prices_lines(self):
-        # Excluir líneas con formulación/receta entintada: su precio depende de los componentes y base,
-        # y sus envases/descuento están protegidos contra edición directa.
-        lines = super()._get_update_prices_lines()
-        return lines.filtered(lambda line: not (hasattr(line, '_tint_recipe') and line._tint_recipe()))
-
     def _recompute_prices(self):
         # "Actualizar precios": el core pone discount = 0 y llama a _compute_discount() sin forzar;
         # forzado, se reaplica el acuerdo vigente en vez de releer ese 0 como acuerdo congelado.
@@ -219,7 +209,7 @@ class SaleOrder(models.Model):
         # Igual que el manual: el core ya puso `discount = 0` antes de recalcular.
         for line, discount in promo_discounts.items():
             if line.promo_reward_id and line.discount != discount:
-                line.with_context(skip_manual_discount_breakdown=True).write({
+                line._promotion_writer().write({
                     'discount': discount,
                     'technical_discount': discount,
                 })
@@ -231,15 +221,16 @@ class SaleOrder(models.Model):
             lines_to_update = order.order_line.filtered(
                 lambda l: l.product_id
                 and not l.display_type
-                and not getattr(l, 'is_reward_line', False)
+                and not l.is_reward_line
             )
             if lines_to_update:
                 # Como `_recompute_prices` del core: la regla de tarifa en caché puede ser la de la
                 # tarifa anterior (`pricelist_item_id` no depende de la tarifa del pedido).
                 lines_to_update.invalidate_recordset(['pricelist_item_id'])
-                lines_to_update.with_context(force_price_recomputation=True)._reset_price_unit()
-                lines_to_update.with_context(force_price_recomputation=True)._compute_price_unit()
-                lines_to_update.with_context(force_price_recomputation=True)._compute_discount()
+                lines_to_update = lines_to_update.with_context(force_price_recomputation=True)
+                lines_to_update._reset_price_unit()
+                lines_to_update._compute_price_unit()
+                lines_to_update._compute_discount()
 
     def _sync_opportunity_stage(self):
         """Al crear/vincular una cotización, mueve la oportunidad a la etapa de Cotización."""
@@ -326,7 +317,7 @@ class SaleOrder(models.Model):
         if self.env.context.get('exclude_protected_discount_lines'):
             protected = self.order_line.filtered(
                 lambda l: l.pricing_rule_type == 'fixed_price'
-                or getattr(l.product_id, 'tint_role', False) == 'colorant'
+                or l.product_id.tint_role == 'colorant'
             )
             return lines | protected
         return lines
@@ -379,6 +370,7 @@ class SaleOrder(models.Model):
         products = self.order_line.product_id
         products_per_rule = program._get_valid_products(products)
         points = None
+        precision = self.currency_id.decimal_places or 2
         for rule in program.rule_ids:
             if rule.mode == 'with_code' and rule not in self.code_enabled_rule_ids:
                 continue
@@ -394,7 +386,6 @@ class SaleOrder(models.Model):
                 price_line._get_line_promotion_threshold_amounts()
                 for price_line in amount_lines._get_lines_with_price_batch()
             ]
-            precision = self.currency_id.decimal_places or 2
             untaxed = float_round(sum(amount[0] for amount in amounts), precision_digits=precision)
             taxed = float_round(sum(amount[1] for amount in amounts), precision_digits=precision)
             minimum = rule._compute_amount(self.currency_id)
@@ -510,9 +501,13 @@ class SaleOrder(models.Model):
         """Vacía la promoción de pedido."""
         self.write({'order_promo_reward_id': False})
 
+    def _is_promotion_reward_current(self, reward):
+        self.ensure_one()
+        return reward.active and bool(reward.program_id.filtered_domain(self._get_program_domain()))
+
     def _get_line_promotion_loss_reason(self, line, reward):
         self.ensure_one()
-        if not reward.active or not reward.program_id.filtered_domain(self._get_program_domain()):
+        if not self._is_promotion_reward_current(reward):
             return _("ya no está vigente")
         if not line._admits_line_promotion():
             return _("la línea ya no la admite")
@@ -536,8 +531,7 @@ class SaleOrder(models.Model):
             order_reward = order.order_promo_reward_id
             if order_reward and order_reward not in order._get_order_promotion_rewards():
                 reason = order._get_order_promotion_loss_reason(order_reward)
-                order.order_line.filtered(lambda line: line.promo_reward_id == order_reward)._drop_line_promotion()
-                order._clear_order_promotion()
+                order._remove_order_promotion()
                 notices.append(_(
                     "El pedido dejó la promoción %(program)s: %(reason)s. Sus líneas volvieron a su acuerdo.",
                     program=order_reward.program_id.name,
@@ -574,13 +568,13 @@ class SaleOrder(models.Model):
                     ))
                 elif line.pricing_rule_origin == values['pricing_rule_origin']:
                     continue
-                line.with_context(skip_manual_discount_breakdown=True).write(values)
+                line._promotion_writer().write(values)
             order._apply_order_promotion_to_lines()
             order._notify_promotion_changes(notices)
 
     def _get_order_promotion_loss_reason(self, reward):
         self.ensure_one()
-        if not reward.active or not reward.program_id.filtered_domain(self._get_program_domain()):
+        if not self._is_promotion_reward_current(reward):
             return _("ya no está vigente")
         return _("el pedido ya no cumple la condición")
 
@@ -626,7 +620,7 @@ class SaleOrder(models.Model):
         for order in self:
             for line in order.order_line.filtered('promo_reward_id'):
                 if line.promo_reward_id.discount and line.discount != line.promo_reward_id.discount:
-                    line.with_context(skip_manual_discount_breakdown=True).write({
+                    line._promotion_writer().write({
                         'discount': line.promo_reward_id.discount,
                         'technical_discount': line.promo_reward_id.discount,
                     })

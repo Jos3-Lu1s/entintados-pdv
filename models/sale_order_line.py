@@ -1258,8 +1258,6 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         if self.pricing_rule_type == 'fixed_price':
             return _("Precio fijo de acuerdo")
-        if self.tint_snapshot:
-            return _("Entintado")
         if self.qty_invoiced > 0:
             return _("Ya facturada")
         return False
@@ -1328,27 +1326,28 @@ class SaleOrderLine(models.Model):
                     option(reward, difference(reward.discount), reward == applied)
                     for reward in (rewards | applied).sorted(key=lambda reward: (-reward.discount, reward.id))
                 ]
-                fallback = False
-                if applied:
-                    rule = line._get_agreement_rule()
-                    if rule.get('type') == 'fixed_price':
-                        fixed_subtotal = line.currency_id.round(rule['price'] * line.product_uom_qty)
-                        fallback_diff = line.currency_id.round(sum(price_lines.mapped('price_subtotal')) - fixed_subtotal)
-                        fallback = {
-                            'label': rule.get('origin_label') or _("Precio Fijo"),
-                            'difference': fallback_diff,
-                        }
-                    else:
-                        agreement = rule['discount'] if rule.get('type') == 'discount' else 0.0
-                        fallback = {
-                            'label': rule.get('origin_label') or _("sin acuerdo"),
-                            'difference': difference(agreement),
-                        }
+                fallback = line._promotion_fallback_hint(price_lines, difference) if applied else False
                 if fallback:
                     # Quitar la promoción de pedido de una línea la quita de todo el pedido.
                     order_reward = line.order_id.order_promo_reward_id.sudo()
                     fallback['scope'] = 'order' if order_reward and applied == order_reward else 'specific'
                 line.promo_available_info = {'options': options, 'fallback': fallback}
+
+    def _promotion_fallback_hint(self, price_lines, difference):
+        """Vuelta al acuerdo vigente que el selector ofrece como «Sin promoción»."""
+        self.ensure_one()
+        rule = self._get_agreement_rule()
+        if rule.get('type') == 'fixed_price':
+            fixed_subtotal = self.currency_id.round(rule['price'] * self.product_uom_qty)
+            return {
+                'label': rule.get('origin_label') or _("Precio Fijo"),
+                'difference': self.currency_id.round(sum(price_lines.mapped('price_subtotal')) - fixed_subtotal),
+            }
+        agreement = rule['discount'] if rule.get('type') == 'discount' else 0.0
+        return {
+            'label': rule.get('origin_label') or _("sin acuerdo"),
+            'difference': difference(agreement),
+        }
 
     def action_set_line_promotion(self, reward_id=False):
         """Aplica la promoción `reward_id` a la línea, o la quita si es falso. Lo usa el selector
@@ -1398,6 +1397,10 @@ class SaleOrderLine(models.Model):
         taxes = self._get_taxes_without_discount()
         return taxes['total_excluded'], taxes['total_included']
 
+    def _promotion_writer(self):
+        """Líneas con las que las promociones escriben su descuento: no es un descuento manual."""
+        return self.with_context(skip_manual_discount_breakdown=True)
+
     def _line_promotion_values(self, reward):
         return {
             'discount': reward.discount,
@@ -1419,7 +1422,7 @@ class SaleOrderLine(models.Model):
                         reward=reward.display_name,
                         line=line.name,
                     ))
-        self.with_context(skip_manual_discount_breakdown=True).write(self._line_promotion_values(reward))
+        self._promotion_writer().write(self._line_promotion_values(reward))
 
     def _drop_line_promotion(self):
         """Quita la promoción de las líneas y las devuelve a su acuerdo vigente."""
@@ -1437,19 +1440,24 @@ class SaleOrderLine(models.Model):
             combo_lines._compute_price_unit()
             combo_lines._compute_discount()
         for line in lines - packages:
-            rule = line._get_agreement_rule()
-            discount, (rule_type, origin, rule_id) = line._agreement_discount_badge(rule)
-            values = {
-                'promo_reward_id': False,
-                'discount': discount,
-                'technical_discount': discount,
-                'pricing_rule_type': rule_type,
-                'pricing_rule_origin': origin,
-                'pricing_rule_id': rule_id,
-            }
-            if rule_type == 'fixed_price':
-                values.update(price_unit=rule['price'], technical_price_unit=rule['price'])
-            line.with_context(skip_manual_discount_breakdown=True).write(values)
+            line._promotion_writer().write(line._promotion_fallback_values())
+
+    def _promotion_fallback_values(self):
+        """Valores con los que la línea vuelve a su acuerdo vigente al quitar su promoción."""
+        self.ensure_one()
+        rule = self._get_agreement_rule()
+        discount, (rule_type, origin, rule_id) = self._agreement_discount_badge(rule)
+        values = {
+            'promo_reward_id': False,
+            'discount': discount,
+            'technical_discount': discount,
+            'pricing_rule_type': rule_type,
+            'pricing_rule_origin': origin,
+            'pricing_rule_id': rule_id,
+        }
+        if rule_type == 'fixed_price':
+            values.update(price_unit=rule['price'], technical_price_unit=rule['price'])
+        return values
 
     @api.constrains('promo_reward_id')
     def _check_line_promotion(self):
