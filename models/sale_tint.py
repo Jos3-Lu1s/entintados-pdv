@@ -134,7 +134,7 @@ class SaleOrder(models.Model):
             'name': self._tint_base_description(snapshot), 'product_uom_qty': quantity,
             'product_uom_id': base.uom_id.id, 'price_unit': snapshot['unit_price'],
             'discount': 0, 'tint_snapshot': snapshot, 'tint_container_qty': quantity,
-            'price_origin': 'manual', 'technical_price_unit': snapshot['unit_price'],
+            'price_origin': 'tint', 'technical_price_unit': snapshot['unit_price'],
         }]
         return lines.create(values).with_env(self.env)
 
@@ -187,7 +187,7 @@ class SaleOrderLine(models.Model):
         for line in tinted.with_context(_tint_operation=_TINT_OPERATION):
             line.price_unit = line._tint_saved_component_price()
             line.technical_price_unit = line.price_unit
-            line.price_origin = 'manual'
+            line.price_origin = 'tint'
             line.price_origin_label = _('Precio del entintado: base más colorantes')
             line.combo_price_snapshot = False
             line.combo_package_price = 0

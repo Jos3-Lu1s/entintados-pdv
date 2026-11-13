@@ -2,6 +2,7 @@ import { Component } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { registry } from "@web/core/registry";
+import { formatSelection } from "@web/views/fields/formatters";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import {
     buildComboBreakdown,
@@ -15,9 +16,8 @@ const PRICE_ORIGINS = {
     fixed_price: { icon: "fa-lock", color: "text-success" },
     manual: { icon: "fa-pencil", color: "text-warning" },
     combo: { icon: "fa-cubes", color: "text-primary" },
+    tint: { icon: "fa-tint", color: "text-info" },
 };
-
-const COMBO_PACKAGE = { icon: "fa-cubes", color: "text-primary" };
 
 export class PriceOriginPopover extends Component {
     static template = "entintados_pdv.PriceOriginPopover";
@@ -48,7 +48,7 @@ export class PriceOriginField extends Component {
 
     get origin() {
         if (this.isComboPackage) {
-            return COMBO_PACKAGE;
+            return PRICE_ORIGINS.combo;
         }
         return PRICE_ORIGINS[this.props.record.data[this.props.name]] || null;
     }
@@ -57,31 +57,23 @@ export class PriceOriginField extends Component {
         if (this.isComboPackage) {
             return _t("Desglose del combo");
         }
-        const value = this.props.record.data[this.props.name];
-        const selection = this.props.record.fields[this.props.name].selection || [];
-        const option = selection.find(([key]) => key === value);
-        return option ? option[1] : "";
+        return formatSelection(this.props.record.data[this.props.name], {
+            field: this.props.record.fields[this.props.name],
+        });
     }
 
     onClick(ev) {
-        if (this.isComboPackage) {
-            if (this.comboPopover.isOpen) {
-                this.comboPopover.close();
-                return;
-            }
-            this.comboPopover.open(ev.currentTarget, {
-                breakdown: buildComboBreakdown(this.props.record),
-            });
+        const [popover, props] = this.isComboPackage
+            ? [this.comboPopover, { breakdown: buildComboBreakdown(this.props.record) }]
+            : [this.popover, {
+                title: this.title,
+                detail: this.props.record.data.price_origin_label || false,
+            }];
+        if (popover.isOpen) {
+            popover.close();
             return;
         }
-        if (this.popover.isOpen) {
-            this.popover.close();
-            return;
-        }
-        this.popover.open(ev.currentTarget, {
-            title: this.title,
-            detail: this.props.record.data.price_origin_label || false,
-        });
+        popover.open(ev.currentTarget, props);
     }
 }
 

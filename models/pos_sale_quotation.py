@@ -259,7 +259,8 @@ class PosOrderQuotation(models.Model):
                           'price_origin': 'manual', 'price_origin_label': _('Precio conservado del Punto de Venta'),
                           'tax_ids': [Command.set(line.tax_ids_after_fiscal_position.ids)], 'name': description}
                 if snapshot:
-                    values.update(tint_snapshot=snapshot, tint_container_qty=line.qty)
+                    values.update(tint_snapshot=snapshot, tint_container_qty=line.qty, price_origin='tint',
+                                  price_origin_label=_('Precio del entintado: base más colorantes'))
                 self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION).create(values)
             if self.currency_id.compare_amounts(quotation.amount_total, self.amount_total):
                 raise UserError(_('El total de la cotización difiere del ticket. Revisa impuestos, redondeos o promociones; no se convirtió el ticket.'))

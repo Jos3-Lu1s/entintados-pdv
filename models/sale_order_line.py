@@ -66,6 +66,7 @@ class SaleOrderLine(models.Model):
             ('fixed_price', 'Precio fijo de acuerdo'),
             ('manual', 'Manual'),
             ('combo', 'Parte de combo'),
+            ('tint', 'Entintado'),
         ],
         string='Origen del precio',
         compute='_compute_price_unit',
