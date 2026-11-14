@@ -32,6 +32,23 @@ GENERIC_RFCS = {
 }
 
 
+def _pricing_result(rule_type, origin_type, origin_label='', price=False, discount=0.0, rule=False):
+    return {
+        'type': rule_type,
+        'origin_type': origin_type,
+        'origin_label': origin_label,
+        'price': price,
+        'discount': discount,
+        'rule': rule,
+    }
+
+
+def _discount_result(origin_type, name, rule):
+    return _pricing_result(
+        'discount', origin_type, format_origin_badge(name, rule.discount), discount=rule.discount, rule=rule,
+    )
+
+
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
@@ -113,114 +130,49 @@ class ResPartner(models.Model):
           Fallback: sin descuento (0.0).
 
         :param product: recordset de product.product
-        :return: dict con {'type': 'fixed_price'|'discount'|'none', 'price': float|False, 'discount': float, 'rule': recordset|False}
+        :return: dict con
+            - ``type``: 'fixed_price' | 'discount' | 'none'
+            - ``origin_type``: 'fixed_price' | 'product' | 'line' | 'scheme' | 'global' | 'none'
+            - ``origin_label``: texto del badge de origen ('' sin acuerdo)
+            - ``price``: precio fijo o False
+            - ``discount``: porcentaje (0.0 sin descuento)
+            - ``rule``: regla aplicada o False (también False en el descuento global)
         """
         self.ensure_one()
         if not product:
-            return {
-                'type': 'none',
-                'origin_type': 'none',
-                'origin_label': '',
-                'price': False,
-                'discount': 0.0,
-                'rule': False,
-            }
+            return _pricing_result('none', 'none')
 
-        product_template = product.product_tmpl_id
+        def first_rule(rule_type, applied_on, field, target):
+            return self.discount_rule_ids.filtered(
+                lambda r: r.rule_type == rule_type and r.applied_on == applied_on and r[field] == target
+            )[:1]
 
-        # 1. Precio fijo por Producto
-        fixed_rule = self.discount_rule_ids.filtered(
-            lambda r: r.rule_type == 'fixed_price'
-            and r.applied_on == '0_product'
-            and r.product_id == product
-        )
+        fixed_rule = first_rule('fixed_price', '0_product', 'product_id', product)
         if fixed_rule:
-            return {
-                'type': 'fixed_price',
-                'origin_type': 'fixed_price',
-                'origin_label': FIXED_PRICE_LABEL,
-                'price': fixed_rule[0].fixed_price,
-                'discount': 0.0,
-                'rule': fixed_rule[0],
-            }
-
-        # 2. Descuento por Producto
-        prod_discount_rule = self.discount_rule_ids.filtered(
-            lambda r: r.rule_type == 'discount'
-            and r.applied_on == '0_product'
-            and r.product_id == product
-        )
-        if prod_discount_rule:
-            rule_rec = prod_discount_rule[0]
-            return {
-                'type': 'discount',
-                'origin_type': 'product',
-                'origin_label': format_origin_badge('Producto', rule_rec.discount),
-                'price': False,
-                'discount': rule_rec.discount,
-                'rule': rule_rec,
-            }
-
-        # 3. Descuento por Línea de producto
-        line = product_template.lines_product_id
-        if line:
-            line_rule = self.discount_rule_ids.filtered(
-                lambda r: r.rule_type == 'discount'
-                and r.applied_on == '1_line'
-                and r.line_id == line
+            return _pricing_result(
+                'fixed_price', 'fixed_price', FIXED_PRICE_LABEL, price=fixed_rule.fixed_price, rule=fixed_rule,
             )
-            if line_rule:
-                rule_rec = line_rule[0]
-                line_name = line.name or ''
-                return {
-                    'type': 'discount',
-                    'origin_type': 'line',
-                    'origin_label': format_origin_badge(f"Línea {line_name}", rule_rec.discount),
-                    'price': False,
-                    'discount': rule_rec.discount,
-                    'rule': rule_rec,
-                }
 
-        # 4. Descuento por Esquema
-        scheme = product_template.scheme_id
-        if scheme:
-            scheme_rule = self.discount_rule_ids.filtered(
-                lambda r: r.rule_type == 'discount'
-                and r.applied_on == '2_scheme'
-                and r.scheme_id == scheme
-            )
-            if scheme_rule:
-                rule_rec = scheme_rule[0]
-                scheme_name = scheme.name or ''
-                return {
-                    'type': 'discount',
-                    'origin_type': 'scheme',
-                    'origin_label': format_origin_badge(f"Esquema {scheme_name}", rule_rec.discount),
-                    'price': False,
-                    'discount': rule_rec.discount,
-                    'rule': rule_rec,
-                }
+        product_rule = first_rule('discount', '0_product', 'product_id', product)
+        if product_rule:
+            return _discount_result('product', 'Producto', product_rule)
 
-        # 5. Descuento Global del Cliente (res.partner.discount)
+        template = product.product_tmpl_id
+        for applied_on, field, target, origin_type, prefix in (
+            ('1_line', 'line_id', template.lines_product_id, 'line', 'Línea'),
+            ('2_scheme', 'scheme_id', template.scheme_id, 'scheme', 'Esquema'),
+        ):
+            rule = target and first_rule('discount', applied_on, field, target)
+            if rule:
+                return _discount_result(origin_type, f"{prefix} {target.name or ''}", rule)
+
         if self.discount:
-            global_disc = self.discount * 100.0
-            return {
-                'type': 'discount',
-                'origin_type': 'global',
-                'origin_label': format_origin_badge('Cliente', global_disc),
-                'price': False,
-                'discount': global_disc,
-                'rule': False,
-            }
+            discount = self.discount * 100.0
+            return _pricing_result(
+                'discount', 'global', format_origin_badge('Cliente', discount), discount=discount,
+            )
 
-        return {
-            'type': 'none',
-            'origin_type': 'none',
-            'origin_label': '',
-            'price': False,
-            'discount': 0.0,
-            'rule': False,
-        }
+        return _pricing_result('none', 'none')
 
     @api.depends('is_customer', 'is_distributor')
     def _compute_is_sales_contact(self):

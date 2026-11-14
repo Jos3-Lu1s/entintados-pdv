@@ -18,10 +18,14 @@ FIXED_PRICE_LABEL = 'Precio fijo'
 DISCOUNT_DIGITS = 2
 
 
+def format_discount_number(discount):
+    """Número del porcentaje sin ceros sobrantes: ``30.0`` → ``'30'``, ``12.5`` → ``'12.5'``."""
+    return f"{float(discount):.{DISCOUNT_DIGITS}f}".rstrip('0').rstrip('.')
+
+
 def format_discount_percent(discount):
     """Porcentaje sin ceros sobrantes: ``30.0`` → ``'30%'``, ``12.5`` → ``'12.5%'``."""
-    text = f"{round(float(discount), DISCOUNT_DIGITS):.{DISCOUNT_DIGITS}f}".rstrip('0').rstrip('.')
-    return f"{text}%"
+    return f"{format_discount_number(discount)}%"
 
 
 def format_origin_badge(name, discount=None):

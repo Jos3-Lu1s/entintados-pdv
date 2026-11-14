@@ -5,6 +5,7 @@ from odoo.tests.common import TransactionCase, tagged
 from ..utils.origin_badge import (
     COMBO_ORIGIN_PREFIX,
     FIXED_PRICE_LABEL,
+    format_discount_number,
     format_discount_percent,
     format_origin_badge,
 )
@@ -26,6 +27,12 @@ class TestOriginBadge(TransactionCase):
         for discount, expected in cases:
             with self.subTest(discount=discount):
                 self.assertEqual(format_discount_percent(discount), expected)
+
+    def test_discount_number_without_percent_sign(self):
+        cases = [(30.0, '30'), (12.5, '12.5'), (33.333, '33.33'), (0.0, '0'), (9.999, '10')]
+        for discount, expected in cases:
+            with self.subTest(discount=discount):
+                self.assertEqual(format_discount_number(discount), expected)
 
     def test_badge_with_discount(self):
         cases = [

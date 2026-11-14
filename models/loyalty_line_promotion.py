@@ -18,11 +18,12 @@ class LoyaltyReward(models.Model):
         )
         if rewards_in_use:
             rewards_in_use.action_archive()
-            remaining = self - rewards_in_use
-            if not remaining:
-                return True
-            return super(LoyaltyReward, remaining).unlink()
-        return super().unlink()
+        remaining = self - rewards_in_use
+        return super(LoyaltyReward, remaining).unlink() if remaining else True
+
+    def _sorted_by_line_promotion_discount(self):
+        """Mayor % primero: el orden con el que se elige y se ofrece una promoción por línea."""
+        return self.sorted(key=lambda reward: (-reward.discount, reward.id))
 
     def _is_line_promotion(self):
         """Recompensa que se elige por línea y vive en su `discount`, sin línea de recompensa.

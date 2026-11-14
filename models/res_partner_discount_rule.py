@@ -86,8 +86,10 @@ class ResPartnerDiscountRule(models.Model):
         readonly=True,
     )
 
-    # _check_unique_rules da el mensaje legible; los índices cubren lo que escribe por SQL,
-    # como la fusión de contactos.
+    _TARGET_FIELDS = {'0_product': 'product_id', '1_line': 'line_id', '2_scheme': 'scheme_id'}
+
+    # create/write validan antes y dan el mensaje legible; los índices cubren lo que se
+    # escribe por SQL, como la fusión de contactos.
     _partner_product_uniq = models.UniqueIndex(
         "(partner_id, product_id) WHERE applied_on = '0_product'",
         'Ya existe una regla comercial para este producto en el cliente.',
@@ -138,14 +140,11 @@ class ResPartnerDiscountRule(models.Model):
         if self.applied_on == '0_product':
             self.line_id = False
             self.scheme_id = False
-        elif self.applied_on == '1_line':
-            # El esquema se conserva para filtrar las líneas.
+        elif self.applied_on in ('1_line', '2_scheme'):
             self.product_id = False
-            if self.rule_type == 'fixed_price':
-                self.rule_type = 'discount'
-        elif self.applied_on == '2_scheme':
-            self.product_id = False
-            self.line_id = False
+            # En una regla por línea el esquema se conserva para filtrar las líneas.
+            if self.applied_on == '2_scheme':
+                self.line_id = False
             if self.rule_type == 'fixed_price':
                 self.rule_type = 'discount'
 
@@ -170,18 +169,14 @@ class ResPartnerDiscountRule(models.Model):
     @api.constrains('applied_on', 'product_id', 'line_id', 'scheme_id')
     def _check_target_defined(self):
         for rule in self:
-            if rule.applied_on == '0_product' and not rule.product_id:
-                raise ValidationError(_(
-                    'Debe seleccionar un producto para la regla comercial.'
-                ))
-            elif rule.applied_on == '1_line' and not rule.line_id:
-                raise ValidationError(_(
-                    'Debe seleccionar una línea de producto para la regla comercial.'
-                ))
-            elif rule.applied_on == '2_scheme' and not rule.scheme_id:
-                raise ValidationError(_(
-                    'Debe seleccionar un esquema para la regla comercial.'
-                ))
+            field = self._TARGET_FIELDS.get(rule.applied_on)
+            if not field or rule[field]:
+                continue
+            if rule.applied_on == '0_product':
+                raise ValidationError(_('Debe seleccionar un producto para la regla comercial.'))
+            if rule.applied_on == '1_line':
+                raise ValidationError(_('Debe seleccionar una línea de producto para la regla comercial.'))
+            raise ValidationError(_('Debe seleccionar un esquema para la regla comercial.'))
 
     @api.constrains('discount', 'fixed_price', 'rule_type')
     def _check_values(self):
@@ -197,12 +192,10 @@ class ResPartnerDiscountRule(models.Model):
                         'El precio fijo no puede ser un valor negativo.'
                     ))
 
-    _TARGET_FIELDS = {'0_product': 'product_id', '1_line': 'line_id', '2_scheme': 'scheme_id'}
-
     @api.model_create_multi
     def create(self, vals_list):
-        # Los índices únicos rechazan el INSERT antes de que corra la restricción de Python:
-        # se valida antes para conservar el mensaje que nombra el objetivo y el cliente.
+        # Se valida antes del INSERT para dar el mensaje que nombra el objetivo y el cliente;
+        # el índice único solo daría su mensaje genérico.
         candidates = []
         for vals in vals_list:
             applied_on = vals.get('applied_on', '0_product')
@@ -235,14 +228,6 @@ class ResPartnerDiscountRule(models.Model):
         # La línea manda: una regla por línea siempre guarda el esquema de su línea.
         for rule in self.filtered(lambda r: r.applied_on == '1_line' and r.scheme_id != r.line_id.scheme):
             super(ResPartnerDiscountRule, rule).write({'scheme_id': rule.line_id.scheme.id})
-
-    @api.constrains('partner_id', 'applied_on', 'product_id', 'line_id', 'scheme_id')
-    def _check_unique_rules(self):
-        self._check_unique_rule_values([
-            (rule.partner_id.id, rule.applied_on, rule[self._TARGET_FIELDS[rule.applied_on]].id, rule.ids)
-            for rule in self
-            if rule.applied_on in self._TARGET_FIELDS
-        ])
 
     @api.model
     def _check_unique_rule_values(self, candidates):
