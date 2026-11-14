@@ -6,6 +6,8 @@ from odoo import Command, _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tools import float_compare
 
+from ..utils.origin_badge import FIXED_PRICE_LABEL, format_origin_badge
+
 PHONE_REGEX = re.compile(r'^\d{10}$')
 
 # Marca de contexto con la que los canales de captura del usuario piden
@@ -136,7 +138,7 @@ class ResPartner(models.Model):
             return {
                 'type': 'fixed_price',
                 'origin_type': 'fixed_price',
-                'origin_label': 'Precio Fijo',
+                'origin_label': FIXED_PRICE_LABEL,
                 'price': fixed_rule[0].fixed_price,
                 'discount': 0.0,
                 'rule': fixed_rule[0],
@@ -153,7 +155,7 @@ class ResPartner(models.Model):
             return {
                 'type': 'discount',
                 'origin_type': 'product',
-                'origin_label': f"Desc. Producto ({rule_rec.discount:.1f}%)",
+                'origin_label': format_origin_badge('Producto', rule_rec.discount),
                 'price': False,
                 'discount': rule_rec.discount,
                 'rule': rule_rec,
@@ -173,7 +175,7 @@ class ResPartner(models.Model):
                 return {
                     'type': 'discount',
                     'origin_type': 'line',
-                    'origin_label': f"Desc. Línea: {line_name} ({rule_rec.discount:.1f}%)",
+                    'origin_label': format_origin_badge(f"Línea {line_name}", rule_rec.discount),
                     'price': False,
                     'discount': rule_rec.discount,
                     'rule': rule_rec,
@@ -193,7 +195,7 @@ class ResPartner(models.Model):
                 return {
                     'type': 'discount',
                     'origin_type': 'scheme',
-                    'origin_label': f"Desc. Esquema: {scheme_name} ({rule_rec.discount:.1f}%)",
+                    'origin_label': format_origin_badge(f"Esquema {scheme_name}", rule_rec.discount),
                     'price': False,
                     'discount': rule_rec.discount,
                     'rule': rule_rec,
@@ -205,7 +207,7 @@ class ResPartner(models.Model):
             return {
                 'type': 'discount',
                 'origin_type': 'global',
-                'origin_label': f"Desc. Global Cliente ({global_disc:.1f}%)",
+                'origin_label': format_origin_badge('Cliente', global_disc),
                 'price': False,
                 'discount': global_disc,
                 'rule': False,

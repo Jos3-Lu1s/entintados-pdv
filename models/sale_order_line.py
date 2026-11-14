@@ -4,6 +4,8 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import float_compare, format_amount
 
+from ..utils.origin_badge import COMBO_ORIGIN_PREFIX, FIXED_PRICE_LABEL, format_origin_badge
+
 AGREEMENT_DISCOUNT_TYPES = ('product', 'line', 'scheme', 'global')
 # Campos del acuerdo que los productos de un combo copian de su paquete.
 COMBO_AGREEMENT_FIELDS = {
@@ -318,7 +320,7 @@ class SaleOrderLine(models.Model):
         return {
             'technical_discount': discount,
             'pricing_rule_type': 'manual',
-            'pricing_rule_origin': f"Desc. Manual ({discount:.1f}%)",
+            'pricing_rule_origin': format_origin_badge('Manual', discount),
             'pricing_rule_id': False,
             'promo_reward_id': False,
         }
@@ -842,7 +844,7 @@ class SaleOrderLine(models.Model):
             price = origin.product_uom_id._compute_price(origin.combo_package_price, self.product_uom_id)
             if origin.currency_id != self.currency_id:
                 price = self._convert_price_currency(price, origin.currency_id)
-            label = origin.pricing_rule_origin or 'Precio Fijo'
+            label = origin.pricing_rule_origin or FIXED_PRICE_LABEL
         else:
             rule = self._get_agreement_rule()
             if rule.get('type') != 'fixed_price':
@@ -967,7 +969,7 @@ class SaleOrderLine(models.Model):
                     line.price_unit = frozen_price
                     line.technical_price_unit = frozen_price
                     line.price_origin = 'fixed_price'
-                    line.price_origin_label = line._origin.pricing_rule_origin or 'Precio Fijo'
+                    line.price_origin_label = line._origin.pricing_rule_origin or FIXED_PRICE_LABEL
                 else:
                     line._set_price_origin()
                 continue
@@ -1070,7 +1072,7 @@ class SaleOrderLine(models.Model):
             'discount': package.discount,
             'technical_discount': package.discount,
             'pricing_rule_type': package.pricing_rule_type or 'none',
-            'pricing_rule_origin': f"Del paquete: {origin}" if origin else '',
+            'pricing_rule_origin': f"{COMBO_ORIGIN_PREFIX}{origin}" if origin else '',
             'pricing_rule_id': package.pricing_rule_id.id,
         }
 
@@ -1236,7 +1238,7 @@ class SaleOrderLine(models.Model):
         """Descuento y badge (tipo, origen, regla) que da el acuerdo `rule`."""
         rule_id = rule.get('rule') and rule['rule'].id or False
         if rule.get('type') == 'fixed_price':
-            return 0.0, ('fixed_price', rule.get('origin_label') or 'Precio Fijo', rule_id)
+            return 0.0, ('fixed_price', rule.get('origin_label') or FIXED_PRICE_LABEL, rule_id)
         if rule.get('type') == 'discount':
             return rule['discount'], (rule.get('origin_type') or 'product', rule.get('origin_label') or '', rule_id)
         return 0.0, ('none', '', False)
@@ -1340,7 +1342,7 @@ class SaleOrderLine(models.Model):
         if rule.get('type') == 'fixed_price':
             fixed_subtotal = self.currency_id.round(rule['price'] * self.product_uom_qty)
             return {
-                'label': rule.get('origin_label') or _("Precio Fijo"),
+                'label': rule.get('origin_label') or FIXED_PRICE_LABEL,
                 'difference': self.currency_id.round(sum(price_lines.mapped('price_subtotal')) - fixed_subtotal),
             }
         agreement = rule['discount'] if rule.get('type') == 'discount' else 0.0
@@ -1406,7 +1408,7 @@ class SaleOrderLine(models.Model):
             'discount': reward.discount,
             'technical_discount': reward.discount,
             'pricing_rule_type': 'promo',
-            'pricing_rule_origin': f"Promo: {reward.program_id.name} ({reward.discount:.1f}%)",
+            'pricing_rule_origin': format_origin_badge(reward.program_id.name, reward.discount),
             'pricing_rule_id': False,
             'promo_reward_id': reward.id,
         }

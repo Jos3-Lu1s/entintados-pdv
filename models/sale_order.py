@@ -4,6 +4,7 @@ from odoo.tools import float_compare, float_round
 from collections import defaultdict
 from markupsafe import Markup
 
+from ..utils.origin_badge import format_origin_badge
 from .loyalty_line_promotion import LINE_PROMOTION_PROGRAM_TYPES
 
 CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
@@ -339,7 +340,7 @@ class SaleOrder(models.Model):
         for values in values_list:
             values.update({
                 'pricing_rule_type': 'promo',
-                'pricing_rule_origin': f"Promoción: {reward.program_id.name}",
+                'pricing_rule_origin': format_origin_badge(reward.program_id.name, 'Regalo'),
                 'pricing_rule_id': False,
             })
         return values_list

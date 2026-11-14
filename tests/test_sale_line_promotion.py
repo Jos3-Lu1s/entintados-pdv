@@ -7,6 +7,8 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, new_test_user, tagged
 
+from ..utils.origin_badge import format_discount_percent
+
 
 @tagged('post_install', '-at_install')
 class TestSaleLinePromotion(TransactionCase):
@@ -236,7 +238,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertEqual(line.technical_discount, 20.0)
         self.assertEqual(line.price_subtotal, 80.0)
         self.assertEqual(line.pricing_rule_type, 'promo')
-        self.assertEqual(line.pricing_rule_origin, 'Promo: Promo Línea (20.0%)')
+        self.assertEqual(line.pricing_rule_origin, 'Promo Línea · 20%')
         self.assertFalse(line.pricing_rule_id)
         self.assertEqual(line.promo_reward_id, reward)
         self.assertFalse(line.reward_id)
@@ -295,7 +297,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertEqual(agreement_line.discount, 10.0)
         self.assertEqual(agreement_line.technical_discount, 10.0)
         self.assertEqual(agreement_line.pricing_rule_type, 'product')
-        self.assertEqual(agreement_line.pricing_rule_origin, 'Desc. Producto (10.0%)')
+        self.assertEqual(agreement_line.pricing_rule_origin, 'Producto · 10%')
         self.assertEqual(agreement_line.pricing_rule_id, rule)
         self.assertEqual(agreement_line.price_unit, 100.0)
         self.assertFalse(plain_line.promo_reward_id)
@@ -325,7 +327,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertEqual(line.discount, discount)
         self.assertEqual(line.technical_discount, discount)
         self.assertEqual(line.pricing_rule_type, 'promo')
-        self.assertEqual(line.pricing_rule_origin, f'Promo: Promo Línea ({discount:.1f}%)')
+        self.assertEqual(line.pricing_rule_origin, f'Promo Línea · {format_discount_percent(discount)}')
         self.assertEqual(line.promo_reward_id, reward)
 
     def test_qty_change_keeps_promo(self):
@@ -376,7 +378,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(line.promo_reward_id)
         self.assertEqual(line.discount, 7.0)
         self.assertEqual(line.pricing_rule_type, 'manual')
-        self.assertEqual(line.pricing_rule_origin, 'Desc. Manual (7.0%)')
+        self.assertEqual(line.pricing_rule_origin, 'Manual · 7%')
 
     def test_untracked_discount_drops_promo(self):
         order, line, reward = self._promo_line()
@@ -389,7 +391,7 @@ class TestSaleLinePromotion(TransactionCase):
         other_line.discount = 10.0
         self.assertFalse(other_line.promo_reward_id)
         self.assertEqual(other_line.pricing_rule_type, 'product')
-        self.assertEqual(other_line.pricing_rule_origin, 'Desc. Producto (10.0%)')
+        self.assertEqual(other_line.pricing_rule_origin, 'Producto · 10%')
 
     def test_discount_wizard_drops_promo(self):
         order, line, reward = self._promo_line()
@@ -440,7 +442,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(new_line.promo_reward_id)
         self.assertEqual(new_line.discount, 10.0)
         self.assertEqual(new_line.pricing_rule_type, 'product')
-        self.assertEqual(new_line.pricing_rule_origin, 'Desc. Producto (10.0%)')
+        self.assertEqual(new_line.pricing_rule_origin, 'Producto · 10%')
 
     def _save_line(self, order, line, **values):
         order.write({'order_line': [Command.update(line.id, values)]})
@@ -458,7 +460,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(line.promo_reward_id)
         self.assertEqual(line.discount, 10.0)
         self.assertEqual(line.pricing_rule_type, 'product')
-        self.assertEqual(line.pricing_rule_origin, 'Desc. Producto (10.0%)')
+        self.assertEqual(line.pricing_rule_origin, 'Producto · 10%')
 
     def test_removed_line_below_minimum(self):
         reward = self._create_program([{'discount': 10.0}], minimum_amount=1000.0).reward_ids
@@ -581,7 +583,7 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertIn(self.product_agreement.display_name, notice.body)
         self.assertIn('Promo Línea', notice.body)
         self.assertIn('el pedido ya no cumple la condición', notice.body)
-        self.assertIn('Desc. Producto (10.0%)', notice.body)
+        self.assertIn('Producto · 10%', notice.body)
 
     def test_no_notice_without_change(self):
         order, line, reward = self._minimum_promo()
@@ -922,7 +924,7 @@ class TestSaleLinePromotion(TransactionCase):
                 {'reward_id': twenty.id, 'name': 'Promo TK', 'discount': 20.0, 'difference': 0.0, 'applied': True, 'scope': 'order'},
                 {'reward_id': five.id, 'name': 'Promo TK', 'discount': 5.0, 'difference': -45.0, 'applied': False, 'scope': 'order'},
             ],
-            'fallback': {'label': 'Desc. Producto (10.0%)', 'difference': -30.0, 'scope': 'specific'},
+            'fallback': {'label': 'Producto · 10%', 'difference': -30.0, 'scope': 'specific'},
         })
         self.assertEqual(line.promo_available_count, 1)
 
@@ -1442,7 +1444,7 @@ class TestSaleLinePromotion(TransactionCase):
         lines[1].action_set_line_promotion(order_reward.id)
         # También P1, aunque su acuerdo de 15 % dé más: la promoción o el acuerdo, no los dos.
         self._assert_order_promo(order, lines, order_reward)
-        self.assertEqual(lines[0].pricing_rule_origin, 'Promo: Pedido (10.0%)')
+        self.assertEqual(lines[0].pricing_rule_origin, 'Pedido · 10%')
 
     def test_order_promo_new_line_on_save(self):
         order, lines, order_reward, __, products = self._order_promo_setup()
@@ -1681,7 +1683,7 @@ class TestSaleComboPromotion(TransactionCase):
         for line in items:
             self.assertEqual(
                 (line.discount, line.technical_discount, line.pricing_rule_type, line.pricing_rule_origin),
-                (discount, discount, rule_type, f'Del paquete: {origin}'),
+                (discount, discount, rule_type, f'↳ {origin}'),
                 line.product_id.name,
             )
             self.assertFalse(line.promo_reward_id)
@@ -1689,10 +1691,10 @@ class TestSaleComboPromotion(TransactionCase):
     def test_specific_promo_on_combo_package(self):
         reward = self._create_program(10.0, 'Esp', self.package)
         order, package_line, items = self._quote()
-        self._assert_combo(package_line, items, 15.0, 'product', 'Desc. Producto (15.0%)')
+        self._assert_combo(package_line, items, 15.0, 'product', 'Producto · 15%')
         self.assertEqual(order._get_line_promotion_rewards()[package_line], reward)
         package_line.action_set_line_promotion(reward.id)
-        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Esp · 10%', reward)
         self.assertAlmostEqual(order.amount_untaxed, 900.0, places=2)
         for line in items:
             self.assertFalse(line._is_listed_for_line_promotion())
@@ -1742,31 +1744,31 @@ class TestSaleComboPromotion(TransactionCase):
         loose = self.lines.create({'order_id': order.id, 'product_id': self.suelto.id, 'product_uom_qty': 1.0})
         loose.action_set_line_promotion(reward.id)
         self.assertEqual(order.order_promo_reward_id, reward)
-        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Pedido · 10%', reward)
 
         # El combo agregado después la recibe al guardar.
         other = self._create_order()
         other_loose = self.lines.create({'order_id': other.id, 'product_id': self.suelto.id, 'product_uom_qty': 1.0})
         other_loose.action_set_line_promotion(reward.id)
         __, new_package, new_items = self._quote(other)
-        self._assert_combo(new_package, new_items, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+        self._assert_combo(new_package, new_items, 10.0, 'promo', 'Pedido · 10%', reward)
 
     def test_bulk_button_applies_to_combo_where_better(self):
         self._create_program(10.0, 'Esp Diez', self.package)
         order, package_line, items = self._quote()
         order.action_open_reward_wizard()
-        self._assert_combo(package_line, items, 15.0, 'product', 'Desc. Producto (15.0%)')
+        self._assert_combo(package_line, items, 15.0, 'product', 'Producto · 15%')
 
         better = self._create_program(20.0, 'Esp Veinte', self.package)
         order.action_open_reward_wizard()
-        self._assert_combo(package_line, items, 20.0, 'promo', 'Promo: Esp Veinte (20.0%)', better)
+        self._assert_combo(package_line, items, 20.0, 'promo', 'Esp Veinte · 20%', better)
 
     def test_drop_combo_promo_restores_agreement(self):
         reward = self._create_program(10.0, 'Esp', self.package)
         __, package_line, items = self._quote()
         package_line.action_set_line_promotion(reward.id)
         package_line.action_set_line_promotion(False)
-        self._assert_combo(package_line, items, 15.0, 'product', 'Desc. Producto (15.0%)')
+        self._assert_combo(package_line, items, 15.0, 'product', 'Producto · 15%')
 
     def test_drop_combo_promo_with_new_fixed_price(self):
         reward = self._create_program(10.0, 'Esp', self.package)
@@ -1795,7 +1797,7 @@ class TestSaleComboPromotion(TransactionCase):
         order, package_line, items = self._quote()
         package_line.action_set_line_promotion(reward.id)
         order.write({'order_line': [Command.create({'product_id': self.suelto.id, 'product_uom_qty': 1.0})]})
-        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Esp · 10%', reward)
 
     def test_combo_promo_minimum_not_self_cancelling(self):
         # Sin acuerdo, el combo vale 1,000: alcanza el mínimo de 950 solo si se mide sin su 10 %.
@@ -1804,7 +1806,7 @@ class TestSaleComboPromotion(TransactionCase):
         order, package_line, items = self._quote()
         package_line.action_set_line_promotion(reward.id)
         order.write({'order_line': [Command.create({'product_id': self.extra.id, 'product_uom_qty': 0.0})]})
-        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Esp · 10%', reward)
 
     def test_combo_order_promo_blocks_typed_discount(self):
         reward = self._create_program(10.0, 'Pedido')
@@ -1815,7 +1817,7 @@ class TestSaleComboPromotion(TransactionCase):
             package_line.discount = 5.0
         with self.assertRaises(ValidationError):
             items[0].discount = 5.0
-        self._assert_combo(package_line, items, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+        self._assert_combo(package_line, items, 10.0, 'promo', 'Pedido · 10%', reward)
 
     def test_combo_promo_hint_difference(self):
         # El paquete vale 0: la diferencia del selector sale del importe de sus productos.
@@ -1961,7 +1963,7 @@ class TestSaleTintPromotion(TransactionCase):
         self.assertTrue(line._admits_line_promotion())
         self.assertEqual(order._get_line_promotion_rewards()[line], reward)
         line.action_set_line_promotion(reward.id)
-        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_tint(line, 10.0, 'promo', 'Esp · 10%', reward)
         self.assertAlmostEqual(order.amount_untaxed, 201.6, places=2)
 
     def test_specific_promo_on_colorant_not_offered(self):
@@ -1979,7 +1981,7 @@ class TestSaleTintPromotion(TransactionCase):
         tint_line = self._tint(order, pos_discount=5.0)
         self._plain(order).action_set_line_promotion(reward.id)
         self.assertEqual(order.order_promo_reward_id, reward)
-        self._assert_tint(tint_line, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+        self._assert_tint(tint_line, 10.0, 'promo', 'Pedido · 10%', reward)
 
         # El entintado agregado después la recibe al guardar.
         other = self._create_order()
@@ -1987,7 +1989,7 @@ class TestSaleTintPromotion(TransactionCase):
         other_plain.action_set_line_promotion(reward.id)
         new_tint = self._tint(other)
         other.write({'order_line': [Command.update(other_plain.id, {'product_uom_qty': 2.0})]})
-        self._assert_tint(new_tint, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+        self._assert_tint(new_tint, 10.0, 'promo', 'Pedido · 10%', reward)
 
     def test_bulk_button_applies_to_tint_where_better(self):
         reward = self._create_program(3.0, 'Esp', self.base)
@@ -1995,7 +1997,7 @@ class TestSaleTintPromotion(TransactionCase):
         wizard_line = self._tint(order)
         pos_line = self._tint(order, pos_discount=5.0)
         order.action_open_reward_wizard()
-        self._assert_tint(wizard_line, 3.0, 'promo', 'Promo: Esp (3.0%)', reward)
+        self._assert_tint(wizard_line, 3.0, 'promo', 'Esp · 3%', reward)
         self._assert_tint(pos_line, 5.0)
 
     def test_drop_tint_promo_restores_pos_discount(self):
@@ -2015,7 +2017,7 @@ class TestSaleTintPromotion(TransactionCase):
         line = self._tint(order)
         line.action_set_line_promotion(reward.id)
         order.action_update_prices()
-        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_tint(line, 10.0, 'promo', 'Esp · 10%', reward)
 
     def test_tint_promo_survives_partner_change(self):
         reward = self._create_program(10.0, 'Esp', self.base)
@@ -2029,7 +2031,7 @@ class TestSaleTintPromotion(TransactionCase):
             'property_product_pricelist': self.pricelist.id,
         })
         order._recompute_pricing_rules()
-        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_tint(line, 10.0, 'promo', 'Esp · 10%', reward)
 
     def test_tint_promo_minimum_not_self_cancelling(self):
         # El entintado vale 224: alcanza el mínimo de 220 solo si se mide sin su 10 %.
@@ -2038,7 +2040,7 @@ class TestSaleTintPromotion(TransactionCase):
         line = self._tint(order)
         line.action_set_line_promotion(reward.id)
         order.write({'order_line': [Command.create({'product_id': self.plain.id, 'product_uom_qty': 0.0})]})
-        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_tint(line, 10.0, 'promo', 'Esp · 10%', reward)
 
     def test_tint_order_promo_blocks_typed_discount(self):
         reward = self._create_program(10.0, 'Pedido')
@@ -2048,7 +2050,7 @@ class TestSaleTintPromotion(TransactionCase):
         self.assertFalse(line.manual_discount_allowed)
         with self.assertRaises(UserError):
             line.discount = 5.0
-        self._assert_tint(line, 10.0, 'promo', 'Promo: Pedido (10.0%)', reward)
+        self._assert_tint(line, 10.0, 'promo', 'Pedido · 10%', reward)
 
     def test_tint_direct_discount_write_still_rejected(self):
         reward = self._create_program(10.0, 'Esp', self.base)
@@ -2059,7 +2061,7 @@ class TestSaleTintPromotion(TransactionCase):
         line.action_set_line_promotion(reward.id)
         with self.assertRaises(ValidationError):
             line.write({'discount': 20.0})
-        self._assert_tint(line, 10.0, 'promo', 'Promo: Esp (10.0%)', reward)
+        self._assert_tint(line, 10.0, 'promo', 'Esp · 10%', reward)
 
     def test_tint_promo_follows_reward_change(self):
         reward = self._create_program(10.0, 'Esp', self.base)
@@ -2068,7 +2070,7 @@ class TestSaleTintPromotion(TransactionCase):
         line.action_set_line_promotion(reward.id)
         reward.discount = 15.0
         order._update_programs_and_rewards()
-        self._assert_tint(line, 15.0, 'promo', 'Promo: Esp (15.0%)', reward)
+        self._assert_tint(line, 15.0, 'promo', 'Esp · 15%', reward)
 
     def test_tint_promo_hint_fallback(self):
         # «Sin promoción» devuelve el entintado a su descuento del PDV o a 0, no a un acuerdo.

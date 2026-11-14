@@ -10,6 +10,8 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
 
+from ..utils.origin_badge import format_discount_percent
+
 
 @tagged('post_install', '-at_install')
 class TestPartnerDiscountHierarchy(TransactionCase):
@@ -522,7 +524,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         # Fallback sin reglas pero con descuento global 5%
         res_global = self.partner._get_partner_pricing_rule(self.prod_3)
         self.assertEqual(res_global['origin_type'], 'global')
-        self.assertEqual(res_global['origin_label'], 'Desc. Global Cliente (5.0%)')
+        self.assertEqual(res_global['origin_label'], 'Cliente · 5%')
         self.assertEqual(res_global['discount'], 5.0)
 
         # Nivel 4: Esquema (10%)
@@ -535,7 +537,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         res_scheme = self.partner._get_partner_pricing_rule(self.prod_2)
         self.assertEqual(res_scheme['origin_type'], 'scheme')
-        self.assertEqual(res_scheme['origin_label'], f"Desc. Esquema: {self.schema_a.name} (10.0%)")
+        self.assertEqual(res_scheme['origin_label'], f"Esquema {self.schema_a.name} · 10%")
         self.assertEqual(res_scheme['rule'].id, rule_scheme.id)
 
         # Nivel 3: Línea (18%)
@@ -548,7 +550,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         res_line = self.partner._get_partner_pricing_rule(self.prod_1)
         self.assertEqual(res_line['origin_type'], 'line')
-        self.assertEqual(res_line['origin_label'], f"Desc. Línea: {self.line_1.name} (18.0%)")
+        self.assertEqual(res_line['origin_label'], f"Línea {self.line_1.name} · 18%")
         self.assertEqual(res_line['rule'].id, rule_line.id)
 
         # Nivel 2: Producto (25%)
@@ -561,7 +563,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         res_prod = self.partner._get_partner_pricing_rule(self.prod_1)
         self.assertEqual(res_prod['origin_type'], 'product')
-        self.assertEqual(res_prod['origin_label'], "Desc. Producto (25.0%)")
+        self.assertEqual(res_prod['origin_label'], "Producto · 25%")
         self.assertEqual(res_prod['rule'].id, rule_prod.id)
 
         # Nivel 1: Precio Fijo ($320.0)
@@ -575,7 +577,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         res_fixed = self.partner._get_partner_pricing_rule(self.prod_1)
         self.assertEqual(res_fixed['origin_type'], 'fixed_price')
-        self.assertEqual(res_fixed['origin_label'], "Precio Fijo")
+        self.assertEqual(res_fixed['origin_label'], "Precio fijo")
         self.assertEqual(res_fixed['price'], 320.0)
         self.assertEqual(res_fixed['rule'].id, rule_fixed.id)
 
@@ -631,20 +633,20 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
         # Comprobar línea 1 (Precio fijo)
         self.assertEqual(l1.pricing_rule_type, 'fixed_price')
-        self.assertEqual(l1.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(l1.pricing_rule_origin, 'Precio fijo')
         self.assertEqual(l1.pricing_rule_id.id, fixed_rule.id)
         self.assertEqual(l1.price_unit, 350.0)
         self.assertEqual(l1.discount, 0.0)
 
         # Comprobar línea 2 (Línea de producto)
         self.assertEqual(l2.pricing_rule_type, 'line')
-        self.assertEqual(l2.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (12.0%)")
+        self.assertEqual(l2.pricing_rule_origin, f"Línea {self.line_2.name} · 12%")
         self.assertEqual(l2.pricing_rule_id.id, line_rule.id)
         self.assertEqual(l2.discount, 12.0)
 
         # Comprobar línea 3 (Descuento Global fallback 5%)
         self.assertEqual(l3.pricing_rule_type, 'global')
-        self.assertEqual(l3.pricing_rule_origin, 'Desc. Global Cliente (5.0%)')
+        self.assertEqual(l3.pricing_rule_origin, 'Cliente · 5%')
         self.assertFalse(l3.pricing_rule_id)
         self.assertEqual(l3.discount, 5.0)
 
@@ -657,7 +659,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         l1.product_id = prod_2_bis
         l1._onchange_product_id()
         self.assertEqual(l1.pricing_rule_type, 'line')
-        self.assertEqual(l1.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (12.0%)")
+        self.assertEqual(l1.pricing_rule_origin, f"Línea {self.line_2.name} · 12%")
         self.assertEqual(l1.pricing_rule_id.id, line_rule.id)
 
         # Reactividad ante cambio de contacto (cambia a Cliente C con descuento global 8%)
@@ -669,9 +671,9 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         order.partner_id = cliente_c
         order._onchange_partner_id_entintados_rules()
         self.assertEqual(l2.pricing_rule_type, 'global')
-        self.assertEqual(l2.pricing_rule_origin, 'Desc. Global Cliente (8.0%)')
+        self.assertEqual(l2.pricing_rule_origin, 'Cliente · 8%')
         self.assertEqual(l3.pricing_rule_type, 'global')
-        self.assertEqual(l3.pricing_rule_origin, 'Desc. Global Cliente (8.0%)')
+        self.assertEqual(l3.pricing_rule_origin, 'Cliente · 8%')
 
     def test_pos_order_line_fields_persistence(self):
         """Validar persistencia de pricing_rule_* en pos.order.line y exposición en _load_pos_data_fields."""
@@ -708,7 +710,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             'product_uom_qty': 1.0,
         })
         self.assertEqual(line.price_unit, 350.0)
-        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(line.pricing_rule_origin, 'Precio fijo')
 
         # Pasar la cotización a estado 'sent'
         order.state = 'sent'
@@ -726,10 +728,10 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         # Forzar recarga desde la base de datos para asegurar que se persistió en PostgreSQL
         line.invalidate_recordset()
 
-        # Verificar que el precio se restablece al de lista (500), el descuento es 10% y el badge refleja 'Desc. Global Cliente (10.0%)'
+        # Verificar que el precio se restablece al de lista (500), el descuento es 10% y el badge refleja 'Cliente · 10%'
         self.assertEqual(line.price_unit, 500.0, "El precio unitario debe restablecerse al precio de lista.")
         self.assertEqual(line.discount, 10.0, "El descuento debe actualizarse al 10% de partner_b.")
-        self.assertEqual(line.pricing_rule_origin, 'Desc. Global Cliente (10.0%)', "El badge de Origen Acuerdo no debe desaparecer ni revertirse al valor anterior.")
+        self.assertEqual(line.pricing_rule_origin, 'Cliente · 10%', "El badge de Origen Acuerdo no debe desaparecer ni revertirse al valor anterior.")
 
     def test_sent_quotation_change_partner_with_onchange_and_save(self):
         """Simular el ciclo completo del cliente web en estado 'sent': onchange + save con líneas."""
@@ -750,7 +752,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             'product_uom_qty': 1.0,
         })
         self.assertEqual(line.price_unit, 340.0)
-        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(line.pricing_rule_origin, 'Precio fijo')
 
         order.state = 'sent'
 
@@ -771,7 +773,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         order.partner_id = partner_c
         order._onchange_partner_id_entintados_rules()
         self.assertEqual(line.price_unit, 410.0)
-        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(line.pricing_rule_origin, 'Precio fijo')
 
         # 2. Simulación de Guardar (Save) desde el cliente web
         order.write({
@@ -781,7 +783,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
         line.invalidate_recordset()
         self.assertEqual(line.price_unit, 410.0, "El precio acordado con partner_c ($410) debe persistir.")
-        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo', "El badge 'Precio Fijo' debe persistir.")
+        self.assertEqual(line.pricing_rule_origin, 'Precio fijo', "El badge 'Precio fijo' debe persistir.")
         self.assertEqual(line.pricing_rule_type, 'fixed_price')
 
     def test_sent_quotation_change_product_on_existing_line(self):
@@ -811,14 +813,14 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         order.state = 'sent'
         self.assertEqual(line.price_unit, 330.0)
-        self.assertEqual(line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(line.pricing_rule_origin, 'Precio fijo')
 
         # Cambiar de prod_1 a prod_2 en la UI (onchange)
         line.product_id = self.prod_2
         line._onchange_product_id()
         self.assertEqual(line.price_unit, 800.0)
         self.assertEqual(line.discount, 15.0)
-        self.assertEqual(line.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (15.0%)")
+        self.assertEqual(line.pricing_rule_origin, f"Línea {self.line_2.name} · 15%")
 
         # Guardar en base de datos
         order.write({
@@ -827,7 +829,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         line.invalidate_recordset()
         self.assertEqual(line.price_unit, 800.0)
         self.assertEqual(line.discount, 15.0)
-        self.assertEqual(line.pricing_rule_origin, f"Desc. Línea: {self.line_2.name} (15.0%)")
+        self.assertEqual(line.pricing_rule_origin, f"Línea {self.line_2.name} · 15%")
 
     def _create_confirmed_order(self, partner, product, qty=1.0):
         order = self.sale_orders.create({
@@ -876,7 +878,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self.assertEqual(new_line.price_unit, 70.0)
         self.assertEqual(new_line.discount, 0.0)
         self.assertEqual(new_line.pricing_rule_type, 'fixed_price')
-        self.assertEqual(new_line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(new_line.pricing_rule_origin, 'Precio fijo')
         self.assertEqual(new_line._prepare_invoice_line()['price_unit'], 70.0)
 
     def test_confirmed_order_new_line_discount_rules(self):
@@ -1029,8 +1031,8 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         })
         self.env.user.group_ids |= self.env.ref('sale.group_discount_per_so_line')
         cases = [
-            (self.partner, partner_b, (500.0, 10.0, 'Desc. Global Cliente (10.0%)')),
-            (partner_b, self.partner, (350.0, 0.0, 'Precio Fijo')),
+            (self.partner, partner_b, (500.0, 10.0, 'Cliente · 10%')),
+            (partner_b, self.partner, (350.0, 0.0, 'Precio fijo')),
         ]
         for partner_from, partner_to, expected in cases:
             with self.subTest(partner_from=partner_from.name, partner_to=partner_to.name):
@@ -1217,7 +1219,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         partner = self._create_agreement_partner('Cliente Veracruz Acuerdo', self._create_percentage_pricelist())
         line = self._create_order(partner, self.prod_3).order_line
         self.assertEqual(self._line_values(line), (95.0, 10.0, 'product', 'pricelist'))
-        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._line_badge(line), ('product', 'Producto · 10%'))
         self.assertAlmostEqual(line.price_subtotal, 85.50)
 
     def test_update_prices_keeps_agreement_discount(self):
@@ -1243,7 +1245,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         rule.write({'discount': 15.0})
         order.action_update_prices()
         self.assertEqual(self._line_values(line), (95.0, 15.0, 'product', 'pricelist'))
-        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (15.0%)'))
+        self.assertEqual(self._line_badge(line), ('product', 'Producto · 15%'))
 
     def test_manual_discount_replaces_agreement(self):
         """Un descuento escrito sustituye al del acuerdo, aunque sea menor, y se marca manual."""
@@ -1255,14 +1257,14 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             line = self._create_order(partner, self.prod_3).order_line
             line.write({'discount': 7.0})
             self.assertEqual(self._line_values(line), expected)
-            self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (7.0%)'))
+            self.assertEqual(self._line_badge(line), ('manual', 'Manual · 7%'))
             self.assertFalse(line.pricing_rule_id)
 
         with self.subTest('Form'):
             order = self._create_order(partner, self.prod_3)
             self._edit_first_line(order, discount=7.0)
             self.assertEqual(self._line_values(order.order_line), expected)
-            self.assertEqual(self._line_badge(order.order_line), ('manual', 'Desc. Manual (7.0%)'))
+            self.assertEqual(self._line_badge(order.order_line), ('manual', 'Manual · 7%'))
 
     def test_manual_discount_persists(self):
         """Cantidad, "Actualizar precios" y cambio de cliente conservan el descuento manual."""
@@ -1296,7 +1298,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             order = manual_order()
             order.write({'partner_id': partner_b.id})
             self.assertEqual(self._line_values(order.order_line), expected)
-            self.assertEqual(self._line_badge(order.order_line), ('manual', 'Desc. Manual (7.0%)'))
+            self.assertEqual(self._line_badge(order.order_line), ('manual', 'Manual · 7%'))
 
         with self.subTest('cambio de cliente por Form'):
             order = manual_order()
@@ -1343,7 +1345,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                 order.order_line.write(vals)
                 order.write({'partner_id': partner_fixed.id})
                 self.assertEqual(self._line_values(order.order_line), expected)
-                self.assertEqual(self._line_badge(order.order_line), ('fixed_price', 'Precio Fijo'))
+                self.assertEqual(self._line_badge(order.order_line), ('fixed_price', 'Precio fijo'))
 
     def test_fixed_price_rejects_manual_discount(self):
         """El servidor rechaza descuento o precio distinto en precio fijo y descuento fuera de 0–100."""
@@ -1373,7 +1375,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
         order.order_line.write({'discount': 0.0})
         self.assertEqual(self._line_values(fixed_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
-        self.assertEqual(self._line_badge(fixed_line), ('fixed_price', 'Precio Fijo'))
+        self.assertEqual(self._line_badge(fixed_line), ('fixed_price', 'Precio fijo'))
         self.assertFalse(fixed_line.manual_discount_allowed)
         # Sin acuerdo para la línea, 0 % es el descuento vigente: no es manual.
         self.assertEqual(self._line_badge(eligible_line), ('none', ''))
@@ -1396,7 +1398,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             order, _rule = order_with('Cliente Copia Desc', {'discount': 7.0})
             line = order.copy().order_line
             self.assertEqual(self._line_values(line), (95.0, 7.0, 'manual', 'pricelist'))
-            self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (7.0%)'))
+            self.assertEqual(self._line_badge(line), ('manual', 'Manual · 7%'))
 
         with self.subTest('precio manual'):
             order, _rule = order_with('Cliente Copia Precio', {'price_unit': 90.0})
@@ -1418,7 +1420,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                 rule.write({'rule_type': 'fixed_price', 'fixed_price': 70.0})
                 line = order.copy().order_line
                 self.assertEqual(self._line_values(line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
-                self.assertEqual(self._line_badge(line), ('fixed_price', 'Precio Fijo'))
+                self.assertEqual(self._line_badge(line), ('fixed_price', 'Precio fijo'))
 
     def test_manual_price_unit(self):
         """Un precio tecleado se marca manual, conserva el acuerdo y solo se pierde al cambiar producto."""
@@ -1523,10 +1525,10 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         acuerdo del cliente nuevo, no un descuento manual."""
         self._enable_line_discounts()
         expected_badges = {
-            'product': 'Desc. Producto (15.0%)',
-            'line': f"Desc. Línea: {self.line_1.name} (15.0%)",
-            'scheme': f"Desc. Esquema: {self.schema_a.name} (15.0%)",
-            'global': 'Desc. Global Cliente (15.0%)',
+            'product': 'Producto · 15%',
+            'line': f"Línea {self.line_1.name} · 15%",
+            'scheme': f"Esquema {self.schema_a.name} · 15%",
+            'global': 'Cliente · 15%',
         }
         for rule_type, expected_badge in expected_badges.items():
             with self.subTest(rule_type=rule_type):
@@ -1549,7 +1551,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         self._enable_line_discounts()
         partner = self._create_agreement_partner(
             'Cliente Control Manual', self.env['product.pricelist'].create({'name': 'Tarifa Lista'}))
-        expected = ('manual', 'Desc. Manual (7.0%)')
+        expected = ('manual', 'Manual · 7%')
 
         with self.subTest('formulario'):
             line = self._create_order(partner, self.prod_3).order_line
@@ -1576,7 +1578,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
         line = self._create_order(partner, self.prod_3).order_line
         line.write({'discount': 7.0, 'technical_discount': 7.0})
         self.assertEqual(round(line.discount, 2), 7.0)
-        self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._line_badge(line), ('product', 'Producto · 10%'))
 
     def test_create_with_discount_is_manual(self):
         """Una línea creada con `discount` (importación o RPC) queda manual como por `write`, y
@@ -1596,7 +1598,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                 line = create_line(discount)
                 expected = (100.0, discount, 'manual', 'list')
                 self.assertEqual(self._line_values(line), expected)
-                self.assertEqual(self._line_badge(line), ('manual', f'Desc. Manual ({discount:.1f}%)'))
+                self.assertEqual(self._line_badge(line), ('manual', f'Manual · {format_discount_percent(discount)}'))
                 self.assertEqual(round(line.technical_discount, 2), discount)
                 line.order_id.action_update_prices()
                 self.assertEqual(self._line_values(line), expected)
@@ -1608,7 +1610,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
             )
             self.assertFalse(result['messages'])
             line = self.sale_orders.browse(result['ids']).order_line
-            self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (5.0%)'))
+            self.assertEqual(self._line_badge(line), ('manual', 'Manual · 5%'))
             line.order_id.action_update_prices()
             self.assertEqual(round(line.discount, 2), 5.0)
 
@@ -1619,7 +1621,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
                     'product_id': self.prod_3.id, 'discount': 10.0, 'technical_discount': 10.0,
                 })],
             }).order_line
-            self.assertEqual(self._line_badge(line), ('product', 'Desc. Producto (10.0%)'))
+            self.assertEqual(self._line_badge(line), ('product', 'Producto · 10%'))
 
     def test_create_with_zero_discount_keeps_fixed_price(self):
         """`discount = 0` al crear una línea de precio fijo no la marca manual ni la desbloquea."""
@@ -1731,14 +1733,14 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
         self._apply_discount_wizard(order, 0.05)
         self.assertEqual(self._line_values(eligible_line), (475.0, 5.0, 'manual', 'pricelist'))
-        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Desc. Manual (5.0%)'))
+        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Manual · 5%'))
         self.assertEqual(self._line_values(fixed_line), (70.0, 0.0, 'fixed_price', 'fixed_price'))
         for line, values in untouched.items():
             self.assertEqual(self._line_values(line), values)
 
         self._apply_discount_wizard(order, 0.0)
         self.assertEqual(self._line_values(eligible_line), (475.0, 0.0, 'manual', 'pricelist'))
-        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Desc. Manual (0.0%)'))
+        self.assertEqual(self._line_badge(eligible_line), ('manual', 'Manual · 0%'))
 
     def test_wizard_rejects_discounts_that_add_lines(self):
         """"Descuento global" e "Importe fijo" agregarían una línea al pedido: se rechazan."""
@@ -1779,7 +1781,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
         self.assertEqual(order.order_line, line)
         self.assertEqual(self._line_values(line), (475.0, 5.0, 'manual', 'pricelist'))
-        self.assertEqual(self._line_badge(line), ('manual', 'Desc. Manual (5.0%)'))
+        self.assertEqual(self._line_badge(line), ('manual', 'Manual · 5%'))
 
     def _create_order_with_posted_down_payment(self, amount):
         """Pedido confirmado P × 10 a 100, sin impuestos, con un anticipo fijo publicado."""
@@ -1813,7 +1815,7 @@ class TestPartnerDiscountHierarchy(TransactionCase):
 
         self._apply_discount_wizard(order, 0.10)
         self.assertEqual(round(product_line.discount, 2), 10.0)
-        self.assertEqual(self._line_badge(product_line), ('manual', 'Desc. Manual (10.0%)'))
+        self.assertEqual(self._line_badge(product_line), ('manual', 'Manual · 10%'))
         self.assertEqual(down_payment_line.discount, 0.0)
         self.assertEqual(down_payment_line.pricing_rule_type, 'none')
         self.assertEqual(order.amount_total, 900.0)
