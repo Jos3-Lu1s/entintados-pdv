@@ -32,6 +32,29 @@ GENERIC_RFCS = {
 }
 
 
+def _normalize_vat(vat):
+    return (vat or '').strip().upper()
+
+
+def _phone_digits(phone):
+    # Deja solo dígitos y, si el widget nativo antepuso el código de
+    # país (+52), lo quita para comparar contra el número real de 10.
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) == 12 and digits.startswith(MX_COUNTRY_CODE):
+        digits = digits[len(MX_COUNTRY_CODE):]
+    return digits
+
+
+def _is_mexican_partner(partner):
+    # Sin país registrado se considera un contacto de México.
+    return not partner.country_id or partner.country_id.code == MX_ISO_CODE
+
+
+def _has_phone(partner):
+    # Un teléfono con solo espacios cuenta como vacío.
+    return bool((partner.phone or '').strip())
+
+
 def _pricing_result(rule_type, origin_type, origin_label='', price=False, discount=0.0, rule=False):
     return {
         'type': rule_type,
@@ -225,8 +248,7 @@ class ResPartner(models.Model):
         for vals in vals_list:
             # Normalizar y validar RFC/VAT duplicado
             if isinstance(vals.get('vat'), str):
-                vat = vals['vat'].strip().upper()
-                vals['vat'] = vat
+                vat = vals['vat'] = _normalize_vat(vals['vat'])
 
                 if vat:
                     if vat not in GENERIC_RFCS and vat in seen_vats:
@@ -260,9 +282,8 @@ class ResPartner(models.Model):
             for partner in self
         ):
             self._raise_commercial_discount_access()
-        if 'vat' in vals and isinstance(vals['vat'], str):
-            vat = vals['vat'].strip().upper()
-            vals['vat'] = vat
+        if isinstance(vals.get('vat'), str):
+            vat = vals['vat'] = _normalize_vat(vals['vat'])
             if vat and vat not in GENERIC_RFCS and len(self) > 1:
                 raise ValidationError(_('No puedes asignar el mismo RFC (%s) a varios contactos.') % vat)
             for partner in self:
@@ -317,7 +338,7 @@ class ResPartner(models.Model):
         ).load(fields, data)
 
     def _check_phone_required(self):
-        missing = self.filtered(lambda partner: not self._has_phone(partner))
+        missing = self.filtered(lambda partner: not _has_phone(partner))
         if missing:
             raise ValidationError(_(
                 'El teléfono es obligatorio. Falta en: %(names)s.',
@@ -326,8 +347,8 @@ class ResPartner(models.Model):
 
     @api.onchange('vat')
     def _onchange_vat_uppercase(self):
-        if self.vat and isinstance(self.vat, str):
-            self.vat = self.vat.strip().upper()
+        if self.vat:
+            self.vat = _normalize_vat(self.vat)
 
     _vat_uniq_active_idx = models.UniqueIndex(
         "(upper(trim(vat))) WHERE vat IS NOT NULL AND trim(vat) != '' AND active = true "
@@ -336,8 +357,8 @@ class ResPartner(models.Model):
     )
 
     def _find_duplicate_by_vat(self, vat, exclude_ids=None):
-        vat = (vat or '').strip()
-        if not vat or vat.upper() in GENERIC_RFCS:
+        vat = _normalize_vat(vat)
+        if not vat or vat in GENERIC_RFCS:
             return self.browse()
         domain = [('vat', '=ilike', vat)]
         if exclude_ids:
@@ -364,7 +385,7 @@ class ResPartner(models.Model):
     @api.constrains('vat')
     def _check_vat_format(self):
         for partner in self:
-            vat = (partner.vat or '').strip().upper()
+            vat = _normalize_vat(partner.vat)
             if not vat or vat in GENERIC_RFCS:
                 continue
             if not RFC_REGEX.match(vat):
@@ -379,31 +400,15 @@ class ResPartner(models.Model):
                     generic=' / '.join(sorted(GENERIC_RFCS)),
                 ))
 
-    def _phone_digits(self, phone):
-        # Deja solo dígitos y, si el widget nativo antepuso el código de
-        # país (+52), lo quita para comparar contra el número real de 10.
-        digits = re.sub(r'\D', '', phone or '')
-        if len(digits) == 12 and digits.startswith(MX_COUNTRY_CODE):
-            digits = digits[len(MX_COUNTRY_CODE):]
-        return digits
-
-    def _is_mexican_partner(self, partner):
-        # Sin país registrado se considera un contacto de México.
-        return not partner.country_id or partner.country_id.code == MX_ISO_CODE
-
-    def _has_phone(self, partner):
-        # Un teléfono con solo espacios cuenta como vacío.
-        return bool((partner.phone or '').strip())
-
     @api.constrains('phone', 'country_id')
     def _check_phone_format(self):
         for partner in self:
             # La obligatoriedad se revisa solo en los canales del usuario;
             # aquí únicamente se valida el formato de lo que se capturó.
-            if not self._has_phone(partner):
+            if not _has_phone(partner):
                 continue
-            if self._is_mexican_partner(partner):
-                if not PHONE_REGEX.match(self._phone_digits(partner.phone)):
+            if _is_mexican_partner(partner):
+                if not PHONE_REGEX.match(_phone_digits(partner.phone)):
                     raise ValidationError(_(
                         'El teléfono de "%(name)s" debe tener 10 dígitos '
                         '(puede incluir el +52 y espacios que agrega el '
@@ -435,7 +440,6 @@ class ResPartner(models.Model):
         return fields + [
             'discount',
             'discount_rule_ids',
-            'is_told',
             'is_credit',
             'is_customer',
             'is_distributor',
@@ -458,17 +462,13 @@ class ResPartner(models.Model):
         config = self.env['pos.config'].browse(config_id)
         sales_domain = [('is_sales_contact', '=', True)]
         if len(domain) == 0:
-            limited_partner_ids = {
-                partner[0] for partner in config.get_limited_partners_loading(offset)
-            }
-            new_partners = self.search([('id', 'in', list(limited_partner_ids))] + sales_domain)
+            limited_partner_ids = [partner[0] for partner in config.get_limited_partners_loading(offset)]
+            new_partners = self.search([('id', 'in', limited_partner_ids)] + sales_domain)
         else:
             # If search domain is not empty, we need to search inside all partners
             new_partners = self.search(domain + sales_domain, offset=offset, limit=100)
         fiscal_positions = new_partners.fiscal_position_id
-        discount_rules = self.env['res.partner.discount.rule'].search([
-            ('partner_id', 'in', new_partners.ids)
-        ])
+        discount_rules = new_partners.discount_rule_ids
         return {
             'res.partner': self._load_pos_data_read(new_partners, config),
             'account.fiscal.position': self.env['account.fiscal.position']._load_pos_data_read(fiscal_positions, config),
