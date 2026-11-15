@@ -9,7 +9,10 @@ const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_customer
 test('A finalized purchase refreshes customer funds; failed synchronization does not', async () => {
     class Store {}
     class Validation { async afterOrderValidation() {} }
-    vm.runInNewContext(source, { PosStore: Store, OrderPaymentValidation: Validation, _t: (s) => s,
+    class ProductScreen { static components = {}; }
+    class CustomerContactInfo {}
+    vm.runInNewContext(source, { PosStore: Store, OrderPaymentValidation: Validation,
+        ProductScreen, CustomerContactInfo, _t: (s) => s,
         patch(target, extension) {
             Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));
             Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));

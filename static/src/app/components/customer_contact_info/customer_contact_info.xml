@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="entintados_pdv.CustomerContactInfo">
+        <t t-set="partner" t-value="props.partner || partner"/>
         <div t-if="partner" class="o-pos-contact-info small" aria-label="Información del cliente">
             <t t-set="info" t-value="partner.pos_contact_info || {}"/>
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 <strong class="text-break" t-esc="partner.name"/>
-                <span t-if="partner.is_credit or (partner.commercial_partner_id and partner.commercial_partner_id.is_credit)"
+                <span t-if="props.partner.is_credit or (props.partner.commercial_partner_id and props.partner.commercial_partner_id.is_credit)"
                       class="badge rounded-pill text-bg-primary" title="Cliente con condición de pago a crédito">
                     <i class="fa fa-credit-card me-1" aria-hidden="true"/>Crédito
                 </span>
