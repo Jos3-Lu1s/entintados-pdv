@@ -32,14 +32,14 @@
             </div>
 
             <!-- Matriz de Indicadores Financieros / Estados de Saldo -->
-            <div class="o-contact-metrics d-flex flex-wrap align-items-stretch gap-2 mt-2">
+            <div class="o-contact-metrics d-flex flex-wrap align-items-stretch gap-1 gap-sm-2 mt-1">
                 <!-- Anticipo Disponible a Favor -->
                 <div t-if="partner.customer_advance_available !== undefined and partner.customer_advance_available !== null"
-                     class="o-metric-card d-flex align-items-center gap-2 px-2 py-1 rounded-2 border"
+                     class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border"
                      t-att-class="partner.customer_advance_available > 0 ? 'o-metric-advance-positive' : 'bg-light text-secondary'">
                     <i class="fa fa-money" aria-hidden="true"/>
                     <div class="small lh-1">
-                        <span class="text-muted me-1">Anticipo disponible:</span>
+                        <span class="text-muted me-1">Anticipo:</span>
                         <span class="font-monospace fw-bold"
                               t-att-class="partner.customer_advance_available > 0 ? 'text-success' : 'text-dark'"
                               t-esc="env.utils.formatCurrency(partner.customer_advance_available)"/>
@@ -48,12 +48,12 @@
 
                 <!-- Deuda Actual / Saldo Vencido -->
                 <div t-if="partner.total_due !== undefined and partner.total_due !== null"
-                     class="o-metric-card d-flex align-items-center gap-2 px-2 py-1 rounded-2 border"
+                     class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border"
                      t-att-class="partner.total_due > 0 ? 'o-metric-debt-positive' : 'bg-light text-secondary'">
                     <i class="fa fa-exclamation-circle text-danger" t-if="partner.total_due > 0" aria-hidden="true"/>
                     <i class="fa fa-check-circle text-success" t-else="" aria-hidden="true"/>
                     <div class="small lh-1">
-                        <span class="text-muted me-1">Deuda actual:</span>
+                        <span class="text-muted me-1">Deuda:</span>
                         <span class="font-monospace fw-bold"
                               t-att-class="partner.total_due > 0 ? 'text-danger' : 'text-dark'"
                               t-esc="env.utils.formatCurrency(partner.total_due)"/>
@@ -61,10 +61,10 @@
                 </div>
 
                 <!-- Límite de Crédito -->
-                <div class="o-metric-card d-flex align-items-center gap-2 px-2 py-1 rounded-2 border bg-light text-secondary">
+                <div class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border bg-light text-secondary">
                     <i class="fa fa-shield text-muted" aria-hidden="true"/>
                     <div class="small lh-1">
-                        <span class="text-muted me-1">Límite de crédito:</span>
+                        <span class="text-muted me-1">Límite:</span>
                         <span t-if="info.credit_authorized" class="font-monospace fw-semibold text-dark">
                             <t t-esc="info.credit_limit_text"/> <t t-esc="info.credit_currency"/>
                         </span>
@@ -74,7 +74,7 @@
             </div>
 
             <!-- Cajón Desplegable de Direcciones y Régimen Fiscal -->
-            <details class="o-contact-details mt-2" t-if="info.address || info.fiscal_regime || info.invoice || info.delivery">
+            <details class="o-contact-details mt-1" t-if="info.address || info.fiscal_regime || info.invoice || info.delivery">
                 <summary class="d-inline-flex align-items-center gap-1 small fw-semibold text-primary">
                     <i class="fa fa-chevron-right o-details-arrow" aria-hidden="true"/>
                     <span>Direcciones y datos fiscales</span>

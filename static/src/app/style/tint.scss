@@ -65,7 +65,7 @@ $tint-breakpoint-xs: 575.98px;
     }
 }
 
-// Keep one scrolling pane for the summary, fiscal options and registered payments.
+// Layout adaptativo para la pantalla de pagos en PdV
 .payment-screen .o-entintados-payment-layout {
     min-height: 0;
     min-width: 0;
@@ -74,26 +74,34 @@ $tint-breakpoint-xs: 575.98px;
     align-items: stretch !important;
     height: 100%;
 
-    > .o-customer-payment-summary {
-        flex: 1 1 auto;
-        min-height: 280px;
+    .payment-summary {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        width: 100%;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
         display: flex;
         flex-direction: column;
-    }
+        overflow: hidden;
 
-    .payment-summary {
-        flex: 0 0 auto !important;
-        overflow: visible !important;
-        width: 100%;
-        padding: .75rem 1rem !important;
-        background: #fff;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
+        > * {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
     }
 
     .paymentlines {
         flex-shrink: 0;
-        overflow-y: visible !important;
+        max-height: 130px;
+        overflow-y: auto !important;
+        margin-top: 0.35rem;
     }
 }
 
@@ -107,23 +115,28 @@ $tint-breakpoint-xs: 575.98px;
     border: 1px solid #cbd5e1;
     border-radius: 10px;
     width: 100%;
+    height: 100%;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     color: #1e293b;
 
     .o-summary-header {
+        flex-shrink: 0;
+
         .o-summary-header-icon {
-            width: 2.25rem;
-            height: 2.25rem;
-            font-size: 1rem;
+            width: 1.85rem;
+            height: 1.85rem;
+            font-size: 0.9rem;
             background-color: #ede9fe !important;
             color: #5b21b6 !important;
         }
     }
 
     .o-customer-purchase-lines {
-        flex: 1 1 auto;
-        min-height: 120px;
+        flex: 1 1 0;
+        min-height: 70px;
         overflow-y: auto;
 
         thead {
@@ -134,11 +147,11 @@ $tint-breakpoint-xs: 575.98px;
             th {
                 background-color: #f8fafc !important;
                 color: #334155;
-                font-size: 0.75rem;
+                font-size: 0.72rem;
                 font-weight: 700;
                 text-transform: uppercase;
                 letter-spacing: 0.4px;
-                padding: 0.65rem 0.85rem;
+                padding: 0.45rem 0.75rem;
                 border-bottom: 2px solid #cbd5e1;
                 white-space: nowrap;
             }
@@ -153,23 +166,24 @@ $tint-breakpoint-xs: 575.98px;
         }
 
         tbody td {
-            padding: 0.65rem 0.85rem;
+            padding: 0.45rem 0.75rem;
             border-bottom: 1px solid #e2e8f0;
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             vertical-align: middle;
             font-variant-numeric: tabular-nums;
         }
 
         th:first-child, tbody td:first-child {
-            padding-left: 1rem;
+            padding-left: 0.85rem;
         }
 
         th:last-child, tbody td:last-child {
-            padding-right: 1rem;
+            padding-right: 0.85rem;
         }
     }
 
     .o-summary-footer {
+        flex-shrink: 0;
         background: #f8fafc;
         border-top: 1px solid #e2e8f0;
 
@@ -256,6 +270,112 @@ $tint-breakpoint-xs: 575.98px;
                     font-weight: 700;
                     color: #ffffff;
                     letter-spacing: -0.5px;
+                }
+            }
+        }
+    }
+}
+
+/* Adaptabilidad Ergonómica para Laptops y Pantallas de Menor Altura */
+@media (max-height: 850px), (max-width: 1200px) {
+    .o-pos-contact-info {
+        .o-contact-avatar-box {
+            width: 1.5rem !important;
+            height: 1.5rem !important;
+            font-size: 0.75rem !important;
+        }
+
+        .o-contact-header strong {
+            font-size: 0.9rem !important;
+        }
+
+        .o-metric-card {
+            padding: 0.1rem 0.4rem !important;
+            font-size: 0.72rem !important;
+        }
+
+        details summary {
+            font-size: 0.72rem !important;
+            padding-block: 0.1rem !important;
+        }
+
+        details[open] .o-contact-details-content {
+            max-height: 8rem !important;
+        }
+    }
+
+    .o-customer-payment-summary {
+        .o-summary-header {
+            padding: 0.35rem 0.65rem !important;
+
+            .o-summary-header-icon {
+                width: 1.5rem !important;
+                height: 1.5rem !important;
+                font-size: 0.75rem !important;
+            }
+
+            .o-summary-title-bar h6 {
+                font-size: 0.85rem !important;
+            }
+        }
+
+        .o-customer-purchase-lines {
+            thead th {
+                padding: 0.25rem 0.5rem !important;
+                font-size: 0.68rem !important;
+            }
+
+            tbody td {
+                padding: 0.25rem 0.5rem !important;
+                font-size: 0.78rem !important;
+            }
+        }
+
+        .o-summary-footer {
+            padding: 0.35rem 0.65rem !important;
+
+            .o-customer-invoice-options {
+                padding: 0.45rem 0.65rem !important;
+
+                label {
+                    font-size: 0.68rem !important;
+                    margin-bottom: 0.05rem !important;
+                }
+
+                .form-select, .form-control {
+                    font-size: 0.78rem !important;
+                    padding: 0.15rem 0.35rem !important;
+                    height: auto !important;
+                }
+
+                .o-invoice-note {
+                    display: none !important;
+                }
+            }
+
+            .o-customer-price-card {
+                padding: 0.45rem 0.65rem !important;
+
+                .o-customer-price-breakdown {
+                    gap: 0.1rem 0.5rem !important;
+                    font-size: 0.78rem !important;
+                }
+
+                .o-customer-total-banner {
+                    padding: 0.3rem 0.65rem !important;
+                    margin-top: 0.25rem !important;
+
+                    .o-total-caption {
+                        font-size: 0.65rem !important;
+                    }
+
+                    .o-total-subcaption {
+                        display: none !important;
+                    }
+
+                    .o-total-amount {
+                        font-size: 1.15rem !important;
+                    }
                 }
             }
         }

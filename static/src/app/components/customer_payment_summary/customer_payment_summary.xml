@@ -6,31 +6,29 @@
             
             <!-- Encabezado de la pantalla de pago -->
             <header class="o-summary-header px-3 py-2 border-bottom bg-white flex-shrink-0">
-                <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="d-flex align-items-center justify-content-between mb-1 o-summary-title-bar">
                     <div class="d-flex align-items-center gap-2">
-                        <div class="o-summary-header-icon bg-light text-primary rounded-2 d-flex align-items-center justify-content-center">
+                        <div class="o-summary-header-icon bg-light text-primary rounded-2 d-flex align-items-center justify-content-center flex-shrink-0">
                             <i class="fa fa-file-text-o" aria-hidden="true"/>
                         </div>
-                        <div>
-                            <h5 class="mb-0 fw-bold text-dark">Resumen de compra</h5>
-                            <span class="text-muted text-xs">Verificación previa al registro de pago</span>
-                        </div>
+                        <h6 class="mb-0 fw-bold text-dark fs-6">Resumen de compra</h6>
                     </div>
+                    <span class="text-muted text-xxs d-none d-sm-inline">Revisión previa a pago</span>
                 </div>
                 <t t-if="currentOrder.getPartner()">
                     <CustomerContactInfo partner="currentOrder.getPartner()"/>
                 </t>
-                <div t-else="" class="o-general-public-box d-flex align-items-center gap-2 p-2 rounded-2 bg-light border text-secondary small">
+                <div t-else="" class="o-general-public-box d-flex align-items-center gap-2 p-1 px-2 rounded-2 bg-light border text-secondary small">
                     <i class="fa fa-user-circle-o fs-5 text-muted" aria-hidden="true"/>
                     <div>
                         <strong class="text-dark">Público en general</strong>
-                        <span class="text-muted d-block text-xs">Venta al mostrador sin cliente registrado</span>
+                        <span class="text-muted d-block text-xxs">Venta al mostrador sin cliente registrado</span>
                     </div>
                 </div>
             </header>
 
             <!-- Tabla de Partidas del Pedido -->
-            <div class="o-customer-purchase-lines table-responsive">
+            <div class="o-customer-purchase-lines table-responsive o-tint-scroll-touch">
                 <table class="table table-hover mb-0 align-middle">
                     <thead>
                         <tr>
@@ -78,41 +76,41 @@
             </div>
 
             <!-- Footer: Facturación Fiscal + Liquidación de Totales -->
-            <footer class="o-summary-footer p-3 flex-shrink-0">
-                <div class="row g-3 align-items-stretch">
+            <footer class="o-summary-footer p-2 p-lg-3 flex-shrink-0">
+                <div class="row g-2 g-lg-3 align-items-stretch">
                     <!-- Opciones de Facturación CFDI -->
                     <div t-if="showPaymentInvoiceOptions" class="col-12 col-lg-7 d-flex flex-column">
-                        <div class="o-customer-invoice-options border rounded-3 bg-white p-3 shadow-xs h-100 d-flex flex-column justify-content-between" t-att-class="{'o-has-payment-term': showPaymentTerm}">
+                        <div class="o-customer-invoice-options border rounded-3 bg-white p-2 p-lg-3 shadow-xs h-100 d-flex flex-column justify-content-between" t-att-class="{'o-has-payment-term': showPaymentTerm}">
                             <div>
-                                <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+                                <div class="d-flex align-items-center justify-content-between pb-1 pb-lg-2 mb-2 border-bottom">
                                     <span class="small fw-bold text-dark text-uppercase d-flex align-items-center gap-1">
                                         <i class="fa fa-file-text-o text-primary" aria-hidden="true"/> Datos de facturación CFDI
                                     </span>
                                     <span class="badge bg-light text-secondary border text-xxs">México</span>
                                 </div>
-                                <div class="row g-2">
+                                <div class="row g-1 g-lg-2">
                                     <div class="col-12 col-sm-6 col-xl-5">
-                                        <label for="payment_invoice_usage" class="form-label small text-secondary-emphasis fw-semibold mb-1">Uso de CFDI</label>
+                                        <label for="payment_invoice_usage" class="form-label text-secondary-emphasis fw-semibold mb-1">Uso de CFDI</label>
                                         <select id="payment_invoice_usage" class="form-select form-select-sm" t-on-change="changePaymentInvoiceUsage">
                                             <option t-foreach="pos.config._l10n_mx_edi_usage || []" t-as="usage" t-key="usage.value"
                                                     t-att-value="usage.value" t-att-selected="usage.value === paymentInvoiceUsage" t-esc="usage.name"/>
                                         </select>
                                     </div>
                                     <div class="col-6 col-sm-3 col-xl-3">
-                                        <label for="payment_invoice_public" class="form-label small text-secondary-emphasis fw-semibold mb-1">Público en general</label>
+                                        <label for="payment_invoice_public" class="form-label text-secondary-emphasis fw-semibold mb-1">Público general</label>
                                         <select id="payment_invoice_public" class="form-select form-select-sm" t-on-change="changePaymentInvoicePublic">
                                             <option value="0" t-att-selected="!currentOrder.l10n_mx_edi_cfdi_to_public">No</option>
                                             <option value="1" t-att-selected="!!currentOrder.l10n_mx_edi_cfdi_to_public">Sí</option>
                                         </select>
                                     </div>
                                     <div class="col-6 col-sm-3 col-xl-4">
-                                        <label for="payment_invoice_count" class="form-label small text-secondary-emphasis fw-semibold mb-1">Número de facturas</label>
+                                        <label for="payment_invoice_count" class="form-label text-secondary-emphasis fw-semibold mb-1">Nº facturas</label>
                                         <input id="payment_invoice_count" type="number" min="1" step="1"
                                                class="form-control form-control-sm font-monospace" t-att-value="paymentInvoiceSplitCount"
                                                t-att-disabled="!canSplitPaymentInvoice" t-on-change="changePaymentInvoiceSplitCount"/>
                                     </div>
-                                    <div t-if="showPaymentTerm" class="col-12 mt-2">
-                                        <label for="payment_invoice_term" class="form-label small text-secondary-emphasis fw-semibold mb-1">Términos de pago</label>
+                                    <div t-if="showPaymentTerm" class="col-12 mt-1 mt-lg-2">
+                                        <label for="payment_invoice_term" class="form-label text-secondary-emphasis fw-semibold mb-1">Términos de pago</label>
                                         <select id="payment_invoice_term" class="form-select form-select-sm" t-on-change="changePaymentTerm">
                                             <option value="" t-att-selected="!currentOrder.pos_payment_term_id">
                                                 <t t-esc="defaultPaymentTerm?.name || 'Plazo predeterminado'"/>
@@ -124,10 +122,10 @@
                                 </div>
                             </div>
 
-                            <div class="o-invoice-note mt-3 pt-2">
-                                <div class="p-2 rounded-2 bg-light border text-muted small d-flex align-items-center gap-2">
-                                    <i class="fa fa-info-circle text-primary" aria-hidden="true"/>
-                                    <span class="text-xxs">La factura electrónica CFDI se generará al confirmar el cobro en caja.</span>
+                            <div class="o-invoice-note mt-2 pt-1">
+                                <div class="p-1 px-2 rounded-2 bg-light border text-muted d-flex align-items-center gap-2">
+                                    <i class="fa fa-info-circle text-primary flex-shrink-0" aria-hidden="true"/>
+                                    <span class="text-xxs">Factura electrónica generada al confirmar en caja.</span>
                                 </div>
                             </div>
                         </div>
@@ -135,13 +133,13 @@
 
                     <!-- Tarjeta de Liquidación de Totales -->
                     <div t-attf-class="{{ showPaymentInvoiceOptions ? 'col-12 col-lg-5' : 'col-12 col-lg-6 ms-auto' }}" class="d-flex flex-column">
-                        <div class="o-customer-price-card border rounded-3 bg-white p-3 shadow-xs h-100 d-flex flex-column justify-content-between">
+                        <div class="o-customer-price-card border rounded-3 bg-white p-2 p-lg-3 shadow-xs h-100 d-flex flex-column justify-content-between">
                             <div>
-                                <div class="d-flex align-items-center justify-content-between pb-2 mb-2 border-bottom">
+                                <div class="d-flex align-items-center justify-content-between pb-1 pb-lg-2 mb-2 border-bottom">
                                     <span class="small fw-bold text-dark text-uppercase d-flex align-items-center gap-1">
                                         <i class="fa fa-calculator text-primary" aria-hidden="true"/> Desglose de totales
                                     </span>
-                                    <small class="text-muted text-xxs">Precios antes de impuestos</small>
+                                    <small class="text-muted text-xxs">Antes de impuestos</small>
                                 </div>
                                 
                                 <dl class="o-customer-price-breakdown mb-0">
@@ -182,17 +180,14 @@
                             </div>
 
                             <!-- Banner Destacado del Total a Cobrar -->
-                            <div class="o-customer-total-banner rounded-3 p-3 mt-3 d-flex align-items-center justify-content-between flex-shrink-0">
+                            <div class="o-customer-total-banner rounded-3 p-2 p-lg-3 mt-2 mt-lg-3 d-flex align-items-center justify-content-between flex-shrink-0">
                                 <div>
                                     <span class="o-total-caption text-uppercase fw-bold">Total a liquidar</span>
-                                    <small class="o-total-subcaption d-block">Importe final con impuestos</small>
+                                    <small class="o-total-subcaption d-block">Con impuestos incluidos</small>
                                 </div>
                                 <div class="o-total-amount font-monospace" t-esc="env.utils.formatCurrency(summary.total)"/>
                             </div>
                         </div>
-                        <small t-if="!showPaymentInvoiceOptions" class="text-muted d-block text-end mt-2 text-xxs">
-                            Precios e importes de productos antes de impuestos.
-                        </small>
                     </div>
                 </div>
             </footer>
