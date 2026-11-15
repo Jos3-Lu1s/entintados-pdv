@@ -4,20 +4,51 @@
 $tint-breakpoint-xs: 575.98px;
 
 .o-pos-contact-info {
+    .o-contact-avatar-box {
+        width: 1.85rem;
+        height: 1.85rem;
+        background-color: #ede9fe;
+        color: #5b21b6;
+        font-size: 0.85rem;
+    }
+
+    .o-metric-card {
+        transition: all 0.15s ease-in-out;
+        font-size: 0.8125rem;
+    }
+
+    .o-metric-advance-positive {
+        background-color: #dcfce7 !important;
+        border-color: #86efac !important;
+        color: #166534 !important;
+    }
+
+    .o-metric-debt-positive {
+        background-color: #fee2e2 !important;
+        border-color: #fca5a5 !important;
+        color: #991b1b !important;
+    }
+
     details summary {
         cursor: pointer;
         padding-block: .25rem;
         font-weight: 500;
         user-select: none;
         list-style: none;
+        transition: color 0.15s ease;
+
+        &:hover {
+            color: var(--primary, #714b67);
+        }
 
         &::-webkit-details-marker {
             display: none;
         }
 
         .o-details-arrow {
-            transition: transform 0.2s ease;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: inline-block;
+            font-size: 0.75rem;
         }
     }
 
@@ -27,8 +58,9 @@ $tint-breakpoint-xs: 575.98px;
         }
 
         .o-contact-details-content {
-            max-height: 14rem;
+            max-height: 16rem;
             overflow-y: auto;
+            animation: fadeInSlide 0.2s ease-out;
         }
     }
 }
@@ -72,12 +104,22 @@ $tint-breakpoint-xs: 575.98px;
 
 .o-customer-payment-summary {
     background: #fff;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
     width: 100%;
     min-height: 0;
     overflow: hidden;
-    color: #212529;
+    color: #1e293b;
+
+    .o-summary-header {
+        .o-summary-header-icon {
+            width: 2.25rem;
+            height: 2.25rem;
+            font-size: 1rem;
+            background-color: #ede9fe !important;
+            color: #5b21b6 !important;
+        }
+    }
 
     .o-customer-purchase-lines {
         flex: 1 1 auto;
@@ -90,20 +132,31 @@ $tint-breakpoint-xs: 575.98px;
             z-index: 2;
 
             th {
-                background: #f8f9fa;
-                color: #495057;
-                font-size: 0.8rem;
-                font-weight: 600;
-                padding: 0.6rem 0.75rem;
-                border-bottom: 1px solid #dee2e6;
+                background-color: #f8fafc !important;
+                color: #334155;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+                padding: 0.65rem 0.85rem;
+                border-bottom: 2px solid #cbd5e1;
                 white-space: nowrap;
             }
         }
 
+        tbody tr {
+            transition: background-color 0.15s ease-in-out;
+
+            &:hover {
+                background-color: rgba(113, 75, 103, 0.03);
+            }
+        }
+
         tbody td {
-            padding: 0.65rem 0.75rem;
-            border-bottom: 1px solid #f1f3f5;
-            font-size: 0.9rem;
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.875rem;
+            vertical-align: middle;
             font-variant-numeric: tabular-nums;
         }
 
@@ -117,29 +170,43 @@ $tint-breakpoint-xs: 575.98px;
     }
 
     .o-summary-footer {
-        background: #f8f9fa;
-        border-top: 1px solid #dee2e6;
+        background: #f8fafc;
+        border-top: 1px solid #e2e8f0;
 
         .o-customer-invoice-options {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+
             label {
                 font-size: 0.75rem;
-                font-weight: 500;
-                color: #6c757d;
+                font-weight: 600;
+                color: #475569;
                 margin-bottom: 0.2rem;
             }
 
             .form-select, .form-control {
-                border-color: #ced4da;
+                border-color: #cbd5e1;
                 font-size: 0.85rem;
 
                 &:focus {
                     border-color: #714B67;
-                    box-shadow: none;
+                    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.15);
                 }
+            }
+
+            .o-invoice-note {
+                font-size: 0.75rem;
             }
         }
 
         .o-customer-price-card {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+
             .o-customer-price-breakdown {
                 display: grid;
                 grid-template-columns: minmax(0, 1fr) auto;
@@ -148,7 +215,7 @@ $tint-breakpoint-xs: 575.98px;
 
                 dt {
                     font-weight: 400;
-                    color: #495057;
+                    color: #475569;
                 }
 
                 dd {
@@ -156,7 +223,7 @@ $tint-breakpoint-xs: 575.98px;
                     text-align: right;
                     font-variant-numeric: tabular-nums;
                     font-weight: 500;
-                    color: #212529;
+                    color: #1e293b;
                 }
 
                 .o-customer-total {
@@ -165,6 +232,30 @@ $tint-breakpoint-xs: 575.98px;
                     font-size: 1.25rem;
                     font-weight: 700;
                     color: #212529;
+                }
+            }
+
+            .o-customer-total-banner {
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                color: #ffffff;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+
+                .o-total-caption {
+                    font-size: 0.72rem;
+                    letter-spacing: 0.5px;
+                    color: #94a3b8;
+                }
+
+                .o-total-subcaption {
+                    font-size: 0.68rem;
+                    color: #64748b;
+                }
+
+                .o-total-amount {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: #ffffff;
+                    letter-spacing: -0.5px;
                 }
             }
         }
