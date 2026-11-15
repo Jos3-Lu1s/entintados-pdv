@@ -3,14 +3,34 @@
    ========================================================================== */
 $tint-breakpoint-xs: 575.98px;
 
-.o-pos-contact-info details[open] {
-    max-height: 14rem;
-    overflow-y: auto;
-}
+.o-pos-contact-info {
+    details summary {
+        cursor: pointer;
+        padding-block: .25rem;
+        font-weight: 500;
+        user-select: none;
+        list-style: none;
 
-.o-pos-contact-info summary {
-    cursor: pointer;
-    padding-block: .25rem;
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        .o-details-arrow {
+            transition: transform 0.2s ease;
+            display: inline-block;
+        }
+    }
+
+    details[open] {
+        summary .o-details-arrow {
+            transform: rotate(90deg);
+        }
+
+        .o-contact-details-content {
+            max-height: 14rem;
+            overflow-y: auto;
+        }
+    }
 }
 
 // Keep one scrolling pane for the summary, fiscal options and registered payments.
@@ -20,10 +40,13 @@ $tint-breakpoint-xs: 575.98px;
     overflow-y: auto;
     justify-content: flex-start !important;
     align-items: stretch !important;
+    height: 100%;
 
     > .o-customer-payment-summary {
-        flex: 0 0 auto;
-        overflow: visible;
+        flex: 1 1 auto;
+        min-height: 280px;
+        display: flex;
+        flex-direction: column;
     }
 
     .payment-summary {
@@ -32,8 +55,8 @@ $tint-breakpoint-xs: 575.98px;
         width: 100%;
         padding: .75rem 1rem !important;
         background: #fff;
-        border: 1px solid #dbe3ec;
-        border-radius: 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
     }
 
     .paymentlines {
@@ -49,47 +72,101 @@ $tint-breakpoint-xs: 575.98px;
 
 .o-customer-payment-summary {
     background: #fff;
-    border: 1px solid #dbe3ec;
-    border-radius: 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
     width: 100%;
     min-height: 0;
-    overflow-y: auto;
-    color: #1e293b;
+    overflow: hidden;
+    color: #212529;
 
-    thead th { background: #edf4f8; font-size: .8rem; }
-    td, th { padding: .75rem; }
-    .o-customer-purchase-lines { max-height: 35vh; overflow: auto; }
-    .o-customer-invoice-options {
-        width: calc(100% + 2rem);
-        margin-left: -1rem;
-        table { width: 100%; }
-        th:nth-child(1) { width: 50%; }
-        th:nth-child(2), th:nth-child(3) { width: 25%; }
-        .o-has-payment-term {
-            th:nth-child(1) { width: 34%; }
-            th:nth-child(2), th:nth-child(3) { width: 19%; }
-            th:nth-child(4) { width: 28%; }
+    .o-customer-purchase-lines {
+        flex: 1 1 auto;
+        min-height: 120px;
+        overflow-y: auto;
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+
+            th {
+                background: #f8f9fa;
+                color: #495057;
+                font-size: 0.8rem;
+                font-weight: 600;
+                padding: 0.6rem 0.75rem;
+                border-bottom: 1px solid #dee2e6;
+                white-space: nowrap;
+            }
         }
-        th, td { padding: .35rem .5rem; }
-        thead { position: static; }
-        label { margin: 0; }
-        input { min-width: 100px; }
-        select { min-width: 130px; }
+
+        tbody td {
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1px solid #f1f3f5;
+            font-size: 0.9rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        th:first-child, tbody td:first-child {
+            padding-left: 1rem;
+        }
+
+        th:last-child, tbody td:last-child {
+            padding-right: 1rem;
+        }
     }
-    thead { position: sticky; top: 0; }
-    .o-customer-price-breakdown {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: .45rem 1rem;
-        margin-left: auto;
-        max-width: 440px;
-        dt { font-weight: 500; }
-        dd { text-align: right; margin: 0; font-variant-numeric: tabular-nums; }
-        .o-customer-total {
-            border-top: 2px solid #b9ccd8;
-            padding-top: .65rem;
-            font-size: 1.4rem;
-            font-weight: 700;
+
+    .o-summary-footer {
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+
+        .o-customer-invoice-options {
+            label {
+                font-size: 0.75rem;
+                font-weight: 500;
+                color: #6c757d;
+                margin-bottom: 0.2rem;
+            }
+
+            .form-select, .form-control {
+                border-color: #ced4da;
+                font-size: 0.85rem;
+
+                &:focus {
+                    border-color: #714B67;
+                    box-shadow: none;
+                }
+            }
+        }
+
+        .o-customer-price-card {
+            .o-customer-price-breakdown {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 0.35rem 1rem;
+                font-size: 0.875rem;
+
+                dt {
+                    font-weight: 400;
+                    color: #495057;
+                }
+
+                dd {
+                    margin: 0;
+                    text-align: right;
+                    font-variant-numeric: tabular-nums;
+                    font-weight: 500;
+                    color: #212529;
+                }
+
+                .o-customer-total {
+                    border-top: 1px solid #dee2e6;
+                    padding-top: 0.6rem;
+                    font-size: 1.25rem;
+                    font-weight: 700;
+                    color: #212529;
+                }
+            }
         }
     }
 }

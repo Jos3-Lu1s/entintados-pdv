@@ -2,55 +2,68 @@
 <templates xml:space="preserve">
     <t t-name="entintados_pdv.CustomerContactInfo">
         <t t-set="partner" t-value="props.partner || partner"/>
-        <div t-if="partner" class="o-pos-contact-info small" aria-label="Información del cliente">
+        <div t-if="partner" class="o-pos-contact-info" aria-label="Información del cliente">
             <t t-set="info" t-value="partner.pos_contact_info || {}"/>
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-                <strong class="text-break" t-esc="partner.name"/>
-                <span t-if="props.partner.is_credit or (props.partner.commercial_partner_id and props.partner.commercial_partner_id.is_credit)"
-                      class="badge rounded-pill text-bg-primary" title="Cliente con condición de pago a crédito">
-                    <i class="fa fa-credit-card me-1" aria-hidden="true"/>Crédito
-                </span>
-                <span t-if="info.reference" class="badge text-bg-light border">Clave: <t t-esc="info.reference"/></span>
+            
+            <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <strong class="fs-6 text-dark text-break" t-esc="partner.name"/>
+                    <span t-if="props.partner.is_credit or (props.partner.commercial_partner_id and props.partner.commercial_partner_id.is_credit)"
+                          class="badge text-bg-primary rounded-pill" title="Cliente con condición de pago a crédito">
+                        <i class="fa fa-credit-card me-1" aria-hidden="true"/>Crédito
+                    </span>
+                    <span t-if="info.reference" class="badge bg-light text-secondary">
+                        Clave: <t t-esc="info.reference"/>
+                    </span>
+                    <span t-if="info.vat" class="badge bg-light text-secondary">
+                        RFC: <t t-esc="info.vat"/>
+                    </span>
+                </div>
+                <div class="small text-muted d-flex align-items-center gap-1">
+                    <i class="fa fa-user-circle-o" aria-hidden="true"/>
+                    <span>Vendedor:</span>
+                    <span class="text-dark fw-medium" t-esc="info.salesperson || partner.sale_owner_name || 'Sin vendedor asignado'"/>
+                </div>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                <strong t-if="info.vat" class="badge bg-light text-dark border fs-6 text-wrap text-break">
-                    RFC: <t t-esc="info.vat"/>
-                </strong>
-                <span class="text-muted">Vendedor: <t t-esc="info.salesperson || partner.sale_owner_name || 'Sin vendedor asignado'"/></span>
-                <span t-if="partner.total_due !== undefined and partner.total_due !== null"
-                      class="text-nowrap border-start ps-2">
-                    <span class="text-muted">Deuda actual: </span>
-                    <strong t-esc="env.utils.formatCurrency(partner.total_due)"/>
+
+            <div class="o-contact-metrics d-flex flex-wrap align-items-center gap-3 mt-1 small">
+                <span t-if="partner.total_due !== undefined and partner.total_due !== null" class="text-muted">
+                    Deuda actual: <strong t-att-class="partner.total_due > 0 ? 'text-danger' : 'text-dark'" t-esc="env.utils.formatCurrency(partner.total_due)"/>
                 </span>
-                <span class="text-nowrap border-start ps-2">
-                    <span class="text-muted">Límite de crédito autorizado: </span>
-                    <strong t-if="info.credit_authorized"><t t-esc="info.credit_limit_text"/> <t t-esc="info.credit_currency"/></strong>
-                    <strong t-else="" class="text-muted">Sin crédito autorizado</strong>
+                <span class="text-muted">
+                    Límite de crédito: <strong t-if="info.credit_authorized" class="text-dark"><t t-esc="info.credit_limit_text"/> <t t-esc="info.credit_currency"/></strong><span t-else="" class="fst-italic text-muted">Sin crédito autorizado</span>
                 </span>
-                <span t-if="partner.customer_advance_available !== undefined and partner.customer_advance_available !== null"
-                      class="text-nowrap border-start ps-2">
-                    <span class="text-muted">Anticipo disponible (saldo a favor): </span>
-                    <strong class="text-success" t-esc="env.utils.formatCurrency(partner.customer_advance_available)"/>
+                <span t-if="partner.customer_advance_available !== undefined and partner.customer_advance_available !== null" class="text-muted">
+                    Anticipo disponible: <strong t-att-class="partner.customer_advance_available > 0 ? 'text-success fw-bold' : 'text-dark'" t-esc="env.utils.formatCurrency(partner.customer_advance_available)"/>
                 </span>
             </div>
-            <details class="mt-2" t-if="info.address || info.fiscal_regime || info.invoice || info.delivery">
-                <summary class="text-primary">Direcciones y datos fiscales</summary>
-                <div class="text-break pt-2">
-                    <p t-if="info.address" class="mb-1"><strong>Dirección: </strong><t t-esc="info.address"/></p>
-                    <p t-if="info.fiscal_regime" class="mb-2"><strong>Régimen fiscal: </strong><t t-esc="info.fiscal_regime"/></p>
-                    <div class="row g-2">
+
+            <details class="o-contact-details mt-1" t-if="info.address || info.fiscal_regime || info.invoice || info.delivery">
+                <summary class="text-primary small">
+                    <i class="fa fa-angle-right me-1 o-details-arrow" aria-hidden="true"/>Direcciones y datos fiscales
+                </summary>
+                <div class="o-contact-details-content bg-light-subtle rounded p-2 mt-1 small text-break">
+                    <div t-if="info.address" class="mb-1">
+                        <span class="text-muted">Dirección:</span>
+                        <span class="text-dark ms-1" t-esc="info.address"/>
+                    </div>
+                    <div t-if="info.fiscal_regime" class="mb-2">
+                        <span class="text-muted">Régimen fiscal:</span>
+                        <span class="text-dark ms-1" t-esc="info.fiscal_regime"/>
+                    </div>
+                    <div class="row g-2" t-if="info.invoice || info.delivery">
                         <div t-if="info.invoice" class="col-12 col-md-6">
-                            <strong class="d-block">Dirección de factura</strong>
-                            <span class="d-block" t-esc="info.invoice.name"/>
+                            <span class="fw-medium text-secondary d-block">Dirección de factura</span>
+                            <span class="d-block text-dark" t-esc="info.invoice.name"/>
                             <span class="text-muted" t-esc="info.invoice.address || 'Sin dirección registrada'"/>
                         </div>
                         <div t-if="info.delivery" class="col-12 col-md-6">
-                            <strong class="d-block">Dirección de entrega</strong>
-                            <span class="d-block" t-esc="info.delivery.name"/>
+                            <span class="fw-medium text-secondary d-block">Dirección de entrega</span>
+                            <span class="d-block text-dark" t-esc="info.delivery.name"/>
                             <span class="text-muted" t-esc="info.delivery.address || 'Sin dirección registrada'"/>
                         </div>
                     </div>
-                    <small class="text-muted d-block mt-2">Direcciones predeterminadas del contacto.</small>
+                    <small class="text-muted d-block mt-2 fst-italic">Direcciones predeterminadas del contacto.</small>
                 </div>
             </details>
         </div>
