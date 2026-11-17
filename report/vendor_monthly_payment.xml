@@ -62,7 +62,7 @@
                 <field name="monthly_vendor_payment_kind" optional="show"/>
                 <field name="journal_id"/>
                 <field name="payment_method_line_id" string="Método del diario" optional="hide"/>
-                <field name="l10n_mx_edi_payment_method_id" string="Forma SAT"/>
+                <field name="l10n_mx_edi_payment_method_id" string="Forma de pago"/>
                 <field name="monthly_vendor_bill_ids" widget="many2many_tags"/>
                 <field name="monthly_vendor_group_ids" widget="many2many_tags"/>
                 <field name="currency_id" string="Moneda"/>
@@ -114,24 +114,23 @@
         <field name="column_ids">
             <record id="vendor_monthly_payment_column_date" model="account.report.column">
                 <field name="name">Fecha de pago</field><field name="expression_label">date</field><field name="figure_type">date</field>
-            </record>
-            <record id="vendor_monthly_payment_column_kind" model="account.report.column">
-                <field name="name">Tipo</field><field name="expression_label">kind</field><field name="figure_type">string</field>
+                <field name="sequence" eval="10"/>
             </record>
             <record id="vendor_monthly_payment_column_journal" model="account.report.column">
                 <field name="name">Diario</field><field name="expression_label">journal</field><field name="figure_type">string</field>
+                <field name="sequence" eval="30"/>
             </record>
             <record id="vendor_monthly_payment_column_sat" model="account.report.column">
-                <field name="name">Forma SAT</field><field name="expression_label">sat</field><field name="figure_type">string</field>
-            </record>
-            <record id="vendor_monthly_payment_column_bills" model="account.report.column">
-                <field name="name">Facturas</field><field name="expression_label">bills</field><field name="figure_type">string</field>
+                <field name="name">Forma de pago</field><field name="expression_label">sat</field><field name="figure_type">string</field>
+                <field name="sequence" eval="40"/>
             </record>
             <record id="vendor_monthly_payment_column_groups" model="account.report.column">
                 <field name="name">Pagos agrupados</field><field name="expression_label">groups</field><field name="figure_type">string</field>
+                <field name="sequence" eval="50"/>
             </record>
             <record id="vendor_monthly_payment_column_amount" model="account.report.column">
                 <field name="name">Importe</field><field name="expression_label">amount</field><field name="figure_type">monetary</field>
+                <field name="sequence" eval="60"/>
             </record>
         </field>
     </record>
@@ -153,21 +152,27 @@
         <field name="column_ids">
             <record id="customer_monthly_payment_column_date" model="account.report.column">
                 <field name="name">Fecha de pago</field><field name="expression_label">date</field><field name="figure_type">date</field>
+                <field name="sequence" eval="10"/>
             </record>
             <record id="customer_monthly_payment_column_kind" model="account.report.column">
                 <field name="name">Tipo</field><field name="expression_label">kind</field><field name="figure_type">string</field>
+                <field name="sequence" eval="20"/>
             </record>
             <record id="customer_monthly_payment_column_journal" model="account.report.column">
                 <field name="name">Diario</field><field name="expression_label">journal</field><field name="figure_type">string</field>
+                <field name="sequence" eval="30"/>
             </record>
             <record id="customer_monthly_payment_column_sat" model="account.report.column">
-                <field name="name">Forma SAT</field><field name="expression_label">sat</field><field name="figure_type">string</field>
-            </record>
-            <record id="customer_monthly_payment_column_bills" model="account.report.column">
-                <field name="name">Facturas</field><field name="expression_label">bills</field><field name="figure_type">string</field>
+                <field name="name">Forma de pago</field><field name="expression_label">sat</field><field name="figure_type">string</field>
+                <field name="sequence" eval="40"/>
             </record>
             <record id="customer_monthly_payment_column_amount" model="account.report.column">
                 <field name="name">Importe</field><field name="expression_label">amount</field><field name="figure_type">monetary</field>
+                <field name="sequence" eval="60"/>
+            </record>
+            <record id="customer_monthly_payment_column_groups" model="account.report.column">
+                <field name="name">Pagos agrupados</field><field name="expression_label">groups</field><field name="figure_type">string</field>
+                <field name="sequence" eval="50"/>
             </record>
         </field>
     </record>

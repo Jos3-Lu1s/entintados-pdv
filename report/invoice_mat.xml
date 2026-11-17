@@ -15,48 +15,50 @@
     <t t-set="mat_header" t-value="o._mat_report_header()"/>
     <t t-set="mat_partner" t-value="mat_header['partner']"/>
     <t t-set="mat_agent" t-value="mat_header['agent']"/>
-    <table class="mat-top"><tr>
-        <td style="width:34%;"><div class="mat-panel mat-brand">
-            <img src="/entintados_pdv/static/src/img/invoice_logo_placeholder.png" style="width:210px;height:80px;object-fit:contain;" alt="Logotipo de la empresa"/>
-            <div class="mat-folio"><strong t-out="mat_header['title'] + ':'"/> <span t-out="o.name if o.name and o.name != '/' else 'Borrador'"/></div>
-            <div class="mat-stage">Etapa: <strong t-out="mat_header['stage']"/></div>
-        </div></td>
-        <td style="width:36%;"><div class="mat-company" style="padding:14px 8px;">
-            <strong t-field="o.company_id.name"/><br/>
-            <strong>RFC: <span t-field="o.company_id.vat"/></strong>
-            <div t-field="o.company_id.partner_id" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/>
-            <span t-field="o.company_id.website"/>
-        </div></td>
-        <td style="width:30%;"><div class="mat-panel mat-dates">
-            <div class="mat-heading" t-out="mat_header['date_label']"/><div class="mat-date" t-out="mat_header['date']"/>
-        </div><div class="mat-panel mat-dates" style="margin-top:10px;">
-            <div class="mat-heading" t-out="mat_header['due_label']"/><div class="mat-date" t-out="mat_header['due'] or 'Sin fecha definida'"/>
-        </div><div style="text-align:center;font-size:11px;margin-top:5px;">Moneda: <span t-field="o.currency_id.name"/></div></td>
-    </tr></table>
-    <table class="mat-top"><tr>
-        <td style="width:70%;"><div class="mat-panel">
-            <div class="mat-heading">En atención a:</div><div style="padding:12px;line-height:1.5;">
-                <table class="mat-details"><tr><th>CLAVE:</th><td><span t-field="mat_partner.ref"/></td></tr>
-                <tr><th>NOMBRE:</th><td><span t-field="mat_partner.name"/></td></tr>
-                <tr><th>RFC:</th><td t-out="mat_header['rfc']"/></tr>
-                <tr><th>AGENTE:</th><td><span t-field="mat_agent.name"/></td></tr>
-                <tr><th>Dirección:</th><td><div t-out="mat_partner" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/></td></tr>
-                <tr t-if="o.partner_shipping_id and o.partner_shipping_id != mat_partner"><th>Entrega a:</th><td><div t-field="o.partner_shipping_id" t-options="{'widget':'contact','fields':['name','address'],'no_marker':True}"/></td></tr>
-                <tr t-if="mat_header['origin']"><th>Origen:</th><td t-out="mat_header['origin']"/></tr></table>
+    <div class="o_sale_quotation mat-document-header">
+        <table class="o_sq_header"><tr>
+            <td class="o_sq_logo">
+                <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)" alt="Logotipo"/>
+                <img t-else="" src="/entintados_pdv/static/src/img/invoice_logo_placeholder.png" alt="Logotipo de la empresa"/>
+            </td>
+            <td class="o_sq_company">
+                <div class="o_sq_company_name" t-field="o.company_id.name"/>
+                <div t-if="o.company_id.vat">RFC <span t-field="o.company_id.vat"/></div>
+                <div t-field="o.company_id.partner_id" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/>
+                <span t-field="o.company_id.website"/>
+            </td>
+            <td class="o_sq_title_cell">
+                <div class="o_sq_title" t-out="mat_header['title']"/>
+                <div class="o_sq_folio" t-out="o.name if o.name and o.name != '/' else 'Borrador'"/>
+                <div class="o_sq_date" t-out="mat_header['date']"/>
+                <div class="o_sq_date">Etapa <strong t-out="mat_header['stage']"/></div>
+            </td>
+        </tr></table>
+        <table class="mat-info"><tr>
+            <td style="width:36%;">
+                <div class="mat-heading">Cliente</div>
+                <strong t-field="mat_partner.name"/>
+                <div t-if="mat_partner.ref">Clave <span t-field="mat_partner.ref"/></div>
+                <div t-if="mat_header['rfc']">RFC <span t-out="mat_header['rfc']"/></div>
                 <t t-call="l10n_mx_edi.l10n_mx_fiscal_regime_receptor"/>
-            </div>
-        </div></td>
-        <td style="width:30%;"><div class="mat-panel" style="padding:12px;line-height:1.5;">
-            <strong t-field="mat_agent.name"/><div style="font-size:11px;margin-top:14px;">
-                <div t-if="mat_agent.partner_id.phone"><strong>Teléfono: </strong><span t-field="mat_agent.partner_id.phone"/></div>
-                <t t-set="mat_agent_address" t-value="mat_agent.partner_id if mat_agent.partner_id.street else o.company_id.partner_id"/>
-                <div t-out="mat_agent_address" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/>
-                <div t-if="mat_agent.email"><span t-field="mat_agent.email"/></div>
-                <div t-if="mat_header['reference']"><strong>Referencia: </strong><span t-out="mat_header['reference']"/></div>
-            </div>
-        </div></td>
-    </tr></table>
-    <div class="mat-panel" style="padding:8px 12px;font-size:10px;margin:4px 7px 12px;">
+            </td>
+            <td style="width:31%;">
+                <div class="mat-heading">Entregar en</div>
+                <div t-out="o.partner_shipping_id or mat_partner" t-options="{'widget':'contact','fields':['address'],'no_marker':True}"/>
+            </td>
+            <td style="width:33%;">
+                <div class="mat-heading">Detalles</div>
+                <div><span t-out="mat_header['due_label']"/> <span t-out="mat_header['due'] or 'Sin fecha definida'"/></div>
+                <div>Moneda <span t-field="o.currency_id.name"/></div>
+                <div t-if="mat_agent">Agente <span t-field="mat_agent.name"/></div>
+                <div t-if="mat_agent.partner_id.phone" t-field="mat_agent.partner_id.phone"/>
+                <div t-if="mat_agent.email" t-field="mat_agent.email"/>
+                <div t-if="mat_header['origin']">Origen <span t-out="mat_header['origin']"/></div>
+                <div t-if="mat_header['reference']">Referencia <span t-out="mat_header['reference']"/></div>
+            </td>
+        </tr></table>
+    </div>
+    <div class="mat-panel" style="padding:8px 12px;font-size:10px;margin:4px 0 12px;">
         <strong>Uso CFDI: </strong><span t-out="mat_header['usage']"/>
         <br/><strong>Forma de pago: </strong><span t-out="mat_header['payment_way']"/>
         <strong> · Método de pago: </strong><span t-out="mat_header['payment_method']"/>
@@ -119,7 +121,17 @@
     .mat-invoice .mat-details {border:0;font-size:12px;}
     .mat-invoice .mat-details th {width:85px;text-align:left;vertical-align:top;padding:0 8px 0 0;}
     .mat-invoice .mat-details td {text-align:left;padding:0;}
-    .mat-invoice .mat-lines {border-spacing:0;box-shadow:0 2px 6px #ededed;}
+    .mat-invoice .mat-document-header .mat-info {margin:24px 0 16px;table-layout:fixed;}
+    .mat-invoice .mat-info td {padding-right:16px;vertical-align:top;}
+    .mat-invoice .mat-info td:last-child {padding-right:0;}
+    .mat-invoice .mat-heading,
+    .mat-invoice .mat-lines th {background:#f1e9d4;color:#625d54;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;}
+    .mat-invoice .mat-info .mat-heading {margin-bottom:8px;}
+    .mat-invoice .mat-panel {border:0;border-radius:0;box-shadow:none;background:#f5f4f1;}
+    .mat-invoice .mat-lines {border:0;border-radius:0;border-collapse:collapse;}
+    .mat-invoice .mat-lines td {border-bottom:1px solid #e4e1db;}
+    .mat-invoice .mat-summary {border:0;border-radius:0;width:42%;}
+    .mat-invoice .mat-summary .o_total {background:#f1e9d4;color:#24468d;}
 </style>
                 <t t-out="0"/>
             </div>
@@ -177,7 +189,7 @@
                 <t t-set="mat_discount" t-value="any(line.discount for line in mat_lines)"/>
                 <table class="mat-lines" name="mat_invoice_lines" dir="ltr">
                     <thead><tr>
-                        <th>Cantidad</th><th>Código</th><th style="width:40%;">Descripción</th>
+                        <th>Cantidad</th><th>Código</th><th>UNSPSC</th><th style="width:30%;">Descripción</th><th>UdM</th>
                         <th t-if="mat_discount">Descuento</th><th>Valor unitario</th><th>Importe</th>
                     </tr></thead>
                     <tbody>
@@ -186,12 +198,14 @@
                                 <t t-set="mat_values" t-value="o._mat_invoice_line_values(line)"/>
                                 <td><span t-field="line.quantity"/></td>
                                 <td><span t-out="mat_values['code']"/></td>
+                                <td><span t-out="line.product_id.unspsc_code_id.code or ''"/></td>
                                 <td><span t-field="line.name" t-options="{'widget':'text'}"/></td>
+                                <td><span t-if="line.product_uom_id" t-field="line.product_uom_id"/></td>
                                 <td t-if="mat_discount"><t t-if="line.discount"><span t-field="line.discount"/>%<br/><span t-out="mat_values['discount']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></t></td>
                                 <td><span t-out="mat_values['unit']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td>
                                 <td><span t-field="line.price_subtotal"/></td>
                             </tr>
-                            <tr t-else=""><td t-att-colspan="6 if mat_discount else 5"><span t-field="line.name" t-options="{'widget':'text'}"/></td></tr>
+                            <tr t-else=""><td t-att-colspan="8 if mat_discount else 7"><span t-field="line.name" t-options="{'widget':'text'}"/></td></tr>
                         </t>
                     </tbody>
                 </table>

@@ -1,6 +1,8 @@
 from odoo import _, models
 from odoo.exceptions import UserError
 
+from ..utils.origin_badge import format_discount_number
+
 
 class SaleOrderDiscount(models.TransientModel):
     _inherit = 'sale.order.discount'
@@ -45,7 +47,7 @@ class SaleOrderDiscount(models.TransientModel):
                 body=_(
                     "Se aplicó el %(discount)s %% de descuento manual en %(count)d línea(s). "
                     "Se omitieron de la aplicación por no admitir descuento manual: %(excluded)s.",
-                    discount=f"{discount:.2f}".rstrip('0').rstrip('.'),
+                    discount=format_discount_number(discount),
                     count=len(lines),
                     excluded=excluded_names,
                 ),

@@ -10,18 +10,6 @@ from odoo.tools import float_is_zero
 class BasePartnerMergeAutomaticWizard(models.TransientModel):
     _inherit = 'base.partner.merge.automatic.wizard'
 
-    @staticmethod
-    def _discount_rule_target(rule):
-        return rule.applied_on, rule[rule._TARGET_FIELDS[rule.applied_on]].id
-
-    @staticmethod
-    def _discount_rule_target_label(rule):
-        if rule.applied_on == '0_product':
-            return rule.product_id.display_name
-        if rule.applied_on == '1_line':
-            return rule.line_id.display_name
-        return rule.scheme_id.name
-
     def _check_merge_agreements_access(self, src_partners):
         if self.env['res.partner']._can_edit_commercial_agreements():
             return
@@ -33,23 +21,21 @@ class BasePartnerMergeAutomaticWizard(models.TransientModel):
                 'contactos que tienen acuerdos comerciales o descuento.'
             ))
 
-    def _check_source_rule_conflicts(self, src_partners, dst_targets):
+    def _check_source_rule_conflicts(self, src_rules):
         rules_by_target = defaultdict(lambda: self.env['res.partner.discount.rule'])
-        for rule in src_partners.discount_rule_ids:
-            target = self._discount_rule_target(rule)
-            if target not in dst_targets:
-                rules_by_target[target] |= rule
-        conflicts = [rules for rules in rules_by_target.values() if len(rules) > 1]
+        for rule in src_rules:
+            rules_by_target[rule._get_target()] |= rule
+        conflicts = [(target, rules) for target, rules in rules_by_target.items() if len(rules) > 1]
         if conflicts:
             raise UserError(self.env._(
                 'Varios contactos a fusionar tienen un acuerdo comercial sobre el mismo objetivo '
                 'y el destino no tiene ninguno. Resuélvelo antes de fusionar:\n%(conflicts)s',
                 conflicts='\n'.join(
                     '- %s: %s' % (
-                        self._discount_rule_target_label(rules[0]),
+                        target.display_name,
                         ', '.join(rules.partner_id.mapped('display_name')),
                     )
-                    for rules in conflicts
+                    for target, rules in conflicts
                 ),
             ))
 
@@ -66,11 +52,10 @@ class BasePartnerMergeAutomaticWizard(models.TransientModel):
 
         # El core reasigna las reglas por SQL sin pasar por la unicidad de Python:
         # en cada objetivo repetido se descarta antes la regla del origen.
-        dst_targets = {self._discount_rule_target(rule) for rule in dst_partner.discount_rule_ids}
-        self._check_source_rule_conflicts(src_partners, dst_targets)
-        discarded_rules = src_partners.discount_rule_ids.filtered(
-            lambda rule: self._discount_rule_target(rule) in dst_targets
-        )
+        dst_targets = {rule._get_target() for rule in dst_partner.discount_rule_ids}
+        src_rules = src_partners.discount_rule_ids
+        discarded_rules = src_rules.filtered(lambda rule: rule._get_target() in dst_targets)
+        self._check_source_rule_conflicts(src_rules - discarded_rules)
         discarded = [(rule.name, rule.partner_id.display_name) for rule in discarded_rules]
         discarded_rules.unlink()
 

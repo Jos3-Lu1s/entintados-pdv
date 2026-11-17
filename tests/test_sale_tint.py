@@ -178,6 +178,18 @@ class TestSaleTint(TransactionCase):
         with self.assertRaises(ValidationError), self.cr.savepoint():
             line.product_uom_qty = 3
 
+    def test_tint_line_price_origin_is_tint(self):
+        line = self._order()._apply_tint(self.formula, self.base, 1)
+        self.assertEqual(line.price_origin, 'tint')
+        self.assertEqual(line.price_origin_label, 'Precio del entintado: base más colorantes')
+
+    def test_tint_line_price_origin_survives_price_update(self):
+        order = self._order()
+        line = order._apply_tint(self.formula, self.base, 1)
+        order.action_update_prices()
+        self.assertEqual(line.price_origin, 'tint')
+        self.assertEqual(line.price_unit, 224)
+
     def test_loose_colorants_and_forged_recipe_blocked(self):
         order = self._order()
         for values in ({'product_id': self.colorant.id},

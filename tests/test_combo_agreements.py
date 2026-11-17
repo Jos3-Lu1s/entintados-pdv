@@ -132,7 +132,7 @@ class TestComboAgreements(TransactionCase):
         self.assertEqual(package_line.price_unit, 0.0)
         self.assertEqual(package_line.discount, 0.0)
         self.assertEqual(package_line.pricing_rule_type, 'fixed_price')
-        self.assertEqual(package_line.pricing_rule_origin, 'Precio Fijo')
+        self.assertEqual(package_line.pricing_rule_origin, 'Precio fijo')
         self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [142.86, 42.86, 14.28])
         self.assertAlmostEqual(order.amount_untaxed, 600.0, places=2)
         self.assertAlmostEqual(order.amount_tax, 96.0, places=2)
@@ -188,7 +188,7 @@ class TestComboAgreements(TransactionCase):
             self.assertEqual(
                 (line.discount, line.technical_discount, line.pricing_rule_type,
                  line.pricing_rule_origin, line.pricing_rule_id),
-                (discount, discount, rule_type, f'Del paquete: {origin}', package_line.pricing_rule_id),
+                (discount, discount, rule_type, f'↳ {origin}', package_line.pricing_rule_id),
                 line.product_id.name,
             )
 
@@ -202,7 +202,7 @@ class TestComboAgreements(TransactionCase):
         })
         order, package_line, items = self._quote()
 
-        self._assert_items_inherit(package_line, items, 10.0, 'product', 'Desc. Producto (10.0%)')
+        self._assert_items_inherit(package_line, items, 10.0, 'product', 'Producto · 10%')
         self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [714.29, 214.29, 71.42])
         self.assertAlmostEqual(order.amount_untaxed, 2700.0, places=2)
 
@@ -210,7 +210,7 @@ class TestComboAgreements(TransactionCase):
         self.partner.discount = 0.05
         _order, package_line, items = self._quote()
 
-        self._assert_items_inherit(package_line, items, 5.0, 'global', 'Desc. Global Cliente (5.0%)')
+        self._assert_items_inherit(package_line, items, 5.0, 'global', 'Cliente · 5%')
 
     def test_no_agreement_items_have_no_badge(self):
         _order, _package_line, items = self._quote()
@@ -231,12 +231,12 @@ class TestComboAgreements(TransactionCase):
             for index in range(1, 4):
                 with order_form.order_line.edit(index) as item_form:
                     self.assertEqual(item_form.discount, 7.0)
-                    self.assertEqual(item_form.pricing_rule_origin, 'Del paquete: Desc. Manual (7.0%)')
+                    self.assertEqual(item_form.pricing_rule_origin, '↳ Manual · 7%')
 
-        self._assert_items_inherit(package_line, items, 7.0, 'manual', 'Desc. Manual (7.0%)')
+        self._assert_items_inherit(package_line, items, 7.0, 'manual', 'Manual · 7%')
 
         order.action_update_prices()
-        self._assert_items_inherit(package_line, items, 7.0, 'manual', 'Desc. Manual (7.0%)')
+        self._assert_items_inherit(package_line, items, 7.0, 'manual', 'Manual · 7%')
 
     def test_fixed_price_package_rejects_manual_discount(self):
         self._fixed_price_rule(self.package, 200.0)
@@ -283,7 +283,7 @@ class TestComboAgreements(TransactionCase):
         snapshot = items[0].combo_price_snapshot
         self.assertEqual(
             (snapshot['pricelist_price'], snapshot['agreement'], snapshot['package_price']),
-            (1000.0, {'type': 'fixed_price', 'label': 'Precio Fijo', 'price': 200.0}, 200.0),
+            (1000.0, {'type': 'fixed_price', 'label': 'Precio fijo', 'price': 200.0}, 200.0),
         )
 
         self.rules.search([('partner_id', '=', self.partner.id)]).unlink()
@@ -325,7 +325,7 @@ class TestComboAgreements(TransactionCase):
         self.assertEqual(items.linked_line_id, package_line)
         self.assertEqual(package_line.price_unit, 0.0)
         self.assertEqual([round(price, 2) for price in items.mapped('price_unit')], [142.86, 42.86, 14.28])
-        self.assertEqual(items.mapped('pricing_rule_origin'), ['Del paquete: Precio Fijo'] * 3)
+        self.assertEqual(items.mapped('pricing_rule_origin'), ['↳ Precio fijo'] * 3)
         self.assertAlmostEqual(order.amount_total, 696.0, places=2)
 
     def test_create_order_with_combo_lines_without_prices(self):

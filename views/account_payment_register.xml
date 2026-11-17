@@ -7,6 +7,23 @@
         <field name="inherit_id" ref="account.view_account_payment_register_form"/>
         <field name="priority">90</field>
         <field name="arch" type="xml">
+            <xpath expr="//form/group[1]" position="attributes">
+                <attribute name="invisible" add="supplier_payment_source == 'advance'" separator=" or "/>
+            </xpath>
+            <xpath expr="//form/group[1]" position="before">
+                <field name="supplier_bill_currency_id" invisible="1"/>
+                <group invisible="not supplier_advance_to_apply and supplier_payment_source != 'advance'">
+                    <field name="supplier_payment_source" widget="radio" options="{'horizontal': true}"/>
+                    <field name="supplier_advance_to_apply"/>
+                </group>
+            </xpath>
+            <xpath expr="//footer/button[@name='action_create_payments' and @type='object']" position="attributes">
+                <attribute name="invisible" add="supplier_payment_source == 'advance'" separator=" or "/>
+            </xpath>
+            <xpath expr="//footer/button[@name='action_create_payments' and @type='object']" position="before">
+                <button name="action_create_payments" type="object" string="Aplicar anticipo"
+                        class="btn-primary" invisible="supplier_payment_source != 'advance'"/>
+            </xpath>
             <xpath expr="//form" position="inside">
                 <field name="vendor_percentage_editable" invisible="1"/>
             </xpath>
@@ -55,7 +72,7 @@
             </xpath>
             <xpath expr="//field[@name='l10n_mx_edi_payment_method_id']" position="attributes">
                 <attribute name="invisible" add="vendor_payment_group_id" separator=" or "/>
-                <attribute name="required">country_code == 'MX' and not vendor_payment_group_id</attribute>
+                <attribute name="required">country_code == 'MX' and not vendor_payment_group_id and supplier_payment_source != 'advance'</attribute>
             </xpath>
             <xpath expr="//field[@name='payment_method_line_id']" position="attributes">
                 <attribute name="readonly" add="vendor_payment_group_id" separator=" or "/>

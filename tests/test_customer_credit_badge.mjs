@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
-const list = read('../static/src/app/components/customer_credit_badge.xml');
-const contact = read('../static/src/app/components/customer_contact_info.xml');
+const list = read('../static/src/app/overrides/partner_line.xml');
+const contact = read('../static/src/app/components/customer_contact_info/customer_contact_info.xml');
 const conditionFor = (xml) => [...xml.matchAll(/t-if="([^"]*is_credit[^"]*)"/g)]
     .map((match) => match[1].replace(/\bor\b/g, '||').replace(/\band\b/g, '&&'));
 

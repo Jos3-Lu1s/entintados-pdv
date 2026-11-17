@@ -19,7 +19,7 @@ with Registry(database).cursor() as cr:
         env = api.Environment(cr, SUPERUSER_ID, {})
         native = etree.parse('/usr/lib/python3/dist-packages/odoo/addons/point_of_sale/static/src/app/screens/payment_screen/payment_screen.xml')
         custom = etree.parse(str(Path(__file__).resolve().parents[1] /
-                                 'static/src/app/overrides/customer_payment_summary.xml'))
+                                 'static/src/app/overrides/payment_screen.xml'))
         namespace = etree.FunctionNamespace(None)
         namespace['hasclass'] = lambda context, *names: all(
             name in context.context_node.get('class', '').split() for name in names)

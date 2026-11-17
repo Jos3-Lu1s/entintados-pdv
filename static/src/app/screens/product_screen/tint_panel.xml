@@ -5,7 +5,7 @@
         <div class="o-tint-panel d-flex flex-column flex-grow-1 min-w-0 min-h-0 overflow-hidden h-100 w-100">
 
             <!-- Franja de contexto de la galería activa (Paso 2: Selección de color) -->
-            <div t-if="ui.galleryId and !ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs min-w-0">
+            <div t-if="ui.galleryId and !ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-0 mt-0 min-w-0">
                 <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2 min-w-0">
                     <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
                         <!-- Botón Volver a Selección de Galería -->
@@ -36,7 +36,7 @@
             </div>
 
             <!-- Filtros de base y color seleccionado con navegación de retorno -->
-            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 shadow-xs min-w-0">
+            <div t-if="ui.colorId" class="o-tint-card flex-shrink-0 mx-2 mb-2 mt-0 shadow-xs min-w-0">
                 <div class="o-tint-card-header d-flex flex-wrap align-items-center justify-content-between py-2 px-3 gap-2 min-w-0">
                     <!-- Left: Botón Volver + Info de Color & Galería -->
                     <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
@@ -100,7 +100,7 @@
                 </div>
 
                 <!-- Filtros en cascada (Presentación / Base) -->
-                <div t-if="levels.length" class="o-tint-card-body p-2 px-3 border-top bg-light min-w-0">
+                <div t-if="levels.length" class="o-tint-card-body p-2 px-3 rounded-3 bg-light min-w-0">
                     <div t-foreach="levels" t-as="level" t-key="level.key"
                          class="o-tint-filter-row">
                         <small class="text-dark fw-bold text-uppercase text-nowrap o-tint-filter-label" style="width: 7.5rem; font-size: 0.7rem; letter-spacing: 0.3px;"

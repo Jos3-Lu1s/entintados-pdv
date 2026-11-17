@@ -2,6 +2,12 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import OrderPaymentValidation from "@point_of_sale/app/utils/order_payment_validation";
+import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
+import { CustomerContactInfo } from "@entintados_pdv/app/components/customer_contact_info/customer_contact_info";
+
+patch(ProductScreen, {
+    components: { ...ProductScreen.components, CustomerContactInfo },
+});
 
 patch(PosStore.prototype, {
     requireCustomer(order = this.getOrder()) {

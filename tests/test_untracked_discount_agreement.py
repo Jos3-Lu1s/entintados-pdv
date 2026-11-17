@@ -73,7 +73,7 @@ class TestUntrackedDiscountAgreement(TransactionCase):
                         line.invalidate_recordset()
 
                     self.assertEqual(round(line.discount, 2), 10.0)
-                    self.assertEqual(self._badge(line), ('product', 'Desc. Producto (10.0%)'))
+                    self.assertEqual(self._badge(line), ('product', 'Producto · 10%'))
                     self.assertEqual(round(line.technical_discount, 2), 10.0)
 
                     line.write({'product_uom_qty': 2.0})
@@ -86,25 +86,25 @@ class TestUntrackedDiscountAgreement(TransactionCase):
     def test_agreement_change_updates_badge(self):
         rule = self._discount_rule(10.0)
         line = self._create_line()
-        self.assertEqual(self._badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._badge(line), ('product', 'Producto · 10%'))
 
         rule.write({'discount': 15.0})
         line.write({'discount': 15.0})
         self.assertEqual(round(line.discount, 2), 15.0)
-        self.assertEqual(self._badge(line), ('product', 'Desc. Producto (15.0%)'))
+        self.assertEqual(self._badge(line), ('product', 'Producto · 15%'))
         self.assertEqual(round(line.technical_discount, 2), 15.0)
 
     def test_fixed_price_agreement_keeps_discount_manual(self):
         rule = self._discount_rule(10.0)
         line = self._create_line()
         line.write({'discount': 7.0})
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (7.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 7%'))
 
         rule.write({'rule_type': 'fixed_price', 'fixed_price': 70.0})
         line.write({'discount': 0.0})
         self.assertEqual(line.discount, 0.0)
         self.assertEqual(line.price_unit, 95.0)
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (0.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 0%'))
 
         line.write({'price_unit': 70.0})
         self.assertEqual(line.price_unit, 70.0)
@@ -126,7 +126,7 @@ class TestUntrackedDiscountAgreement(TransactionCase):
     def _assert_fixed_price(self, line):
         self.assertEqual(line.price_unit, 70.0)
         self.assertEqual(line.discount, 0.0)
-        self.assertEqual(self._badge(line), ('fixed_price', 'Precio Fijo'))
+        self.assertEqual(self._badge(line), ('fixed_price', 'Precio fijo'))
 
     def test_fixed_price_line_rejects_matching_discount(self):
         line = self._fixed_price_line_with_discount_agreement()
@@ -194,9 +194,9 @@ class TestUntrackedDiscountAgreement(TransactionCase):
             'fixed_price': 70.0,
         })
         expected = {
-            4.0: ('manual', 'Desc. Manual (4.0%)'),
-            10.0: ('product', 'Desc. Producto (10.0%)'),
-            0.0: ('manual', 'Desc. Manual (0.0%)'),
+            4.0: ('manual', 'Manual · 4%'),
+            10.0: ('product', 'Producto · 10%'),
+            0.0: ('manual', 'Manual · 0%'),
         }
         for via in ('write', 'load'):
             for discount, badge in expected.items():
@@ -225,7 +225,7 @@ class TestUntrackedDiscountAgreement(TransactionCase):
     def test_removed_agreement_clears_badge(self):
         rule = self._discount_rule(10.0)
         line = self._create_line()
-        self.assertEqual(self._badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._badge(line), ('product', 'Producto · 10%'))
 
         rule.unlink()
         line.write({'discount': 0.0})

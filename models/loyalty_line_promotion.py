@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from collections import Counter
+
 from odoo import models
 
 LINE_PROMOTION_PROGRAM_TYPES = ('promotion',)
@@ -12,17 +14,19 @@ class LoyaltyReward(models.Model):
     def unlink(self):
         # Si la recompensa está referenciada por líneas de pedido activas, se archiva en lugar
         # de eliminarse físicamente para mantener la integridad de los descuentos aplicados.
-        rewards_in_use = self.filtered(
-            lambda r: self.env['sale.order.line'].sudo().search_count([('promo_reward_id', '=', r.id)], limit=1)
-            or self.env['sale.order'].sudo().search_count([('order_promo_reward_id', '=', r.id)], limit=1)
-        )
-        if rewards_in_use:
-            rewards_in_use.action_archive()
-            remaining = self - rewards_in_use
-            if not remaining:
-                return True
-            return super(LoyaltyReward, remaining).unlink()
-        return super().unlink()
+        used_ids = {
+            reward.id
+            for model, field in (('sale.order.line', 'promo_reward_id'), ('sale.order', 'order_promo_reward_id'))
+            for (reward,) in self.env[model].sudo()._read_group([(field, 'in', self.ids)], [field])
+        }
+        rewards_in_use = self.filtered(lambda r: r.id in used_ids)
+        rewards_in_use.action_archive()
+        remaining = self - rewards_in_use
+        return super(LoyaltyReward, remaining).unlink() if remaining else True
+
+    def _sorted_by_line_promotion_discount(self):
+        """Mayor % primero: el orden con el que se elige y se ofrece una promoción por línea."""
+        return self.sorted(key=lambda reward: (-reward.discount, reward.id))
 
     def _is_line_promotion(self):
         """Recompensa que se elige por línea y vive en su `discount`, sin línea de recompensa.
@@ -31,7 +35,7 @@ class LoyaltyReward(models.Model):
         puede expresar como un % fijo.
         """
         self.ensure_one()
-        return bool(
+        return (
             self.reward_type == 'discount'
             and self.discount_mode == 'percent'
             and self.discount_applicability in LINE_PROMOTION_APPLICABILITIES
@@ -48,18 +52,14 @@ class LoyaltyProgram(models.Model):
         # de cualquier línea de cotización activa para que vuelva a su acuerdo vigente
         # antes de que la cascada de base de datos elimine las recompensas.
         rewards = self.with_context(active_test=False).reward_ids
-        lines_with_promo = self.env['sale.order.line'].sudo().search([
+        self.env['sale.order.line'].sudo().search([
             ('promo_reward_id', 'in', rewards.ids),
             ('order_id.state', 'in', ('draft', 'sent')),
-        ])
-        if lines_with_promo:
-            lines_with_promo._drop_line_promotion()
-        orders_with_promo = self.env['sale.order'].sudo().search([
+        ])._drop_line_promotion()
+        self.env['sale.order'].sudo().search([
             ('order_promo_reward_id', 'in', rewards.ids),
             ('state', 'in', ('draft', 'sent')),
-        ])
-        if orders_with_promo:
-            orders_with_promo._clear_order_promotion()
+        ])._clear_order_promotion()
         return super().unlink()
 
     def _compute_order_count(self):
@@ -72,9 +72,9 @@ class LoyaltyProgram(models.Model):
             ['order_id'],
             ['reward_id:array_agg', 'promo_reward_id:array_agg'],
         )
+        program_by_reward = {reward.id: reward.program_id.id for reward in self.reward_ids}
+        counts = Counter()
+        for __, native, promo in groups:
+            counts.update({program_by_reward[rid] for rid in native + promo if rid in program_by_reward})
         for program in self:
-            program_rewards = set(program.reward_ids.ids)
-            program.order_count = sum(
-                bool(program_rewards.intersection(native + promo))
-                for __, native, promo in groups
-            )
+            program.order_count = counts[program.id]

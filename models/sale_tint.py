@@ -17,6 +17,10 @@ class SaleOrder(models.Model):
                    for line in order.order_line.filtered('tint_snapshot')):
                 raise ValidationError(_('Elimina los entintados y vuelve a agregarlos al cambiar la moneda.'))
 
+    def _get_update_prices_lines(self):
+        # El precio de una base entintada sale de su fórmula congelada, no de la tarifa.
+        return super()._get_update_prices_lines().filtered(lambda line: not line._tint_recipe())
+
     def action_add_tint(self):
         self.ensure_one()
         self.check_access('write')
@@ -134,7 +138,7 @@ class SaleOrder(models.Model):
             'name': self._tint_base_description(snapshot), 'product_uom_qty': quantity,
             'product_uom_id': base.uom_id.id, 'price_unit': snapshot['unit_price'],
             'discount': 0, 'tint_snapshot': snapshot, 'tint_container_qty': quantity,
-            'price_origin': 'manual', 'technical_price_unit': snapshot['unit_price'],
+            'price_origin': 'tint', 'technical_price_unit': snapshot['unit_price'],
         }]
         return lines.create(values).with_env(self.env)
 
@@ -176,6 +180,38 @@ class SaleOrderLine(models.Model):
     def _reset_price_unit(self):
         return super(SaleOrderLine, self.filtered(lambda line: not line._tint_recipe()))._reset_price_unit()
 
+    def _promotion_writer(self):
+        # Una promoción sí reemplaza el descuento de la base entintada; teclearlo sigue prohibido.
+        return super()._promotion_writer().with_context(_tint_operation=_TINT_OPERATION)
+
+    def _tint_own_discount(self):
+        """Descuento propio de la base entintada: el que trajo del Punto de Venta, o ninguno."""
+        self.ensure_one()
+        return self._tint_recipe().get('pos_discount', 0)
+
+    def _promotion_fallback_values(self):
+        # La base entintada no lleva acuerdos: vuelve a su descuento propio.
+        if not self._tint_recipe():
+            return super()._promotion_fallback_values()
+        discount = self._tint_own_discount()
+        return {
+            'promo_reward_id': False,
+            'discount': discount,
+            'technical_discount': discount,
+            'pricing_rule_type': 'none',
+            'pricing_rule_origin': False,
+            'pricing_rule_id': False,
+        }
+
+    def _promotion_fallback_hint(self, price_lines, difference):
+        if not self._tint_recipe():
+            return super()._promotion_fallback_hint(price_lines, difference)
+        discount = self._tint_own_discount()
+        return {
+            'label': _('Desc. Punto de Venta (%.1f%%)') % discount if discount else _('sin descuento'),
+            'difference': difference(discount),
+        }
+
     def _tint_saved_component_price(self):
         self.ensure_one()
         return self._tint_recipe()['unit_price']
@@ -187,7 +223,7 @@ class SaleOrderLine(models.Model):
         for line in tinted.with_context(_tint_operation=_TINT_OPERATION):
             line.price_unit = line._tint_saved_component_price()
             line.technical_price_unit = line.price_unit
-            line.price_origin = 'manual'
+            line.price_origin = 'tint'
             line.price_origin_label = _('Precio del entintado: base más colorantes')
             line.combo_price_snapshot = False
             line.combo_package_price = 0
@@ -197,7 +233,11 @@ class SaleOrderLine(models.Model):
         tinted = self.filtered(lambda line: line.product_id and line._tint_recipe())
         super(SaleOrderLine, self - tinted)._compute_discount()
         for line in tinted.with_context(_tint_operation=_TINT_OPERATION):
-            line.discount = line._tint_recipe().get('pos_discount', 0)
+            if line.promo_reward_id:
+                # La promoción elegida se conserva; la reevaluación la quita si deja de proceder.
+                line.update(line._line_promotion_values(line.promo_reward_id))
+                continue
+            line.discount = line._tint_own_discount()
             line.technical_discount = line.discount
             line.pricing_rule_type = 'none'
             line.pricing_rule_origin = False

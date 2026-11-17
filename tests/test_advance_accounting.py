@@ -102,6 +102,32 @@ class TestAdvanceAccounting(TransactionCase):
         with self.assertRaises(UserError):
             self._apply(source, self._invoice(800), 100)
 
+    def test_supplier_prepayment_is_applied_only_when_selected(self):
+        method = self.journals['bank'].outbound_payment_method_line_ids[:1]
+        method.payment_account_id = self.accounts['outstanding']
+        advance = self.env['account.payment'].create({
+            'payment_type': 'outbound',
+            'partner_type': 'supplier',
+            'partner_id': self.partner.id,
+            'journal_id': method.journal_id.id,
+            'payment_method_line_id': method.id,
+            'amount': 100,
+            'is_supplier_prepayment': True,
+        })
+        advance.action_post()
+        bill = self._invoice(150, supplier=True)
+        bill.action_post()
+        self.assertEqual(bill.amount_residual, 150)
+        register = self.env['account.payment.register'].with_context(
+            active_model='account.move', active_ids=bill.ids,
+        ).create({'journal_id': method.journal_id.id})
+        self.assertEqual(register.supplier_payment_source, 'normal')
+        self.assertEqual(register.supplier_advance_to_apply, 100)
+        register.supplier_payment_source = 'advance'
+        register.action_create_payments()
+        self.assertEqual(bill.amount_residual, 50)
+        self.assertEqual(advance.supplier_prepayment_balance, 0)
+
     def test_partial_payment_limits_available_balance(self):
         source = self._invoice(300, supplier=True, advance=True)
         self._pay(source, 100)

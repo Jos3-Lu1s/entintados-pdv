@@ -29,7 +29,7 @@
                 <field name="currency_id"/>
                 <field name="invoice_count"/>
                 <field name="payment_count"/>
-                <field name="state" widget="badge" decoration-success="state == 'registered'"/>
+                <field name="state" widget="badge" decoration-success="state == 'registered'" decoration-danger="state == 'cancel'"/>
                 <button name="action_print_payment_group" type="object" string="PDF" invisible="state != 'registered'"/>
                 <button name="action_export_payment_group" type="object" string="Excel" invisible="state != 'registered'"/>
             </list>
@@ -51,7 +51,10 @@
                     <field name="has_pending_balance" invisible="1"/>
                     <button name="action_prepare_followup_payment" type="object" string="Preparar otro abono"
                             class="btn-primary" invisible="not has_pending_balance"/>
-                    <field name="state" widget="statusbar"/>
+                    <button name="action_cancel" type="object" string="Cancelar"
+                            invisible="state == 'cancel'"
+                            confirm="¿Cancelar el grupo y todos los pagos vinculados?"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,registered,cancel"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -65,22 +68,19 @@
                         </button>
                     </div>
                     <div class="oe_title mb-4">
-                        <div class="text-muted mb-1">PAGO AGRUPADO DE PROVEEDOR</div>
+                        <div class="text-muted mb-1" invisible="payment_type != 'outbound'">PAGO AGRUPADO DE PROVEEDOR</div>
+                        <div class="text-muted mb-1" invisible="payment_type != 'inbound'">COBRO AGRUPADO DE CLIENTES</div>
                         <h1><field name="name" placeholder="Nuevo"/></h1>
                         <p class="text-muted">Consulta las facturas y los pagos de esta agrupación.</p>
                     </div>
                     <group>
-                        <group>
-                            <field name="company_id" invisible="1"/>
-                            <field name="country_code" invisible="1"/>
+                        <field name="company_id" invisible="1"/>
+                        <field name="payment_type" invisible="1" force_save="1"/>
+                        <field name="country_code" invisible="1"/>
+                        <group string="Datos generales">
                             <field name="currency_id" readonly="state != 'draft' or previous_group_id" options="{'no_create': True}"/>
-                            <field name="payment_method_line_id" readonly="state != 'draft'" required="state == 'draft'"
-                                   invisible="state == 'registered' and not payment_method_line_id"
-                                   placeholder="Selecciona una forma de pago"
-                                   domain="[('payment_type', '=', 'outbound'), ('journal_id.company_id', '=', company_id),
-                                            ('journal_id.type', 'in', ['bank', 'cash', 'credit']),
-                                            ('journal_id.currency_id', 'in', [False, currency_id])]"
-                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="default_sat_payment_method_id" invisible="country_code != 'MX'"
+                                   readonly="state != 'draft'" options="{'no_create': True, 'no_open': True}"/>
                         </group>
                         <group string="Datos del pago">
                             <field name="previous_group_id" invisible="not previous_group_id"/>
@@ -98,9 +98,12 @@
                         Los pagos se registraron y se aplicaron a las facturas seleccionadas.
                         <span invisible="not has_pending_balance">Puedes preparar otro abono para las facturas con saldo pendiente.</span>
                     </div>
+                    <div class="alert alert-danger" role="status" invisible="state != 'cancel'">
+                        El grupo está cancelado. Las facturas y los pagos vinculados quedan disponibles para consulta.
+                    </div>
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-4 mb-3">
                         <div>
-                            <h3 class="mb-1">Facturas de proveedores</h3>
+                            <h3 class="mb-1">Facturas</h3>
                             <span class="text-muted" invisible="state != 'draft'">Facturas pendientes o con pago parcial.</span>
                             <span class="text-muted" invisible="state != 'registered'">Facturas incluidas y su saldo pendiente actual.</span>
                         </div>
@@ -115,13 +118,12 @@
                         <list editable="bottom" create="0" delete="0" decoration-muted="not selected">
                             <field name="selected"/>
                             <field name="invoice_id" readonly="1" force_save="1"/>
-                            <field name="partner_id"/>
+                            <field name="partner_id" string="Contacto"/>
                             <field name="invoice_date"/>
                             <field name="due_date"/>
                             <field name="currency_id" column_invisible="True"/>
                             <field name="amount_to_pay" readonly="not selected" force_save="1"/>
-                            <field name="payment_method_line_id" readonly="1" column_invisible="parent.state == 'draft'"/>
-                            <field name="sat_payment_method_id" readonly="not selected"
+                            <field name="sat_payment_method_id" readonly="not selected" force_save="1"
                                    column_invisible="parent.country_code != 'MX'"
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="amount_residual"/>
@@ -136,5 +138,14 @@
         <field name="name">Pagos agrupados</field>
         <field name="res_model">vendor.payment.group</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('payment_type', '=', 'outbound')]</field>
+        <field name="context">{'default_payment_type': 'outbound'}</field>
+    </record>
+    <record id="customer_payment_group_action" model="ir.actions.act_window">
+        <field name="name">Pagos agrupados de clientes</field>
+        <field name="res_model">vendor.payment.group</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('payment_type', '=', 'inbound')]</field>
+        <field name="context">{'default_payment_type': 'inbound'}</field>
     </record>
 </odoo>

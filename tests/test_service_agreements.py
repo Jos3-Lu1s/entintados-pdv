@@ -129,7 +129,7 @@ class TestServiceAgreements(TransactionCase):
 
         line = self._create_order(self.service).order_line
 
-        self._assert_discount(line, 10.0, 'product', 'Desc. Producto (10.0%)', rule)
+        self._assert_discount(line, 10.0, 'product', 'Producto · 10%', rule)
 
     def test_service_line_discount(self):
         product_line, _scheme = self._service_in_line()
@@ -137,7 +137,7 @@ class TestServiceAgreements(TransactionCase):
 
         line = self._create_order(self.service).order_line
 
-        self._assert_discount(line, 12.0, 'line', 'Desc. Línea: Línea Servicios (12.0%)', rule)
+        self._assert_discount(line, 12.0, 'line', 'Línea Línea Servicios · 12%', rule)
 
     def test_service_scheme_discount(self):
         _product_line, scheme = self._service_in_line()
@@ -145,14 +145,14 @@ class TestServiceAgreements(TransactionCase):
 
         line = self._create_order(self.service).order_line
 
-        self._assert_discount(line, 15.0, 'scheme', 'Desc. Esquema: Esquema Servicios (15.0%)', rule)
+        self._assert_discount(line, 15.0, 'scheme', 'Esquema Esquema Servicios · 15%', rule)
 
     def test_service_partner_global_discount(self):
         self.partner.discount = 0.10
 
         line = self._create_order(self.service).order_line
 
-        self._assert_discount(line, 10.0, 'global', 'Desc. Global Cliente (10.0%)')
+        self._assert_discount(line, 10.0, 'global', 'Cliente · 10%')
 
     def test_service_fixed_price_survives_recomputes(self):
         rule = self._fixed_price_rule(self.service, 80.0)
@@ -181,7 +181,7 @@ class TestServiceAgreements(TransactionCase):
 
         order.action_update_prices()
 
-        self._assert_discount(order.order_line, 10.0, 'product', 'Desc. Producto (10.0%)', rule)
+        self._assert_discount(order.order_line, 10.0, 'product', 'Producto · 10%', rule)
 
     def _assert_without_agreement(self, line):
         self.assertEqual(line.discount, 0.0)

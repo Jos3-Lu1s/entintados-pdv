@@ -14,10 +14,12 @@ class PosStore {
 class OrderPaymentValidation {
     async validateOrder() { this.validated = true; return true; }
 }
+class ProductScreen { static components = {}; }
+class CustomerContactInfo {}
 const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_customer.js', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
-new Function('patch', '_t', 'PosStore', 'OrderPaymentValidation', source)(
-    patch, (text) => text, PosStore, OrderPaymentValidation);
+new Function('patch', '_t', 'PosStore', 'OrderPaymentValidation', 'ProductScreen', 'CustomerContactInfo', source)(
+    patch, (text) => text, PosStore, OrderPaymentValidation, ProductScreen, CustomerContactInfo);
 const pos = new PosStore();
 pos.order = { partner_id: false };
 pos.notification = { add() {} };
