@@ -155,7 +155,7 @@ class TestSaleLineMobileForm(TransactionCase):
         line, _returned = self._mobile_new_line(order, self.product)
 
         self.assertEqual(round(line.discount, 2), 10.0)
-        self.assertEqual(self._badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._badge(line), ('product', 'Producto · 10%'))
 
         order.write({'partner_id': self.partner_without_agreement.id})
         self.assertEqual(line.discount, 0.0)
@@ -167,9 +167,9 @@ class TestSaleLineMobileForm(TransactionCase):
 
         self.assertEqual(returned.get('discount', 7.0), 7.0)
         self.assertEqual(returned.get('pricing_rule_type'), 'manual')
-        self.assertEqual(returned.get('pricing_rule_origin'), 'Desc. Manual (7.0%)')
+        self.assertEqual(returned.get('pricing_rule_origin'), 'Manual · 7%')
         self.assertEqual(round(line.discount, 2), 7.0)
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (7.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 7%'))
 
     def test_mobile_new_line_typed_price_is_manual(self):
         order = self._new_order()
@@ -220,11 +220,11 @@ class TestSaleLineMobileForm(TransactionCase):
     def test_rpc_create_discount_against_agreement(self):
         line = self._rpc_create_line(self.partner, 10.0)
         self.assertEqual(round(line.discount, 2), 10.0)
-        self.assertEqual(self._badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._badge(line), ('product', 'Producto · 10%'))
 
         line = self._rpc_create_line(self.partner, 5.0)
         self.assertEqual(round(line.discount, 2), 5.0)
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (5.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 5%'))
 
         line = self._rpc_create_line(self.partner_without_agreement, 0.0)
         self.assertEqual(line.discount, 0.0)
@@ -232,22 +232,22 @@ class TestSaleLineMobileForm(TransactionCase):
 
     def test_rpc_write_discount_against_agreement(self):
         line = self._rpc_create_line(self.partner, 7.0)
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (7.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 7%'))
 
         line.write({'discount': 10.0})
         self.assertEqual(round(line.discount, 2), 10.0)
-        self.assertEqual(self._badge(line), ('product', 'Desc. Producto (10.0%)'))
+        self.assertEqual(self._badge(line), ('product', 'Producto · 10%'))
         self.assertEqual(round(line.technical_discount, 2), 10.0)
 
         line.write({'discount': 8.0})
         self.assertEqual(round(line.discount, 2), 8.0)
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (8.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 8%'))
 
     def test_mobile_saved_line_typed_discount_is_manual(self):
         line, _returned = self._mobile_new_line(self._new_order(), self.product)
         self._mobile_edit_line(line, [('discount', 7.0)])
         self.assertEqual(round(line.discount, 2), 7.0)
-        self.assertEqual(self._badge(line), ('manual', 'Desc. Manual (7.0%)'))
+        self.assertEqual(self._badge(line), ('manual', 'Manual · 7%'))
 
     def test_mobile_saved_line_typed_price_is_manual(self):
         line, _returned = self._mobile_new_line(self._new_order(), self.product)

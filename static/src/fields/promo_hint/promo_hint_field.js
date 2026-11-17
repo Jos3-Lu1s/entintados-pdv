@@ -49,7 +49,14 @@ export class PromoHintField extends Component {
         return Boolean(this.info?.options?.some((option) => option.applied));
     }
 
+    get fromPackage() {
+        return Boolean(this.info?.from_package);
+    }
+
     get title() {
+        if (this.fromPackage) {
+            return _t("Promoción del paquete");
+        }
         return this.hasPromo ? _t("Promoción aplicada") : _t("Promoción disponible");
     }
 
@@ -61,7 +68,8 @@ export class PromoHintField extends Component {
         const currencyId = this.props.record.data.currency_id?.id;
         this.popover.open(ev.currentTarget, {
             rows: promoHintLines(this.info, _t, (amount) => formatMonetary(amount, { currencyId })),
-            selectable: this.props.selectable,
+            // La promoción de un producto del combo se elige en su paquete.
+            selectable: this.props.selectable && !this.fromPackage,
             onSelect: (rewardId) => this.setPromotion(rewardId),
         });
     }

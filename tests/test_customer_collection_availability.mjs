@@ -9,6 +9,7 @@ function fixture(hasInvoices = false) {
     class Controls { setup() {} }
     vm.runInNewContext(source, {
         PaymentScreen: class {}, ControlButtons: Controls, CustomSelectCreateDialog: class {},
+        OrderPaymentValidation: class {},
         useState: (value) => value, useEffect() {}, _t: (value) => value,
         patch(target, extension) {
             Object.setPrototypeOf(extension, Object.create(Object.getPrototypeOf(target), Object.getOwnPropertyDescriptors(target)));

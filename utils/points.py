@@ -144,7 +144,5 @@ def parse_points(value):
     ounces, points = match.group("ounces"), match.group("points")
     if ounces is None and points is None:
         return None
-    ounces_val = float(ounces) if ounces else 0
-    points_val = float(points) if points else 0
-    return to_points(ounces_val, points_val)
+    return to_points(ounces, points)
 

@@ -115,6 +115,21 @@ class TestPosSaleQuotation(TransactionCase):
         self.assertAlmostEqual(quote.amount_total, 403.2)
         self.assertFalse(ticket.picking_ids | quote.picking_ids)
 
+    def test_pos_ticket_tint_line_price_origin_is_tint(self):
+        ticket = self._ticket(tinted=True)
+        self.env['pos.order.line'].create({'order_id': ticket.id, 'product_id': self.product.id,
+            'qty': 2, 'price_unit': 100, 'price_subtotal': 200, 'price_subtotal_incl': 200,
+            'tax_ids': [Command.clear()]})
+        ticket.amount_total += 200
+        ticket.action_create_sale_quotation()
+        lines = ticket.generated_quotation_id.order_line
+        tinted = lines.filtered('tint_snapshot')
+        regular = lines - tinted
+        self.assertEqual(tinted.price_origin, 'tint')
+        self.assertEqual(tinted.price_origin_label, 'Precio del entintado: base más colorantes')
+        self.assertEqual(regular.price_origin, 'manual')
+        self.assertEqual(regular.price_origin_label, 'Precio conservado del Punto de Venta')
+
     def test_tint_quote_keeps_pos_points_for_colorant_stocked_in_ounces(self):
         self.colorant.uom_id = self.env.ref('entintados_pdv.uom_tint_ounce')
         ticket = self._ticket(tinted=True)

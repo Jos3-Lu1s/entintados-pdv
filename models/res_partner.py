@@ -6,6 +6,8 @@ from odoo import Command, _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tools import float_compare
 
+from ..utils.origin_badge import FIXED_PRICE_LABEL, format_origin_badge
+
 PHONE_REGEX = re.compile(r'^\d{10}$')
 
 # Marca de contexto con la que los canales de captura del usuario piden
@@ -28,6 +30,46 @@ GENERIC_RFCS = {
     'XAXX010101000',  # Público en general
     'XEXX010101000',  # Extranjeros
 }
+
+
+def _normalize_vat(vat):
+    return (vat or '').strip().upper()
+
+
+def _phone_digits(phone):
+    # Deja solo dígitos y, si el widget nativo antepuso el código de
+    # país (+52), lo quita para comparar contra el número real de 10.
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) == 12 and digits.startswith(MX_COUNTRY_CODE):
+        digits = digits[len(MX_COUNTRY_CODE):]
+    return digits
+
+
+def _is_mexican_partner(partner):
+    # Sin país registrado se considera un contacto de México.
+    return not partner.country_id or partner.country_id.code == MX_ISO_CODE
+
+
+def _has_phone(partner):
+    # Un teléfono con solo espacios cuenta como vacío.
+    return bool((partner.phone or '').strip())
+
+
+def _pricing_result(rule_type, origin_type, origin_label='', price=False, discount=0.0, rule=False):
+    return {
+        'type': rule_type,
+        'origin_type': origin_type,
+        'origin_label': origin_label,
+        'price': price,
+        'discount': discount,
+        'rule': rule,
+    }
+
+
+def _discount_result(origin_type, name, rule):
+    return _pricing_result(
+        'discount', origin_type, format_origin_badge(name, rule.discount), discount=rule.discount, rule=rule,
+    )
 
 
 class ResPartner(models.Model):
@@ -111,114 +153,49 @@ class ResPartner(models.Model):
           Fallback: sin descuento (0.0).
 
         :param product: recordset de product.product
-        :return: dict con {'type': 'fixed_price'|'discount'|'none', 'price': float|False, 'discount': float, 'rule': recordset|False}
+        :return: dict con
+            - ``type``: 'fixed_price' | 'discount' | 'none'
+            - ``origin_type``: 'fixed_price' | 'product' | 'line' | 'scheme' | 'global' | 'none'
+            - ``origin_label``: texto del badge de origen ('' sin acuerdo)
+            - ``price``: precio fijo o False
+            - ``discount``: porcentaje (0.0 sin descuento)
+            - ``rule``: regla aplicada o False (también False en el descuento global)
         """
         self.ensure_one()
         if not product:
-            return {
-                'type': 'none',
-                'origin_type': 'none',
-                'origin_label': '',
-                'price': False,
-                'discount': 0.0,
-                'rule': False,
-            }
+            return _pricing_result('none', 'none')
 
-        product_template = product.product_tmpl_id
+        def first_rule(rule_type, applied_on, field, target):
+            return self.discount_rule_ids.filtered(
+                lambda r: r.rule_type == rule_type and r.applied_on == applied_on and r[field] == target
+            )[:1]
 
-        # 1. Precio fijo por Producto
-        fixed_rule = self.discount_rule_ids.filtered(
-            lambda r: r.rule_type == 'fixed_price'
-            and r.applied_on == '0_product'
-            and r.product_id == product
-        )
+        fixed_rule = first_rule('fixed_price', '0_product', 'product_id', product)
         if fixed_rule:
-            return {
-                'type': 'fixed_price',
-                'origin_type': 'fixed_price',
-                'origin_label': 'Precio Fijo',
-                'price': fixed_rule[0].fixed_price,
-                'discount': 0.0,
-                'rule': fixed_rule[0],
-            }
-
-        # 2. Descuento por Producto
-        prod_discount_rule = self.discount_rule_ids.filtered(
-            lambda r: r.rule_type == 'discount'
-            and r.applied_on == '0_product'
-            and r.product_id == product
-        )
-        if prod_discount_rule:
-            rule_rec = prod_discount_rule[0]
-            return {
-                'type': 'discount',
-                'origin_type': 'product',
-                'origin_label': f"Desc. Producto ({rule_rec.discount:.1f}%)",
-                'price': False,
-                'discount': rule_rec.discount,
-                'rule': rule_rec,
-            }
-
-        # 3. Descuento por Línea de producto
-        line = product_template.lines_product_id
-        if line:
-            line_rule = self.discount_rule_ids.filtered(
-                lambda r: r.rule_type == 'discount'
-                and r.applied_on == '1_line'
-                and r.line_id == line
+            return _pricing_result(
+                'fixed_price', 'fixed_price', FIXED_PRICE_LABEL, price=fixed_rule.fixed_price, rule=fixed_rule,
             )
-            if line_rule:
-                rule_rec = line_rule[0]
-                line_name = line.name or ''
-                return {
-                    'type': 'discount',
-                    'origin_type': 'line',
-                    'origin_label': f"Desc. Línea: {line_name} ({rule_rec.discount:.1f}%)",
-                    'price': False,
-                    'discount': rule_rec.discount,
-                    'rule': rule_rec,
-                }
 
-        # 4. Descuento por Esquema
-        scheme = product_template.scheme_id
-        if scheme:
-            scheme_rule = self.discount_rule_ids.filtered(
-                lambda r: r.rule_type == 'discount'
-                and r.applied_on == '2_scheme'
-                and r.scheme_id == scheme
-            )
-            if scheme_rule:
-                rule_rec = scheme_rule[0]
-                scheme_name = scheme.name or ''
-                return {
-                    'type': 'discount',
-                    'origin_type': 'scheme',
-                    'origin_label': f"Desc. Esquema: {scheme_name} ({rule_rec.discount:.1f}%)",
-                    'price': False,
-                    'discount': rule_rec.discount,
-                    'rule': rule_rec,
-                }
+        product_rule = first_rule('discount', '0_product', 'product_id', product)
+        if product_rule:
+            return _discount_result('product', 'Producto', product_rule)
 
-        # 5. Descuento Global del Cliente (res.partner.discount)
+        template = product.product_tmpl_id
+        for applied_on, field, target, origin_type, prefix in (
+            ('1_line', 'line_id', template.lines_product_id, 'line', 'Línea'),
+            ('2_scheme', 'scheme_id', template.scheme_id, 'scheme', 'Esquema'),
+        ):
+            rule = target and first_rule('discount', applied_on, field, target)
+            if rule:
+                return _discount_result(origin_type, f"{prefix} {target.name or ''}", rule)
+
         if self.discount:
-            global_disc = self.discount * 100.0
-            return {
-                'type': 'discount',
-                'origin_type': 'global',
-                'origin_label': f"Desc. Global Cliente ({global_disc:.1f}%)",
-                'price': False,
-                'discount': global_disc,
-                'rule': False,
-            }
+            discount = self.discount * 100.0
+            return _pricing_result(
+                'discount', 'global', format_origin_badge('Cliente', discount), discount=discount,
+            )
 
-        return {
-            'type': 'none',
-            'origin_type': 'none',
-            'origin_label': '',
-            'price': False,
-            'discount': 0.0,
-            'rule': False,
-        }
+        return _pricing_result('none', 'none')
 
     @api.depends('is_customer', 'is_distributor')
     def _compute_is_sales_contact(self):
@@ -271,8 +248,7 @@ class ResPartner(models.Model):
         for vals in vals_list:
             # Normalizar y validar RFC/VAT duplicado
             if isinstance(vals.get('vat'), str):
-                vat = vals['vat'].strip().upper()
-                vals['vat'] = vat
+                vat = vals['vat'] = _normalize_vat(vals['vat'])
 
                 if vat:
                     if vat not in GENERIC_RFCS and vat in seen_vats:
@@ -306,9 +282,8 @@ class ResPartner(models.Model):
             for partner in self
         ):
             self._raise_commercial_discount_access()
-        if 'vat' in vals and isinstance(vals['vat'], str):
-            vat = vals['vat'].strip().upper()
-            vals['vat'] = vat
+        if isinstance(vals.get('vat'), str):
+            vat = vals['vat'] = _normalize_vat(vals['vat'])
             if vat and vat not in GENERIC_RFCS and len(self) > 1:
                 raise ValidationError(_('No puedes asignar el mismo RFC (%s) a varios contactos.') % vat)
             for partner in self:
@@ -363,7 +338,7 @@ class ResPartner(models.Model):
         ).load(fields, data)
 
     def _check_phone_required(self):
-        missing = self.filtered(lambda partner: not self._has_phone(partner))
+        missing = self.filtered(lambda partner: not _has_phone(partner))
         if missing:
             raise ValidationError(_(
                 'El teléfono es obligatorio. Falta en: %(names)s.',
@@ -372,8 +347,8 @@ class ResPartner(models.Model):
 
     @api.onchange('vat')
     def _onchange_vat_uppercase(self):
-        if self.vat and isinstance(self.vat, str):
-            self.vat = self.vat.strip().upper()
+        if self.vat:
+            self.vat = _normalize_vat(self.vat)
 
     _vat_uniq_active_idx = models.UniqueIndex(
         "(upper(trim(vat))) WHERE vat IS NOT NULL AND trim(vat) != '' AND active = true "
@@ -382,8 +357,8 @@ class ResPartner(models.Model):
     )
 
     def _find_duplicate_by_vat(self, vat, exclude_ids=None):
-        vat = (vat or '').strip()
-        if not vat or vat.upper() in GENERIC_RFCS:
+        vat = _normalize_vat(vat)
+        if not vat or vat in GENERIC_RFCS:
             return self.browse()
         domain = [('vat', '=ilike', vat)]
         if exclude_ids:
@@ -410,7 +385,7 @@ class ResPartner(models.Model):
     @api.constrains('vat')
     def _check_vat_format(self):
         for partner in self:
-            vat = (partner.vat or '').strip().upper()
+            vat = _normalize_vat(partner.vat)
             if not vat or vat in GENERIC_RFCS:
                 continue
             if not RFC_REGEX.match(vat):
@@ -425,31 +400,15 @@ class ResPartner(models.Model):
                     generic=' / '.join(sorted(GENERIC_RFCS)),
                 ))
 
-    def _phone_digits(self, phone):
-        # Deja solo dígitos y, si el widget nativo antepuso el código de
-        # país (+52), lo quita para comparar contra el número real de 10.
-        digits = re.sub(r'\D', '', phone or '')
-        if len(digits) == 12 and digits.startswith(MX_COUNTRY_CODE):
-            digits = digits[len(MX_COUNTRY_CODE):]
-        return digits
-
-    def _is_mexican_partner(self, partner):
-        # Sin país registrado se considera un contacto de México.
-        return not partner.country_id or partner.country_id.code == MX_ISO_CODE
-
-    def _has_phone(self, partner):
-        # Un teléfono con solo espacios cuenta como vacío.
-        return bool((partner.phone or '').strip())
-
     @api.constrains('phone', 'country_id')
     def _check_phone_format(self):
         for partner in self:
             # La obligatoriedad se revisa solo en los canales del usuario;
             # aquí únicamente se valida el formato de lo que se capturó.
-            if not self._has_phone(partner):
+            if not _has_phone(partner):
                 continue
-            if self._is_mexican_partner(partner):
-                if not PHONE_REGEX.match(self._phone_digits(partner.phone)):
+            if _is_mexican_partner(partner):
+                if not PHONE_REGEX.match(_phone_digits(partner.phone)):
                     raise ValidationError(_(
                         'El teléfono de "%(name)s" debe tener 10 dígitos '
                         '(puede incluir el +52 y espacios que agrega el '
@@ -481,7 +440,6 @@ class ResPartner(models.Model):
         return fields + [
             'discount',
             'discount_rule_ids',
-            'is_told',
             'is_credit',
             'is_customer',
             'is_distributor',
@@ -504,17 +462,13 @@ class ResPartner(models.Model):
         config = self.env['pos.config'].browse(config_id)
         sales_domain = [('is_sales_contact', '=', True)]
         if len(domain) == 0:
-            limited_partner_ids = {
-                partner[0] for partner in config.get_limited_partners_loading(offset)
-            }
-            new_partners = self.search([('id', 'in', list(limited_partner_ids))] + sales_domain)
+            limited_partner_ids = [partner[0] for partner in config.get_limited_partners_loading(offset)]
+            new_partners = self.search([('id', 'in', limited_partner_ids)] + sales_domain)
         else:
             # If search domain is not empty, we need to search inside all partners
             new_partners = self.search(domain + sales_domain, offset=offset, limit=100)
         fiscal_positions = new_partners.fiscal_position_id
-        discount_rules = self.env['res.partner.discount.rule'].search([
-            ('partner_id', 'in', new_partners.ids)
-        ])
+        discount_rules = new_partners.discount_rule_ids
         return {
             'res.partner': self._load_pos_data_read(new_partners, config),
             'account.fiscal.position': self.env['account.fiscal.position']._load_pos_data_read(fiscal_positions, config),
