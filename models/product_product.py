@@ -9,6 +9,24 @@ from ..utils.default_code import REQUIRE_DEFAULT_CODE, clean_default_code
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
+    def action_view_recent_purchases(self):
+        self.ensure_one()
+        return self._action_view_recent_purchases()
+
+    def _action_view_recent_purchases(self):
+        orders = self.env['purchase.order'].search([
+            ('state', '=', 'purchase'),
+            ('order_line', 'any', [('product_id', 'in', self.ids)]),
+        ], order='date_approve desc nulls last, id desc', limit=3)
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Últimas compras'),
+            'res_model': 'purchase.order',
+            'views': [(self.env.ref('entintados_pdv.product_recent_purchases_list').id, 'list'), (False, 'form')],
+            'domain': [('id', 'in', orders.ids)],
+            'context': {'create': False},
+        }
+
     # --- Referencia interna ---------------------------------------------
 
     @api.model_create_multi

@@ -1,0 +1,19 @@
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.CustomerAdvanceLineCell"
+       t-inherit="account_reports.AccountReportLineCellCustomizable" t-inherit-mode="primary">
+        <xpath expr="//div[hasclass('content')]" position="attributes">
+            <attribute name="t-att-class">{
+                'fw-bold': props.cell.expression_label === 'amount_total',
+                'text-success': props.cell.expression_label === 'advance_applied',
+                'text-warning': props.cell.expression_label === 'advance_available' and props.cell.no_format > 0,
+                'text-danger': props.cell.expression_label === 'advance_available' and props.cell.no_format === 0,
+            }</attribute>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.CustomerAdvanceLineName"
+       t-inherit="account_reports.AccountReportLineNameCustomizable" t-inherit-mode="primary">
+        <xpath expr="//div[@data-id='content']" position="attributes">
+            <attribute name="t-att-class">props.line.advance_name_color</attribute>
+        </xpath>
+    </t>
+</templates>

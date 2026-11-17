@@ -27,6 +27,9 @@
         <field name="parent_id" ref="account_customer_invoices_section"/>
         <field name="sequence">20</field>
     </record>
+    <menuitem id="menu_customer_advance_preview_report" name="Facturas de anticipos"
+              parent="account_customer_invoices_section" action="action_customer_advance_preview_report"
+              sequence="30" groups="account.group_account_readonly,account.group_account_basic"/>
     <record id="account.menu_action_move_out_refund_type" model="ir.ui.menu">
         <field name="parent_id" ref="account_customer_credits_section"/>
         <field name="sequence">10</field>

@@ -1,0 +1,44 @@
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.SalesCollectionPartners"
+       t-inherit="account_reports.AccountReportFilterPartner" t-inherit-mode="primary">
+        <xpath expr="//MultiRecordSelector[@domain]" position="attributes">
+            <attribute name="domain">['|', ['is_customer', '=', true], ['is_distributor', '=', true]]</attribute>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.SalesCollectionFilters"
+       t-inherit="account_reports.AccountReportFiltersCustomizable" t-inherit-mode="primary">
+        <xpath expr="//t[@t-call='account_reports.AccountReportFilterPartner']" position="attributes">
+            <attribute name="t-call">entintados_pdv.SalesCollectionPartners</attribute>
+        </xpath>
+        <xpath expr="//div[@id='filter_rounding_unit']" position="before">
+            <div t-if="controller.cachedFilterOptions.sales_collection_can_view_all_sellers">
+                <Dropdown>
+                    <button class="btn btn-secondary"><i class="fa fa-user me-1"/>Vendedor</button>
+                    <t t-set-slot="content">
+                        <div class="dropdown-item gap-2 align-items-center">
+                            <label>Vendedores</label>
+                            <MultiRecordSelector t-props="getMultiRecordSelectorProps('res.users', 'sales_collection_seller_ids')"
+                                                 domain="[['share', '=', false]]"/>
+                        </div>
+                    </t>
+                </Dropdown>
+            </div>
+            <div>
+                <Dropdown>
+                    <button class="btn btn-secondary"
+                            t-att-class="{'fw-bold': controller.cachedFilterOptions.sales_collection_payment_policy}">
+                        <i class="fa fa-credit-card me-1"/>Método de pago
+                        <t t-if="controller.cachedFilterOptions.sales_collection_payment_policy">
+                            <span class="ms-1" t-out="controller.cachedFilterOptions.sales_collection_payment_policy"/>
+                        </t>
+                    </button>
+                    <t t-set-slot="content">
+                        <DropdownItem onSelected="() => this.filterClicked({optionKey: 'sales_collection_payment_policy', optionValue: '', reload: true})">Todos</DropdownItem>
+                        <DropdownItem onSelected="() => this.filterClicked({optionKey: 'sales_collection_payment_policy', optionValue: 'PPD', reload: true})">PPD</DropdownItem>
+                        <DropdownItem onSelected="() => this.filterClicked({optionKey: 'sales_collection_payment_policy', optionValue: 'PUE', reload: true})">PUE</DropdownItem>
+                    </t>
+                </Dropdown>
+            </div>
+        </xpath>
+    </t>
+</templates>

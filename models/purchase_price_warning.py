@@ -1,10 +1,30 @@
+from collections import defaultdict
+
 from odoo import api, fields, models
+from odoo.tools.safe_eval import safe_eval
 
 
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order.line'
 
     sale_cost_warning = fields.Char(compute='_compute_sale_cost_warning', string='Advertencia de margen')
+
+    @api.model
+    def _recent_product_purchase_cost_domain(self):
+        action = self.env.ref('entintados_pdv.action_product_purchase_costs')
+        lines = self.search_fetch(
+            safe_eval(action.domain), ['product_id', 'order_id'],
+            order='date_approve desc nulls last, id desc',
+        )
+        orders_by_product = defaultdict(set)
+        recent_line_ids = []
+        for line in lines:
+            orders = orders_by_product[line.product_id.id]
+            order_id = line.order_id.id
+            if order_id in orders or len(orders) < 3:
+                orders.add(order_id)
+                recent_line_ids.append(line.id)
+        return [('id', 'in', recent_line_ids)]
 
     @api.depends('product_id', 'price_unit', 'discount', 'tax_ids', 'product_uom_id',
                  'product_qty', 'order_id.currency_id', 'order_id.date_order',

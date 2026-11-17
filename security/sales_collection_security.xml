@@ -1,0 +1,17 @@
+<odoo>
+    <record id="privilege_sales_collection_report" model="res.groups.privilege">
+        <field name="name">Reporte cobranza vendedor</field>
+        <field name="category_id" ref="base.module_category_sales"/>
+    </record>
+    <record id="group_sales_collection_own" model="res.groups">
+        <field name="name">Propios</field>
+        <field name="privilege_id" ref="privilege_sales_collection_report"/>
+        <field name="comment">Permite consultar la cobranza de las facturas asignadas al usuario.</field>
+    </record>
+    <record id="group_sales_collection_all_sellers" model="res.groups">
+        <field name="name">Todos los vendedores</field>
+        <field name="privilege_id" ref="privilege_sales_collection_report"/>
+        <field name="implied_ids" eval="[Command.link(ref('group_sales_collection_own'))]"/>
+        <field name="comment">Permite consultar la cobranza de todos los vendedores en las compañías autorizadas.</field>
+    </record>
+</odoo>

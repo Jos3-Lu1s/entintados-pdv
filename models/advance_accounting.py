@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 
 from odoo import api, Command, fields, models, _
@@ -181,6 +182,10 @@ class AccountMoveLine(models.Model):
             raise UserError(_('La relación del anticipo solo puede modificarse en un documento en borrador.'))
         return super().write(vals)
 
+    def _advance_application_amount(self):
+        self.ensure_one()
+        return self.price_total if self.move_id.move_type in ('out_refund', 'in_refund') else -self.price_total
+
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
@@ -200,6 +205,10 @@ class AccountMove(models.Model):
     advance_available = fields.Monetary(compute='_compute_advance_balance', string='Anticipo disponible')
     advance_source_ids = fields.Many2many('account.move', 'advance_source_display_rel', 'move_id', 'source_id', compute='_compute_advance_links', string='Anticipos aplicados')
     advance_final_ids = fields.Many2many('account.move', 'advance_final_display_rel', 'move_id', 'final_id', compute='_compute_advance_links', string='Documentos de aplicación')
+    advance_used_invoice_ids = fields.Many2many(
+        'account.move', 'advance_used_invoice_rel', 'advance_id', 'invoice_id',
+        compute='_compute_advance_used_invoices', string='Facturas relacionadas',
+    )
     advance_link_count = fields.Integer(compute='_compute_advance_links')
 
     @api.depends('advance_document', 'invoice_line_ids.is_downpayment',
@@ -223,6 +232,16 @@ class AccountMove(models.Model):
             )
         )
         return self.advance_application_line_ids | native_lines
+
+    def _advance_used_amounts_by_invoice(self):
+        amounts = defaultdict(float)
+        for line in self._advance_application_lines():
+            document = line.move_id
+            if document.state == 'posted':
+                invoice = document if document.move_type == 'out_invoice' else document.advance_target_id
+                if invoice.move_type == 'out_invoice' and invoice.state == 'posted':
+                    amounts[invoice.id] += line._advance_application_amount()
+        return amounts
 
     def _advance_account(self):
         self.ensure_one()
@@ -253,8 +272,7 @@ class AccountMove(models.Model):
             paid = max(move.amount_total - move.amount_residual, 0) if move.state == 'posted' and move.is_advance_invoice and move._uses_advance_account() else 0
             applied = reserved = 0
             for line in move._advance_application_lines():
-                sign = 1 if line.move_id.move_type in ('out_refund', 'in_refund') else -1
-                amount = sign * line.price_total
+                amount = line._advance_application_amount()
                 if line.move_id.state == 'posted':
                     applied += amount
                 elif line.move_id.state == 'draft':
@@ -277,6 +295,31 @@ class AccountMove(models.Model):
             move.advance_source_ids = move.invoice_line_ids.advance_source_id | native_sources
             move.advance_final_ids = move._advance_application_lines().move_id if move.is_advance_invoice else move.advance_application_line_ids.move_id
             move.advance_link_count = len(move.advance_source_ids | move.advance_final_ids)
+
+    @api.depends('is_advance_invoice', 'move_type', 'advance_final_ids.state',
+                 'advance_final_ids.advance_target_id.state')
+    def _compute_advance_used_invoices(self):
+        for move in self:
+            invoices = self.browse()
+            if move.is_advance_invoice and move.move_type == 'out_invoice':
+                applications = move.advance_final_ids.filtered(lambda document: document.state == 'posted')
+                invoices = (applications | applications.advance_target_id).filtered(
+                    lambda invoice: invoice.move_type == 'out_invoice' and invoice.state == 'posted'
+                )
+            move.advance_used_invoice_ids = invoices
+
+    def action_open_customer_advance_print(self):
+        wizard = self.env['customer.advance.print'].create({
+            'invoice_domain': self.env.context.get('active_domain') or [],
+        })
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Imprimir facturas de anticipo'),
+            'res_model': wizard._name,
+            'res_id': wizard.id,
+            'views': [(self.env.ref('entintados_pdv.customer_advance_print_form').id, 'form')],
+            'target': 'new',
+        }
 
     def action_view_advance_links(self):
         self.ensure_one()

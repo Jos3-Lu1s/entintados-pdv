@@ -34,11 +34,11 @@
                             <span t-if="o.include_sale">Ventas</span>
                         </p>
                         <table t-if="not detailed" class="table table-sm" style="font-size: 11px;">
+                            <t t-set="visible_columns" t-value="[key for key in columns if key != 'credit_receipts']"/>
                             <thead style="display: table-header-group;">
                                 <tr>
-                                    <th>Método de pago</th><th>Subtipo</th>
+                                    <th>Método de pago</th>
                                     <th class="text-end">Contado cobrado</th>
-                                    <th class="text-end">Abonos a crédito</th>
                                     <th class="text-end">Anticipos recibidos</th>
                                     <th class="text-end">Devoluciones</th>
                                     <th class="text-end">Total neto</th>
@@ -46,15 +46,15 @@
                             </thead>
                             <tbody>
                                 <tr t-foreach="summary" t-as="item" style="page-break-inside: avoid;">
-                                    <td t-out="item[0][0]"/><td t-out="item[0][1] or '—'"/>
-                                    <td t-foreach="columns" t-as="key" class="text-end text-nowrap">
+                                    <td t-out="item[0][0]"/>
+                                    <td t-foreach="visible_columns" t-as="key" class="text-end text-nowrap">
                                         <span t-out="item[1][key]" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
                                     </td>
                                 </tr>
-                                <tr t-if="not summary"><td colspan="7">No hay cobros ni devoluciones para los filtros seleccionados.</td></tr>
+                                <tr t-if="not summary"><td colspan="5">No hay cobros ni devoluciones para los filtros seleccionados.</td></tr>
                                 <tr class="fw-bold border-top">
-                                    <td colspan="2">Totales</td>
-                                    <td t-foreach="columns" t-as="key" class="text-end text-nowrap">
+                                    <td>Totales</td>
+                                    <td t-foreach="visible_columns" t-as="key" class="text-end text-nowrap">
                                         <span t-out="totals[key]" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
                                     </td>
                                 </tr>

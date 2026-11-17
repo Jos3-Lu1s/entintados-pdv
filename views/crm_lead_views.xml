@@ -113,15 +113,10 @@
                 <attribute name="required">stage_type == 'quotation'</attribute>
             </xpath>
 
-            <!-- <xpath expr="//field[@name='source_id']" position="attributes">
+            <xpath expr="//field[@name='source_id']" position="attributes">
                 <attribute name="invisible">1</attribute>
-            </xpath> -->
-            
-            <xpath expr="//field[@name='tag_ids']" position="before">
-                <xpath expr="//field[@name='source_id']" position="move"/>
             </xpath>
-
-            <xpath expr="//group[field[@name='campaign_id'] and field[@name='medium_id']]/field[@name='source_id']" position="attributes">
+            <xpath expr="//page[@name='lead']//field[@name='source_id']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
         </field>

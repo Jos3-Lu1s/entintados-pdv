@@ -1,0 +1,82 @@
+<odoo>
+    <record id="invoice_commission_cost_form" model="ir.ui.view">
+        <field name="name">account.move.historical.cost.form</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_date']" position="after">
+                <field name="commission_cost_captured" invisible="1" groups="account.group_account_manager"/>
+                <field name="company_currency_id" invisible="1" groups="account.group_account_manager"/>
+                <field name="commission_cost" string="Costo histórico"
+                       groups="account.group_account_manager"
+                       invisible="move_type != 'out_invoice' or not commission_cost_captured"/>
+                <div class="text-muted" colspan="2" groups="account.group_account_manager"
+                     invisible="move_type != 'out_invoice' or commission_cost_captured">Costo histórico pendiente de captura.</div>
+            </xpath>
+        </field>
+    </record>
+    <record id="invoice_commission_cost_list" model="ir.ui.view">
+        <field name="name">account.move.historical.cost.list</field>
+        <field name="model">account.move</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="Histórico de costos" create="0" edit="0" delete="0" default_order="invoice_date desc, id desc">
+                <field name="name" string="Factura"/>
+                <field name="invoice_date"/>
+                <field name="partner_id" string="Cliente"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="company_currency_id" column_invisible="True"/>
+                <field name="commission_cost" string="Costo histórico"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_invoice_commission_cost" model="ir.actions.act_window">
+        <field name="name">Histórico de costos</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="invoice_commission_cost_list"/>
+        <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+        <field name="domain">[('move_type', '=', 'out_invoice'), ('state', '=', 'posted'), ('commission_cost_captured', '=', True)]</field>
+    </record>
+    <menuitem id="menu_invoice_commission_cost" name="Histórico de costos" parent="menu_osel_reports"
+              action="action_invoice_commission_cost" sequence="45" groups="account.group_account_manager"/>
+    <record id="invoice_commissions_list" model="ir.ui.view">
+        <field name="name">account.move.osel.commissions.list</field>
+        <field name="model">account.move</field>
+        <field name="priority">90</field>
+        <field name="arch" type="xml">
+            <list string="Comisiones" create="0" edit="0" delete="0"
+                  decoration-danger="osel_commission_available and osel_commission_margin &lt;= 0.20"
+                  default_group_by="invoice_user_id" group_create="0" default_order="invoice_date desc, id desc">
+                <field name="invoice_date" string="Fecha"/>
+                <field name="osel_payment_date"/>
+                <field name="name" string="Factura"/>
+                <field name="partner_id" string="Cliente"/>
+                <field name="invoice_user_id" string="Vendedor"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="amount_untaxed" string="Total subtotal"/>
+                <field name="osel_commission_currency_id" column_invisible="True"/>
+                <field name="osel_commission_available" column_invisible="True"/>
+                <field name="osel_cost" invisible="not osel_commission_available"/>
+                <field name="osel_commission_margin" widget="percentage" invisible="not osel_commission_available"/>
+                <field name="osel_commission_rate" widget="percentage" invisible="not osel_commission_available"/>
+                <field name="osel_before_delay" invisible="not osel_commission_available"/>
+                <field name="osel_credit_days_label"/>
+                <field name="osel_payment_days" invisible="not osel_payment_date"/>
+                <field name="osel_collection_delay" invisible="not osel_payment_date"/>
+                <field name="osel_commission_amount" invisible="not osel_commission_available"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_invoice_commissions" model="ir.actions.act_window">
+        <field name="name">Comisiones</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="invoice_commissions_list"/>
+        <field name="search_view_id" ref="account.view_account_invoice_filter"/>
+        <field name="domain">[('move_type', '=', 'out_invoice'), ('state', '=', 'posted'), ('payment_state', '=', 'paid'), ('is_advance_invoice', '=', False), ('invoice_user_id', '!=', False), ('l10n_mx_edi_payment_policy', 'in', ('PUE', 'PPD'))]</field>
+        <field name="context">{'default_move_type': 'out_invoice'}</field>
+    </record>
+    <menuitem id="menu_invoice_commissions" name="Comisiones" parent="menu_osel_reports"
+              action="action_invoice_commissions" sequence="46" groups="account.group_account_manager"/>
+</odoo>

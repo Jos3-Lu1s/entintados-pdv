@@ -17,6 +17,9 @@ class BranchCashCut(models.TransientModel):
     date_to = fields.Date(string='Hasta', required=True, default=lambda self: fields.Date.context_today(self))
     include_pos = fields.Boolean(string='Punto de Venta', default=True)
     include_sale = fields.Boolean(string='Ventas', default=True)
+    sale_payment_type = fields.Selection([
+        ('cash', 'Ventas de contado'), ('credit', 'Ventas a crédito'),
+    ], string='Tipo de venta', required=True, default='cash')
 
     def _payment_domain(self, invoice_side, payment_side):
         invoice = f'{invoice_side}.move_id'
@@ -145,7 +148,9 @@ class BranchCashCut(models.TransientModel):
     def action_open_cut(self):
         self._check_cut_filters()
         self.env['branch.cash.cut.line'].search([('cut_id', '=', self.id)]).unlink()
-        self.env['branch.cash.cut.line'].create(self._collect_rows())
+        amount_field = 'credit_billed' if self.sale_payment_type == 'credit' else 'cash_sales'
+        rows = [row for row in self._collect_rows() if row.get(amount_field, 0) > 0]
+        self.env['branch.cash.cut.line'].create(rows)
         return {
             'type': 'ir.actions.act_window', 'name': _('Corte: %s · %s a %s', self.company_id.name, self.date_from, self.date_to),
             'res_model': 'branch.cash.cut.line', 'view_mode': 'list',
@@ -200,7 +205,7 @@ class BranchCashCutLine(models.TransientModel):
         action = self.env['ir.actions.actions']._for_xml_id('entintados_pdv.branch_cash_cut_action')
         action['context'] = {
             f'default_{field}': cut[field].id if field == 'company_id' else cut[field]
-            for field in ('company_id', 'date_from', 'date_to', 'include_pos', 'include_sale')
+            for field in ('company_id', 'date_from', 'date_to', 'include_pos', 'include_sale', 'sale_payment_type')
         }
         return action
 

@@ -1,5 +1,6 @@
 from odoo import api, fields, models
 from odoo.fields import Domain
+from odoo.tools import format_amount
 
 
 HANDLER = 'account.ppd.receivable.report.handler'
@@ -68,6 +69,36 @@ class PpdReceivableReport(models.Model):
             previous_options = {**previous_options, 'date': {}}
         return super()._init_options_date(options, previous_options)
 
+    def export_to_pdf(self, options):
+        report = self
+        if self.custom_handler_model_name == HANDLER:
+            report = self.with_context(ppd_receivable_pdf=True)
+        return super(PpdReceivableReport, report).export_to_pdf(options)
+
+    def _get_pdf_export_html(self, options, lines, additional_context=None, template=None):
+        if self.custom_handler_model_name == HANDLER:
+            root_ids = {line['id'] for line in lines if not line.get('parent_id')}
+            lines = [line for line in lines if self._get_markup(line['id']) != 'total'
+                     or line.get('parent_id') in root_ids]
+            options = {**options, 'custom_display_config': {
+                **options['custom_display_config'], 'pdf_export': {
+                    **options['custom_display_config'].get('pdf_export', {}),
+                    'pdf_export_filters': 'entintados_pdv.ppd_receivable_pdf_filters',
+                },
+            }}
+            limit = None
+            partner_ids = options.get('partner_ids') or []
+            if len(partner_ids) == 1:
+                partner = self.env['res.partner'].browse(int(partner_ids[0])).exists()
+                if partner:
+                    companies = self.env['res.company'].browse(self.get_report_company_ids(options))
+                    currency = self.env.company.currency_id
+                    date = fields.Date.to_date(options['date']['date_to'])
+                    amount = self.env[HANDLER]._credit_limit(partner, companies, currency, date)
+                    limit = format_amount(self.env, amount, currency)
+            additional_context = {**(additional_context or {}), 'ppd_customer_credit_limit': limit}
+        return super()._get_pdf_export_html(options, lines, additional_context, template)
+
     def _get_options_domain(self, options, date_scope):
         domain = super()._get_options_domain(options, date_scope)
         if self.custom_handler_model_name == HANDLER:
@@ -85,25 +116,23 @@ class PpdReceivableReportHandler(models.AbstractModel):
     _inherit = 'account.aged.receivable.report.handler'
     _description = 'Cuentas por cobrar PPD de clientes de crédito'
 
+    def _credit_limit(self, partner, companies, currency, date):
+        commercial = partner.commercial_partner_id
+        return sum(
+            (customer.risk_currency_id or customer.env.company.currency_id)._convert(
+                customer.credit_limit, currency, customer.env.company, date,
+            )
+            for customer in (commercial.with_company(company) for company in companies)
+        )
+
     def _custom_options_initializer(self, report, options, previous_options):
         super()._custom_options_initializer(report, options, previous_options)
+        if self.env.context.get('ppd_receivable_pdf'):
+            options['columns'] = [column for column in options['columns']
+                                  if column['expression_label'] != 'ppd_credit_limit']
         options['custom_display_config']['templates']['AccountReportLineCell'] = (
             'entintados_pdv.PpdReceivableLineCell'
         )
-        options['buttons'].append({
-            'name': 'Descargar reporte', 'action': 'action_download_customer_ppd',
-            'sequence': 5, 'always_show': True,
-        })
-
-    def action_download_customer_ppd(self, options):
-        report = self.env.ref('entintados_pdv.ppd_receivable_report')
-        clean_options = report.get_options({**options, 'is_opening_report': False,
-                                            'selected_variant_id': report.id})
-        return {'type': 'ir.actions.act_window', 'name': 'Descargar cuentas por cobrar PPD',
-                'res_model': 'ppd.receivable.download', 'view_mode': 'form', 'target': 'new',
-                'views': [(self.env.ref('entintados_pdv.ppd_receivable_download_form').id, 'form')],
-                'context': {**self.env.context, 'default_date_to': clean_options['date']['date_to'],
-                            'default_report_options': clean_options}}
 
     def _custom_line_postprocessor(self, report, options, lines):
         lines = super()._custom_line_postprocessor(report, options, lines)
@@ -121,15 +150,7 @@ class PpdReceivableReportHandler(models.AbstractModel):
         companies = self.env['res.company'].browse(report.get_report_company_ids(options))
         currency = self.env.company.currency_id
         date = fields.Date.to_date(options['date']['date_to'])
-        limits = {}
-        for partner in partners:
-            commercial = partner.commercial_partner_id
-            limits[partner.id] = sum(
-                (commercial.with_company(company).risk_currency_id or company.currency_id)._convert(
-                    commercial.with_company(company).credit_limit, currency, company, date,
-                )
-                for company in companies
-            )
+        limits = {partner.id: self._credit_limit(partner, companies, currency, date) for partner in partners}
         # Limits belong to the customer, never to an invoice or the report total.
         for line, partner_id in partner_lines:
             for index, column in enumerate(options['columns']):

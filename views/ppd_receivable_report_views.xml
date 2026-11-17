@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <template id="ppd_receivable_pdf_filters" inherit_id="account_reports.pdf_export_filters" primary="True">
+        <xpath expr="//t[@t-if='partner_value']/div" position="attributes">
+            <attribute name="t-if">ppd_customer_credit_limit is None</attribute>
+        </xpath>
+        <xpath expr="//t[@t-if='partner_value']/div" position="after">
+            <div t-else="">
+                Cliente: <span t-out="', '.join(partner_value)" class="o_text_muted"/><br/>
+                Límite de crédito: <span t-out="ppd_customer_credit_limit" class="o_text_muted"/>
+            </div>
+        </xpath>
+    </template>
     <function model="account.report" name="_setup_ppd_receivable_report"/>
     <record id="action_ppd_receivable_report" model="ir.actions.client">
         <field name="name">Cuentas por cobrar PPD</field>

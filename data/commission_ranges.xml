@@ -1,0 +1,32 @@
+<odoo noupdate="1">
+    <record id="commission_range_initial_1" model="commission.range">
+        <field name="margin_from">0</field>
+        <field name="margin_to">0.1499</field>
+        <field name="percentage">0</field>
+    </record>
+    <record id="commission_range_initial_2" model="commission.range">
+        <field name="margin_from">0.15</field>
+        <field name="margin_to">0.24</field>
+        <field name="percentage">0.01</field>
+    </record>
+    <record id="commission_range_initial_3" model="commission.range">
+        <field name="margin_from">0.2401</field>
+        <field name="margin_to">0.34</field>
+        <field name="percentage">0.015</field>
+    </record>
+    <record id="commission_range_initial_4" model="commission.range">
+        <field name="margin_from">0.34</field>
+        <field name="margin_to">0.4099</field>
+        <field name="percentage">0.025</field>
+    </record>
+    <record id="commission_range_initial_5" model="commission.range">
+        <field name="margin_from">0.41</field>
+        <field name="margin_to">0.43</field>
+        <field name="percentage">0.03</field>
+    </record>
+    <record id="commission_range_initial_6" model="commission.range">
+        <field name="margin_from">0.4301</field>
+        <field name="margin_to">1</field>
+        <field name="percentage">0.035</field>
+    </record>
+</odoo>

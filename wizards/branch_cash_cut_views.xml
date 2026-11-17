@@ -8,11 +8,13 @@
                     <field name="company_id" domain="[('id', 'in', context.get('allowed_company_ids', []))]" options="{'no_create': True}"/>
                     <field name="date_from"/>
                     <field name="date_to"/>
+                    <field name="sale_payment_type"/>
                     <separator string="Orígenes"/>
                     <field name="include_pos"/>
                     <field name="include_sale"/>
                 </group>
-                <p class="text-muted">Los cobros y las devoluciones se consultan por fecha del movimiento. Facturado a crédito muestra el total de las facturas PPD emitidas en el periodo y no forma parte del total neto.</p>
+                <p class="text-muted" invisible="sale_payment_type != 'cash'">La lista muestra los cobros de ventas de contado por fecha del movimiento.</p>
+                <p class="text-muted" invisible="sale_payment_type != 'credit'">La lista muestra las ventas PPD por fecha de factura.</p>
                 <footer>
                     <button name="action_open_cut" string="Generar corte" type="object" class="btn-primary"/>
                 </footer>

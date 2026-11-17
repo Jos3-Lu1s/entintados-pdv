@@ -1,7 +1,6 @@
 from odoo import Command, fields
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.tests import tagged
-from odoo.exceptions import UserError
 
 from .common_pdf import offline_wkhtmltopdf, render_offline_pdf
 

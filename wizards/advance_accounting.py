@@ -1,6 +1,55 @@
+import json
+from urllib.parse import urlencode
+
 from odoo import api, Command, fields, models, _
 from odoo.exceptions import UserError
+from odoo.fields import Domain
 
+
+class CustomerAdvancePrint(models.TransientModel):
+    _name = 'customer.advance.print'
+    _description = 'Imprimir facturas de anticipo'
+
+    report_kind = fields.Selection(
+        [('general', 'General'), ('detail', 'Detallado')],
+        string='Tipo de reporte', required=True, default='general',
+    )
+    invoice_domain = fields.Json(readonly=True)
+
+    def action_print(self):
+        self.ensure_one()
+        self.check_access('read')
+        report = self.env.ref('entintados_pdv.action_customer_advance_pdf')
+        query = urlencode({'context': json.dumps({'allowed_company_ids': self.env.companies.ids})})
+        return {
+            'type': 'ir.actions.act_url',
+            'target': 'new',
+            'url': f'/report/pdf/{report.report_name}/{self.id}?{query}',
+        }
+
+    def _report_sections(self):
+        self.ensure_one()
+        domain = Domain(self.invoice_domain or []) & Domain([
+            ('move_type', '=', 'out_invoice'), ('is_advance_invoice', '=', True),
+        ])
+        invoices = self.env['account.move'].search(domain, order='partner_id, invoice_date desc, id desc')
+        fields_to_sum = ('amount_total', 'advance_available', 'advance_applied')
+        sections = []
+        for currency, records in invoices.grouped('currency_id').items():
+            sections.append({
+                'currency': currency,
+                'customers': [
+                    {
+                        'name': partner.display_name,
+                        'invoices': moves,
+                        'count': len(moves),
+                        'amounts': [sum(moves.mapped(name)) for name in fields_to_sum],
+                    }
+                    for partner, moves in records.grouped('partner_id').items()
+                ],
+                'totals': [sum(records.mapped(name)) for name in fields_to_sum],
+            })
+        return sections
 
 class PurchaseAdvanceInvoice(models.TransientModel):
     _name = 'purchase.advance.invoice'

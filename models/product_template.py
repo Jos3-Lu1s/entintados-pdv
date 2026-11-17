@@ -14,6 +14,10 @@ MAX_ORDERS_IN_MESSAGE = 5
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
+    def action_view_recent_purchases(self):
+        self.ensure_one()
+        return self.with_context(active_test=False).product_variant_ids._action_view_recent_purchases()
+
     tint_role = fields.Selection(
         selection=[
             ('base', "Base"),

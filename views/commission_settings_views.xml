@@ -1,0 +1,41 @@
+<odoo>
+    <menuitem id="menu_commissions" name="Comisiones" parent="account.menu_finance_configuration" groups="account.group_account_manager"/>
+    <record id="commission_range_list" model="ir.ui.view">
+        <field name="name">commission.range.list</field>
+        <field name="model">commission.range</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="margin_from" widget="percentage"/>
+                <field name="margin_to" widget="percentage"/>
+                <field name="percentage" widget="percentage"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_commission_range" model="ir.actions.act_window">
+        <field name="name">Márgenes de comisiones</field>
+        <field name="res_model">commission.range</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="commission_range_list"/>
+    </record>
+    <menuitem id="menu_commission_range" name="Márgenes de comisiones" parent="menu_commissions" action="action_commission_range" sequence="10" groups="account.group_account_manager"/>
+    <record id="commission_goal_list" model="ir.ui.view">
+        <field name="name">commission.goal.list</field>
+        <field name="model">commission.goal</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="currency_id" column_invisible="True"/>
+                <field name="seller_id"/>
+                <field name="minimum" widget="percentage"/>
+                <field name="scope" widget="percentage"/>
+                <field name="commercial_goal"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_commission_goal" model="ir.actions.act_window">
+        <field name="name">Metas de comisiones</field>
+        <field name="res_model">commission.goal</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="commission_goal_list"/>
+    </record>
+    <menuitem id="menu_commission_goal" name="Metas de comisiones" parent="menu_commissions" action="action_commission_goal" sequence="20" groups="account.group_account_manager"/>
+</odoo>

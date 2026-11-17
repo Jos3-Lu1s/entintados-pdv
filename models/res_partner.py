@@ -33,6 +33,13 @@ GENERIC_RFCS = {
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    source_id = fields.Many2one('utm.source', string='Origen', ondelete='set null', index=True)
+
+    age = fields.Selection(
+        [(str(years), str(years)) for years in range(18, 81)],
+        string='Edad',
+    )
+
     phone = fields.Char()
 
     is_customer = fields.Boolean(

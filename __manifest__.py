@@ -33,7 +33,7 @@ Catálogo de entintado
     # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Sales/Point of Sale',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
@@ -114,6 +114,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.js",
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.xml",
             "entintados_pdv/static/src/reports/ppd_receivable_line_cell.xml",
+            "entintados_pdv/static/src/reports/customer_advance_report.xml",
+            "entintados_pdv/static/src/reports/sales_collection_filters.xml",
             "entintados_pdv/static/src/fields/customer_payment_policy.js",
             "entintados_pdv/static/src/views/tint_sales_report.js",
             "entintados_pdv/static/src/views/tint_sales_report.xml",
@@ -161,6 +163,7 @@ Catálogo de entintado
     'data': [
         'views/pos_order_legacy_cleanup.xml',
         'security/security.xml',
+        'security/sales_collection_security.xml',
         'security/demo_flow_security.xml',
         'security/pos_accounting_access.xml',
         'security/vendor_credit_security.xml',
@@ -189,6 +192,7 @@ Catálogo de entintado
         'views/tint_base_capacity_views.xml',
         'views/product_template_tint_views.xml',
         'views/product_default_code_views.xml',
+        'views/product_recent_purchases_views.xml',
         'views/tint_gallery_views.xml',
         'views/tint_category_views.xml',
         'views/tint_color_views.xml',
@@ -246,6 +250,7 @@ Catálogo de entintado
         'views/res_config_settings_sale_views.xml',
         'views/res_partner_risk_view.xml',
         'views/advance_accounting_views.xml',
+        'report/customer_advance.xml',
         'data/pos_financing_data.xml',
         'views/pos_financing_views.xml',
         'views/pos_credit_approval_views.xml',
@@ -266,14 +271,17 @@ Catálogo de entintado
         'wizards/branch_cash_cut_views.xml',
         'report/branch_cash_cut.xml',
         'views/ppd_receivable_report_views.xml',
-        'wizards/ppd_receivable_download_views.xml',
-        'report/ppd_customer_receivable.xml',
+        'views/customer_advance_report_views.xml',
+        'views/sales_collection_report_views.xml',
+        'views/invoice_commission_cost_views.xml',
         # Reportes y vistas de actividades
         'views/mail_activity_views.xml',
         'views/mail_activity_menu_views.xml',
         'views/pos_order_views.xml',
         'data/pos_order_reference_data.xml',
         'views/accounting_menu_sections.xml',
+        'views/commission_settings_views.xml',
+        'data/commission_ranges.xml',
         'report/vendor_monthly_payment.xml',
         'data/advance_accounting_data.xml',
         'data/sale_tint_data.xml',

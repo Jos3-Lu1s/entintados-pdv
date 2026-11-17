@@ -91,3 +91,7 @@ from . import sale_quotation_report
 from . import sale_auto_invoice
 from . import pos_reinvoice
 from . import ppd_receivable_report
+from . import customer_advance_report
+from . import sales_collection_report
+from . import commission_settings
+from . import invoice_commission_cost
