@@ -450,11 +450,6 @@ class AccountMove(models.Model):
                 account_lines = lines.filtered(lambda line: line.account_id == account)
                 if account_lines.filtered(lambda line: line.move_id == move) and account_lines.filtered(lambda line: line.move_id == target):
                     account_lines.reconcile()
-        for bill in result.filtered(lambda move: move.move_type == 'in_invoice' and not move.is_advance_invoice):
-            for line in bill._supplier_prepayment_lines():
-                if bill.currency_id.is_zero(bill.amount_residual):
-                    break
-                bill.js_assign_outstanding_line(line.id)
         return result
 
     def button_draft(self):

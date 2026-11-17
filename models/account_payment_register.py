@@ -11,6 +11,60 @@ class AccountPaymentRegister(models.TransientModel):
     vendor_allocation_ids = fields.One2many('vendor.payment.allocation', 'wizard_id', string='Facturas seleccionadas')
     vendor_allocated_amount = fields.Monetary(string='Total asignado', compute='_compute_vendor_allocated_amount')
     vendor_percentage_editable = fields.Boolean(compute='_compute_vendor_percentage_editable')
+    supplier_payment_source = fields.Selection([
+        ('normal', 'Pago normal'),
+        ('advance', 'Saldo de anticipo'),
+    ], string='Forma de liquidar', default='normal', required=True)
+    supplier_advance_to_apply = fields.Monetary(
+        string='Anticipo aplicable', compute='_compute_supplier_advance_to_apply',
+        currency_field='supplier_bill_currency_id',
+    )
+    supplier_bill_currency_id = fields.Many2one('res.currency', compute='_compute_supplier_advance_to_apply')
+
+    def _supplier_advance_bill(self):
+        self.ensure_one()
+        bill = self.line_ids.move_id
+        if (not self.vendor_payment_group_id and len(bill) == 1
+                and bill.move_type == 'in_invoice' and not bill.is_advance_invoice):
+            return bill
+        return self.env['account.move']
+
+    @api.depends('line_ids.move_id.amount_residual', 'line_ids.move_id.state', 'vendor_payment_group_id')
+    def _compute_supplier_advance_to_apply(self):
+        for wizard in self:
+            bill = wizard._supplier_advance_bill()
+            lines = bill._supplier_prepayment_lines() if bill else self.env['account.move.line']
+            amounts = (bill.invoice_outstanding_credits_debits_widget or {}).get('content', []) if lines else []
+            line_ids = set(lines.ids)
+            wizard.supplier_bill_currency_id = bill.currency_id
+            wizard.supplier_advance_to_apply = (
+                min(bill.amount_residual, sum(item['amount'] for item in amounts if item['id'] in line_ids))
+                if lines else 0
+            )
+
+    def action_create_payments(self):
+        self.ensure_one()
+        if self.supplier_payment_source != 'advance':
+            return super().action_create_payments()
+
+        bill = self._supplier_advance_bill()
+        if not bill:
+            raise UserError(_('Selecciona una factura de proveedor para aplicar el anticipo.'))
+        bill.check_access('write')
+        lock = self.env['res.company']._with_locked_records
+        lock(bill)
+        lines = bill._supplier_prepayment_lines()
+        if lines:
+            lock(lines.sorted('id'))
+            bill.invalidate_recordset(['amount_residual', 'invoice_outstanding_credits_debits_widget'])
+            lines &= bill._supplier_prepayment_lines()
+        if not lines:
+            raise UserError(_('El anticipo ya no tiene saldo aplicable. Vuelve a abrir Registrar pago.'))
+        for line in lines:
+            if bill.currency_id.is_zero(bill.amount_residual):
+                break
+            bill.js_assign_outstanding_line(line.id)
+        return {'type': 'ir.actions.act_window_close'}
 
     @api.depends('line_ids.move_id.move_type', 'line_ids.move_id.state', 'vendor_payment_group_id.payment_type',
                  'line_ids.move_id.currency_id', 'line_ids.move_id.company_id', 'currency_id')
