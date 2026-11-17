@@ -12,15 +12,16 @@ class AccountPaymentRegister(models.TransientModel):
     vendor_allocated_amount = fields.Monetary(string='Total asignado', compute='_compute_vendor_allocated_amount')
     vendor_percentage_editable = fields.Boolean(compute='_compute_vendor_percentage_editable')
 
-    @api.depends('line_ids.move_id.move_type', 'line_ids.move_id.state',
+    @api.depends('line_ids.move_id.move_type', 'line_ids.move_id.state', 'vendor_payment_group_id.payment_type',
                  'line_ids.move_id.currency_id', 'line_ids.move_id.company_id', 'currency_id')
     def _compute_vendor_percentage_editable(self):
         for wizard in self:
             invoices = wizard.line_ids.move_id
+            move_type = 'out_invoice' if wizard.vendor_payment_group_id.payment_type == 'inbound' else 'in_invoice'
             wizard.vendor_percentage_editable = bool(
                 invoices and wizard.currency_id and invoices.currency_id == wizard.currency_id
                 and len(invoices.company_id) == 1
-                and all(invoice.move_type == 'in_invoice' and invoice.state == 'posted' for invoice in invoices)
+                and all(invoice.move_type == move_type and invoice.state == 'posted' for invoice in invoices)
             )
 
     def _vendor_pending_total(self):
@@ -63,9 +64,6 @@ class AccountPaymentRegister(models.TransientModel):
                 raise UserError(_('La selección de facturas cambió. Vuelve a abrir Pagar desde el grupo.'))
             if self.currency_id != group.currency_id:
                 raise UserError(_('Usa la moneda del grupo para registrar los pagos.'))
-            method = group._check_payment_method()
-            if self.payment_method_line_id != method or self.journal_id != method.journal_id:
-                raise UserError(_('La forma de pago del grupo cambió. Vuelve a abrir Pagar.'))
         if self.vendor_percentage_editable:
             invoices = self.line_ids.move_id
             invoices.invalidate_recordset(['amount_residual'])
@@ -83,7 +81,8 @@ class AccountPaymentRegister(models.TransientModel):
         invoices = self.line_ids.move_id
         if set(self.vendor_allocation_ids.invoice_id.ids) != set(invoices.ids):
             raise UserError(_('La distribución debe corresponder a las facturas seleccionadas.'))
-        payable = invoices.line_ids.filtered(lambda line: line.account_type == 'liability_payable')
+        account_type = 'asset_receivable' if group and group.payment_type == 'inbound' else 'liability_payable'
+        payable = invoices.line_ids.filtered(lambda line: line.account_type == account_type)
         payable.flush_recordset(['amount_residual', 'amount_residual_currency'])
         self.env.cr.execute(
             'SELECT id FROM account_move_line WHERE id IN %s ORDER BY id FOR UPDATE', [tuple(payable.ids)],
@@ -113,6 +112,7 @@ class AccountPaymentRegister(models.TransientModel):
         if not payment_group:
             payment_group = self.env['vendor.payment.group'].create({
                 'company_id': invoices.company_id.id,
+                'payment_type': 'outbound',
                 'currency_id': currency.id,
                 'payment_date': self.payment_date,
                 'payment_method_line_id': self.payment_method_line_id.id,
@@ -189,15 +189,12 @@ class AccountPaymentRegister(models.TransientModel):
                 raise UserError(_('Hay facturas fuera del pago. Revisa los saldos, vencimientos y cuentas bancarias.'))
             to_process[:] = distributed
         if self.vendor_payment_group_id:
-            group_method = self.vendor_payment_group_id.payment_method_line_id
             for item in to_process:
                 values = item['create_vals']
                 method = self.env['account.payment.method.line'].browse(values['payment_method_line_id'])
-                if method != group_method:
-                    raise UserError(_('El asistente no pudo aplicar la forma de pago seleccionada en el grupo.'))
                 journal = method.journal_id
                 account = journal.default_account_id
-                if (values['payment_type'] == 'outbound' and values['partner_type'] == 'supplier'
+                if (values['payment_type'] == self.vendor_payment_group_id.payment_type
                         and journal.type == 'cash' and method.code == 'manual' and not method.payment_account_id
                         and account.active and account.account_type == 'asset_cash'):
                     values['force_outstanding_account_id'] = account.id

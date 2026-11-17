@@ -10,6 +10,78 @@ from odoo.exceptions import UserError
 class AccountPayment(models.Model):
     _inherit = 'account.payment'
 
+    is_supplier_prepayment = fields.Boolean(string='Anticipo a proveedor', copy=False)
+    supplier_prepayment_balance = fields.Monetary(
+        string='Saldo del anticipo', compute='_compute_supplier_prepayment_balance',
+    )
+    supplier_prepayment_bill_id = fields.Many2one(
+        'account.move', string='Factura a pagar', copy=False, check_company=True,
+    )
+    supplier_prepayment_commercial_id = fields.Many2one(related='partner_id.commercial_partner_id')
+
+    def _action_open_supplier_prepayment(self):
+        self.ensure_one()
+        self.check_access('read')
+        if not self.is_supplier_prepayment:
+            raise UserError(_('Este pago no es un anticipo a proveedor.'))
+        return self.env['ir.actions.actions']._for_xml_id('entintados_pdv.action_supplier_prepayments')
+
+    # Compatibility with payment forms loaded before the module upgrade.
+    def action_enter_supplier_prepayment_transfer(self):
+        return self._action_open_supplier_prepayment()
+
+    def action_open_supplier_prepayment_bank(self):
+        return self._action_open_supplier_prepayment()
+
+    def action_apply_supplier_prepayment_to_bill(self):
+        self.ensure_one()
+        self.check_access('write')
+        bill = self.supplier_prepayment_bill_id
+        if not bill:
+            raise UserError(_('Selecciona la factura a pagar.'))
+        bill.check_access('write')
+        lock = self.env['res.company']._with_locked_records
+        lock(bill)
+        lock(self)
+        bill.invalidate_recordset(['amount_residual', 'invoice_outstanding_credits_debits_widget'])
+        line = bill._supplier_prepayment_lines() & self.move_id.line_ids
+        if not self.is_supplier_prepayment or not line:
+            raise UserError(_('Selecciona una factura pendiente compatible con este anticipo.'))
+        bill.js_assign_outstanding_line(line[0].id)
+        self.supplier_prepayment_bill_id = False
+        return True
+
+    @api.depends('is_supplier_prepayment', 'move_id.state', 'move_id.line_ids.amount_residual_currency',
+                 'move_id.line_ids.amount_residual')
+    def _compute_supplier_prepayment_balance(self):
+        for payment in self:
+            payable = payment.move_id.line_ids.filtered(
+                lambda line: line.account_type == 'liability_payable'
+            )
+            payment.supplier_prepayment_balance = (
+                abs(sum(
+                    line.amount_residual_currency if line.currency_id == payment.currency_id
+                    else payment.company_id.currency_id._convert(
+                        line.amount_residual, payment.currency_id, payment.company_id, payment.date,
+                    )
+                    for line in payable
+                ))
+                if payment.is_supplier_prepayment and payment.move_id.state == 'posted' else 0
+            )
+
+    @api.constrains('is_supplier_prepayment', 'partner_type', 'payment_type', 'partner_id')
+    def _check_supplier_prepayment(self):
+        for payment in self.filtered('is_supplier_prepayment'):
+            if payment.partner_type != 'supplier' or payment.payment_type != 'outbound' or not payment.partner_id:
+                raise UserError(_('Un anticipo requiere un pago saliente a un proveedor.'))
+
+    def action_post(self):
+        result = super().action_post()
+        for payment in self.filtered('is_supplier_prepayment'):
+            if not payment.move_id.line_ids.filtered(lambda line: line.account_type == 'liability_payable'):
+                raise UserError(_('Configura la cuenta de pagos pendientes del método de pago para registrar el anticipo.'))
+        return result
+
     @api.model
     def _get_monthly_vendor_report_data(self, date_from=None, date_to=None, partner_ids=None, company_ids=None,
                                         customer=False):
@@ -51,13 +123,30 @@ class AccountPayment(models.Model):
                                                compute='_compute_monthly_vendor_documents')
     monthly_vendor_payment_kind = fields.Char(string='Tipo de pago', compute='_compute_monthly_vendor_payment_kind')
 
+    def action_view_linked_payment_groups(self):
+        self.ensure_one()
+        self.check_access('read')
+        groups = self.monthly_vendor_group_ids
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': _('Pagos agrupados'),
+            'res_model': 'vendor.payment.group',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', groups.ids)],
+            'context': {'create': False},
+        }
+        if len(groups) == 1:
+            action.update(view_mode='form', res_id=groups.id)
+        return action
+
     def _compute_monthly_vendor_payment_kind(self):
         for payment in self:
             bills = payment.monthly_vendor_bill_ids
             advances = bills.filtered('is_advance_invoice')
             advance_account = (payment.company_id.downpayment_account_id if payment.partner_type == 'customer'
                                else payment.company_id.supplier_advance_account_id)
-            is_advance = bool(advances or (advance_account and advance_account in payment.move_id.line_ids.account_id))
+            is_advance = bool(payment.is_supplier_prepayment or advances
+                              or (advance_account and advance_account in payment.move_id.line_ids.account_id))
             payment.monthly_vendor_payment_kind = (
                 (_('Mixto') if bills - advances else _('Anticipo')) if is_advance
                 else (_('Pago de cliente') if payment.partner_type == 'customer' else _('Pago de proveedor'))
@@ -102,7 +191,7 @@ class AccountPayment(models.Model):
 
     def _monthly_payment_headers(self):
         return [_('Fecha de pago'), _('Pago'), _('Proveedor'), _('Tipo'), _('Diario'), _('Método del diario'),
-                _('Forma SAT'), _('Facturas'), _('Pagos agrupados'), _('Moneda'), _('Importe')]
+                _('Forma de pago'), _('Facturas'), _('Pagos agrupados'), _('Moneda'), _('Importe')]
 
     def _monthly_payment_xlsx(self):
         months = self._monthly_payment_rows()
@@ -151,6 +240,11 @@ class VendorMonthlyPaymentReportHandler(models.AbstractModel):
 
     def _custom_options_initializer(self, report, options, previous_options):
         super()._custom_options_initializer(report, options, previous_options)
+        if report in (
+            self.env.ref('entintados_pdv.vendor_monthly_payment_account_report'),
+            self.env.ref('entintados_pdv.customer_monthly_payment_account_report', raise_if_not_found=False),
+        ):
+            options['custom_display_config']['css_custom_class'] = 'monthly_payment_report'
         if not (previous_options or {}).get('date'):
             today = fields.Date.context_today(self)
             options['date'] = report._get_dates_period(today.replace(day=1), today, 'range', options_return=True)
@@ -200,13 +294,148 @@ class VendorMonthlyPaymentReportHandler(models.AbstractModel):
         provider = next((item for item in self._vendor_report_data(options)['providers'] if item['id'] == anchor), None)
         lines = []
         if provider and not offset:
+            payments = self.env['account.payment'].browse([payment['id'] for payment in provider['payments']])
+            bills_by_payment = {payment.id: payment.monthly_vendor_bill_ids for payment in payments}
             currency = self.env['res.currency'].search([('name', '=', provider['currency'])], limit=1)
             labels = ('date', 'payment', 'partner', 'kind', 'journal', 'method', 'sat', 'bills', 'groups', 'currency', 'amount')
             for payment in provider['payments']:
                 values = dict(zip(labels, payment['values']))
+                payment_line_id = report._get_generic_line_id('account.payment', payment['id'], parent_line_id=line_dict_id)
                 lines.append({
-                    'id': report._get_generic_line_id('account.payment', payment['id'], parent_line_id=line_dict_id),
+                    'id': payment_line_id,
                     'parent_id': line_dict_id, 'name': values['payment'], 'level': 4,
                     'columns': self._vendor_report_columns(report, options, values, currency),
                 })
+                for bill in bills_by_payment.get(payment['id'], ()):
+                    lines.append({
+                        'id': report._get_generic_line_id('account.move', bill.id, parent_line_id=payment_line_id),
+                        'parent_id': payment_line_id,
+                        'name': bill.display_name,
+                        'level': 8,
+                        'caret_options': 'account.move',
+                        'columns': self._vendor_report_columns(report, options, {}),
+                    })
         return {'lines': lines, 'offset_increment': len(lines), 'has_more': False, 'progress': progress}
+
+
+class VendorDocumentReportHandler(models.AbstractModel):
+    _name = 'account.vendor.document.report.handler'
+    _inherit = 'account.vendor.monthly.payment.report.handler'
+    _description = 'Facturas y contabilización de pagos a proveedores'
+
+    def _vendor_document_groups(self, options):
+        dates = options['date']
+        companies = [company['id'] for company in options.get('companies', [])] or self.env.company.ids
+        domain = [('company_id', 'in', companies)]
+        partners = [int(partner) for partner in options.get('partner_ids', [])]
+        if partners:
+            domain.append(('partner_id', 'child_of', partners))
+        invoice_report = self.env.ref('entintados_pdv.vendor_invoice_detail_report')
+        invoice_mode = options['report_id'] == invoice_report.id
+        if invoice_mode:
+            documents = self.env['account.move'].search(domain + [
+                ('move_type', 'in', ['in_invoice', 'in_receipt']), ('state', '=', 'posted'),
+                ('invoice_date', '>=', dates['date_from']), ('invoice_date', '<=', dates['date_to']),
+            ], order='invoice_date, id')
+        else:
+            documents = self.env['account.payment'].search(domain + [
+                ('partner_type', '=', 'supplier'), ('payment_type', '=', 'outbound'),
+                ('state', 'in', ['in_process', 'paid']), ('move_id.state', '=', 'posted'),
+                ('move_id.date', '>=', dates['date_from']), ('move_id.date', '<=', dates['date_to']),
+            ], order='date, id')
+        groups = {}
+        for document in documents:
+            partner = document.partner_id.commercial_partner_id
+            currency = document.currency_id if invoice_mode else document.company_id.currency_id
+            group = groups.setdefault((partner.id, currency.id), {
+                'name': f"{partner.display_name or _('Sin proveedor')} · {currency.name}",
+                'currency': currency, 'anchor': document, 'rows': [],
+            })
+            if invoice_mode:
+                group['rows'].append((document, document.name, {
+                    'date': document.invoice_date, 'due': document.invoice_date_due,
+                    'ref': document.ref or '', 'untaxed': document.amount_untaxed,
+                    'tax': document.amount_tax, 'amount': document.amount_total, 'balance': document.amount_residual,
+                }))
+            else:
+                folios = ', '.join(document.monthly_vendor_group_ids.mapped('name'))
+                for line in document.move_id.line_ids:
+                    group['rows'].append((line, document.name, {
+                        'date': line.date, 'entry': document.move_id.name,
+                        'journal': document.journal_id.display_name, 'account': line.account_id.display_name,
+                        'memo': line.name, 'groups': folios, 'debit': line.debit, 'credit': line.credit,
+                    }))
+        return groups.values()
+
+    def _dynamic_lines_generator(self, report, options, all_column_groups_expression_totals, warnings=None):
+        lines = []
+        totals = defaultdict(lambda: defaultdict(float))
+        amount_keys = ('untaxed', 'tax', 'amount', 'balance', 'debit', 'credit')
+        for group in self._vendor_document_groups(options):
+            values = defaultdict(float)
+            for _record, _name, row in group['rows']:
+                for key in amount_keys:
+                    if key in row:
+                        values[key] += row[key]
+            for key, value in values.items():
+                totals[group['currency']][key] += value
+            anchor = group['anchor']
+            line_id = report._get_generic_line_id(anchor._name, anchor.id, markup='vendor_document_group')
+            lines.append((0, {
+                'id': line_id, 'name': group['name'], 'level': 2, 'unfoldable': True,
+                'unfolded': line_id in options.get('unfolded_lines', []) or options.get('unfold_all'),
+                'expand_function': '_report_expand_unfoldable_line_vendor_document',
+                'columns': self._vendor_report_columns(report, options, values, group['currency']),
+            }))
+        for currency, values in totals.items():
+            lines.append((0, {
+                'id': report._get_generic_line_id('res.currency', currency.id, markup='vendor_document_total'),
+                'name': _('Total %s', currency.name), 'level': 1,
+                'columns': self._vendor_report_columns(report, options, values, currency),
+            }))
+        return lines
+
+    def _report_expand_unfoldable_line_vendor_document(self, line_dict_id, groupby, options, progress,
+                                                       offset, unfold_all_batch_data=None):
+        report = self.env['account.report'].browse(options['report_id'])
+        _markup, model, record_id = report._parse_line_id(line_dict_id)[-1]
+        group = next((group for group in self._vendor_document_groups(options)
+                      if group['anchor']._name == model and group['anchor'].id == record_id), None)
+        lines = []
+        if group and not offset:
+            for record, name, values in group['rows']:
+                lines.append({
+                    'id': report._get_generic_line_id(record._name, record.id, parent_line_id=line_dict_id),
+                    'parent_id': line_dict_id, 'name': name, 'level': 4,
+                    'columns': self._vendor_report_columns(report, options, values, group['currency']),
+                })
+                if record._name == 'account.move':
+                    lines.extend(self._vendor_bill_document_lines(report, options, line_dict_id, record))
+        return {'lines': lines, 'offset_increment': len(lines), 'has_more': False, 'progress': progress}
+
+    def _vendor_bill_document_lines(self, report, options, group_line_id, bill):
+        payable = bill.line_ids.filtered(lambda line: line.account_type == 'liability_payable')
+        reconciled_moves = (
+            payable.matched_debit_ids.debit_move_id | payable.matched_credit_ids.credit_move_id
+        ).move_id
+        credits = (reconciled_moves | bill.reversal_move_ids).filtered(
+            lambda move: move.move_type == 'in_refund' and move.state == 'posted'
+        )
+        payments = (bill._get_reconciled_payments() | bill.matched_payment_ids).filtered(
+            lambda payment: payment.state in ('in_process', 'paid')
+        )
+        lines = []
+        for documents, label in ((payments, _('Pago')), (credits, _('Nota de crédito'))):
+            for document in documents.sorted(lambda item: (item.date, item.id)):
+                lines.append({
+                    'id': report._get_generic_line_id(
+                        document._name, document.id, parent_line_id=group_line_id,
+                        markup=f'vendor_bill_{bill.id}',
+                    ),
+                    'parent_id': group_line_id,
+                    'name': _('%(label)s · %(name)s', label=label, name=document.display_name),
+                    'level': 8,
+                    'caret_options': document._name,
+                    'columns': self._vendor_report_columns(report, options, {'date': document.date}),
+                })
+        return lines

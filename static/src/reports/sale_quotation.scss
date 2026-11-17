@@ -255,9 +255,24 @@ $o-sq-mono: 'IBM Plex Mono', 'DejaVu Sans Mono', monospace;
 
         .o_sq_col_code { width: 96px; }
         .o_sq_col_qty { width: 58px; }
+        .o_sq_col_sat { width: 88px; }
         .o_sq_col_price { width: 88px; }
         .o_sq_col_disc { width: 52px; }
         .o_sq_col_total { width: 96px; }
+
+        &.o_sq_lines_detailed {
+            th {
+                white-space: normal;
+                letter-spacing: normal;
+            }
+
+            .o_sq_col_code { width: 8%; }
+            .o_sq_col_qty { width: 7%; }
+            .o_sq_col_sat { width: 8%; }
+            .o_sq_col_price { width: 8%; }
+            .o_sq_col_disc { width: 6%; }
+            .o_sq_col_total { width: 9%; }
+        }
 
         .o_sq_product td {
             padding: 9px 6px;

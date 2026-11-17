@@ -5,6 +5,28 @@
         <field name="model">account.payment</field>
         <field name="inherit_id" ref="account.view_account_payment_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="after">
+                <group string="Anticipo a proveedor" invisible="not is_supplier_prepayment">
+                    <field name="is_supplier_prepayment" invisible="1" force_save="1"/>
+                    <field name="supplier_prepayment_balance" string="Disponible para facturas"/>
+                    <field name="supplier_prepayment_commercial_id" invisible="1"/>
+                    <field name="supplier_prepayment_bill_id"
+                           invisible="supplier_prepayment_balance &lt;= 0"
+                           domain="[('move_type', '=', 'in_invoice'), ('state', '=', 'posted'),
+                                    ('commercial_partner_id', '=', supplier_prepayment_commercial_id),
+                                    ('company_id', '=', company_id), ('amount_residual', '&gt;', 0)]"
+                           options="{'no_create': True}"/>
+                    <button name="action_apply_supplier_prepayment_to_bill" type="object"
+                            string="Aplicar a factura" class="btn-primary"
+                            invisible="not supplier_prepayment_bill_id or supplier_prepayment_balance &lt;= 0"/>
+                </group>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <field name="monthly_vendor_group_ids" invisible="1" groups="account.group_account_invoice"/>
+                <button name="action_view_linked_payment_groups" type="object" class="oe_stat_button"
+                        icon="fa-object-group" string="Pagos agrupados"
+                        groups="account.group_account_invoice" invisible="not monthly_vendor_group_ids"/>
+            </xpath>
             <xpath expr="//field[@name='partner_id'][contains(@invisible,'customer')]" position="attributes">
                 <attribute name="domain">[('is_sales_contact', '=', True)]</attribute>
                 <attribute name="context">{'default_is_company': True, 'default_is_customer': True, 'entintados_partner_scope': 'customer'}</attribute>
@@ -15,4 +37,34 @@
             </xpath>
         </field>
     </record>
+    <record id="view_supplier_prepayment_list" model="ir.ui.view">
+        <field name="name">account.payment.supplier.prepayment.list</field>
+        <field name="model">account.payment</field>
+        <field name="arch" type="xml">
+            <list string="Anticipos a proveedores">
+                <field name="date"/>
+                <field name="name"/>
+                <field name="partner_id" string="Proveedor"/>
+                <field name="journal_id"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="amount" string="Importe del anticipo"/>
+                <field name="supplier_prepayment_balance"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_supplier_prepayments" model="ir.actions.act_window">
+        <field name="name">Anticipos a proveedores</field>
+        <field name="res_model">account.payment</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_supplier_prepayment_list"/>
+        <field name="domain">[('is_supplier_prepayment', '=', True)]</field>
+        <field name="context">{'default_is_supplier_prepayment': True, 'default_partner_type': 'supplier', 'default_payment_type': 'outbound'}</field>
+    </record>
+    <menuitem id="purchase_supplier_prepayment_menu" name="Anticipos a proveedores"
+              parent="purchase.menu_purchase_root" action="action_supplier_prepayments"
+              sequence="35" groups="account.group_account_invoice"/>
+    <menuitem id="account_supplier_prepayment_menu" name="Anticipos a proveedores"
+              parent="account.menu_finance_payables" action="action_supplier_prepayments"
+              sequence="15" groups="account.group_account_invoice"/>
 </odoo>
