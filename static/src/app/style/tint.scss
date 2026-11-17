@@ -3,42 +3,105 @@
    ========================================================================== */
 $tint-breakpoint-xs: 575.98px;
 
-.o-pos-contact-info details[open] {
-    max-height: 14rem;
-    overflow-y: auto;
+.o-pos-contact-info {
+    .o-contact-avatar-box {
+        width: 1.85rem;
+        height: 1.85rem;
+        background-color: #ede9fe;
+        color: #5b21b6;
+        font-size: 0.85rem;
+    }
+
+    .o-metric-card {
+        transition: all 0.15s ease-in-out;
+        font-size: 0.8125rem;
+    }
+
+    .o-metric-advance-positive {
+        background-color: #dcfce7 !important;
+        border-color: #86efac !important;
+        color: #166534 !important;
+    }
+
+    .o-metric-debt-positive {
+        background-color: #fee2e2 !important;
+        border-color: #fca5a5 !important;
+        color: #991b1b !important;
+    }
+
+    details summary {
+        cursor: pointer;
+        padding-block: .25rem;
+        font-weight: 500;
+        user-select: none;
+        list-style: none;
+        transition: color 0.15s ease;
+
+        &:hover {
+            color: var(--primary, #714b67);
+        }
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        .o-details-arrow {
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-block;
+            font-size: 0.75rem;
+        }
+    }
+
+    details[open] {
+        summary .o-details-arrow {
+            transform: rotate(90deg);
+        }
+
+        .o-contact-details-content {
+            max-height: 16rem;
+            overflow-y: auto;
+            animation: fadeInSlide 0.2s ease-out;
+        }
+    }
 }
 
-.o-pos-contact-info summary {
-    cursor: pointer;
-    padding-block: .25rem;
-}
-
-// Keep one scrolling pane for the summary, fiscal options and registered payments.
+// Layout adaptativo para la pantalla de pagos en PdV
 .payment-screen .o-entintados-payment-layout {
     min-height: 0;
     min-width: 0;
     overflow-y: auto;
     justify-content: flex-start !important;
     align-items: stretch !important;
-
-    > .o-customer-payment-summary {
-        flex: 0 0 auto;
-        overflow: visible;
-    }
+    height: 100%;
 
     .payment-summary {
-        flex: 0 0 auto !important;
-        overflow: visible !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
         width: 100%;
-        padding: .75rem 1rem !important;
-        background: #fff;
-        border: 1px solid #dbe3ec;
-        border-radius: 12px;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+
+        > * {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
     }
 
     .paymentlines {
         flex-shrink: 0;
-        overflow-y: visible !important;
+        max-height: 130px;
+        overflow-y: auto !important;
+        margin-top: 0.35rem;
     }
 }
 
@@ -49,47 +112,272 @@ $tint-breakpoint-xs: 575.98px;
 
 .o-customer-payment-summary {
     background: #fff;
-    border: 1px solid #dbe3ec;
-    border-radius: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
     width: 100%;
+    height: 100%;
     min-height: 0;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     color: #1e293b;
 
-    thead th { background: #edf4f8; font-size: .8rem; }
-    td, th { padding: .75rem; }
-    .o-customer-purchase-lines { max-height: 35vh; overflow: auto; }
-    .o-customer-invoice-options {
-        width: calc(100% + 2rem);
-        margin-left: -1rem;
-        table { width: 100%; }
-        th:nth-child(1) { width: 50%; }
-        th:nth-child(2), th:nth-child(3) { width: 25%; }
-        .o-has-payment-term {
-            th:nth-child(1) { width: 34%; }
-            th:nth-child(2), th:nth-child(3) { width: 19%; }
-            th:nth-child(4) { width: 28%; }
+    .o-summary-header {
+        flex-shrink: 0;
+
+        .o-summary-header-icon {
+            width: 1.85rem;
+            height: 1.85rem;
+            font-size: 0.9rem;
+            background-color: #ede9fe !important;
+            color: #5b21b6 !important;
         }
-        th, td { padding: .35rem .5rem; }
-        thead { position: static; }
-        label { margin: 0; }
-        input { min-width: 100px; }
-        select { min-width: 130px; }
     }
-    thead { position: sticky; top: 0; }
-    .o-customer-price-breakdown {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: .45rem 1rem;
-        margin-left: auto;
-        max-width: 440px;
-        dt { font-weight: 500; }
-        dd { text-align: right; margin: 0; font-variant-numeric: tabular-nums; }
-        .o-customer-total {
-            border-top: 2px solid #b9ccd8;
-            padding-top: .65rem;
-            font-size: 1.4rem;
-            font-weight: 700;
+
+    .o-customer-purchase-lines {
+        flex: 1 1 0;
+        min-height: 70px;
+        overflow-y: auto;
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+
+            th {
+                background-color: #f8fafc !important;
+                color: #334155;
+                font-size: 0.72rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+                padding: 0.45rem 0.75rem;
+                border-bottom: 2px solid #cbd5e1;
+                white-space: nowrap;
+            }
+        }
+
+        tbody tr {
+            transition: background-color 0.15s ease-in-out;
+
+            &:hover {
+                background-color: rgba(113, 75, 103, 0.03);
+            }
+        }
+
+        tbody td {
+            padding: 0.45rem 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.85rem;
+            vertical-align: middle;
+            font-variant-numeric: tabular-nums;
+        }
+
+        th:first-child, tbody td:first-child {
+            padding-left: 0.85rem;
+        }
+
+        th:last-child, tbody td:last-child {
+            padding-right: 0.85rem;
+        }
+    }
+
+    .o-summary-footer {
+        flex-shrink: 0;
+        background: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+
+        .o-customer-invoice-options {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+
+            label {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: #475569;
+                margin-bottom: 0.2rem;
+            }
+
+            .form-select, .form-control {
+                border-color: #cbd5e1;
+                font-size: 0.85rem;
+
+                &:focus {
+                    border-color: #714B67;
+                    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.15);
+                }
+            }
+
+            .o-invoice-note {
+                font-size: 0.75rem;
+            }
+        }
+
+        .o-customer-price-card {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+
+            .o-customer-price-breakdown {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 0.35rem 1rem;
+                font-size: 0.875rem;
+
+                dt {
+                    font-weight: 400;
+                    color: #475569;
+                }
+
+                dd {
+                    margin: 0;
+                    text-align: right;
+                    font-variant-numeric: tabular-nums;
+                    font-weight: 500;
+                    color: #1e293b;
+                }
+
+                .o-customer-total {
+                    border-top: 1px solid #dee2e6;
+                    padding-top: 0.6rem;
+                    font-size: 1.25rem;
+                    font-weight: 700;
+                    color: #212529;
+                }
+            }
+
+            .o-customer-total-banner {
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                color: #ffffff;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+
+                .o-total-caption {
+                    font-size: 0.72rem;
+                    letter-spacing: 0.5px;
+                    color: #94a3b8;
+                }
+
+                .o-total-subcaption {
+                    font-size: 0.68rem;
+                    color: #64748b;
+                }
+
+                .o-total-amount {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: #ffffff;
+                    letter-spacing: -0.5px;
+                }
+            }
+        }
+    }
+}
+
+/* Adaptabilidad Ergonómica para Laptops y Pantallas de Menor Altura */
+@media (max-height: 850px), (max-width: 1200px) {
+    .o-pos-contact-info {
+        .o-contact-avatar-box {
+            width: 1.5rem !important;
+            height: 1.5rem !important;
+            font-size: 0.75rem !important;
+        }
+
+        .o-contact-header strong {
+            font-size: 0.9rem !important;
+        }
+
+        .o-metric-card {
+            padding: 0.1rem 0.4rem !important;
+            font-size: 0.72rem !important;
+        }
+
+        details summary {
+            font-size: 0.72rem !important;
+            padding-block: 0.1rem !important;
+        }
+
+        details[open] .o-contact-details-content {
+            max-height: 8rem !important;
+        }
+    }
+
+    .o-customer-payment-summary {
+        .o-summary-header {
+            padding: 0.35rem 0.65rem !important;
+
+            .o-summary-header-icon {
+                width: 1.5rem !important;
+                height: 1.5rem !important;
+                font-size: 0.75rem !important;
+            }
+
+            .o-summary-title-bar h6 {
+                font-size: 0.85rem !important;
+            }
+        }
+
+        .o-customer-purchase-lines {
+            thead th {
+                padding: 0.25rem 0.5rem !important;
+                font-size: 0.68rem !important;
+            }
+
+            tbody td {
+                padding: 0.25rem 0.5rem !important;
+                font-size: 0.78rem !important;
+            }
+        }
+
+        .o-summary-footer {
+            padding: 0.35rem 0.65rem !important;
+
+            .o-customer-invoice-options {
+                padding: 0.45rem 0.65rem !important;
+
+                label {
+                    font-size: 0.68rem !important;
+                    margin-bottom: 0.05rem !important;
+                }
+
+                .form-select, .form-control {
+                    font-size: 0.78rem !important;
+                    padding: 0.15rem 0.35rem !important;
+                    height: auto !important;
+                }
+
+                .o-invoice-note {
+                    display: none !important;
+                }
+            }
+
+            .o-customer-price-card {
+                padding: 0.45rem 0.65rem !important;
+
+                .o-customer-price-breakdown {
+                    gap: 0.1rem 0.5rem !important;
+                    font-size: 0.78rem !important;
+                }
+
+                .o-customer-total-banner {
+                    padding: 0.3rem 0.65rem !important;
+                    margin-top: 0.25rem !important;
+
+                    .o-total-caption {
+                        font-size: 0.65rem !important;
+                    }
+
+                    .o-total-subcaption {
+                        display: none !important;
+                    }
+
+                    .o-total-amount {
+                        font-size: 1.15rem !important;
+                    }
+                }
+            }
         }
     }
 }

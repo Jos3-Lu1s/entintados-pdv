@@ -8,23 +8,29 @@ from odoo.exceptions import UserError
 
 class VendorPaymentGroup(models.Model):
     _name = 'vendor.payment.group'
-    _description = 'Pago agrupado de proveedor'
+    _description = 'Pago agrupado'
     _order = 'id desc'
     _check_company_auto = True
 
     name = fields.Char(string='Folio', required=True, readonly=True, copy=False, default=lambda self: _('Nuevo'))
     company_id = fields.Many2one('res.company', string='Compañía', required=True, default=lambda self: self.env.company)
+    payment_type = fields.Selection([('outbound', 'Proveedores'), ('inbound', 'Clientes')],
+                                    required=True, default='outbound', readonly=True, index=True)
     partner_id = fields.Many2one('res.partner', string='Proveedor', check_company=True)
     currency_id = fields.Many2one('res.currency', string='Moneda', required=True, default=lambda self: self.env.company.currency_id)
-    payment_method_line_id = fields.Many2one('account.payment.method.line', string='Método del diario', ondelete='restrict')
+    payment_method_line_id = fields.Many2one('account.payment.method.line', string='Método de pago', ondelete='restrict')
     country_code = fields.Char(related='company_id.account_fiscal_country_id.code')
+    default_sat_payment_method_id = fields.Many2one(
+        'l10n_mx_edi.payment.method', string='Forma de pago predeterminada',
+    )
     payment_date = fields.Date(string='Fecha de pago', default=fields.Date.context_today)
     previous_group_id = fields.Many2one('vendor.payment.group', string='Grupo anterior', readonly=True,
                                         copy=False, check_company=True, ondelete='restrict')
     has_pending_balance = fields.Boolean(compute='_compute_has_pending_balance')
     line_ids = fields.One2many('vendor.payment.group.line', 'group_id', string='Facturas pendientes', copy=False)
     payment_ids = fields.Many2many('account.payment', string='Pagos', readonly=True, copy=False, check_company=True)
-    state = fields.Selection([('draft', 'Borrador'), ('registered', 'Registrado')], default='draft', required=True, readonly=True, copy=False)
+    state = fields.Selection([('draft', 'Borrador'), ('registered', 'Registrado'), ('cancel', 'Cancelado')],
+                             string='Estado', default='draft', required=True, readonly=True, copy=False)
     invoice_count = fields.Integer(string='Facturas', compute='_compute_counts')
     payment_count = fields.Integer(string='Pagos', compute='_compute_counts')
     amount_total = fields.Monetary(string='Total a pagar', compute='_compute_counts')
@@ -53,7 +59,7 @@ class VendorPaymentGroup(models.Model):
     def _invoice_domain(self):
         self.ensure_one()
         domain = [
-            ('move_type', '=', 'in_invoice'),
+            ('move_type', '=', 'out_invoice' if self.payment_type == 'inbound' else 'in_invoice'),
             ('state', '=', 'posted'),
             ('payment_state', 'in', ['not_paid', 'partial']),
             ('amount_residual', '>', 0),
@@ -64,31 +70,18 @@ class VendorPaymentGroup(models.Model):
             domain.append(('id', 'in', self.previous_group_id._selected_invoices().ids))
         return domain
 
-    def _default_bank_payment_method(self):
-        self.ensure_one()
-        return self.env['account.payment.method.line'].search([
-            ('payment_type', '=', 'outbound'),
-            ('code', '=', 'manual'),
-            ('journal_id.type', '=', 'bank'),
-            ('journal_id.company_id', '=', self.company_id.id),
-            ('journal_id.currency_id', 'in', [False, self.currency_id.id]),
-            ('payment_account_id', '!=', False),
-        ], order='sequence, id', limit=1)
-
     @api.model
     def default_get(self, fields_list):
         values = super().default_get(fields_list)
-        if {'line_ids', 'payment_method_line_id'}.intersection(fields_list) - values.keys():
+        if 'line_ids' in fields_list and 'line_ids' not in values:
             group = self.new({
                 'company_id': values.get('company_id') or self.env.company.id,
                 'currency_id': values.get('currency_id') or self.env.company.currency_id.id,
+                'payment_type': values.get('payment_type') or self.env.context.get('default_payment_type', 'outbound'),
                 'previous_group_id': values.get('previous_group_id'),
                 'line_ids': [],
             })
-            if 'line_ids' in fields_list and 'line_ids' not in values:
-                values['line_ids'] = group._pending_invoice_commands()
-            if 'payment_method_line_id' in fields_list and 'payment_method_line_id' not in values:
-                values['payment_method_line_id'] = group._default_bank_payment_method().id
+            values['line_ids'] = group._pending_invoice_commands()
         return values
 
     def _pending_invoice_commands(self):
@@ -115,12 +108,6 @@ class VendorPaymentGroup(models.Model):
     @api.onchange('company_id', 'currency_id')
     def _onchange_scope(self):
         self._refresh_invoices()
-        method = self.payment_method_line_id
-        if not method or method.journal_id.company_id != self.company_id or (
-            method.journal_id.currency_id and method.journal_id.currency_id != self.currency_id
-        ):
-            self.payment_method_line_id = self._default_bank_payment_method()
-
     def action_refresh_invoices(self):
         self.ensure_one()
         self._lock_draft()
@@ -130,6 +117,7 @@ class VendorPaymentGroup(models.Model):
         self.ensure_one()
         self._lock_draft()
         self.line_ids.write({'selected': True})
+        self._fill_missing_sat_methods()
 
     def action_deselect_all(self):
         self.ensure_one()
@@ -145,7 +133,7 @@ class VendorPaymentGroup(models.Model):
         ])
 
     def write(self, vals):
-        if {'name', 'state', 'payment_ids'} & vals.keys():
+        if {'name', 'state', 'payment_ids', 'payment_type'} & vals.keys():
             raise UserError(_('El folio, el estado y los pagos vinculados se asignan automáticamente.'))
         self._lock_draft()
         return super().write(vals)
@@ -161,7 +149,30 @@ class VendorPaymentGroup(models.Model):
         self.env.cr.execute('SELECT id FROM vendor_payment_group WHERE id IN %s ORDER BY id FOR UPDATE', [tuple(self.ids)])
         self.invalidate_recordset(['state', 'line_ids'])
         if any(group.state != 'draft' for group in self):
-            raise UserError(_('El pago agrupado ya está registrado.'))
+            raise UserError(_('Solo puedes modificar un pago agrupado en borrador.'))
+
+    def _default_sat_payment_method(self, method=None):
+        self.ensure_one()
+        sat_methods = self.env['l10n_mx_edi.payment.method']
+        if self.country_code != 'MX':
+            return sat_methods
+        if self.default_sat_payment_method_id:
+            return self.default_sat_payment_method_id
+        if not method or method.code != 'manual':
+            return sat_methods
+        code = {'cash': '01', 'bank': '03'}.get(method.journal_id.type)
+        return sat_methods.search([('code', '=', code)], limit=1) if code else sat_methods
+
+    def _fill_missing_sat_methods(self):
+        for group in self:
+            method = group._default_sat_payment_method()
+            if method:
+                for line in group.line_ids.filtered(lambda line: line.selected and not line.sat_payment_method_id):
+                    line.sat_payment_method_id = method
+
+    @api.onchange('default_sat_payment_method_id')
+    def _onchange_default_sat_payment_method(self):
+        self._fill_missing_sat_methods()
 
     def _check_selected_invoices(self, invoices):
         if not invoices:
@@ -177,7 +188,7 @@ class VendorPaymentGroup(models.Model):
         invoices = lines.invoice_id
         self._check_selected_invoices(invoices)
         action = invoices.action_register_payment()
-        method = self._check_payment_method()
+        self._fill_missing_sat_methods()
         allocations = []
         amount = 0
         for line in lines:
@@ -202,28 +213,15 @@ class VendorPaymentGroup(models.Model):
             'custom_user_amount': amount,
             'custom_user_currency_id': self.currency_id.id,
         }
-        values.update(journal_id=method.journal_id.id, payment_method_line_id=method.id)
         wizard = self.env['account.payment.register'].with_company(self.company_id).with_context(
             action['context'], active_model='account.move', active_ids=invoices.ids,
         ).create(values)
+        default_sat = self._default_sat_payment_method(wizard.payment_method_line_id)
+        if default_sat:
+            wizard.vendor_allocation_ids.filtered(lambda line: not line.sat_payment_method_id).write({
+                'sat_payment_method_id': default_sat.id,
+            })
         return dict(action, res_id=wizard.id)
-
-    def _check_payment_method(self):
-        self.ensure_one()
-        method = self.payment_method_line_id
-        journal = method.journal_id
-        if not method or method.payment_type != 'outbound' or journal.company_id != self.company_id or (
-            journal.type not in ('bank', 'cash', 'credit')
-            or (journal.currency_id and journal.currency_id != self.currency_id)
-        ):
-            raise UserError(_('Selecciona una forma de pago de proveedor compatible con la compañía y moneda del grupo.'))
-        if not method.payment_account_id and not (
-            journal.type == 'cash' and method.code == 'manual'
-            and journal.default_account_id.active and journal.default_account_id.account_type == 'asset_cash'
-        ):
-            raise UserError(_('Configura la cuenta de pagos pendientes de la forma %(method)s del diario %(journal)s.',
-                              method=method.name, journal=journal.display_name))
-        return method
 
     def action_register_payment(self):
         return self.action_open_payment_wizard()
@@ -231,6 +229,26 @@ class VendorPaymentGroup(models.Model):
     def _mark_registered(self, payments):
         self.line_ids.filtered(lambda line: not line.selected).unlink()
         super().write({'state': 'registered', 'payment_ids': [Command.set(payments.ids)]})
+
+    def action_cancel(self):
+        self.ensure_one()
+        self.check_access('write')
+        lock = self.env['res.company']._with_locked_records
+        lock(self)
+        self.invalidate_recordset(['state', 'payment_ids'])
+        if self.state == 'cancel':
+            return True
+        payments = self.payment_ids
+        if payments:
+            payments.check_access('write')
+            lock(payments.sorted('id'))
+            payments.invalidate_recordset(['state'])
+        for payment in payments.filtered(lambda payment: payment.state != 'canceled'):
+            payment.action_cancel()
+        if payments.filtered(lambda payment: payment.state != 'canceled'):
+            raise UserError(_('Odoo no pudo cancelar todos los pagos vinculados.'))
+        super().write({'state': 'cancel'})
+        return True
 
     def action_prepare_followup_payment(self):
         self.ensure_one()
@@ -243,7 +261,8 @@ class VendorPaymentGroup(models.Model):
             'partner_id': self.partner_id.id,
             'company_id': self.company_id.id,
             'currency_id': self.currency_id.id,
-            'payment_method_line_id': (self.payment_method_line_id or self._default_bank_payment_method()).id,
+            'payment_type': self.payment_type,
+            'default_sat_payment_method_id': self.default_sat_payment_method_id.id,
             'previous_group_id': self.id,
             'line_ids': [Command.create({
                 'invoice_id': invoice.id,
@@ -272,7 +291,10 @@ class VendorPaymentGroup(models.Model):
 
     def _payment_group_report_action(self, extension, target):
         self.check_access('read')
-        selection = 'all' if self.env.context.get('all_payment_groups') else ','.join(map(str, self.ids))
+        if self.env.context.get('all_payment_groups'):
+            selection = 'all-inbound' if self.env.context.get('default_payment_type') == 'inbound' else 'all-outbound'
+        else:
+            selection = ','.join(map(str, self.ids))
         if not selection:
             raise UserError(_('Selecciona al menos un folio de pagos agrupados.'))
         return {'type': 'ir.actions.act_url', 'target': target,
@@ -295,7 +317,7 @@ class VendorPaymentGroup(models.Model):
                        payment.currency_id.name, payment.amount, None)
 
     def _payment_group_report_headers(self):
-        return [_('Folio'), _('Compañía'), _('Estado'), _('Tipo'), _('Documento'), _('Proveedor'), _('Fecha'),
+        return [_('Folio'), _('Compañía'), _('Estado'), _('Tipo'), _('Documento'), _('Contacto'), _('Fecha'),
                 _('Diario'), _('Forma de pago SAT'), _('Moneda'), _('Importe'), _('Saldo pendiente actual')]
 
     def _payment_group_xlsx(self):
@@ -366,6 +388,11 @@ class VendorPaymentGroupLine(models.Model):
     def _onchange_amount_to_pay(self):
         if self._amount_exceeds_balance():
             self.amount_to_pay = self.amount_residual
+
+    @api.onchange('selected')
+    def _onchange_selected(self):
+        if self.selected and self.group_id and not self.sat_payment_method_id:
+            self.sat_payment_method_id = self.group_id._default_sat_payment_method()
 
     @api.model_create_multi
     def create(self, vals_list):

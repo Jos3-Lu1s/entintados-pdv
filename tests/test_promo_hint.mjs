@@ -29,13 +29,13 @@ test('marks the applied reward and offers to return to the agreement', () => {
             { reward_id: 1, name: 'Promo TK', discount: 20, difference: 0, applied: true },
             { reward_id: 2, name: 'Promo TK', discount: 10, difference: -10, applied: false },
         ],
-        fallback: { label: 'Desc. Producto (10.0%)', difference: -10 },
+        fallback: { label: 'Producto · 10%', difference: -10 },
     }, identity, money);
     assert.equal(rows[0].applied, true);
     assert.equal(rows[0].detail, 'aplicada');
     assert.deepEqual(rows.at(-1), {
         key: 'fallback',
-        text: 'Sin promoción: vuelve a Desc. Producto (10.0%)',
+        text: 'Sin promoción: vuelve a Producto · 10%',
         detail: 'da $ 10.00 menos que el descuento actual',
         rewardId: false,
         applied: false,
@@ -61,7 +61,7 @@ test('offers to remove the order-wide promotion from the whole order', () => {
         options: [
             { reward_id: 2, name: 'Promo Pedido', discount: 10, difference: 0, applied: true, scope: 'order' },
         ],
-        fallback: { label: 'Desc. Producto (15.0%)', difference: 5, scope: 'order' },
+        fallback: { label: 'Producto · 15%', difference: 5, scope: 'order' },
     }, identity, money);
     assert.deepEqual(rows.at(-1), {
         key: 'fallback',
@@ -70,6 +70,23 @@ test('offers to remove the order-wide promotion from the whole order', () => {
         rewardId: false,
         applied: false,
     });
+});
+
+test('describes the promotion a combo product takes from its package', () => {
+    const rows = promoHintLines({
+        options: [
+            { reward_id: 4, name: 'Promo Esp', discount: 10, difference: 0, applied: true, scope: 'specific' },
+        ],
+        fallback: false,
+        from_package: true,
+    }, identity, money);
+    assert.deepEqual(rows, [{
+        key: 'reward-4',
+        text: 'Promo Esp - 10 %',
+        detail: 'aplicada en el paquete',
+        rewardId: 4,
+        applied: true,
+    }]);
 });
 
 test('handles a line without options', () => {

@@ -181,7 +181,7 @@ class TestSaleGiftPromotion(TransactionCase):
     def test_gift_badge(self):
         gift = self._gift_line(self._order_with_gift())
         self.assertEqual(gift.pricing_rule_type, 'promo')
-        self.assertEqual(gift.pricing_rule_origin, 'Promoción: Lleva2')
+        self.assertEqual(gift.pricing_rule_origin, 'Lleva2 · Regalo')
         self.assertFalse(gift.pricing_rule_id)
         self.assertFalse(gift.promo_reward_id)
 
@@ -192,7 +192,7 @@ class TestSaleGiftPromotion(TransactionCase):
         gift = order.order_line.filtered(lambda line: line.product_id == self.product_q)
         self.assertEqual(gift.discount, 100.0)
         self.assertAlmostEqual(gift.price_unit, 50.0)
-        self.assertEqual(gift.pricing_rule_origin, 'Promoción: Lleva2')
+        self.assertEqual(gift.pricing_rule_origin, 'Lleva2 · Regalo')
         self.assertAlmostEqual(order.amount_total, 180.0)
 
     def test_update_prices_keeps_gift(self):
@@ -200,7 +200,7 @@ class TestSaleGiftPromotion(TransactionCase):
         order.action_update_prices()
         gift = order.order_line.filtered(lambda line: line.product_id == self.product_q)
         self.assertEqual(gift.discount, 100.0)
-        self.assertEqual(gift.pricing_rule_origin, 'Promoción: Lleva2')
+        self.assertEqual(gift.pricing_rule_origin, 'Lleva2 · Regalo')
         self.assertAlmostEqual(order.amount_total, 200.0)
 
     def test_pricelist_change_keeps_gift(self):
@@ -218,7 +218,7 @@ class TestSaleGiftPromotion(TransactionCase):
         order.action_update_prices()
         gift = order.order_line.filtered(lambda line: line.product_id == self.product_q)
         self.assertEqual(gift.discount, 100.0)
-        self.assertEqual(gift.pricing_rule_origin, 'Promoción: Lleva2')
+        self.assertEqual(gift.pricing_rule_origin, 'Lleva2 · Regalo')
         self.assertAlmostEqual(order.amount_total, 180.0)
 
     def test_gift_beside_paid_line(self):
@@ -455,7 +455,7 @@ class TestSaleGiftPromotion(TransactionCase):
 
         self.assertFalse(line.promo_reward_id)
         self.assertEqual(line.discount, 10.0)
-        self.assertEqual(line.pricing_rule_origin, 'Desc. Producto (10.0%)')
+        self.assertEqual(line.pricing_rule_origin, 'Producto · 10%')
         notice = (order.message_ids - messages).filtered(lambda message: 'dejó la promoción' in message.body)
         self.assertEqual(len(notice), 1)
 

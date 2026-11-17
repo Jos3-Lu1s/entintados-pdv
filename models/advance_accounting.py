@@ -190,6 +190,77 @@ class AccountMoveLine(models.Model):
 class AccountMove(models.Model):
     _inherit = 'account.move'
 
+    supplier_prepayment_ids = fields.Many2many('account.payment', compute='_compute_supplier_prepayment_usage')
+    supplier_prepayment_applied = fields.Monetary(
+        string='Anticipo aplicado', compute='_compute_supplier_prepayment_usage',
+    )
+
+    @api.depends('move_type', 'line_ids.matched_debit_ids.debit_move_id',
+                 'line_ids.matched_debit_ids.credit_amount_currency')
+    def _compute_supplier_prepayment_usage(self):
+        partials_by_bill = {
+            bill.id: bill.line_ids.filtered(lambda line: line.account_type == 'liability_payable').matched_debit_ids
+            for bill in self.filtered(lambda move: move.move_type == 'in_invoice')
+        }
+        source_moves = {move.id for partials in partials_by_bill.values() for move in partials.debit_move_id.move_id}
+        payments = self.env['account.payment'].search([
+            ('is_supplier_prepayment', '=', True), ('move_id', 'in', list(source_moves)),
+        ])
+        payment_by_move = {payment.move_id.id: payment for payment in payments}
+        for bill in self:
+            related = self.env['account.payment']
+            applied = 0.0
+            for partial in partials_by_bill.get(bill.id, ()):
+                payment = payment_by_move.get(partial.debit_move_id.move_id.id)
+                if payment:
+                    related |= payment
+                    applied += partial.credit_amount_currency
+            bill.supplier_prepayment_ids = related
+            bill.supplier_prepayment_applied = applied
+
+    def action_view_supplier_prepayment_usage(self):
+        self.ensure_one()
+        self.check_access('read')
+        payments = self.supplier_prepayment_ids
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Anticipos aplicados'),
+            'res_model': 'account.payment',
+            'view_mode': 'form' if len(payments) == 1 else 'list,form',
+            'res_id': payments.id if len(payments) == 1 else False,
+            'domain': [('id', 'in', payments.ids)],
+            'context': {'create': False},
+        }
+
+    # Older inherited views are validated before the updated advance view loads.
+    supplier_prepayment_available = fields.Boolean(compute='_compute_legacy_supplier_prepayment_available')
+
+    def _compute_legacy_supplier_prepayment_available(self):
+        self.supplier_prepayment_available = False
+
+    def action_apply_supplier_prepayment(self):
+        self.ensure_one()
+        self.check_access('read')
+        return self.env['ir.actions.actions']._for_xml_id('entintados_pdv.action_supplier_prepayments')
+
+    def _supplier_prepayment_lines(self):
+        self.ensure_one()
+        lines = self.env['account.move.line']
+        if self.move_type != 'in_invoice' or self.state != 'posted' or self.amount_residual <= 0:
+            return lines
+        outstanding = self.invoice_outstanding_credits_debits_widget or {}
+        candidates = lines.browse([item['id'] for item in outstanding.get('content', [])])
+        payments = self.env['account.payment'].search([
+            ('is_supplier_prepayment', '=', True),
+            ('company_id', '=', self.company_id.id),
+            ('state', 'in', ['in_process', 'paid']),
+            ('partner_id.commercial_partner_id', '=', self.commercial_partner_id.id),
+            ('move_id', 'in', candidates.move_id.ids),
+        ])
+        return candidates.filtered(
+            lambda line: line.move_id in payments.move_id and line.account_type == 'liability_payable'
+        ).sorted(lambda line: (line.date, line.id))
+
     advance_document = fields.Boolean(string='Factura de anticipo', copy=False)
     advance_fiscal_kind = fields.Selection([
         ('on_account', 'Pago a cuenta de una operación definida'),

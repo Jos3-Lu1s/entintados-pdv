@@ -11,16 +11,71 @@ class AccountPaymentRegister(models.TransientModel):
     vendor_allocation_ids = fields.One2many('vendor.payment.allocation', 'wizard_id', string='Facturas seleccionadas')
     vendor_allocated_amount = fields.Monetary(string='Total asignado', compute='_compute_vendor_allocated_amount')
     vendor_percentage_editable = fields.Boolean(compute='_compute_vendor_percentage_editable')
+    supplier_payment_source = fields.Selection([
+        ('normal', 'Pago normal'),
+        ('advance', 'Saldo de anticipo'),
+    ], string='Forma de liquidar', default='normal', required=True)
+    supplier_advance_to_apply = fields.Monetary(
+        string='Anticipo aplicable', compute='_compute_supplier_advance_to_apply',
+        currency_field='supplier_bill_currency_id',
+    )
+    supplier_bill_currency_id = fields.Many2one('res.currency', compute='_compute_supplier_advance_to_apply')
 
-    @api.depends('line_ids.move_id.move_type', 'line_ids.move_id.state',
+    def _supplier_advance_bill(self):
+        self.ensure_one()
+        bill = self.line_ids.move_id
+        if (not self.vendor_payment_group_id and len(bill) == 1
+                and bill.move_type == 'in_invoice' and not bill.is_advance_invoice):
+            return bill
+        return self.env['account.move']
+
+    @api.depends('line_ids.move_id.amount_residual', 'line_ids.move_id.state', 'vendor_payment_group_id')
+    def _compute_supplier_advance_to_apply(self):
+        for wizard in self:
+            bill = wizard._supplier_advance_bill()
+            lines = bill._supplier_prepayment_lines() if bill else self.env['account.move.line']
+            amounts = (bill.invoice_outstanding_credits_debits_widget or {}).get('content', []) if lines else []
+            line_ids = set(lines.ids)
+            wizard.supplier_bill_currency_id = bill.currency_id
+            wizard.supplier_advance_to_apply = (
+                min(bill.amount_residual, sum(item['amount'] for item in amounts if item['id'] in line_ids))
+                if lines else 0
+            )
+
+    def action_create_payments(self):
+        self.ensure_one()
+        if self.supplier_payment_source != 'advance':
+            return super().action_create_payments()
+
+        bill = self._supplier_advance_bill()
+        if not bill:
+            raise UserError(_('Selecciona una factura de proveedor para aplicar el anticipo.'))
+        bill.check_access('write')
+        lock = self.env['res.company']._with_locked_records
+        lock(bill)
+        lines = bill._supplier_prepayment_lines()
+        if lines:
+            lock(lines.sorted('id'))
+            bill.invalidate_recordset(['amount_residual', 'invoice_outstanding_credits_debits_widget'])
+            lines &= bill._supplier_prepayment_lines()
+        if not lines:
+            raise UserError(_('El anticipo ya no tiene saldo aplicable. Vuelve a abrir Registrar pago.'))
+        for line in lines:
+            if bill.currency_id.is_zero(bill.amount_residual):
+                break
+            bill.js_assign_outstanding_line(line.id)
+        return {'type': 'ir.actions.act_window_close'}
+
+    @api.depends('line_ids.move_id.move_type', 'line_ids.move_id.state', 'vendor_payment_group_id.payment_type',
                  'line_ids.move_id.currency_id', 'line_ids.move_id.company_id', 'currency_id')
     def _compute_vendor_percentage_editable(self):
         for wizard in self:
             invoices = wizard.line_ids.move_id
+            move_type = 'out_invoice' if wizard.vendor_payment_group_id.payment_type == 'inbound' else 'in_invoice'
             wizard.vendor_percentage_editable = bool(
                 invoices and wizard.currency_id and invoices.currency_id == wizard.currency_id
                 and len(invoices.company_id) == 1
-                and all(invoice.move_type == 'in_invoice' and invoice.state == 'posted' for invoice in invoices)
+                and all(invoice.move_type == move_type and invoice.state == 'posted' for invoice in invoices)
             )
 
     def _vendor_pending_total(self):
@@ -63,9 +118,6 @@ class AccountPaymentRegister(models.TransientModel):
                 raise UserError(_('La selección de facturas cambió. Vuelve a abrir Pagar desde el grupo.'))
             if self.currency_id != group.currency_id:
                 raise UserError(_('Usa la moneda del grupo para registrar los pagos.'))
-            method = group._check_payment_method()
-            if self.payment_method_line_id != method or self.journal_id != method.journal_id:
-                raise UserError(_('La forma de pago del grupo cambió. Vuelve a abrir Pagar.'))
         if self.vendor_percentage_editable:
             invoices = self.line_ids.move_id
             invoices.invalidate_recordset(['amount_residual'])
@@ -83,7 +135,8 @@ class AccountPaymentRegister(models.TransientModel):
         invoices = self.line_ids.move_id
         if set(self.vendor_allocation_ids.invoice_id.ids) != set(invoices.ids):
             raise UserError(_('La distribución debe corresponder a las facturas seleccionadas.'))
-        payable = invoices.line_ids.filtered(lambda line: line.account_type == 'liability_payable')
+        account_type = 'asset_receivable' if group and group.payment_type == 'inbound' else 'liability_payable'
+        payable = invoices.line_ids.filtered(lambda line: line.account_type == account_type)
         payable.flush_recordset(['amount_residual', 'amount_residual_currency'])
         self.env.cr.execute(
             'SELECT id FROM account_move_line WHERE id IN %s ORDER BY id FOR UPDATE', [tuple(payable.ids)],
@@ -113,6 +166,7 @@ class AccountPaymentRegister(models.TransientModel):
         if not payment_group:
             payment_group = self.env['vendor.payment.group'].create({
                 'company_id': invoices.company_id.id,
+                'payment_type': 'outbound',
                 'currency_id': currency.id,
                 'payment_date': self.payment_date,
                 'payment_method_line_id': self.payment_method_line_id.id,
@@ -189,15 +243,12 @@ class AccountPaymentRegister(models.TransientModel):
                 raise UserError(_('Hay facturas fuera del pago. Revisa los saldos, vencimientos y cuentas bancarias.'))
             to_process[:] = distributed
         if self.vendor_payment_group_id:
-            group_method = self.vendor_payment_group_id.payment_method_line_id
             for item in to_process:
                 values = item['create_vals']
                 method = self.env['account.payment.method.line'].browse(values['payment_method_line_id'])
-                if method != group_method:
-                    raise UserError(_('El asistente no pudo aplicar la forma de pago seleccionada en el grupo.'))
                 journal = method.journal_id
                 account = journal.default_account_id
-                if (values['payment_type'] == 'outbound' and values['partner_type'] == 'supplier'
+                if (values['payment_type'] == self.vendor_payment_group_id.payment_type
                         and journal.type == 'cash' and method.code == 'manual' and not method.payment_account_id
                         and account.active and account.account_type == 'asset_cash'):
                     values['force_outstanding_account_id'] = account.id

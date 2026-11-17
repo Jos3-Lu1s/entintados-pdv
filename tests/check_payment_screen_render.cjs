@@ -13,11 +13,24 @@ w.eval(fs.readFileSync(path.join(runtime, 'owl.js'), 'utf8'));
 const { Component, App, reactive, useEffect } = w.owl;
 const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
-const document = new w.DOMParser().parseFromString(read('static/src/app/overrides/customer_payment_summary.xml'), 'text/xml');
-const section = document.querySelector('section').outerHTML;
-const template = `<templates><t t-name="PaymentFixture"><t t-call="point_of_sale.PaymentScreenDue"/></t><t t-name="point_of_sale.PaymentScreenDue">${section}</t><t t-name="entintados_pdv.CustomerContactInfo"><span>Cliente</span></t></templates>`;
+const componentXml = read('static/src/app/components/customer_payment_summary/customer_payment_summary.xml');
+const template = `<templates>${componentXml}<t t-name="PaymentFixture"><CustomerPaymentSummary currentOrder="currentOrder"/></t><t t-name="entintados_pdv.CustomerContactInfo"><span>Cliente</span></t></templates>`;
+class CustomerContactInfo extends Component {
+    static template = 'entintados_pdv.CustomerContactInfo';
+    static props = { partner: { type: Object, optional: true } };
+}
+const utils = new w.Function(read('static/src/app/utils/invoice_options.js').replace(/export /g, '') +
+    '; return {canSplitInvoice, initializePaymentInvoice, isInvoiceCollection, setInvoiceSplitCount};')();
+const componentSource = read('static/src/app/components/customer_payment_summary/customer_payment_summary.js').replace(/^import .*;\r?\n/gm, '');
+const CustomerPaymentSummary = new w.Function('Component', 'useEffect', 'onMounted', 'formatFloat', 'usePos', 'ProductInfoPopup', 'CustomerContactInfo', 'customerSummary',
+    ...Object.keys(utils), componentSource + '; return CustomerPaymentSummary;')(
+    Component, useEffect, (fn) => fn(), String, () => ({ company: { country_id: { code: 'MX' } }, config: { _l10n_mx_edi_usage: [{ value: 'G01', name: 'Adquisición de mercancías' }, { value: 'G03', name: 'Gastos en general' }] }, models: { 'account.payment.term': { getAll: () => [] } } }),
+    { prototype: { _hasMarginsCostsAccessRights: () => false } }, CustomerContactInfo,
+    () => ({ rows: [], showMargins: false, gross: 100, discounts: 0, promotions: 0,
+        subtotal: 100, taxes: [], tax: 16, rounding: 0, total: 116 }), ...Object.values(utils));
 class PaymentScreen extends Component {
     static template = 'PaymentFixture';
+    static components = { CustomerPaymentSummary, CustomerContactInfo };
     static props = {};
     setup() {
         this.order = reactive({
@@ -40,14 +53,9 @@ function patch(target, extension) {
     Object.setPrototypeOf(extension, parent);
     Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
 }
-const utils = new w.Function(read('static/src/app/utils/invoice_options.js').replace(/export /g, '') +
-    '; return {canSplitInvoice, initializePaymentInvoice, isInvoiceCollection, setInvoiceSplitCount};')();
-const source = read('static/src/app/overrides/customer_payment_summary.js').replace(/^import .*;\r?\n/gm, '');
-new w.Function('patch', 'useEffect', 'formatFloat', 'PaymentScreen', 'ProductInfoPopup', 'customerSummary',
-    ...Object.keys(utils), source)(patch, useEffect, String, PaymentScreen,
-    { prototype: { _hasMarginsCostsAccessRights: () => false } },
-    () => ({ rows: [], showMargins: false, gross: 100, discounts: 0, promotions: 0,
-        subtotal: 100, taxes: [], tax: 16, rounding: 0, total: 116 }), ...Object.values(utils));
+const overrideSource = read('static/src/app/overrides/payment_screen.js').replace(/^import .*;\r?\n/gm, '');
+new w.Function('patch', 'PaymentScreen', 'PaymentScreenStatus', 'CustomerPaymentSummary',
+    ...Object.keys(utils), overrideSource)(patch, PaymentScreen, PaymentScreen, CustomerPaymentSummary, ...Object.values(utils));
 (async () => {
     try {
         const app = new App(PaymentScreen, { templates: template,

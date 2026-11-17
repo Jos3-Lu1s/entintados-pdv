@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.CustomerPaymentSummary">
+        <section t-if="currentOrder" class="o-customer-payment-summary" aria-label="Resumen de compra">
+            <t t-set="summary" t-value="customerPaymentSummary"/>
+            
+            <!-- Encabezado de la pantalla de pago -->
+            <header class="o-summary-header px-3 py-2 border-bottom bg-white flex-shrink-0">
+                <div class="d-flex align-items-center justify-content-between mb-1 o-summary-title-bar">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="o-summary-header-icon bg-light text-primary rounded-2 d-flex align-items-center justify-content-center flex-shrink-0">
+                            <i class="fa fa-file-text-o" aria-hidden="true"/>
+                        </div>
+                        <h6 class="mb-0 fw-bold text-dark fs-6">Resumen de compra</h6>
+                    </div>
+                    <span class="text-muted text-xxs d-none d-sm-inline">Revisión previa a pago</span>
+                </div>
+                <t t-if="currentOrder.getPartner()">
+                    <CustomerContactInfo partner="currentOrder.getPartner()"/>
+                </t>
+                <div t-else="" class="o-general-public-box d-flex align-items-center gap-2 p-1 px-2 rounded-2 bg-light border text-secondary small">
+                    <i class="fa fa-user-circle-o fs-5 text-muted" aria-hidden="true"/>
+                    <div>
+                        <strong class="text-dark">Público en general</strong>
+                        <span class="text-muted d-block text-xxs">Venta al mostrador sin cliente registrado</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Tabla de Partidas del Pedido -->
+            <div class="o-customer-purchase-lines table-responsive o-tint-scroll-touch">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th class="text-start">Producto</th>
+                            <th class="text-end">Cant.</th>
+                            <th class="text-end">Precio unit.</th>
+                            <th class="text-end">Descuento / Ahorro</th>
+                            <th t-if="summary.showMargins" class="text-end">Margen interno</th>
+                            <th class="text-end">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="summary.rows" t-as="row" t-key="row.id">
+                            <td>
+                                <div class="fw-semibold text-dark text-break" t-esc="row.name"/>
+                                <span t-if="row.color and (!row.name or !row.name.includes(row.color))"
+                                      class="badge rounded-pill bg-light text-primary border border-primary-subtle d-inline-flex align-items-center gap-1 mt-1 font-monospace text-xxs shadow-xs">
+                                    <i class="fa fa-tint text-primary" aria-hidden="true"/>Color: <t t-esc="row.color"/>
+                                </span>
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <span class="fw-semibold text-dark font-monospace" t-esc="row.quantity"/>
+                                <small class="text-muted ms-1" t-esc="row.unit"/>
+                            </td>
+                            <td class="text-end text-nowrap text-muted font-monospace" t-esc="env.utils.formatCurrency(row.unitPrice)"/>
+                            <td class="text-end text-nowrap">
+                                <span t-if="row.saving" class="badge rounded-pill bg-success-subtle text-success border border-success-subtle fw-semibold font-monospace"
+                                      t-esc="'-' + env.utils.formatCurrency(row.saving)"/>
+                                <span t-else="" class="text-muted font-monospace">—</span>
+                            </td>
+                            <td t-if="summary.showMargins" class="text-end text-nowrap text-muted font-monospace">
+                                <t t-esc="row.margin === null ? '—' : env.utils.formatCurrency(row.margin)"/>
+                                <small t-if="row.marginPercent !== null" class="ms-1 text-secondary-emphasis">(<t t-esc="formatMarginPercent(row.marginPercent)"/>%)</small>
+                            </td>
+                            <td class="text-end text-nowrap fw-bold text-dark font-monospace fs-6" t-esc="env.utils.formatCurrency(row.amount)"/>
+                        </tr>
+                        <tr t-if="!summary.rows.length">
+                            <td t-att-colspan="summary.showMargins ? 6 : 5" class="text-center py-4 text-muted o-tint-empty-state">
+                                <i class="fa fa-shopping-basket fa-2x mb-2 text-secondary opacity-50 d-block" aria-hidden="true"/>
+                                <span class="small">No hay productos agregados a esta orden</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Footer: Facturación Fiscal + Liquidación de Totales -->
+            <footer class="o-summary-footer p-2 p-lg-3 flex-shrink-0">
+                <div class="row g-2 g-lg-3 align-items-stretch">
+                    <!-- Opciones de Facturación CFDI -->
+                    <div t-if="showPaymentInvoiceOptions" class="col-12 col-lg-7 d-flex flex-column">
+                        <div class="o-customer-invoice-options border rounded-3 bg-white p-2 p-lg-3 shadow-xs h-100 d-flex flex-column justify-content-between" t-att-class="{'o-has-payment-term': showPaymentTerm}">
+                            <div>
+                                <div class="d-flex align-items-center justify-content-between pb-1 pb-lg-2 mb-2 border-bottom">
+                                    <span class="small fw-bold text-dark text-uppercase d-flex align-items-center gap-1">
+                                        <i class="fa fa-file-text-o text-primary" aria-hidden="true"/> Datos de facturación CFDI
+                                    </span>
+                                    <span class="badge bg-light text-secondary border text-xxs">México</span>
+                                </div>
+                                <div class="row g-1 g-lg-2">
+                                    <div class="col-12 col-sm-6 col-xl-5">
+                                        <label for="payment_invoice_usage" class="form-label text-secondary-emphasis fw-semibold mb-1">Uso de CFDI</label>
+                                        <select id="payment_invoice_usage" class="form-select form-select-sm" t-on-change="changePaymentInvoiceUsage">
+                                            <option t-foreach="pos.config._l10n_mx_edi_usage || []" t-as="usage" t-key="usage.value"
+                                                    t-att-value="usage.value" t-att-selected="usage.value === paymentInvoiceUsage" t-esc="usage.name"/>
+                                        </select>
+                                    </div>
+                                    <div class="col-6 col-sm-3 col-xl-3">
+                                        <label for="payment_invoice_public" class="form-label text-secondary-emphasis fw-semibold mb-1">Público general</label>
+                                        <select id="payment_invoice_public" class="form-select form-select-sm" t-on-change="changePaymentInvoicePublic">
+                                            <option value="0" t-att-selected="!currentOrder.l10n_mx_edi_cfdi_to_public">No</option>
+                                            <option value="1" t-att-selected="!!currentOrder.l10n_mx_edi_cfdi_to_public">Sí</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6 col-sm-3 col-xl-4">
+                                        <label for="payment_invoice_count" class="form-label text-secondary-emphasis fw-semibold mb-1">Nº facturas</label>
+                                        <input id="payment_invoice_count" type="number" min="1" step="1"
+                                               class="form-control form-control-sm font-monospace" t-att-value="paymentInvoiceSplitCount"
+                                               t-att-disabled="!canSplitPaymentInvoice" t-on-change="changePaymentInvoiceSplitCount"/>
+                                    </div>
+                                    <div t-if="showPaymentTerm" class="col-12 mt-1 mt-lg-2">
+                                        <label for="payment_invoice_term" class="form-label text-secondary-emphasis fw-semibold mb-1">Términos de pago</label>
+                                        <select id="payment_invoice_term" class="form-select form-select-sm" t-on-change="changePaymentTerm">
+                                            <option value="" t-att-selected="!currentOrder.pos_payment_term_id">
+                                                <t t-esc="defaultPaymentTerm?.name || 'Plazo predeterminado'"/>
+                                            </option>
+                                            <option t-foreach="paymentTermOptions" t-as="term" t-key="term.id" t-att-value="term.id"
+                                                    t-att-selected="term.id === currentOrder.pos_payment_term_id?.id" t-esc="term.name"/>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="o-invoice-note mt-2 pt-1">
+                                <div class="p-1 px-2 rounded-2 bg-light border text-muted d-flex align-items-center gap-2">
+                                    <i class="fa fa-info-circle text-primary flex-shrink-0" aria-hidden="true"/>
+                                    <span class="text-xxs">Factura electrónica generada al confirmar en caja.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta de Liquidación de Totales -->
+                    <div t-attf-class="{{ showPaymentInvoiceOptions ? 'col-12 col-lg-5' : 'col-12 col-lg-6 ms-auto' }}" class="d-flex flex-column">
+                        <div class="o-customer-price-card border rounded-3 bg-white p-2 p-lg-3 shadow-xs h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex align-items-center justify-content-between pb-1 pb-lg-2 mb-2 border-bottom">
+                                    <span class="small fw-bold text-dark text-uppercase d-flex align-items-center gap-1">
+                                        <i class="fa fa-calculator text-primary" aria-hidden="true"/> Desglose de totales
+                                    </span>
+                                    <small class="text-muted text-xxs">Antes de impuestos</small>
+                                </div>
+                                
+                                <dl class="o-customer-price-breakdown mb-0">
+                                    <dt class="text-secondary-emphasis fw-normal">Importe antes de descuentos</dt>
+                                    <dd class="text-dark font-monospace" t-esc="env.utils.formatCurrency(summary.gross)"/>
+
+                                    <t t-if="summary.discounts">
+                                        <dt class="text-secondary-emphasis fw-normal">
+                                            Descuentos <small t-if="summary.discountRates" class="text-muted">(<t t-esc="summary.discountRates"/>)</small>
+                                        </dt>
+                                        <dd class="text-danger fw-semibold font-monospace" t-esc="env.utils.formatCurrency(-summary.discounts)"/>
+                                    </t>
+
+                                    <t t-if="summary.promotions">
+                                        <dt class="text-secondary-emphasis fw-normal">
+                                            Promociones <small t-if="summary.promotionRates" class="text-muted">(<t t-esc="summary.promotionRates"/>)</small>
+                                        </dt>
+                                        <dd class="text-success fw-semibold font-monospace" t-esc="env.utils.formatCurrency(-summary.promotions)"/>
+                                    </t>
+
+                                    <dt class="text-dark fw-semibold pt-1 border-top">Subtotal neto</dt>
+                                    <dd class="text-dark fw-bold font-monospace pt-1 border-top" t-esc="env.utils.formatCurrency(summary.subtotal)"/>
+
+                                    <t t-foreach="summary.taxes" t-as="tax" t-key="tax_index">
+                                        <dt class="text-secondary-emphasis fw-normal" t-esc="tax.name"/>
+                                        <dd class="text-dark font-monospace" t-esc="env.utils.formatCurrency(tax.amount)"/>
+                                    </t>
+                                    <t t-if="!summary.taxes.length">
+                                        <dt class="text-secondary-emphasis fw-normal">Impuestos</dt>
+                                        <dd class="text-dark font-monospace" t-esc="env.utils.formatCurrency(summary.tax)"/>
+                                    </t>
+
+                                    <t t-if="!currentOrder.currency.isZero(summary.rounding)">
+                                        <dt class="text-secondary-emphasis fw-normal">Redondeo</dt>
+                                        <dd class="text-dark font-monospace" t-esc="env.utils.formatCurrency(summary.rounding)"/>
+                                    </t>
+                                </dl>
+                            </div>
+
+                            <!-- Banner Destacado del Total a Cobrar -->
+                            <div class="o-customer-total-banner rounded-3 p-2 p-lg-3 mt-2 mt-lg-3 d-flex align-items-center justify-content-between flex-shrink-0">
+                                <div>
+                                    <span class="o-total-caption text-uppercase fw-bold">Total a liquidar</span>
+                                    <small class="o-total-subcaption d-block">Con impuestos incluidos</small>
+                                </div>
+                                <div class="o-total-amount font-monospace" t-esc="env.utils.formatCurrency(summary.total)"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </section>
+    </t>
+</templates>

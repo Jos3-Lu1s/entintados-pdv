@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
         await page.setContent('<main id="fixture"></main>');
         await page.addScriptTag({ url: 'http://localhost:8069/web/static/lib/owl/owl.js' });
         const templates = fs.readFileSync(path.join(__dirname,
-            '../static/src/app/components/customer_contact_info.xml'), 'utf8');
+            '../static/src/app/components/customer_contact_info/customer_contact_info.xml'), 'utf8');
         await page.evaluate(async (templates) => {
             class ContactCard extends owl.Component {
                 static template = 'entintados_pdv.CustomerContactInfo';

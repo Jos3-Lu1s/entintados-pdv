@@ -1,0 +1,8 @@
+.monthly_payment_report .o_account_report_scroll_container {
+    width: calc(100% - 2 * clamp(1rem, 8vw, 10rem));
+    margin-inline: auto !important;
+}
+
+.monthly_payment_report .o_account_report_scroll_container table {
+    width: 100%;
+}
