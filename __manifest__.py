@@ -259,6 +259,7 @@ Catálogo de entintado
         'views/pos_financing_views.xml',
         'views/pos_credit_approval_views.xml',
         'views/sale_credit_views.xml',
+        'views/loyalty_reward_views.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
         'report/report_picking_action.xml',

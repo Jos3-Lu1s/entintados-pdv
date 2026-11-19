@@ -903,8 +903,8 @@ class TestSaleLinePromotion(TransactionCase):
         line = self._create_line(order, qty=3.0)
         self.assertEqual(line.promo_available_info, {
             'options': [
-                {'reward_id': twenty.id, 'name': 'Promo TK', 'discount': 20.0, 'difference': 30.0, 'applied': False, 'scope': 'order'},
-                {'reward_id': five.id, 'name': 'Promo TK', 'discount': 5.0, 'difference': -15.0, 'applied': False, 'scope': 'order'},
+                {'reward_id': twenty.id, 'name': 'Promo TK', 'target': '', 'discount': 20.0, 'difference': 30.0, 'applied': False, 'scope': 'order'},
+                {'reward_id': five.id, 'name': 'Promo TK', 'target': '', 'discount': 5.0, 'difference': -15.0, 'applied': False, 'scope': 'order'},
             ],
             'fallback': False,
         })
@@ -921,8 +921,8 @@ class TestSaleLinePromotion(TransactionCase):
         line._apply_line_promotion(twenty)
         self.assertEqual(line.promo_available_info, {
             'options': [
-                {'reward_id': twenty.id, 'name': 'Promo TK', 'discount': 20.0, 'difference': 0.0, 'applied': True, 'scope': 'order'},
-                {'reward_id': five.id, 'name': 'Promo TK', 'discount': 5.0, 'difference': -45.0, 'applied': False, 'scope': 'order'},
+                {'reward_id': twenty.id, 'name': 'Promo TK', 'target': '', 'discount': 20.0, 'difference': 0.0, 'applied': True, 'scope': 'order'},
+                {'reward_id': five.id, 'name': 'Promo TK', 'target': '', 'discount': 5.0, 'difference': -45.0, 'applied': False, 'scope': 'order'},
             ],
             'fallback': {'label': 'Producto · 10%', 'difference': -30.0, 'scope': 'specific'},
         })
@@ -1569,6 +1569,111 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(copy.order_promo_reward_id)
         self.assertFalse(copy.order_line.promo_reward_id)
         self.assertEqual(sorted(copy.order_line.mapped('discount')), [0.0, 0.0, 15.0])
+
+    def test_reward_line_and_scheme_domain_sync(self):
+        scheme1 = self.env['tint.schema'].create({'name': 'Esquema Vinílico'})
+        scheme2 = self.env['tint.schema'].create({'name': 'Esquema Esmalte'})
+        line1 = self.env['lines.product'].create({'name': 'Línea Satinada', 'scheme': scheme1.id})
+
+        program = self._create_program([{
+            'discount': 10.0,
+            'discount_applicability': 'specific',
+            'lines_product_id': line1.id,
+        }])
+        reward = program.reward_ids[0]
+
+        # Sincronización automática de esquema y dominio al crear con línea
+        self.assertEqual(reward.scheme_id, scheme1)
+        self.assertEqual(reward.discount_product_domain, f"[('lines_product_id', 'in', [{line1.id}])]")
+
+        # Al cambiar de esquema, la línea que no pertenece a dicho esquema se desasocia y el dominio apunta al nuevo esquema
+        reward.write({'scheme_id': scheme2.id})
+        self.assertFalse(reward.lines_product_id)
+        self.assertEqual(reward.discount_product_domain, f"[('scheme_id', 'in', [{scheme2.id}])]")
+
+        # Al limpiar ambos, el dominio dependiente se limpia
+        reward.write({'lines_product_id': False, 'scheme_id': False})
+        self.assertFalse(reward.discount_product_domain)
+
+        # Interacción vía Formulario de recompensa
+        with Form(reward) as reward_form:
+            reward_form.lines_product_id = line1
+            self.assertEqual(reward_form.scheme_id, scheme1)
+        self.assertEqual(reward.discount_product_domain, f"[('lines_product_id', 'in', [{line1.id}])]")
+
+        with Form(reward) as reward_form:
+            reward_form.scheme_id = scheme2
+            self.assertFalse(reward_form.lines_product_id)
+        self.assertEqual(reward.discount_product_domain, f"[('scheme_id', 'in', [{scheme2.id}])]")
+
+    def test_reward_target_label_resolution(self):
+        scheme = self.env['tint.schema'].create({'name': 'Esquema Madera'})
+        line = self.env['lines.product'].create({'name': 'Línea Barniz', 'scheme': scheme.id})
+        tag = self.env['product.tag'].create({'name': 'Secado Rápido'})
+
+        program = self._create_program([
+            {'discount': 10.0, 'discount_applicability': 'specific', 'lines_product_id': line.id},
+            {'discount': 15.0, 'discount_applicability': 'specific', 'scheme_id': scheme.id},
+            {'discount': 20.0, 'discount_applicability': 'specific', 'discount_product_ids': [Command.set(self.product_plain.ids)]},
+            {'discount': 25.0, 'discount_applicability': 'specific', 'discount_product_tag_id': tag.id},
+            {'discount': 5.0, 'discount_applicability': 'order'},
+        ])
+        r_line = program.reward_ids.filtered(lambda r: r.discount == 10.0)
+        r_scheme = program.reward_ids.filtered(lambda r: r.discount == 15.0)
+        r_prod = program.reward_ids.filtered(lambda r: r.discount == 20.0)
+        r_tag = program.reward_ids.filtered(lambda r: r.discount == 25.0)
+        r_order = program.reward_ids.filtered(lambda r: r.discount == 5.0)
+
+        self.assertEqual(r_line._get_reward_target_label(), f"Línea: {line.name}")
+        self.assertEqual(r_scheme._get_reward_target_label(), f"Esquema: {scheme.name}")
+        self.assertEqual(r_prod._get_reward_target_label(), f"Producto: {self.product_plain.name}")
+        self.assertEqual(r_tag._get_reward_target_label(), f"Etiqueta: {tag.name}")
+        self.assertEqual(r_order._get_reward_target_label(), "")
+
+    def test_program_multiple_rewards_target_in_promo_hint(self):
+        scheme_a = self.env['tint.schema'].create({'name': 'Arquitectónico'})
+        scheme_b = self.env['tint.schema'].create({'name': 'Automotriz'})
+        line_a = self.env['lines.product'].create({'name': 'Vinílica', 'scheme': scheme_a.id})
+        line_b = self.env['lines.product'].create({'name': 'Poliuretano', 'scheme': scheme_b.id})
+
+        product_a = self._create_product('Cubeta Vinílica', 100.0, lines_product_id=line_a.id)
+        product_b = self._create_product('Galón Poliuretano', 200.0, lines_product_id=line_b.id)
+
+        program = self._create_program([
+            {'discount': 10.0, 'discount_applicability': 'specific', 'lines_product_id': line_a.id},
+            {'discount': 15.0, 'discount_applicability': 'specific', 'scheme_id': scheme_b.id},
+            {'discount': 7.0, 'discount_applicability': 'order'},
+        ], name='Buen Fin')
+        r_line = program.reward_ids.filtered(lambda r: r.discount == 10.0)
+        r_scheme = program.reward_ids.filtered(lambda r: r.discount == 15.0)
+        r_order = program.reward_ids.filtered(lambda r: r.discount == 7.0)
+
+        order = self._create_order()
+        line_ord_a = self._create_line(order, product_a)
+        line_ord_b = self._create_line(order, product_b)
+
+        info_a = line_ord_a.promo_available_info
+        options_a = {opt['reward_id']: opt for opt in info_a['options']}
+
+        # En la línea A, elegible para Línea Vinílica y para el pedido global, pero no para Esquema Automotriz
+        self.assertIn(r_line.id, options_a)
+        self.assertIn(r_order.id, options_a)
+        self.assertNotIn(r_scheme.id, options_a)
+
+        self.assertEqual(options_a[r_line.id]['target'], f"Línea: {line_a.name}")
+        self.assertEqual(options_a[r_line.id]['name'], 'Buen Fin')
+        self.assertEqual(options_a[r_order.id]['target'], '')
+        self.assertEqual(options_a[r_order.id]['scope'], 'order')
+
+        # En la línea B, elegible para Esquema Automotriz y para el pedido global, pero no para Línea Vinílica
+        info_b = line_ord_b.promo_available_info
+        options_b = {opt['reward_id']: opt for opt in info_b['options']}
+        self.assertIn(r_scheme.id, options_b)
+        self.assertIn(r_order.id, options_b)
+        self.assertNotIn(r_line.id, options_b)
+
+        self.assertEqual(options_b[r_scheme.id]['target'], f"Esquema: {scheme_b.name}")
+        self.assertEqual(options_b[r_scheme.id]['name'], 'Buen Fin')
 
 
 @tagged('post_install', '-at_install')

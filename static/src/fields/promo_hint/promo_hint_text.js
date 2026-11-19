@@ -3,7 +3,7 @@
  * aplicada marcada y, si la línea está en promoción, «Sin promoción» con el acuerdo al que vuelve.
  * Sin dependencias de Odoo: `translate` y `formatAmount` llegan como parámetros.
  *
- * @param {{options: {reward_id: number, name: string, discount: number, difference: number,
+ * @param {{options: {reward_id: number, name: string, target?: string, discount: number, difference: number,
  *          applied: boolean, scope: 'order'|'specific'}[],
  *          fallback: {label: string, difference: number, scope: 'order'|'specific'}|false,
  *          from_package?: boolean}|false} info  `from_package`: producto de un combo que solo
@@ -28,15 +28,18 @@ export function promoHintLines(info, translate, formatAmount) {
     };
     // La promoción de pedido se aplica a todas las líneas, no solo a esta.
     const scopeLabel = (option) => (option.scope === "order" ? ` ${translate("(todo el pedido)")}` : "");
-    const rows = (info.options || []).map((option) => ({
-        key: `reward-${option.reward_id}`,
-        text: `${option.name} - ${option.discount} %${scopeLabel(option)}`,
-        detail: option.applied
-            ? (info.from_package ? translate("aplicada en el paquete") : translate("aplicada"))
-            : describe(option.difference),
-        rewardId: option.reward_id,
-        applied: option.applied,
-    }));
+    const rows = (info.options || []).map((option) => {
+        const targetPart = option.target ? ` · ${option.target}` : "";
+        return {
+            key: `reward-${option.reward_id}`,
+            text: `${option.name}${targetPart} - ${option.discount} %${scopeLabel(option)}`,
+            detail: option.applied
+                ? (info.from_package ? translate("aplicada en el paquete") : translate("aplicada"))
+                : describe(option.difference),
+            rewardId: option.reward_id,
+            applied: option.applied,
+        };
+    });
     if (info.fallback) {
         rows.push({
             key: "fallback",
