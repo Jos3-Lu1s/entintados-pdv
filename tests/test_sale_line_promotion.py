@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from lxml import etree
+from unittest.mock import patch
 
 from odoo import Command
 from odoo.exceptions import UserError, ValidationError
@@ -592,6 +593,101 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse((order.message_ids - messages).filtered(
             lambda message: 'dejó la promoción' in (message.body or '')
         ))
+
+    def test_notices_separate_per_line_in_chatter_and_toasts(self):
+        program = self._create_program([{'discount': 20.0}])
+        reward = program.reward_ids
+        order = self._create_order()
+        prod1 = self._create_product('Producto Notif 1', 100.0)
+        prod2 = self._create_product('Producto Notif 2', 200.0)
+        self._create_rule(prod1, discount=10.0)
+        self._create_rule(prod2, discount=15.0)
+        l1 = self._create_line(order, prod1, qty=1.0)
+        l2 = self._create_line(order, prod2, qty=1.0)
+        l1._apply_line_promotion(reward)
+        l2._apply_line_promotion(reward)
+        self.assertEqual(l1.promo_reward_id, reward)
+        self.assertEqual(l2.promo_reward_id, reward)
+
+        messages_before = order.message_ids
+        with patch.object(type(self.env.user), '_bus_send') as mock_bus:
+            reward.write({'active': False})
+            order._reevaluate_line_promotions()
+
+            new_messages = (order.message_ids - messages_before).filtered(
+                lambda m: 'dejó la promoción' in (m.body or '')
+            )
+            # Para 2 líneas (<= 5) se generan 2 mensajes independientes en el chatter
+            self.assertEqual(len(new_messages), 2)
+            msg1 = new_messages.filtered(lambda m: prod1.display_name in m.body)
+            msg2 = new_messages.filtered(lambda m: prod2.display_name in m.body)
+            self.assertEqual(len(msg1), 1)
+            self.assertEqual(len(msg2), 1)
+
+            # Notificaciones independientes por el bus con título personalizado
+            self.assertEqual(mock_bus.call_count, 2)
+            call_args_list = mock_bus.call_args_list
+            self.assertEqual(call_args_list[0][0][0], 'simple_notification')
+            self.assertEqual(call_args_list[1][0][0], 'simple_notification')
+            notif1 = call_args_list[0][0][1]
+            notif2 = call_args_list[1][0][1]
+            self.assertTrue(notif1.get('sticky'))
+            self.assertTrue(notif2.get('sticky'))
+            self.assertIn(prod1.display_name, notif1.get('title', ''))
+            self.assertIn(prod2.display_name, notif2.get('title', ''))
+
+    def test_notices_grouped_when_exceeding_threshold(self):
+        program = self._create_program([{'discount': 25.0}])
+        reward = program.reward_ids
+        order = self._create_order()
+        lines = self.env['sale.order.line']
+        for i in range(6):
+            p = self._create_product(f'Prod Grupo {i}', 100.0)
+            self._create_rule(p, discount=5.0)
+            l = self._create_line(order, p, qty=1.0)
+            l._apply_line_promotion(reward)
+            lines |= l
+        self.assertEqual(len(lines), 6)
+
+        messages_before = order.message_ids
+        with patch.object(type(self.env.user), '_bus_send') as mock_bus:
+            reward.write({'active': False})
+            order._reevaluate_line_promotions()
+
+            promo_messages = (order.message_ids - messages_before).filtered(
+                lambda m: 'Se actualizaron o retiraron promociones' in (m.body or '')
+            )
+            # Para más de 5 líneas se consolida en un único mensaje de chatter de promociones
+            self.assertEqual(len(promo_messages), 1)
+            body = promo_messages[0].body or ''
+            self.assertIn('6 líneas', body)
+            self.assertIn('<ul>', body)
+
+            # Un único toast consolidado
+            self.assertEqual(mock_bus.call_count, 1)
+            call_type, payload = mock_bus.call_args[0]
+            self.assertEqual(call_type, 'simple_notification')
+            self.assertIn('6 líneas', payload.get('message', ''))
+            self.assertIn(order.name, payload.get('title', ''))
+
+    def test_order_promo_loss_notifies_only_order(self):
+        order, (l1, l2, l3), order_reward, __, __ = self._order_promo_setup(minimum_amount=250.0)
+        l3.action_set_line_promotion(order_reward.id)
+        messages_before = order.message_ids
+        with patch.object(type(self.env.user), '_bus_send') as mock_bus:
+            order.write({'order_line': [Command.delete(l1.id)]})
+            new_messages = order.message_ids - messages_before
+            order_notices = new_messages.filtered(
+                lambda m: 'El pedido dejó la promoción' in (m.body or '')
+            )
+            line_notices = new_messages.filtered(
+                lambda m: 'La línea' in (m.body or '')
+            )
+            self.assertEqual(len(order_notices), 1)
+            self.assertEqual(len(line_notices), 0)
+            self.assertEqual(mock_bus.call_count, 1)
+            payload = mock_bus.call_args[0][1]
+            self.assertIn('Promoción de pedido retirada', payload.get('title', ''))
 
     def _native_reward_order(self):
         """Pedido con un precio fijo de 70 y un producto de 50 sin acuerdo."""
