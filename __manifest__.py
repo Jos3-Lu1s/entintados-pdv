@@ -176,6 +176,7 @@ Catálogo de entintado
         'security/ir.model.access.csv',
         # Catálogo de entintado: datos maestros físicos
         'data/uom_data.xml',
+        'data/payment_method_data.xml',
         'data/return_adjustment_product.xml',
         'data/tint_size_data.xml',
         'data/tint_base_type_data.xml',

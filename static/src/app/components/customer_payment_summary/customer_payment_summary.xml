@@ -92,6 +92,7 @@
                                     <div class="col-12 col-sm-6 col-xl-5">
                                         <label for="payment_invoice_usage" class="form-label text-secondary-emphasis fw-semibold mb-1">Uso de CFDI</label>
                                         <select id="payment_invoice_usage" class="form-select form-select-sm" t-on-change="changePaymentInvoiceUsage">
+                                            <option value="" t-att-selected="!paymentInvoiceUsage">Selecciona el uso de CFDI</option>
                                             <option t-foreach="pos.config._l10n_mx_edi_usage || []" t-as="usage" t-key="usage.value"
                                                     t-att-value="usage.value" t-att-selected="usage.value === paymentInvoiceUsage" t-esc="usage.name"/>
                                         </select>
@@ -103,7 +104,7 @@
                                             <option value="1" t-att-selected="!!currentOrder.l10n_mx_edi_cfdi_to_public">Sí</option>
                                         </select>
                                     </div>
-                                    <div class="col-6 col-sm-3 col-xl-4">
+                                    <div t-if="!isAdvanceReceipt" class="col-6 col-sm-3 col-xl-4">
                                         <label for="payment_invoice_count" class="form-label text-secondary-emphasis fw-semibold mb-1">Nº facturas</label>
                                         <input id="payment_invoice_count" type="number" min="1" step="1"
                                                class="form-control form-control-sm font-monospace" t-att-value="paymentInvoiceSplitCount"

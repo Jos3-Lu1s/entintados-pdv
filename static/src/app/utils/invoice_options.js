@@ -31,7 +31,7 @@ export function initializePaymentInvoice(order, isMexico) {
     }
     order.uiState.paymentInvoiceDefaultApplied = true;
     if (isMexico) {
-        order.l10n_mx_edi_usage ||= order.getPartner()?.l10n_mx_edi_usage || "G01";
+        order.l10n_mx_edi_usage = false;
         order.l10n_mx_edi_cfdi_to_public ??= false;
     }
 }
