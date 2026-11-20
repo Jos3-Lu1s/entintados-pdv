@@ -106,11 +106,37 @@ patch(PosOrderline.prototype, {
         if (isTintColorant(this)) {
             return false;
         }
+        if (this.fixed_price_locked && !this._entintadosSettingPrice) {
+            const notification =
+                this.models?.env?.services?.notification ||
+                this.env?.services?.notification ||
+                this.order_id?.pos?.notification;
+            if (notification) {
+                notification.add(
+                    _t("El precio está pactado por acuerdo comercial y no se puede modificar."),
+                    { type: "warning" }
+                );
+            }
+            return false;
+        }
         return super.setUnitPrice(unitPrice);
     },
 
     setDiscount(discount) {
         if (isTintColorant(this)) {
+            return false;
+        }
+        if (this.fixed_price_locked && !this._entintadosSettingDiscount) {
+            const notification =
+                this.models?.env?.services?.notification ||
+                this.env?.services?.notification ||
+                this.order_id?.pos?.notification;
+            if (notification) {
+                notification.add(
+                    _t("Los productos con precio fijo pactado no admiten descuento."),
+                    { type: "warning" }
+                );
+            }
             return false;
         }
         return super.setDiscount(discount);
@@ -211,6 +237,8 @@ patch(PosOrderline.prototype, {
         json.pricing_rule_type = this.pricing_rule_type || "none";
         json.pricing_rule_origin = this.pricing_rule_origin || "";
         json.pricing_rule_id = this.pricing_rule_id || false;
+        json.price_origin = this.price_origin || "list";
+        json.price_origin_label = this.price_origin_label || "";
         return json;
     },
 
@@ -221,6 +249,18 @@ patch(PosOrderline.prototype, {
         this.pricing_rule_type = json.pricing_rule_type || "none";
         this.pricing_rule_origin = json.pricing_rule_origin || "";
         this.pricing_rule_id = json.pricing_rule_id || false;
+        this.price_origin = json.price_origin || "list";
+        this.price_origin_label = json.price_origin_label || "";
+    },
+
+    serializeForORM() {
+        const values = super.serializeForORM ? super.serializeForORM(...arguments) : {};
+        values.pricing_rule_type = this.pricing_rule_type || "none";
+        values.pricing_rule_origin = this.pricing_rule_origin || "";
+        values.pricing_rule_id = this.pricing_rule_id || false;
+        values.price_origin = this.price_origin || "list";
+        values.price_origin_label = this.price_origin_label || "";
+        return values;
     },
 });
 

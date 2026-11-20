@@ -151,6 +151,10 @@ class SaleOrderLine(models.Model):
     tint_display_name = fields.Char(string='Entintado', compute='_compute_tint_display_name')
     tint_color_description = fields.Char(string='Color del entintado', compute='_compute_tint_display_name')
 
+    def action_add_tint(self):
+        order = self.order_id or self.env['sale.order'].browse(self.env.context.get('order_id'))
+        return order.action_add_tint()
+
     @api.depends('tint_snapshot', 'product_id', 'product_id.name', 'product_id.default_code')
     def _compute_tint_display_name(self):
         for line in self:

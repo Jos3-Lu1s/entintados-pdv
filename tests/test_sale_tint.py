@@ -240,13 +240,24 @@ class TestSaleTint(TransactionCase):
         self.assertEqual(len(order.order_line), 1)
         self.assertEqual(order.amount_untaxed, 448)
 
-    def test_button_stays_to_left_of_coupon(self):
+    def test_button_tint_in_order_line_controls(self):
         from lxml import etree
         arch = etree.fromstring(self.env['sale.order'].get_view(view_type='form')['arch'])
-        button = arch.xpath('//button[@name="action_add_tint"]')[0]
-        coupon_action = str(self.env.ref('sale_loyalty.sale_loyalty_coupon_wizard_action').id)
-        following = [sibling.get('name') for sibling in button.itersiblings()]
-        self.assertIn(coupon_action, following)
+        list_buttons = arch.xpath('//field[@name="order_line"]/list/control/button[@name="action_add_tint"]')
+        self.assertTrue(list_buttons)
+        preceding_list = [sibling.get('name') for sibling in list_buttons[0].itersiblings(preceding=True)]
+        self.assertIn('add_product_control', preceding_list)
+
+        kanban_buttons = arch.xpath('//field[@name="order_line"]/kanban/control/button[@name="action_add_tint"]')
+        self.assertTrue(kanban_buttons)
+        self.assertEqual(kanban_buttons[0].get('string'), 'Entintado')
+        preceding_kanban = [sibling.get('name') for sibling in kanban_buttons[0].itersiblings(preceding=True)]
+        self.assertIn('add_product_control', preceding_kanban)
+
+        order = self._order()
+        action = self.env['sale.order.line'].with_context(order_id=order.id).action_add_tint()
+        self.assertEqual(action.get('res_model'), 'sale.tint.wizard')
+        self.assertEqual(action.get('context', {}).get('default_order_id'), order.id)
 
     def test_report_has_only_color_without_recipe_or_automatic_sections(self):
         order = self._order()

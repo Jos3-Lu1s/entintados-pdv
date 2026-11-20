@@ -70,8 +70,11 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//page[@name='order_lines']/field[@name='order_line']" position="before">
-                <button name="action_add_tint" type="object" string="Agregar entintado" class="btn btn-secondary mb-2" invisible="state not in ['draft', 'sent'] or locked"/>
+            <xpath expr="//field[@name='order_line']/list/control/create[@name='add_product_control']" position="after">
+                <button name="action_add_tint" type="object" string="Agregar entintado" class="btn-link" context="{'order_id': parent.id}"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/kanban/control/create[@name='add_product_control']" position="after">
+                <button name="action_add_tint" type="object" string="Entintado" icon="fa-paint-brush" class="btn-secondary" context="{'order_id': parent.id}"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="tint_display_name" column_invisible="True"/>

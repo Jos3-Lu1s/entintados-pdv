@@ -9,6 +9,7 @@ from .loyalty_line_promotion import LINE_PROMOTION_PROGRAM_TYPES
 
 CREATE_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_create_quotation'
 CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_quotation'
+PROMOTION_NOTIFICATION_THRESHOLD = 5
 
 
 class SaleOrderLine(models.Model):
@@ -558,11 +559,16 @@ class SaleOrder(models.Model):
             if order_reward and order_reward not in order._get_order_promotion_rewards():
                 reason = order._get_order_promotion_loss_reason(order_reward)
                 order._remove_order_promotion()
-                notices.append(_(
-                    "El pedido dejó la promoción %(program)s: %(reason)s. Sus líneas volvieron a su acuerdo.",
-                    program=order_reward.program_id.name,
-                    reason=reason,
-                ))
+                notices.append({
+                    'title': _("Promoción de pedido retirada: %s", order.name),
+                    'message': _(
+                        "El pedido dejó la promoción %(program)s: %(reason)s. Sus líneas volvieron a su acuerdo.",
+                        program=order_reward.program_id.name,
+                        reason=reason,
+                    ),
+                    'line_id': False,
+                    'action_type': 'order_promo_loss',
+                })
             promo_lines = order.order_line.filtered('promo_reward_id')
             # Al volver al acuerdo, una línea puede dejar a otro programa debajo de su mínimo.
             while promo_lines:
@@ -574,25 +580,35 @@ class SaleOrder(models.Model):
                     reward = line.promo_reward_id
                     reason = order._get_line_promotion_loss_reason(line, reward)
                     line._drop_line_promotion()
-                    notices.append(_(
-                        "La línea %(product)s dejó la promoción %(program)s: %(reason)s. Volvió a %(origin)s.",
-                        product=line.product_id.display_name,
-                        program=reward.program_id.name,
-                        reason=reason,
-                        origin=line.pricing_rule_origin or _("sin descuento"),
-                    ))
+                    notices.append({
+                        'title': _("Promoción retirada: %s", line.product_id.display_name),
+                        'message': _(
+                            "La línea %(product)s dejó la promoción %(program)s: %(reason)s. Volvió a %(origin)s.",
+                            product=line.product_id.display_name,
+                            program=reward.program_id.name,
+                            reason=reason,
+                            origin=line.pricing_rule_origin or _("sin descuento"),
+                        ),
+                        'line_id': line.id,
+                        'action_type': 'loss',
+                    })
                 promo_lines -= lost_lines
             for line in promo_lines:
                 reward = line.promo_reward_id
                 values = line._line_promotion_values(reward)
                 discount_changed = float_compare(line.discount, reward.discount, precision_digits=digits)
                 if discount_changed:
-                    notices.append(_(
-                        "La línea %(product)s cambió su promoción %(program)s a %(discount)s %%.",
-                        product=line.product_id.display_name,
-                        program=reward.program_id.name,
-                        discount=reward.discount,
-                    ))
+                    notices.append({
+                        'title': _("Promoción actualizada: %s", line.product_id.display_name),
+                        'message': _(
+                            "La línea %(product)s cambió su promoción %(program)s a %(discount)s %%.",
+                            product=line.product_id.display_name,
+                            program=reward.program_id.name,
+                            discount=reward.discount,
+                        ),
+                        'line_id': line.id,
+                        'action_type': 'update',
+                    })
                 if discount_changed or line.pricing_rule_origin != values['pricing_rule_origin']:
                     line._promotion_writer().write(values)
             order._apply_order_promotion_to_lines()
@@ -604,17 +620,42 @@ class SaleOrder(models.Model):
             return _("ya no está vigente")
         return _("el pedido ya no cumple la condición")
 
+    def _normalize_promotion_notice(self, notice):
+        if isinstance(notice, dict):
+            return notice
+        return {
+            'title': _("Promociones de %s", self.name),
+            'message': str(notice),
+            'line_id': False,
+            'action_type': 'general',
+        }
+
     def _notify_promotion_changes(self, notices):
         self.ensure_one()
         if not notices:
             return
-        self.message_post(body=Markup('<br/>').join(notices))
-        self.env.user._bus_send('simple_notification', {
-            'type': 'warning',
-            'title': _("Promociones de %s", self.name),
-            'message': '\n'.join(notices),
-            'sticky': True,
-        })
+        normalized = [self._normalize_promotion_notice(n) for n in notices]
+        if len(normalized) <= PROMOTION_NOTIFICATION_THRESHOLD:
+            for item in normalized:
+                self.message_post(body=item['message'])
+                self.env.user._bus_send('simple_notification', {
+                    'type': 'warning',
+                    'title': item['title'],
+                    'message': item['message'],
+                    'sticky': True,
+                })
+        else:
+            body = Markup('<p>%s</p><ul>%s</ul>') % (
+                _("Se actualizaron o retiraron promociones en %(count)s líneas:", count=len(normalized)),
+                Markup('').join(Markup('<li>%s</li>') % n['message'] for n in normalized),
+            )
+            self.message_post(body=body)
+            self.env.user._bus_send('simple_notification', {
+                'type': 'warning',
+                'title': _("Promociones de %s", self.name),
+                'message': _("Se actualizaron o retiraron promociones en %s líneas del pedido.", len(normalized)),
+                'sticky': True,
+            })
 
     def _gift_reward_lines(self):
         return self.order_line.filtered(lambda line: line.reward_id.reward_type == 'product')
@@ -660,11 +701,16 @@ class SaleOrder(models.Model):
         gifts.with_context(force_price_recomputation=True)._compute_price_unit()
         remaining_rewards = gifts.reward_id
         self._notify_promotion_changes([
-            _(
-                "Se retiró el regalo %(product)s de la promoción %(program)s: ya no se cumple la condición.",
-                product=product.display_name,
-                program=reward.program_id.name,
-            )
+            {
+                'title': _("Regalo retirado: %s", product.display_name),
+                'message': _(
+                    "Se retiró el regalo %(product)s de la promoción %(program)s: ya no se cumple la condición.",
+                    product=product.display_name,
+                    program=reward.program_id.name,
+                ),
+                'line_id': False,
+                'action_type': 'gift_removal',
+            }
             for reward, products in gifts_before.items() if reward not in remaining_rewards
             for product in products
         ])

@@ -138,7 +138,8 @@ patch(PaymentScreen.prototype, {
     },
     get isCreditCustomer() {
         const partner = this.currentOrder.getPartner();
-        return Boolean(partner?.commercial_partner_id?.is_credit ?? partner?.is_credit);
+        const credit = partner?.pos_contact_info;
+        return Boolean(credit?.credit_authorized && Number(credit.credit_limit) > 0);
     },
     get appliedCustomerAdvance() {
         return -this.currentOrder.lines.filter((line) => line.advance_source_ref ||

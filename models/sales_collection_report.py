@@ -98,7 +98,7 @@ class SalesCollectionReportHandler(models.AbstractModel):
         values = {}
         for invoice in invoices:
             payment = self._last_payment_date(invoice, fields.Date.context_today(self))
-            if invoice.is_advance_invoice or not invoice.invoice_user_id or invoice.payment_state != 'paid' or not payment or payment > cutoff:
+            if (invoice.is_advance_invoice and not historical) or not invoice.invoice_user_id or invoice.payment_state != 'paid' or not payment or payment > cutoff:
                 continue
             subtotal = invoice.currency_id._convert(
                 invoice.amount_untaxed, currency, invoice.company_id, invoice.date, round=False,

@@ -15,9 +15,9 @@
  * @param {Object} product - Registro de product.product
  * @returns {Object} { type: 'fixed_price'|'discount'|'none', price: number|null, discount: number, rule: Object|null }
  */
-export function getPartnerPricingRule(pos, partner, product) {
+export function getPartnerPricingRule(pos, partner, product, options = {}) {
     if (!partner || !product) {
-        return { type: "none", originType: "none", originLabel: "", price: null, discount: 0, rule: null };
+        return { type: "none", originType: "none", priceOrigin: "list", originLabel: "", price: null, discount: 0, rule: null };
     }
     const partnerId = partner?.id ?? partner;
     const productId = product?.id ?? product;
@@ -64,11 +64,45 @@ export function getPartnerPricingRule(pos, partner, product) {
             (r.product_id?.id ?? r.product_id) === productId
     );
     if (fixedRule) {
+        let calculatedPrice = Number(fixedRule.fixed_price || 0);
+
+        // Conversión de UdM si la UdM de venta difiere de la UdM base del producto
+        const productUomId = product.uom_id?.id ?? product.uom_id;
+        const productUom =
+            productUomId && models?.["uom.uom"]
+                ? models["uom.uom"].get(productUomId)
+                : product.uom_id;
+        const targetUomId = options?.uom?.id ?? options?.uom_id?.id ?? options?.uom ?? options?.uom_id ?? productUomId;
+        const targetUom =
+            targetUomId && models?.["uom.uom"]
+                ? models["uom.uom"].get(targetUomId)
+                : options?.uom || options?.uom_id;
+
+        if (productUom && targetUom && (productUom.id ?? productUom) !== (targetUom.id ?? targetUom)) {
+            const pCat = productUom.category_id?.id ?? productUom.category_id;
+            const tCat = targetUom.category_id?.id ?? targetUom.category_id;
+            if (pCat && tCat && pCat === tCat && productUom.factor && targetUom.factor) {
+                calculatedPrice = (calculatedPrice * Number(productUom.factor)) / Number(targetUom.factor);
+            }
+        }
+
+        // Conversión de moneda si la divisa del pedido difiere de la moneda de la compañía
+        const targetCurrency = options?.currency || options?.currency_id || pos?.currency;
+        const companyCurrency = pos?.company?.currency_id || pos?.company_id?.currency_id;
+        if (targetCurrency && companyCurrency && (targetCurrency.id ?? targetCurrency) !== (companyCurrency.id ?? companyCurrency)) {
+            const fromCurr = typeof companyCurrency === "object" ? companyCurrency : models?.["res.currency"]?.get?.(companyCurrency);
+            const toCurr = typeof targetCurrency === "object" ? targetCurrency : models?.["res.currency"]?.get?.(targetCurrency);
+            if (fromCurr?.rate && toCurr?.rate && Number(fromCurr.rate) > 0) {
+                calculatedPrice = (calculatedPrice / Number(fromCurr.rate)) * Number(toCurr.rate);
+            }
+        }
+
         return {
             type: "fixed_price",
             originType: "fixed_price",
+            priceOrigin: "agreement",
             originLabel: "Precio Fijo",
-            price: Number(fixedRule.fixed_price || 0),
+            price: calculatedPrice,
             discount: 0,
             rule: fixedRule,
         };
@@ -86,6 +120,7 @@ export function getPartnerPricingRule(pos, partner, product) {
         return {
             type: "discount",
             originType: "product",
+            priceOrigin: "agreement",
             originLabel: `Desc. Producto (${disc.toFixed(1)}%)`,
             price: null,
             discount: disc,
@@ -107,6 +142,7 @@ export function getPartnerPricingRule(pos, partner, product) {
             return {
                 type: "discount",
                 originType: "line",
+                priceOrigin: "agreement",
                 originLabel: `Desc. Línea: ${resolvedLineName} (${disc.toFixed(1)}%)`.trim(),
                 price: null,
                 discount: disc,
@@ -129,6 +165,7 @@ export function getPartnerPricingRule(pos, partner, product) {
             return {
                 type: "discount",
                 originType: "scheme",
+                priceOrigin: "agreement",
                 originLabel: `Desc. Esquema: ${resolvedSchemeName} (${disc.toFixed(1)}%)`.trim(),
                 price: null,
                 discount: disc,
@@ -143,6 +180,7 @@ export function getPartnerPricingRule(pos, partner, product) {
         return {
             type: "discount",
             originType: "global",
+            priceOrigin: "agreement",
             originLabel: `Desc. Global Cliente (${globalDiscount.toFixed(1)}%)`,
             price: null,
             discount: globalDiscount,
@@ -150,5 +188,5 @@ export function getPartnerPricingRule(pos, partner, product) {
         };
     }
 
-    return { type: "none", originType: "none", originLabel: "", price: null, discount: 0, rule: null };
+    return { type: "none", originType: "none", priceOrigin: "list", originLabel: "", price: null, discount: 0, rule: null };
 }

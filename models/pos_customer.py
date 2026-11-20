@@ -32,6 +32,7 @@ class ResPartnerPosContactInfo(models.Model):
             partner.pos_contact_info = {
                 'reference': partner.ref or commercial.ref or '',
                 'credit_authorized': bool(credit.is_credit),
+                'credit_limit': credit.credit_limit,
                 'credit_limit_text': format_amount(self.env, credit.credit_limit, credit.risk_currency_id),
                 'credit_currency': credit.risk_currency_id.name,
                 'vat': partner.vat or commercial.vat or '',

@@ -94,9 +94,37 @@ class PosOrderLine(models.Model):
         copy=False,
         ondelete='set null',
     )
+    price_origin = fields.Selection(
+        selection=[
+            ('list', 'Precio de venta'),
+            ('pricelist', 'Tarifa'),
+            ('agreement', 'Acuerdo comercial'),
+            ('manual', 'Manual'),
+            ('promo', 'Promoción'),
+            ('combo', 'Combo'),
+            ('tint', 'Entintado'),
+        ],
+        string='Origen del precio',
+        default='list',
+        readonly=True,
+        copy=False,
+        help="Indica el mecanismo comercial que determinó el precio unitario de la partida.",
+    )
+    price_origin_label = fields.Char(
+        string='Detalle origen del precio',
+        readonly=True,
+        copy=False,
+    )
 
     @api.model
     def _load_pos_data_fields(self, config):
         params = super()._load_pos_data_fields(config)
-        params += ['pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id', 'tint_color_code']
+        params += [
+            'pricing_rule_type',
+            'pricing_rule_origin',
+            'pricing_rule_id',
+            'tint_color_code',
+            'price_origin',
+            'price_origin_label',
+        ]
         return params

@@ -114,6 +114,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/add_info_popup.xml",
         ],
         "web.assets_backend": [
+            "entintados_pdv/static/src/views/sale_order_controls.scss",
+            "entintados_pdv/static/src/views/branch_cash_cut_groups.js",
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.js",
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.xml",
             "entintados_pdv/static/src/reports/ppd_receivable_line_cell.xml",
@@ -176,6 +178,7 @@ Catálogo de entintado
         'security/ir.model.access.csv',
         # Catálogo de entintado: datos maestros físicos
         'data/uom_data.xml',
+        'data/payment_method_data.xml',
         'data/return_adjustment_product.xml',
         'data/tint_size_data.xml',
         'data/tint_base_type_data.xml',
@@ -264,6 +267,7 @@ Catálogo de entintado
         'views/pos_financing_views.xml',
         'views/pos_credit_approval_views.xml',
         'views/sale_credit_views.xml',
+        'views/loyalty_reward_views.xml',
         'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
         'report/report_picking_action.xml',

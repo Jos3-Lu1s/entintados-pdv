@@ -26,6 +26,17 @@ patch(PosStore.prototype, {
         return await super.addDownPaymentProductOrderlineToOrder(...arguments);
     },
     async addLineToCurrentOrder(values, options = {}, configure = true) {
+        const order = this.getOrder();
+        const incomingAdvance = !values.advance_source_ref && Number(values.price_unit ?? 0) >= 0 &&
+            (values.product_id?.id === this.config.down_payment_product_id?.id ||
+             values.product_tmpl_id?.is_accounting_advance);
+        const receivingAdvance = order?.lines.some((line) =>
+            line.isAdvanceLocked && !line.advance_source_ref && line.price_unit * line.qty > 0
+        );
+        if (receivingAdvance || (incomingAdvance && order?.lines.length)) {
+            this.notification.add(_t("La recepción de un anticipo debe contener únicamente el anticipo. Usa otra orden para agregar productos."), { type: "warning" });
+            return;
+        }
         const line = await super.addLineToCurrentOrder(...arguments);
         if (line && this.config.advance_risk_enabled &&
             values.product_id?.id === this.config.down_payment_product_id?.id) {

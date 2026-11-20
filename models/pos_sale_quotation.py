@@ -119,7 +119,8 @@ class PosOrderQuotation(models.Model):
         virtual = self.with_company(session.company_id).new(values)
         line_names = ['uuid', 'product_id', 'qty', 'price_unit', 'discount', 'price_subtotal',
                       'price_subtotal_incl', 'full_product_name', 'customer_note', 'tint_color_code',
-                      'sale_order_line_id', 'sale_order_origin_id', 'refunded_orderline_id', 'advance_source_ref']
+                      'sale_order_line_id', 'sale_order_origin_id', 'refunded_orderline_id', 'advance_source_ref',
+                      'price_origin', 'price_origin_label', 'pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id']
         lines = self.env['pos.order.line']
         parents = {}
         identifiers = {}
@@ -252,11 +253,16 @@ class PosOrderQuotation(models.Model):
                 description = (quotation._tint_base_description(snapshot) if snapshot
                                else '\n'.join(filter(None, [line.full_product_name or line.product_id.display_name,
                                                             line.customer_note])))
+                origin = line.price_origin or ('agreement' if line.pricing_rule_type and line.pricing_rule_type != 'none' else 'manual')
+                origin_label = line.price_origin_label or line.pricing_rule_origin or _('Precio conservado del Punto de Venta')
                 values = {'order_id': quotation.id, 'sequence': sequence * 10,
                           'product_id': line.product_id.id, 'product_uom_id': line.product_id.uom_id.id,
                           'product_uom_qty': line.qty, 'price_unit': line.price_unit,
                           'technical_price_unit': line.price_unit, 'discount': line.discount,
-                          'price_origin': 'manual', 'price_origin_label': _('Precio conservado del Punto de Venta'),
+                          'price_origin': origin, 'price_origin_label': origin_label,
+                          'pricing_rule_type': line.pricing_rule_type or 'none',
+                          'pricing_rule_origin': line.pricing_rule_origin or False,
+                          'pricing_rule_id': line.pricing_rule_id.id if line.pricing_rule_id else False,
                           'tax_ids': [Command.set(line.tax_ids_after_fiscal_position.ids)], 'name': description}
                 if snapshot:
                     values.update(tint_snapshot=snapshot, tint_container_qty=line.qty, price_origin='tint',

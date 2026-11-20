@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="loyalty_reward_view_form_inherit_entintados" model="ir.ui.view">
+        <field name="name">loyalty.reward.view.form.inherit.entintados</field>
+        <field name="model">loyalty.reward</field>
+        <field name="inherit_id" ref="loyalty.loyalty_reward_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='discount_product_ids']" position="before">
+                <field name="scheme_id" options="{'no_create': True}" invisible="discount_applicability == 'order'"/>
+                <field name="lines_product_id" options="{'no_create': True}" domain="[('scheme', '=', scheme_id)] if scheme_id else []" invisible="discount_applicability == 'order'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="loyalty_reward_view_kanban_inherit_entintados" model="ir.ui.view">
+        <field name="name">loyalty.reward.view.kanban.inherit.entintados</field>
+        <field name="model">loyalty.reward</field>
+        <field name="inherit_id" ref="loyalty.loyalty_reward_view_kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_has_debug']" position="after">
+                <field name="lines_product_id"/>
+                <field name="scheme_id"/>
+            </xpath>
+            <xpath expr="//t[contains(@t-if, 'specific')]" position="replace">
+                <t t-if="record.discount_applicability.raw_value === 'specific'">
+                    <t t-set="has_specific_target" t-value="record.lines_product_id.raw_value || record.scheme_id.raw_value || record.discount_product_ids.raw_value.length &gt; 0 || record.discount_product_category_id.raw_value || record.discount_product_tag_id.raw_value || (record.discount_product_domain.raw_value &amp;&amp; record.discount_product_domain.raw_value !== '[]' &amp;&amp; record.user_has_debug)"/>
+                    <div t-if="has_specific_target" class="fw-bold text-decoration-underline mt-3">Applied to:</div>
+
+                    <div t-if="record.lines_product_id.raw_value" class="d-flex">
+                        <i class="mt-1 fa fa-paint-brush fa-fw" title="Línea de producto"/> <span class="ms-1">Línea:</span><field name="lines_product_id" class="ms-1"/>
+                    </div>
+                    <div t-if="record.scheme_id.raw_value &amp;&amp; !record.lines_product_id.raw_value" class="d-flex">
+                        <i class="mt-1 fa fa-list-ul fa-fw" title="Esquema"/> <span class="ms-1">Esquema:</span><field name="scheme_id" class="ms-1"/>
+                    </div>
+                    <div t-if="record.discount_product_ids.raw_value.length &gt; 0" class="d-flex align-items-start">
+                        <i class="mt-1 fa fa-cube fa-fw flex-shrink-0" title="Products"/>
+                        <span class="ms-1 text-nowrap flex-shrink-0" t-if="record.discount_product_ids.raw_value.length === 1">Producto:</span>
+                        <span class="ms-1 text-nowrap flex-shrink-0" t-else="">Productos:</span>
+                        <field name="discount_product_ids" widget="many2many_tags" class="ms-1"/>
+                    </div>
+                    <div t-if="record.discount_product_category_id.raw_value" class="d-flex">
+                        <i class="mt-1 fa fa-cubes fa-fw" title="Product Categories"/> <span class="ms-1">Categoría:</span><field name="discount_product_category_id" class="ms-1"/>
+                    </div>
+                    <div t-if="record.discount_product_tag_id.raw_value" class="d-flex">
+                        <i class="mt-1 fa fa-tags fa-fw" title="Product Tags"/> <field name="discount_product_tag_id" class="ms-1"/>
+                    </div>
+                    <div t-if="!record.lines_product_id.raw_value &amp;&amp; !record.scheme_id.raw_value &amp;&amp; record.discount_product_domain.raw_value &amp;&amp; record.discount_product_domain.raw_value !== '[]'" groups="base.group_no_one" class="d-flex">
+                        <i class="mt-1 fa fa-search fa-fw" title="Product Domain"/> <field name="discount_product_domain" class="ms-1"/>
+                    </div>
+                </t>
+            </xpath>
+        </field>
+    </record>
+</odoo>

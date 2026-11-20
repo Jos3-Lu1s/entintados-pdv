@@ -18,15 +18,15 @@
                         <i class="fa fa-credit-card me-1" aria-hidden="true"/>Crédito
                     </span>
                     <span t-if="info.reference" class="badge rounded-pill bg-light text-secondary border font-monospace" title="Clave de cliente">
-                        <i class="fa fa-tag me-1 text-muted" aria-hidden="true"/>Clave: <t t-esc="info.reference"/>
+                        <i class="fa fa-tag me-1 text-muted" aria-hidden="true"/><span class="o-contact-label me-1">Clave:</span> <t t-esc="info.reference"/>
                     </span>
                     <span t-if="info.vat" class="badge rounded-pill bg-light text-secondary border font-monospace" title="Registro Federal de Contribuyentes">
-                        <i class="fa fa-id-card-o me-1 text-muted" aria-hidden="true"/>RFC: <t t-esc="info.vat"/>
+                        <i class="fa fa-id-card-o me-1 text-muted" aria-hidden="true"/><span class="o-contact-label me-1">RFC:</span> <span style="color: #000;" t-esc="info.vat"/>
                     </span>
                 </div>
                 <div class="o-contact-salesperson badge bg-light text-secondary border fw-normal d-flex align-items-center gap-1 shadow-xs">
                     <i class="fa fa-user-circle-o text-muted" aria-hidden="true"/>
-                    <span class="text-muted">Vendedor:</span>
+                    <span class="o-contact-label me-1">Vendedor:</span>
                     <span class="text-dark fw-semibold" t-esc="info.salesperson || partner.sale_owner_name || 'Sin vendedor asignado'"/>
                 </div>
             </div>
@@ -36,10 +36,10 @@
                 <!-- Anticipo Disponible a Favor -->
                 <div t-if="partner.customer_advance_available !== undefined and partner.customer_advance_available !== null"
                      class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border"
-                     t-att-class="partner.customer_advance_available > 0 ? 'o-metric-advance-positive' : 'bg-light text-secondary'">
-                    <i class="fa fa-money" aria-hidden="true"/>
+                     t-att-class="partner.customer_advance_available > 0 ? 'o-metric-advance-positive' : 'bg-light text-dark'">
+                    <i class="fa fa-money" t-att-class="partner.customer_advance_available > 0 ? '' : 'text-secondary-emphasis'" aria-hidden="true"/>
                     <div class="small lh-1">
-                        <span class="text-muted me-1">Anticipo:</span>
+                        <span class="me-1 fw-semibold" t-att-class="partner.customer_advance_available > 0 ? '' : 'text-secondary-emphasis'">Anticipo:</span>
                         <span class="font-monospace fw-bold"
                               t-att-class="partner.customer_advance_available > 0 ? 'text-success' : 'text-dark'"
                               t-esc="env.utils.formatCurrency(partner.customer_advance_available)"/>
@@ -49,11 +49,11 @@
                 <!-- Deuda Actual / Saldo Vencido -->
                 <div t-if="partner.total_due !== undefined and partner.total_due !== null"
                      class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border"
-                     t-att-class="partner.total_due > 0 ? 'o-metric-debt-positive' : 'bg-light text-secondary'">
+                     t-att-class="partner.total_due > 0 ? 'o-metric-debt-positive' : 'bg-light text-dark'">
                     <i class="fa fa-exclamation-circle text-danger" t-if="partner.total_due > 0" aria-hidden="true"/>
                     <i class="fa fa-check-circle text-success" t-else="" aria-hidden="true"/>
                     <div class="small lh-1">
-                        <span class="text-muted me-1">Deuda:</span>
+                        <span class="me-1 fw-semibold" t-att-class="partner.total_due > 0 ? '' : 'text-secondary-emphasis'">Deuda:</span>
                         <span class="font-monospace fw-bold"
                               t-att-class="partner.total_due > 0 ? 'text-danger' : 'text-dark'"
                               t-esc="env.utils.formatCurrency(partner.total_due)"/>
@@ -61,14 +61,14 @@
                 </div>
 
                 <!-- Límite de Crédito -->
-                <div class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border bg-light text-secondary">
-                    <i class="fa fa-shield text-muted" aria-hidden="true"/>
+                <div class="o-metric-card d-flex align-items-center gap-1 gap-sm-2 px-2 py-1 rounded-2 border bg-light text-dark">
+                    <i class="fa fa-shield text-secondary-emphasis" aria-hidden="true"/>
                     <div class="small lh-1">
-                        <span class="text-muted me-1">Límite:</span>
+                        <span class="text-secondary-emphasis fw-semibold me-1">Límite:</span>
                         <span t-if="info.credit_authorized" class="font-monospace fw-semibold text-dark">
                             <t t-esc="info.credit_limit_text"/> <t t-esc="info.credit_currency"/>
                         </span>
-                        <span t-else="" class="text-muted fst-italic">Sin crédito autorizado</span>
+                        <span t-else="" class="text-secondary-emphasis fst-italic">Sin crédito autorizado</span>
                     </div>
                 </div>
             </div>
@@ -84,31 +84,31 @@
                         <div t-if="info.fiscal_regime or info.address" class="col-12">
                             <div class="p-2 bg-white rounded-2 border small">
                                 <div t-if="info.fiscal_regime" class="mb-1">
-                                    <span class="text-secondary fw-semibold">Régimen fiscal:</span>
+                                    <span class="o-contact-label font-monospace fw-bold me-1">Régimen fiscal:</span>
                                     <span class="text-dark ms-1" t-esc="info.fiscal_regime"/>
                                 </div>
                                 <div t-if="info.address">
-                                    <span class="text-secondary fw-semibold">Dirección:</span>
+                                    <span class="o-contact-label font-monospace fw-bold me-1">Dirección:</span>
                                     <span class="text-dark ms-1" t-esc="info.address"/>
                                 </div>
                             </div>
                         </div>
                         <div t-if="info.invoice" class="col-12 col-md-6">
                             <div class="p-2 bg-white rounded-2 border h-100 small">
-                                <div class="fw-bold text-secondary d-flex align-items-center gap-1 mb-1">
-                                    <i class="fa fa-file-text-o text-muted" aria-hidden="true"/>Dirección de factura
+                                <div class="o-contact-label font-monospace fw-bold d-flex align-items-center gap-1 mb-1">
+                                    <i class="fa fa-file-text-o" aria-hidden="true"/>Dirección de factura:
                                 </div>
                                 <span class="d-block text-dark fw-semibold" t-esc="info.invoice.name"/>
-                                <span class="text-muted" t-esc="info.invoice.address || 'Sin dirección registrada'"/>
+                                <span class="text-secondary-emphasis" t-esc="info.invoice.address || 'Sin dirección registrada'"/>
                             </div>
                         </div>
                         <div t-if="info.delivery" class="col-12 col-md-6">
                             <div class="p-2 bg-white rounded-2 border h-100 small">
-                                <div class="fw-bold text-secondary d-flex align-items-center gap-1 mb-1">
-                                    <i class="fa fa-truck text-muted" aria-hidden="true"/>Dirección de entrega
+                                <div class="o-contact-label font-monospace fw-bold d-flex align-items-center gap-1 mb-1">
+                                    <i class="fa fa-truck" aria-hidden="true"/>Dirección de entrega:
                                 </div>
                                 <span class="d-block text-dark fw-semibold" t-esc="info.delivery.name"/>
-                                <span class="text-muted" t-esc="info.delivery.address || 'Sin dirección registrada'"/>
+                                <span class="text-secondary-emphasis" t-esc="info.delivery.address || 'Sin dirección registrada'"/>
                             </div>
                         </div>
                     </div>

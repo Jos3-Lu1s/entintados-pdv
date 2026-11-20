@@ -22,7 +22,9 @@ function hasFixedBank(method) {
 
 patch(PaymentScreen.prototype, {
     get terminalBankPaymentMethods() {
-        const methods = this.payment_methods_from_config;
+        const methods = this.payment_methods_from_config.filter((method) =>
+            method.type !== "pay_later" || (this.isCreditCustomer && !this.isCollectingCustomerAdvance)
+        );
         const genericKinds = new Set(methods.filter((method) => !hasFixedBank(method)).map(cardKind));
         return methods.filter((method) => !cardKind(method) || !hasFixedBank(method) ||
             !genericKinds.has(cardKind(method)));

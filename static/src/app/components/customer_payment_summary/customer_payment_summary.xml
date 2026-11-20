@@ -18,8 +18,8 @@
                 <t t-if="currentOrder.getPartner()">
                     <CustomerContactInfo partner="currentOrder.getPartner()"/>
                 </t>
-                <div t-else="" class="o-general-public-box d-flex align-items-center gap-2 p-1 px-2 rounded-2 bg-light border text-secondary small">
-                    <i class="fa fa-user-circle-o fs-5 text-muted" aria-hidden="true"/>
+                <div t-else="" class="o-general-public-box d-flex align-items-center gap-2 p-1 px-2 rounded-2 bg-light border text-dark small">
+                    <i class="fa fa-user-circle-o fs-5 text-secondary-emphasis" aria-hidden="true"/>
                     <div>
                         <strong class="text-dark">Público en general</strong>
                         <span class="text-muted d-block text-xxs">Venta al mostrador sin cliente registrado</span>
@@ -53,7 +53,7 @@
                                 <span class="fw-semibold text-dark font-monospace" t-esc="row.quantity"/>
                                 <small class="text-muted ms-1" t-esc="row.unit"/>
                             </td>
-                            <td class="text-end text-nowrap text-muted font-monospace" t-esc="env.utils.formatCurrency(row.unitPrice)"/>
+                            <td class="text-end text-nowrap text-secondary-emphasis font-monospace" t-esc="env.utils.formatCurrency(row.unitPrice)"/>
                             <td class="text-end text-nowrap">
                                 <span t-if="row.saving" class="badge rounded-pill bg-success-subtle text-success border border-success-subtle fw-semibold font-monospace"
                                       t-esc="'-' + env.utils.formatCurrency(row.saving)"/>
@@ -86,12 +86,13 @@
                                     <span class="small fw-bold text-dark text-uppercase d-flex align-items-center gap-1">
                                         <i class="fa fa-file-text-o text-primary" aria-hidden="true"/> Datos de facturación CFDI
                                     </span>
-                                    <span class="badge bg-light text-secondary border text-xxs">México</span>
+                                    <span class="badge bg-light text-dark border text-xxs">México</span>
                                 </div>
                                 <div class="row g-1 g-lg-2">
                                     <div class="col-12 col-sm-6 col-xl-5">
                                         <label for="payment_invoice_usage" class="form-label text-secondary-emphasis fw-semibold mb-1">Uso de CFDI</label>
                                         <select id="payment_invoice_usage" class="form-select form-select-sm" t-on-change="changePaymentInvoiceUsage">
+                                            <option value="" t-att-selected="!paymentInvoiceUsage">Selecciona el uso de CFDI</option>
                                             <option t-foreach="pos.config._l10n_mx_edi_usage || []" t-as="usage" t-key="usage.value"
                                                     t-att-value="usage.value" t-att-selected="usage.value === paymentInvoiceUsage" t-esc="usage.name"/>
                                         </select>
@@ -103,7 +104,7 @@
                                             <option value="1" t-att-selected="!!currentOrder.l10n_mx_edi_cfdi_to_public">Sí</option>
                                         </select>
                                     </div>
-                                    <div class="col-6 col-sm-3 col-xl-4">
+                                    <div t-if="!isAdvanceReceipt" class="col-6 col-sm-3 col-xl-4">
                                         <label for="payment_invoice_count" class="form-label text-secondary-emphasis fw-semibold mb-1">Nº facturas</label>
                                         <input id="payment_invoice_count" type="number" min="1" step="1"
                                                class="form-control form-control-sm font-monospace" t-att-value="paymentInvoiceSplitCount"

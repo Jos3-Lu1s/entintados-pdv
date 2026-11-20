@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <function model="l10n_mx_edi.payment.method" name="write"
+              eval="[[ref('l10n_mx_edi.payment_method_otros')], {'active': True}]"/>
+</odoo>

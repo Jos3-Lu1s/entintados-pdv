@@ -1,0 +1,14 @@
+/* Responsive controls for x2many subviews in sale orders */
+@media (max-width: 767.98px) {
+    .o_x2m_control_panel {
+        .o_cp_buttons {
+            flex-wrap: wrap !important;
+            gap: 0.25rem !important;
+
+            button {
+                font-size: 0.8125rem;
+                padding: 0.25rem 0.5rem;
+            }
+        }
+    }
+}

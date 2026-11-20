@@ -99,8 +99,8 @@
                                             <th class="text-end">Facturas</th>
                                         </t>
                                         <th class="text-end">Total</th>
-                                        <th class="text-end">Saldo disponible</th>
                                         <th class="text-end">Saldo utilizado</th>
+                                        <th class="text-end">Saldo disponible</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -114,18 +114,19 @@
                                                     <td class="text-nowrap"><span t-field="invoice.name"/></td>
                                                     <td class="text-nowrap"><span t-field="invoice.invoice_date"/></td>
                                                     <td class="text-end text-nowrap"><span t-field="invoice.amount_total"/></td>
-                                                    <td class="text-end text-nowrap"><span t-field="invoice.advance_available"/></td>
                                                     <td class="text-end text-nowrap"><span t-field="invoice.advance_applied"/></td>
+                                                    <td class="text-end text-nowrap"><span t-field="invoice.advance_available"/></td>
                                                 </tr>
                                                 <t t-set="used_amounts" t-value="invoice._advance_used_amounts_by_invoice()"/>
                                                 <tr t-foreach="invoice.advance_used_invoice_ids" t-as="related" class="o_advance_application">
                                                     <td>Aplicado en <span class="o_advance_application_tag" t-field="related.name"/></td>
                                                     <td class="text-nowrap"><span t-field="related.invoice_date"/></td>
-                                                    <td colspan="2"/>
+                                                    <td/>
                                                     <td class="text-end text-nowrap">
                                                         <span t-out="used_amounts.get(related.id, 0.0)"
                                                               t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                                     </td>
+                                                    <td/>
                                                 </tr>
                                             </t>
                                         </t>
