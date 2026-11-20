@@ -1204,3 +1204,13 @@ $tint-breakpoint-lg: 1199.98px;
         width: 100%;
     }
 }
+
+/* ==========================================================================
+   Estado deshabilitado en botones de Numpad
+   ========================================================================== */
+.numpad .numpad-button:disabled,
+.numpad .numpad-button.disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    filter: grayscale(0.6);
+}

@@ -271,12 +271,17 @@ export async function addTintedBaseToOrder(
                 }
             });
         }
-        if (typeof parent.setUnitPrice === "function") {
-            parent.setUnitPrice(finalUnitPrice);
-        } else if (typeof parent.set_unit_price === "function") {
-            parent.set_unit_price(finalUnitPrice);
-        } else {
-            parent.price_unit = finalUnitPrice;
+        parent._entintadosSettingPrice = true;
+        try {
+            if (typeof parent.setUnitPrice === "function") {
+                parent.setUnitPrice(finalUnitPrice);
+            } else if (typeof parent.set_unit_price === "function") {
+                parent.set_unit_price(finalUnitPrice);
+            } else {
+                parent.price_unit = finalUnitPrice;
+            }
+        } finally {
+            delete parent._entintadosSettingPrice;
         }
         parent.price_type = "manual";
         parent.manual_price = true;

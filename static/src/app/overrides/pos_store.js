@@ -21,6 +21,14 @@ patch(PosStore.prototype, {
         return result;
     },
 
+    get canEditUnitPrice() {
+        return Boolean(this.config?.user_can_edit_price ?? true);
+    },
+
+    get canEditDiscount() {
+        return Boolean(this.config?.user_can_edit_discount ?? true);
+    },
+
     async addLineToCurrentOrder(...args) {
         const line = await super.addLineToCurrentOrder(...args);
         const order = this.getOrder?.() || this.currentOrder;
