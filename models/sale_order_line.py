@@ -1288,6 +1288,7 @@ class SaleOrderLine(models.Model):
             return {
                 'reward_id': reward.id,
                 'name': reward.program_id.name,
+                'target': reward._get_reward_target_label(),
                 'discount': reward.discount,
                 'difference': difference,
                 'applied': applied,

@@ -96,7 +96,7 @@
                         <div t-if="info.invoice" class="col-12 col-md-6">
                             <div class="p-2 bg-white rounded-2 border h-100 small">
                                 <div class="fw-bold text-secondary d-flex align-items-center gap-1 mb-1">
-                                    <i class="fa fa-file-text-o text-muted" aria-hidden="true"/>Dirección de factura
+                                    <i class="fa fa-file-text-o text-secondary" aria-hidden="true"/>Dirección de factura
                                 </div>
                                 <span class="d-block text-dark fw-semibold" t-esc="info.invoice.name"/>
                                 <span class="text-muted" t-esc="info.invoice.address || 'Sin dirección registrada'"/>
@@ -105,7 +105,7 @@
                         <div t-if="info.delivery" class="col-12 col-md-6">
                             <div class="p-2 bg-white rounded-2 border h-100 small">
                                 <div class="fw-bold text-secondary d-flex align-items-center gap-1 mb-1">
-                                    <i class="fa fa-truck text-muted" aria-hidden="true"/>Dirección de entrega
+                                    <i class="fa fa-truck text-secondary" aria-hidden="true"/>Dirección de entrega
                                 </div>
                                 <span class="d-block text-dark fw-semibold" t-esc="info.delivery.name"/>
                                 <span class="text-muted" t-esc="info.delivery.address || 'Sin dirección registrada'"/>

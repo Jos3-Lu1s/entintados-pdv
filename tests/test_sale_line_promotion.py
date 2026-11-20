@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from lxml import etree
+from unittest.mock import patch
 
 from odoo import Command
 from odoo.exceptions import UserError, ValidationError
@@ -593,6 +594,101 @@ class TestSaleLinePromotion(TransactionCase):
             lambda message: 'dejó la promoción' in (message.body or '')
         ))
 
+    def test_notices_separate_per_line_in_chatter_and_toasts(self):
+        program = self._create_program([{'discount': 20.0}])
+        reward = program.reward_ids
+        order = self._create_order()
+        prod1 = self._create_product('Producto Notif 1', 100.0)
+        prod2 = self._create_product('Producto Notif 2', 200.0)
+        self._create_rule(prod1, discount=10.0)
+        self._create_rule(prod2, discount=15.0)
+        l1 = self._create_line(order, prod1, qty=1.0)
+        l2 = self._create_line(order, prod2, qty=1.0)
+        l1._apply_line_promotion(reward)
+        l2._apply_line_promotion(reward)
+        self.assertEqual(l1.promo_reward_id, reward)
+        self.assertEqual(l2.promo_reward_id, reward)
+
+        messages_before = order.message_ids
+        with patch.object(type(self.env.user), '_bus_send') as mock_bus:
+            reward.write({'active': False})
+            order._reevaluate_line_promotions()
+
+            new_messages = (order.message_ids - messages_before).filtered(
+                lambda m: 'dejó la promoción' in (m.body or '')
+            )
+            # Para 2 líneas (<= 5) se generan 2 mensajes independientes en el chatter
+            self.assertEqual(len(new_messages), 2)
+            msg1 = new_messages.filtered(lambda m: prod1.display_name in m.body)
+            msg2 = new_messages.filtered(lambda m: prod2.display_name in m.body)
+            self.assertEqual(len(msg1), 1)
+            self.assertEqual(len(msg2), 1)
+
+            # Notificaciones independientes por el bus con título personalizado
+            self.assertEqual(mock_bus.call_count, 2)
+            call_args_list = mock_bus.call_args_list
+            self.assertEqual(call_args_list[0][0][0], 'simple_notification')
+            self.assertEqual(call_args_list[1][0][0], 'simple_notification')
+            notif1 = call_args_list[0][0][1]
+            notif2 = call_args_list[1][0][1]
+            self.assertTrue(notif1.get('sticky'))
+            self.assertTrue(notif2.get('sticky'))
+            self.assertIn(prod1.display_name, notif1.get('title', ''))
+            self.assertIn(prod2.display_name, notif2.get('title', ''))
+
+    def test_notices_grouped_when_exceeding_threshold(self):
+        program = self._create_program([{'discount': 25.0}])
+        reward = program.reward_ids
+        order = self._create_order()
+        lines = self.env['sale.order.line']
+        for i in range(6):
+            p = self._create_product(f'Prod Grupo {i}', 100.0)
+            self._create_rule(p, discount=5.0)
+            l = self._create_line(order, p, qty=1.0)
+            l._apply_line_promotion(reward)
+            lines |= l
+        self.assertEqual(len(lines), 6)
+
+        messages_before = order.message_ids
+        with patch.object(type(self.env.user), '_bus_send') as mock_bus:
+            reward.write({'active': False})
+            order._reevaluate_line_promotions()
+
+            promo_messages = (order.message_ids - messages_before).filtered(
+                lambda m: 'Se actualizaron o retiraron promociones' in (m.body or '')
+            )
+            # Para más de 5 líneas se consolida en un único mensaje de chatter de promociones
+            self.assertEqual(len(promo_messages), 1)
+            body = promo_messages[0].body or ''
+            self.assertIn('6 líneas', body)
+            self.assertIn('<ul>', body)
+
+            # Un único toast consolidado
+            self.assertEqual(mock_bus.call_count, 1)
+            call_type, payload = mock_bus.call_args[0]
+            self.assertEqual(call_type, 'simple_notification')
+            self.assertIn('6 líneas', payload.get('message', ''))
+            self.assertIn(order.name, payload.get('title', ''))
+
+    def test_order_promo_loss_notifies_only_order(self):
+        order, (l1, l2, l3), order_reward, __, __ = self._order_promo_setup(minimum_amount=250.0)
+        l3.action_set_line_promotion(order_reward.id)
+        messages_before = order.message_ids
+        with patch.object(type(self.env.user), '_bus_send') as mock_bus:
+            order.write({'order_line': [Command.delete(l1.id)]})
+            new_messages = order.message_ids - messages_before
+            order_notices = new_messages.filtered(
+                lambda m: 'El pedido dejó la promoción' in (m.body or '')
+            )
+            line_notices = new_messages.filtered(
+                lambda m: 'La línea' in (m.body or '')
+            )
+            self.assertEqual(len(order_notices), 1)
+            self.assertEqual(len(line_notices), 0)
+            self.assertEqual(mock_bus.call_count, 1)
+            payload = mock_bus.call_args[0][1]
+            self.assertIn('Promoción de pedido retirada', payload.get('title', ''))
+
     def _native_reward_order(self):
         """Pedido con un precio fijo de 70 y un producto de 50 sin acuerdo."""
         fixed_product = self._create_product('Precio Fijo Nativo', 80.0)
@@ -903,8 +999,8 @@ class TestSaleLinePromotion(TransactionCase):
         line = self._create_line(order, qty=3.0)
         self.assertEqual(line.promo_available_info, {
             'options': [
-                {'reward_id': twenty.id, 'name': 'Promo TK', 'discount': 20.0, 'difference': 30.0, 'applied': False, 'scope': 'order'},
-                {'reward_id': five.id, 'name': 'Promo TK', 'discount': 5.0, 'difference': -15.0, 'applied': False, 'scope': 'order'},
+                {'reward_id': twenty.id, 'name': 'Promo TK', 'target': '', 'discount': 20.0, 'difference': 30.0, 'applied': False, 'scope': 'order'},
+                {'reward_id': five.id, 'name': 'Promo TK', 'target': '', 'discount': 5.0, 'difference': -15.0, 'applied': False, 'scope': 'order'},
             ],
             'fallback': False,
         })
@@ -921,8 +1017,8 @@ class TestSaleLinePromotion(TransactionCase):
         line._apply_line_promotion(twenty)
         self.assertEqual(line.promo_available_info, {
             'options': [
-                {'reward_id': twenty.id, 'name': 'Promo TK', 'discount': 20.0, 'difference': 0.0, 'applied': True, 'scope': 'order'},
-                {'reward_id': five.id, 'name': 'Promo TK', 'discount': 5.0, 'difference': -45.0, 'applied': False, 'scope': 'order'},
+                {'reward_id': twenty.id, 'name': 'Promo TK', 'target': '', 'discount': 20.0, 'difference': 0.0, 'applied': True, 'scope': 'order'},
+                {'reward_id': five.id, 'name': 'Promo TK', 'target': '', 'discount': 5.0, 'difference': -45.0, 'applied': False, 'scope': 'order'},
             ],
             'fallback': {'label': 'Producto · 10%', 'difference': -30.0, 'scope': 'specific'},
         })
@@ -1569,6 +1665,111 @@ class TestSaleLinePromotion(TransactionCase):
         self.assertFalse(copy.order_promo_reward_id)
         self.assertFalse(copy.order_line.promo_reward_id)
         self.assertEqual(sorted(copy.order_line.mapped('discount')), [0.0, 0.0, 15.0])
+
+    def test_reward_line_and_scheme_domain_sync(self):
+        scheme1 = self.env['tint.schema'].create({'name': 'Esquema Vinílico'})
+        scheme2 = self.env['tint.schema'].create({'name': 'Esquema Esmalte'})
+        line1 = self.env['lines.product'].create({'name': 'Línea Satinada', 'scheme': scheme1.id})
+
+        program = self._create_program([{
+            'discount': 10.0,
+            'discount_applicability': 'specific',
+            'lines_product_id': line1.id,
+        }])
+        reward = program.reward_ids[0]
+
+        # Sincronización automática de esquema y dominio al crear con línea
+        self.assertEqual(reward.scheme_id, scheme1)
+        self.assertEqual(reward.discount_product_domain, f"[('lines_product_id', 'in', [{line1.id}])]")
+
+        # Al cambiar de esquema, la línea que no pertenece a dicho esquema se desasocia y el dominio apunta al nuevo esquema
+        reward.write({'scheme_id': scheme2.id})
+        self.assertFalse(reward.lines_product_id)
+        self.assertEqual(reward.discount_product_domain, f"[('scheme_id', 'in', [{scheme2.id}])]")
+
+        # Al limpiar ambos, el dominio dependiente se limpia
+        reward.write({'lines_product_id': False, 'scheme_id': False})
+        self.assertFalse(reward.discount_product_domain)
+
+        # Interacción vía Formulario de recompensa
+        with Form(reward) as reward_form:
+            reward_form.lines_product_id = line1
+            self.assertEqual(reward_form.scheme_id, scheme1)
+        self.assertEqual(reward.discount_product_domain, f"[('lines_product_id', 'in', [{line1.id}])]")
+
+        with Form(reward) as reward_form:
+            reward_form.scheme_id = scheme2
+            self.assertFalse(reward_form.lines_product_id)
+        self.assertEqual(reward.discount_product_domain, f"[('scheme_id', 'in', [{scheme2.id}])]")
+
+    def test_reward_target_label_resolution(self):
+        scheme = self.env['tint.schema'].create({'name': 'Esquema Madera'})
+        line = self.env['lines.product'].create({'name': 'Línea Barniz', 'scheme': scheme.id})
+        tag = self.env['product.tag'].create({'name': 'Secado Rápido'})
+
+        program = self._create_program([
+            {'discount': 10.0, 'discount_applicability': 'specific', 'lines_product_id': line.id},
+            {'discount': 15.0, 'discount_applicability': 'specific', 'scheme_id': scheme.id},
+            {'discount': 20.0, 'discount_applicability': 'specific', 'discount_product_ids': [Command.set(self.product_plain.ids)]},
+            {'discount': 25.0, 'discount_applicability': 'specific', 'discount_product_tag_id': tag.id},
+            {'discount': 5.0, 'discount_applicability': 'order'},
+        ])
+        r_line = program.reward_ids.filtered(lambda r: r.discount == 10.0)
+        r_scheme = program.reward_ids.filtered(lambda r: r.discount == 15.0)
+        r_prod = program.reward_ids.filtered(lambda r: r.discount == 20.0)
+        r_tag = program.reward_ids.filtered(lambda r: r.discount == 25.0)
+        r_order = program.reward_ids.filtered(lambda r: r.discount == 5.0)
+
+        self.assertEqual(r_line._get_reward_target_label(), f"Línea: {line.name}")
+        self.assertEqual(r_scheme._get_reward_target_label(), f"Esquema: {scheme.name}")
+        self.assertEqual(r_prod._get_reward_target_label(), f"Producto: {self.product_plain.name}")
+        self.assertEqual(r_tag._get_reward_target_label(), f"Etiqueta: {tag.name}")
+        self.assertEqual(r_order._get_reward_target_label(), "")
+
+    def test_program_multiple_rewards_target_in_promo_hint(self):
+        scheme_a = self.env['tint.schema'].create({'name': 'Arquitectónico'})
+        scheme_b = self.env['tint.schema'].create({'name': 'Automotriz'})
+        line_a = self.env['lines.product'].create({'name': 'Vinílica', 'scheme': scheme_a.id})
+        line_b = self.env['lines.product'].create({'name': 'Poliuretano', 'scheme': scheme_b.id})
+
+        product_a = self._create_product('Cubeta Vinílica', 100.0, lines_product_id=line_a.id)
+        product_b = self._create_product('Galón Poliuretano', 200.0, lines_product_id=line_b.id)
+
+        program = self._create_program([
+            {'discount': 10.0, 'discount_applicability': 'specific', 'lines_product_id': line_a.id},
+            {'discount': 15.0, 'discount_applicability': 'specific', 'scheme_id': scheme_b.id},
+            {'discount': 7.0, 'discount_applicability': 'order'},
+        ], name='Buen Fin')
+        r_line = program.reward_ids.filtered(lambda r: r.discount == 10.0)
+        r_scheme = program.reward_ids.filtered(lambda r: r.discount == 15.0)
+        r_order = program.reward_ids.filtered(lambda r: r.discount == 7.0)
+
+        order = self._create_order()
+        line_ord_a = self._create_line(order, product_a)
+        line_ord_b = self._create_line(order, product_b)
+
+        info_a = line_ord_a.promo_available_info
+        options_a = {opt['reward_id']: opt for opt in info_a['options']}
+
+        # En la línea A, elegible para Línea Vinílica y para el pedido global, pero no para Esquema Automotriz
+        self.assertIn(r_line.id, options_a)
+        self.assertIn(r_order.id, options_a)
+        self.assertNotIn(r_scheme.id, options_a)
+
+        self.assertEqual(options_a[r_line.id]['target'], f"Línea: {line_a.name}")
+        self.assertEqual(options_a[r_line.id]['name'], 'Buen Fin')
+        self.assertEqual(options_a[r_order.id]['target'], '')
+        self.assertEqual(options_a[r_order.id]['scope'], 'order')
+
+        # En la línea B, elegible para Esquema Automotriz y para el pedido global, pero no para Línea Vinílica
+        info_b = line_ord_b.promo_available_info
+        options_b = {opt['reward_id']: opt for opt in info_b['options']}
+        self.assertIn(r_scheme.id, options_b)
+        self.assertIn(r_order.id, options_b)
+        self.assertNotIn(r_line.id, options_b)
+
+        self.assertEqual(options_b[r_scheme.id]['target'], f"Esquema: {scheme_b.name}")
+        self.assertEqual(options_b[r_scheme.id]['name'], 'Buen Fin')
 
 
 @tagged('post_install', '-at_install')
