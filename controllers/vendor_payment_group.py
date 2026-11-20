@@ -23,9 +23,12 @@ class VendorPaymentGroupReport(http.Controller):
 
     def _report_groups(self, selection):
         model = request.env['vendor.payment.group']
-        if selection in ('all', 'all-inbound', 'all-outbound'):
+        if selection in ('all', 'all-inbound', 'all-outbound', 'all-outbound-supplier', 'all-outbound-petty_cash'):
             direction = 'inbound' if selection == 'all-inbound' else 'outbound'
-            group = model.search([('payment_type', '=', direction)])
+            domain = [('payment_type', '=', direction)]
+            if selection.startswith('all-outbound-'):
+                domain.append(('grouping_mode', '=', selection.removeprefix('all-outbound-')))
+            group = model.search(domain)
         else:
             try:
                 ids = [int(value) for value in selection.split(',')]

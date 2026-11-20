@@ -1,0 +1,256 @@
+<odoo>
+    <record id="department_stock_control" model="hr.department">
+        <field name="name">Autorizaciones y revisión física de almacén</field>
+        <field name="company_id" eval="False"/>
+    </record>
+    <function model="res.company" name="_configure_stock_control_department"/>
+    <record id="osel_stock_settings" model="ir.ui.view">
+        <field name="name">res.config.settings.osel.operations</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='stock']" position="inside">
+                <block title="Autorizaciones y aclaraciones" name="osel_stock_controls">
+                    <setting string="Esta empresa recibe compras y surte sucursales" company_dependent="1"
+                             help="Activa esta marca en las empresas que representen a Principal o Veracruz. Las demás empresas serán sucursales solicitantes.">
+                        <field name="branch_supply_center"/>
+                    </setting>
+                    <setting string="Departamento de control de almacén" company_dependent="1"
+                             help="Los empleados vinculados a usuarios de este departamento autorizan traslados y revisan físicamente las recepciones.">
+                        <field name="stock_control_department_id" options="{'no_create': True}"
+                               domain="['|', ('company_id', '=', False), ('company_id', '=', company_id)]"/>
+                    </setting>
+                    <setting string="Plazo de aclaraciones" company_dependent="1"
+                             help="Días naturales desde la apertura. Cada movimiento puede tener su propio plazo. Cero indica vencimiento el mismo día.">
+                        <field name="stock_clarification_days"/>
+                    </setting>
+                    <setting string="Firma de autorización de traslado" company_dependent="1">
+                        <field name="stock_require_signature"/>
+                    </setting>
+                    <setting string="Evidencias de revisión física" company_dependent="1">
+                        <field name="stock_require_receipt_evidence"/>
+                    </setting>
+                    <setting string="Comparación de compras, recepciones y facturas" company_dependent="1"
+                             help="Las diferencias se muestran en los documentos. Puedes bloquear facturas que excedan las cantidades recibidas, según la unidad de medida del producto.">
+                        <field name="purchase_receipt_difference_policy"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_product_purchase_line" model="ir.ui.view">
+        <field name="name">product.template.purchase.line.catalog</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='purchase_ok']" position="after">
+                <label for="purchase_line_product" groups="purchase.group_purchase_user"
+                       invisible="not purchase_ok"/>
+                <field name="purchase_line_product" invisible="not purchase_ok" groups="purchase.group_purchase_user"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_sale_margin_settings" model="ir.ui.view">
+        <field name="name">res.config.settings.osel.sale.margin</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='sale_management']" position="inside">
+                <block title="Política de margen" name="osel_sale_margin_control">
+                    <setting string="Confirmación de ventas con margen mínimo" company_dependent="1"
+                             help="Al activar el control, un responsable de Ventas confirma las excepciones al margen mínimo. Los entintados conservan el control de su módulo.">
+                        <field name="sale_margin_control"/>
+                        <field name="sale_minimum_margin" widget="percentage" invisible="not sale_margin_control"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_purchase_form_controls" model="ir.ui.view">
+        <field name="name">purchase.order.osel.controls</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="branch_request_id" invisible="not branch_request_id"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="attributes">
+                <attribute name="domain">[('purchase_ok', '=', True), ('purchase_line_product', '=', True), '|', ('company_id', '=', False), ('company_id', '=', parent.company_id)]</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_picking_form_controls" model="ir.ui.view">
+        <field name="name">stock.picking.osel.controls</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="branch_direction" invisible="1"/>
+                <field name="transfer_authorization_state" widget="badge"
+                       invisible="picking_type_code != 'internal' and branch_direction != 'outbound'"
+                       decoration-success="transfer_authorization_state == 'approved'"
+                       decoration-warning="transfer_authorization_state == 'pending'"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page name="osel_stock_control" string="Control de almacén"
+                      invisible="picking_type_code != 'internal' and branch_direction != 'outbound' and not purchase_receipt">
+                    <field name="purchase_receipt" invisible="1"/>
+                    <field name="can_control_stock" invisible="1"/>
+                    <group invisible="picking_type_code != 'internal' and branch_direction != 'outbound'">
+                        <group string="Autorización de traslado">
+                            <field name="control_signature" widget="signature" readonly="state in ('done', 'cancel')"/>
+                            <field name="evidence_attachment_ids" widget="many2many_binary" readonly="state in ('done', 'cancel')"/>
+                            <button name="action_approve_internal_transfer" type="object" string="Autorizar traslado"
+                                    class="btn-primary" invisible="not can_control_stock or state in ('done', 'cancel')"/>
+                        </group>
+                        <group>
+                            <field name="transfer_approved_by"/>
+                            <field name="transfer_approved_at"/>
+                        </group>
+                    </group>
+                    <group string="Revisión física" invisible="not purchase_receipt">
+                        <group>
+                            <field name="physical_review_notes" readonly="state in ('done', 'cancel')"/>
+                            <field name="evidence_attachment_ids" widget="many2many_binary" readonly="state in ('done', 'cancel')"/>
+                            <button name="action_review_purchase_receipt" type="object" string="Registrar revisión física"
+                                    class="btn-primary" invisible="not can_control_stock or state in ('done', 'cancel')"/>
+                        </group>
+                        <group>
+                            <field name="physical_review_by"/>
+                            <field name="physical_review_at"/>
+                        </group>
+                    </group>
+                    <group string="Recolección" invisible="picking_type_code != 'internal' and branch_direction != 'outbound'">
+                        <field name="collected_by"/>
+                        <field name="collected_at"/>
+                        <button name="action_record_collection" type="object" string="Registrar recolección"
+                                invisible="state in ('done', 'cancel') or collected_at"/>
+                    </group>
+                    <field name="receipt_comparison" nolabel="1" invisible="not purchase_receipt"/>
+                </page>
+                <page name="osel_stock_clarification" string="Aclaraciones">
+                    <group>
+                        <group>
+                            <field name="clarification_state"/>
+                            <field name="clarification_days" readonly="clarification_state == 'open'"/>
+                            <field name="clarification_deadline"/>
+                            <field name="clarification_responsible_id"/>
+                        </group>
+                        <group>
+                            <field name="clarification_notes"/>
+                            <field name="clarification_resolution"/>
+                        </group>
+                    </group>
+                    <button name="action_open_clarification" type="object" string="Abrir aclaración"
+                            class="btn-primary" invisible="clarification_state == 'open'"/>
+                    <button name="action_close_clarification" type="object" string="Resolver aclaración"
+                            invisible="clarification_state != 'open' or not can_control_stock"/>
+                </page>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_branch_request" type="object" string="Solicitud SRO"
+                        icon="fa-link" class="oe_stat_button" invisible="not branch_request_id"/>
+                <field name="branch_request_id" invisible="1"/>
+                <field name="branch_source_picking_id" invisible="1"/>
+                <button name="action_view_branch_source" type="object" string="Salida de origen"
+                        icon="fa-exchange" class="oe_stat_button" invisible="not branch_source_picking_id"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_sale_contact_origin" model="ir.ui.view">
+        <field name="name">sale.order.osel.contact.origin</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='client_order_ref']" position="after">
+                <field name="contact_origin"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='tax_ids']" position="after">
+                <field name="availability_warehouse_id" optional="hide"/>
+                <field name="osel_cost_amount" optional="hide" groups="sales_team.group_sale_manager"/>
+                <field name="osel_margin_amount" optional="hide" groups="sales_team.group_sale_manager"/>
+                <field name="osel_margin_ratio" widget="percentage" optional="hide" groups="sales_team.group_sale_manager"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_invoice_purchase_comparison" model="ir.ui.view">
+        <field name="name">account.move.osel.purchase.comparison</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <field name="purchase_receipt_has_difference" invisible="1"/>
+                <div class="alert alert-warning" role="alert"
+                     invisible="move_type != 'in_invoice' or not purchase_receipt_has_difference">
+                    Las facturas vinculadas a esta compra superan las cantidades recibidas. Revisa Compra y recepción.
+                </div>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page name="osel_purchase_comparison" string="Compra y recepción"
+                      invisible="move_type != 'in_invoice' or not purchase_receipt_comparison">
+                    <field name="purchase_receipt_comparison" nolabel="1"/>
+                </page>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_stock_pending_search" model="ir.ui.view">
+        <field name="name">stock.picking.osel.pending.search</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <field name="branch_request_id" string="Solicitud SRO"/>
+                <filter name="osel_waiting_approval" string="Esperando aprobación de traslado"
+                        domain="[('state', 'not in', ['done', 'cancel']), ('transfer_authorization_state', '=', 'pending')]"/>
+                <filter name="osel_physical_review_pending" string="Revisión física pendiente"
+                        domain="[('picking_type_code', '=', 'incoming'), ('purchase_id', '!=', False), ('state', 'not in', ['done', 'cancel']), ('physical_review_by', '=', False)]"/>
+                <filter name="osel_clarifications" string="Aclaraciones abiertas"
+                        domain="[('clarification_state', '=', 'open')]"/>
+                <filter name="osel_overdue_clarifications" string="Aclaraciones vencidas"
+                        domain="[('clarification_state', '=', 'open'), ('clarification_deadline', '&lt;', context_today())]"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_purchase_requisition_search" model="ir.ui.view">
+        <field name="name">purchase.order.osel.requisition.search</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <field name="branch_request_id"/>
+                <filter name="osel_from_requisition" string="Desde requisición de sucursal"
+                        domain="[('branch_request_id', '!=', False)]"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="osel_company_branch_role" model="ir.ui.view">
+        <field name="name">res.company.osel.branch.role</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='general_info']" position="inside">
+                <group string="Operación de sucursal">
+                    <field name="branch_supply_center"/>
+                    <field name="branch_warehouse_id" domain="[('company_id', '=', id)]"
+                           context="{'default_company_id': id}" options="{'no_quick_create': True}"/>
+                    <field name="branch_requisition_allowed" readonly="1"/>
+                </group>
+            </xpath>
+            <xpath expr="//page[@name='branches']/field[@name='child_ids']" position="inside">
+                <list editable="bottom" open_form_view="1">
+                    <field name="sequence" widget="handle"/>
+                    <field name="id" column_invisible="True"/>
+                    <field name="name" string="Sucursal"/>
+                    <field name="branch_supply_center" string="Recibe compras y surte"/>
+                    <field name="branch_warehouse_id" domain="[('company_id', '=', id)]"
+                           context="{'default_company_id': id}" readonly="not id"
+                           options="{'no_quick_create': True}"/>
+                    <field name="branch_requisition_allowed" string="Solicita resurtido" readonly="1"/>
+                    <field name="stock_clarification_days" optional="hide"/>
+                    <field name="partner_id" readonly="1" optional="hide"/>
+                    <field name="child_ids" widget="many2many_tags" optional="hide"/>
+                </list>
+            </xpath>
+        </field>
+    </record>
+</odoo>

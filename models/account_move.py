@@ -3,9 +3,18 @@ import re
 from urllib.parse import parse_qs, urlsplit
 
 from odoo import models, api, fields, _
+from odoo.exceptions import ValidationError
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
+
+    is_distributor_invoice = fields.Boolean(string='Factura de distribuidor', copy=False, index=True)
+
+    @api.constrains('is_distributor_invoice', 'partner_id', 'move_type')
+    def _check_distributor_invoice_partner(self):
+        for move in self.filtered('is_distributor_invoice'):
+            if move.move_type != 'out_invoice' or not move.partner_id.commercial_partner_id.is_distributor:
+                raise ValidationError(_('Selecciona un distribuidor autorizado para esta factura.'))
 
     def _mat_invoice_line_values(self, line):
         """Display amounts excluding tax, using the same tax engine as accounting."""
@@ -144,6 +153,7 @@ class AccountMove(models.Model):
         return self._action_open_moves(notes, _('Notas de crédito'))
 
     def _post(self, soft=True):
+        self._check_distributor_invoice_partner()
         posted = super()._post(soft=soft)
         to_stamp = posted.filtered(
             lambda m: m.move_type == "out_invoice"

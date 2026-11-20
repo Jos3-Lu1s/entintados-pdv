@@ -135,6 +135,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/fields/opportunity_relations/approval_demo_relations.js",
             "entintados_pdv/static/src/fields/stock_availability/stock_availability_field.js",
             "entintados_pdv/static/src/fields/stock_availability/stock_availability_field.xml",
+            "entintados_pdv/static/src/fields/payment_group_invoices/payment_group_invoices.js",
+            "entintados_pdv/static/src/fields/payment_group_invoices/payment_group_invoices.xml",
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
@@ -221,6 +223,9 @@ Catálogo de entintado
         'report/sale_quotation.xml',
         'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
+        'views/branch_purchase_request_views.xml',
+        'views/osel_operation_controls_views.xml',
+        'report/branch_request_reports.xml',
         'views/product_supplierinfo_views.xml',
         'views/account_move_views.xml',
         'views/account_payment_register.xml',

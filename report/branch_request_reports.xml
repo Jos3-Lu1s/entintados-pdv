@@ -1,0 +1,80 @@
+<odoo>
+    <record id="action_report_branch_resurtido" model="ir.actions.report">
+        <field name="name">Solicitud de resurtido SRO</field>
+        <field name="model">branch.purchase.request</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.report_branch_resurtido</field>
+        <field name="print_report_name">'Solicitud - %s' % object.name</field>
+    </record>
+    <record id="action_report_branch_requisition" model="ir.actions.report">
+        <field name="name">Requisición de compra REQ</field>
+        <field name="model">branch.purchase.request</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">entintados_pdv.report_branch_requisition</field>
+        <field name="print_report_name">'Requisicion - %s' % object.requisition_ref</field>
+    </record>
+    <template id="report_branch_request_document">
+        <t t-call="web.external_layout">
+            <div class="page">
+                <h2><t t-if="is_requisition">Requisición de compra</t><t t-else="">Solicitud de resurtido</t></h2>
+                <h3 t-out="o.requisition_ref if is_requisition else o.name"/>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <p><strong>Solicita </strong><span t-field="o.company_id"/></p>
+                        <p><strong>Surte / recibe compra </strong><span t-field="o.source_company_id"/></p>
+                        <p><strong>Responsable </strong><span t-field="o.user_id"/></p>
+                    </div>
+                    <div class="col-6">
+                        <p><strong>Fecha prevista </strong><span t-field="o.expected_date"/></p>
+                        <p><strong>Estado </strong><span t-field="o.state"/></p>
+                        <p t-if="is_requisition"><strong>Solicitud origen </strong><span t-field="o.name"/></p>
+                        <p t-if="is_requisition"><strong>Compra </strong><span t-field="o.purchase_id"/></p>
+                    </div>
+                </div>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Producto</th><th>Unidad</th><th class="text-end">Solicitado</th>
+                            <th class="text-end">Finalizado</th><th class="text-end">Pendiente</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="o.line_ids" t-as="line">
+                            <td><span t-field="line.product_id"/></td>
+                            <td><span t-field="line.product_uom_id"/></td>
+                            <td class="text-end"><span t-field="line.quantity"/></td>
+                            <td class="text-end"><span t-field="line.quantity_done"/></td>
+                            <td class="text-end"><span t-field="line.quantity_pending"/></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <t t-if="is_requisition">
+                    <h4>Productos para compra</h4>
+                    <table class="table table-sm">
+                        <thead><tr><th>Producto</th><th>Cantidad a comprar</th><th>Unidad</th></tr></thead>
+                        <tbody>
+                            <tr t-foreach="o.purchase_id.order_line.filtered(lambda line: not line.display_type)" t-as="purchase_line">
+                                <td><span t-field="purchase_line.product_id"/></td>
+                                <td><span t-field="purchase_line.product_qty"/></td>
+                                <td><span t-field="purchase_line.product_uom_id"/></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </t>
+                <p t-if="o.closure_reason"><strong>Motivo de cierre </strong><span t-field="o.closure_reason"/></p>
+            </div>
+        </t>
+    </template>
+    <template id="report_branch_resurtido">
+        <t t-call="web.html_container">
+            <t t-set="is_requisition" t-value="False"/>
+            <t t-foreach="docs" t-as="o"><t t-call="entintados_pdv.report_branch_request_document"/></t>
+        </t>
+    </template>
+    <template id="report_branch_requisition">
+        <t t-call="web.html_container">
+            <t t-set="is_requisition" t-value="True"/>
+            <t t-foreach="docs" t-as="o"><t t-call="entintados_pdv.report_branch_request_document"/></t>
+        </t>
+    </template>
+</odoo>

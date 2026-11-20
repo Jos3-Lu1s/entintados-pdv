@@ -19,6 +19,18 @@
     <menuitem id="account_vendor_catalogs_section" name="Catálogos"
               parent="account.menu_finance_payables" sequence="100"/>
 
+    <record id="action_distributor_invoices" model="ir.actions.act_window">
+        <field name="name">Facturas a distribuidores</field>
+        <field name="res_model">account.move</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="account.view_out_invoice_tree"/>
+        <field name="domain">[('move_type', '=', 'out_invoice'), ('is_distributor_invoice', '=', True)]</field>
+        <field name="context">{'default_move_type': 'out_invoice', 'default_is_distributor_invoice': True}</field>
+    </record>
+    <menuitem id="menu_distributor_invoices" name="Facturas a distribuidores"
+              parent="account_customer_invoices_section" action="action_distributor_invoices"
+              sequence="15" groups="account.group_account_invoice"/>
+
     <record id="account.menu_action_move_out_invoice_type" model="ir.ui.menu">
         <field name="parent_id" ref="account_customer_invoices_section"/>
         <field name="sequence">10</field>
@@ -70,9 +82,12 @@
         <field name="parent_id" ref="account_vendor_invoices_section"/>
         <field name="sequence">20</field>
     </record>
-    <menuitem id="vendor_payment_group_menu" name="Pagos agrupados"
+    <menuitem id="vendor_payment_group_menu" name="Pagos agrupados caja chica"
               parent="account_vendor_invoices_section" action="vendor_payment_group_action"
               sequence="30" groups="account.group_account_invoice"/>
+    <menuitem id="vendor_supplier_payment_group_menu" name="Pagos agrupados"
+              parent="account_vendor_invoices_section" action="vendor_supplier_payment_group_action"
+              sequence="35" groups="account.group_account_invoice"/>
     <record id="account.menu_action_move_in_refund_type" model="ir.ui.menu">
         <field name="parent_id" ref="account_vendor_credits_section"/>
         <field name="sequence">10</field>
