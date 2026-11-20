@@ -240,16 +240,16 @@
                             <!-- Diagnóstico técnico colapsable en alerta compacta -->
                             <div t-if="panelState.showTechnicalDetails"
                                  class="o-tint-diagnostic-box p-2 mt-2 rounded border small">
-                                <div class="fw-bold mb-1 text-secondary">
+                                <div class="fw-bold mb-1 text-dark">
                                     Bases registradas en la caja (<t t-esc="loadedBases.length"/>):
                                 </div>
                                 <ul t-if="loadedBases.length" class="mb-0 ps-3">
                                     <li t-foreach="loadedBases" t-as="base" t-key="base.id">
                                         <span class="fw-semibold"><t t-esc="base.combo"/></span>
-                                        <span class="text-secondary"> — <t t-esc="base.name"/></span>
+                                        <span class="text-secondary-emphasis"> — <t t-esc="base.name"/></span>
                                     </li>
                                 </ul>
-                                <div t-else="" class="text-secondary fst-italic">
+                                <div t-else="" class="text-secondary-emphasis fst-italic">
                                     Ninguna. Los productos base no están llegando al POS: revisa «Disponible en PdV» y «Puede ser vendido» en su ficha.
                                 </div>
                             </div>
@@ -352,16 +352,16 @@
                             <div t-if="panelState.showTechnicalDetails"
                                  class="o-tint-diagnostic-box text-start p-2 mt-2 rounded border small w-100"
                                  style="max-width: 480px;">
-                                <div class="fw-bold mb-1 text-secondary">
+                                <div class="fw-bold mb-1 text-dark">
                                     Bases registradas en la caja (<t t-esc="loadedBases.length"/>):
                                 </div>
                                 <ul t-if="loadedBases.length" class="mb-0 ps-3">
                                     <li t-foreach="loadedBases" t-as="base" t-key="base.id">
                                         <span class="fw-semibold"><t t-esc="base.combo"/></span>
-                                        <span class="text-secondary"> — <t t-esc="base.name"/></span>
+                                        <span class="text-secondary-emphasis"> — <t t-esc="base.name"/></span>
                                     </li>
                                 </ul>
-                                <div t-else="" class="text-secondary fst-italic">
+                                <div t-else="" class="text-secondary-emphasis fst-italic">
                                     Ninguna. Los productos base no están llegando al POS: revisa «Disponible en PdV» y «Puede ser vendido» en su ficha.
                                 </div>
                             </div>
