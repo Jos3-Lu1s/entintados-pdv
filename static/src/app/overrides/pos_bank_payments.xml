@@ -7,7 +7,7 @@
         <xpath expr="//span[hasclass('payment-name')]" position="replace">
             <span class="payment-name">
                 <t t-esc="paymentMethod.name"/>
-                <small t-if="paymentMethod.collection_type === 'card' and (paymentMethod.card_bank_name or paymentMethod.terminal_label)" class="d-block text-muted">
+                <small t-if="paymentMethod.collection_type === 'card' and (paymentMethod.card_bank_name or paymentMethod.terminal_label)" class="d-block text-secondary-emphasis fw-semibold">
                     <t t-esc="paymentMethod.card_bank_name or paymentMethod.terminal_label"/>
                 </small>
             </span>
