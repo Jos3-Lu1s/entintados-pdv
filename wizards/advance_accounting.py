@@ -33,7 +33,7 @@ class CustomerAdvancePrint(models.TransientModel):
             ('move_type', '=', 'out_invoice'), ('is_advance_invoice', '=', True),
         ])
         invoices = self.env['account.move'].search(domain, order='partner_id, invoice_date desc, id desc')
-        fields_to_sum = ('amount_total', 'advance_available', 'advance_applied')
+        fields_to_sum = ('amount_total', 'advance_applied', 'advance_available')
         sections = []
         for currency, records in invoices.grouped('currency_id').items():
             sections.append({

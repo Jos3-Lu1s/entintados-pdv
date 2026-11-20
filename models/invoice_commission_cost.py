@@ -1,8 +1,15 @@
+import json
+from urllib.parse import urlencode
+
 from odoo import _, fields, models
 
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
+
+    def action_export_osel_commissions(self):
+        query = urlencode({'domain': json.dumps(self.env.context.get('active_domain') or [])})
+        return {'type': 'ir.actions.act_url', 'target': 'download', 'url': '/entintados_pdv/commissions/xlsx?' + query}
 
     commission_cost = fields.Monetary(
         string='Costo histórico para comisiones', currency_field='company_currency_id',
@@ -11,14 +18,14 @@ class AccountMove(models.Model):
     commission_cost_captured = fields.Boolean(readonly=True, copy=False)
     osel_commission_currency_id = fields.Many2one('res.currency', compute='_compute_osel_commission')
     osel_commission_margin = fields.Float(string='Margen', compute='_compute_osel_commission')
-    osel_commission_rate = fields.Float(string='Porcentaje de comisión', compute='_compute_osel_commission')
+    osel_commission_rate = fields.Float(string='% comisión', compute='_compute_osel_commission')
     osel_commission_amount = fields.Monetary(
         string='Comisión', compute='_compute_osel_commission', currency_field='osel_commission_currency_id',
     )
     osel_commission_available = fields.Boolean(compute='_compute_osel_commission')
     osel_payment_date = fields.Date(string='Fecha último pago', compute='_compute_osel_commission')
     osel_cost = fields.Monetary(string='Costo', compute='_compute_osel_commission', currency_field='osel_commission_currency_id')
-    osel_before_delay = fields.Monetary(string='Comisión antes de cobranza', compute='_compute_osel_commission', currency_field='osel_commission_currency_id')
+    osel_before_delay = fields.Monetary(string='Previo cobranza', compute='_compute_osel_commission', currency_field='osel_commission_currency_id')
     osel_credit_days = fields.Integer(string='Días de crédito', compute='_compute_osel_commission')
     osel_credit_days_label = fields.Char(string='Días de crédito', compute='_compute_osel_commission')
     osel_payment_days = fields.Integer(string='Días de cobro', compute='_compute_osel_commission')

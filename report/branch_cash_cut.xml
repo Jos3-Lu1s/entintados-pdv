@@ -1,16 +1,27 @@
 <odoo>
+    <record id="paperformat_branch_cash_cut_general" model="report.paperformat">
+        <field name="name">Corte de caja general</field>
+        <field name="format">A4</field>
+        <field name="margin_top">10</field>
+        <field name="margin_bottom">15</field>
+        <field name="margin_left">7</field>
+        <field name="margin_right">7</field>
+        <field name="header_spacing">0</field>
+    </record>
     <record id="action_branch_cash_cut_pdf" model="ir.actions.report">
         <field name="name">Corte de caja por sucursal</field>
         <field name="model">branch.cash.cut</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">entintados_pdv.branch_cash_cut_pdf</field>
         <field name="report_file">entintados_pdv.branch_cash_cut_pdf</field>
+        <field name="paperformat_id" ref="paperformat_branch_cash_cut_general"/>
     </record>
     <record id="action_branch_cash_cut_detail_pdf" model="ir.actions.report">
         <field name="name">Corte de caja detallado</field>
         <field name="model">branch.cash.cut</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">entintados_pdv.branch_cash_cut_detail_pdf</field>
+        <field name="paperformat_id" ref="paperformat_branch_cash_cut_general"/>
     </record>
     <template id="branch_cash_cut_detail_pdf">
         <t t-call="entintados_pdv.branch_cash_cut_pdf">
@@ -21,10 +32,36 @@
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="o">
                 <t t-set="company" t-value="o.company_id"/>
-                <t t-call="web.external_layout">
-                    <div class="page">
-                        <h2 t-if="detailed">Corte de caja detallado</h2>
-                        <h2 t-else="">Corte de caja por sucursal</h2>
+                <div class="article">
+                    <div class="page o_cash_cut_invoice">
+                        <style>
+                            .o_cash_cut_invoice { font-family: Arial, sans-serif; color: #111; font-size: 12px; }
+                            .o_cut_header { width:100%; border-collapse:collapse; margin-bottom:18px; }
+                            .o_cut_header td { padding:8px; vertical-align:top; }
+                            .o_cut_header img { max-width:150px; max-height:80px; }
+                            .o_cut_company { font-size:11px; line-height:1.45; }
+                            .o_cut_title { background:#efeddb; color:#24468d; font-weight:bold; font-size:18px; padding:10px; }
+                            .o_cash_cut_invoice h4 { background:#efeddb; color:#24468d; padding:8px; font-size:13px; font-weight:bold; }
+                            .o_cash_cut_invoice table.table { width:100%; border-collapse:collapse; margin-top:14px; }
+                            .o_cash_cut_invoice table.table th { background:#f1e9d4; color:#625d54; font-weight:bold; text-align:left; padding:8px; }
+                            .o_cash_cut_invoice table.table td { padding:7px 8px; border-bottom:1px solid #eee; vertical-align:top; }
+                            .o_cash_cut_invoice .text-end { text-align:right; }
+                            .o_cash_cut_invoice .text-nowrap { white-space:nowrap; }
+                            .o_cash_cut_invoice .fw-bold { font-weight:bold; }
+                            .o_cash_cut_invoice tr.fw-bold td { background:#f1e9d4; color:#24468d; }
+                        </style>
+                        <table class="o_cut_header"><tr>
+                            <td style="width:23%">
+                                <img t-if="company.logo" t-att-src="image_data_uri(company.logo)" alt="Logotipo"/>
+                            </td>
+                            <td class="o_cut_company" style="width:40%">
+                                <strong t-field="company.name"/>
+                            </td>
+                            <td style="width:37%">
+                                <div class="o_cut_title" t-if="detailed">Corte de caja detallado</div>
+                                <div class="o_cut_title" t-else="">Corte de caja por sucursal</div>
+                            </td>
+                        </tr></table>
                         <p>
                             <strong>Sucursal:</strong> <span t-field="o.company_id"/><br/>
                             <strong>Periodo:</strong> <span t-field="o.date_from"/> al <span t-field="o.date_to"/><br/>
@@ -66,21 +103,23 @@
                             </h4>
                             <table class="table table-sm" style="font-size: 11px;">
                                 <thead style="display: table-header-group;">
-                                    <tr><th>Fecha</th><th>Factura / nota</th><th>Cliente</th><th>Origen / orden</th>
+                                    <tr><th>Fecha</th><th>Factura / nota</th><th>Cliente</th><th>Orden</th>
                                         <th>Tipo de pago</th><th class="text-end">Importe neto</th></tr>
                                 </thead>
                                 <tbody>
                                     <tr t-foreach="details[item[0]]" t-as="row" style="page-break-inside: avoid;">
                                         <td><span t-out="row['date']" t-options="{'widget': 'date'}"/></td>
-                                        <td t-out="invoice_names[row['invoice_id']]"/>
+                                        <td>
+                                            <span t-out="invoice_names[row['invoice_id']]"/>
+                                            <span t-if="row['advances']"> (Anticipo)</span>
+                                        </td>
                                         <td t-out="partner_names.get(row['partner_id'], '')"/>
-                                        <td><span t-out="origins[row['origin']]"/><br/><span t-out="row['order_reference']"/></td>
+                                        <td t-out="row['order_reference']"/>
                                         <td>
                                             <t t-set="invoice" t-value="o.env['account.move'].browse(row['invoice_id'])"/>
                                             <t t-set="source" t-value="invoice.reversed_entry_id or invoice"/>
                                             <span t-out="'Crédito' if source.l10n_mx_edi_payment_policy == 'PPD' and not source.is_advance_invoice else 'Contado'"/>
                                             <small t-if="row['refund']" class="d-block text-muted">Devolución</small>
-                                            <small t-elif="row['advances']" class="d-block text-muted">Anticipo</small>
                                         </td>
                                         <td class="text-end text-nowrap">
                                             <span t-out="row['net']" t-options="{'widget': 'monetary', 'display_currency': company.currency_id}"/>
@@ -115,7 +154,7 @@
                             </tbody>
                         </table>
                     </div>
-                </t>
+                </div>
             </t>
         </t>
     </template>

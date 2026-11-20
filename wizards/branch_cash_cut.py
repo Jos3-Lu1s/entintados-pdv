@@ -1,4 +1,6 @@
 from collections import defaultdict
+import json
+from urllib.parse import urlencode
 
 from odoo import fields, models, _
 from odoo.exceptions import AccessError, UserError
@@ -56,13 +58,14 @@ class BranchCashCut(models.TransientModel):
         journal = method.journal_id or move.journal_id
         code = (method.l10n_mx_edi_payment_method_id or move.l10n_mx_edi_payment_method_id).code
         kind = {
-            '01': 'Efectivo', '02': 'Cheque', '03': 'Transferencia', '04': 'Tarjeta',
+            '01': 'Efectivo', '02': 'Cheque', '03': 'Transferencia', '04': 'Tarjeta de crédito',
             '28': 'Tarjeta', '29': 'Tarjeta',
         }.get(code) or {
             'transfer': 'Transferencia', 'check': 'Cheque', 'card': 'Tarjeta',
         }.get(method.collection_type) or ('Efectivo' if journal.type == 'cash' else 'Otro')
         order = payment.sudo().pos_invoice_collection_order_id or pos_line.pos_order_id
-        return kind, method.terminal_label or (journal.name if journal.type != 'cash' else 'Efectivo'), order
+        bank = pos_line.terminal_bank_id.name or method.card_bank_id.name
+        return kind, bank or method.terminal_label or (journal.name if journal.type != 'cash' else 'Efectivo'), order
 
     def _collect_rows(self):
         amounts = defaultdict(float)
@@ -143,7 +146,16 @@ class BranchCashCut(models.TransientModel):
 
     def action_print_cut(self):
         self._check_cut_filters()
-        return self.env.ref('entintados_pdv.action_branch_cash_cut_pdf').report_action(self, config=False)
+        return self._preview_pdf('entintados_pdv.branch_cash_cut_pdf')
+
+    def _preview_pdf(self, report_name):
+        self.ensure_one()
+        self.check_access('read')
+        query = urlencode({'context': json.dumps({'allowed_company_ids': self.env.companies.ids})})
+        return {
+            'type': 'ir.actions.act_url', 'target': 'new',
+            'url': f'/report/pdf/{report_name}/{self.id}?{query}',
+        }
 
     def action_open_cut(self):
         self._check_cut_filters()
@@ -174,7 +186,7 @@ class BranchCashCutLine(models.TransientModel):
     origin = fields.Selection(ORIGINS, string='Origen', required=True)
     order_reference = fields.Char(string='Orden / ticket')
     method = fields.Char(string='Método', required=True)
-    subtype = fields.Char(string='Subtipo')
+    subtype = fields.Char(string='Banco')
     register = fields.Char(string='Caja')
     cashier = fields.Char(string='Usuario')
     currency_id = fields.Many2one('res.currency', required=True)
@@ -198,7 +210,7 @@ class BranchCashCutLine(models.TransientModel):
 
     def action_print_detail(self):
         cut = self._get_header_cut()
-        return self.env.ref('entintados_pdv.action_branch_cash_cut_detail_pdf').report_action(cut, config=False)
+        return cut._preview_pdf('entintados_pdv.branch_cash_cut_detail_pdf')
 
     def action_change_filters(self):
         cut = self._get_header_cut()
@@ -224,7 +236,8 @@ class BranchCashCutReport(models.AbstractModel):
         for row in cut._collect_rows():
             if not row.get('payment_move_id'):
                 continue
-            group = (row['method'], row.get('subtype') or '')
+            show_bank = row['method'] in ('Tarjeta', 'Tarjeta de crédito')
+            group = (row['method'], (row.get('subtype') or '') if show_bank else '')
             bucket = summary[group]
             for key in columns:
                 bucket[key] += row[key]
