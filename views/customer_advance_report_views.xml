@@ -29,13 +29,13 @@
                 <field name="name">Saldo disponible</field>
                 <field name="expression_label">advance_available</field>
                 <field name="figure_type">monetary</field>
-                <field name="sequence">30</field>
+                <field name="sequence">40</field>
             </record>
             <record id="customer_advance_preview_applied" model="account.report.column">
                 <field name="name">Saldo utilizado</field>
                 <field name="expression_label">advance_applied</field>
                 <field name="figure_type">monetary</field>
-                <field name="sequence">40</field>
+                <field name="sequence">30</field>
             </record>
         </field>
     </record>

@@ -48,19 +48,23 @@
             <list string="Comisiones" create="0" edit="0" delete="0"
                   decoration-danger="osel_commission_available and osel_commission_margin &lt;= 0.20"
                   default_group_by="invoice_user_id" group_create="0" default_order="invoice_date desc, id desc">
+                <header>
+                    <button name="action_export_osel_commissions" type="object" string="Exportar Excel" display="always"/>
+                </header>
                 <field name="invoice_date" string="Fecha"/>
                 <field name="osel_payment_date"/>
                 <field name="name" string="Factura"/>
                 <field name="partner_id" string="Cliente"/>
                 <field name="invoice_user_id" string="Vendedor"/>
                 <field name="currency_id" column_invisible="True"/>
-                <field name="amount_untaxed" string="Total subtotal"/>
+                <field name="amount_total" string="Total"/>
+                <field name="amount_untaxed" string="Subtotal"/>
                 <field name="osel_commission_currency_id" column_invisible="True"/>
                 <field name="osel_commission_available" column_invisible="True"/>
                 <field name="osel_cost" invisible="not osel_commission_available"/>
                 <field name="osel_commission_margin" widget="percentage" invisible="not osel_commission_available"/>
-                <field name="osel_commission_rate" widget="percentage" invisible="not osel_commission_available"/>
-                <field name="osel_before_delay" invisible="not osel_commission_available"/>
+                <field name="osel_commission_rate" string="% comisión" widget="percentage" invisible="not osel_commission_available"/>
+                <field name="osel_before_delay" string="Previo cobranza" invisible="not osel_commission_available"/>
                 <field name="osel_credit_days_label"/>
                 <field name="osel_payment_days" invisible="not osel_payment_date"/>
                 <field name="osel_collection_delay" invisible="not osel_payment_date"/>
@@ -74,7 +78,7 @@
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="invoice_commissions_list"/>
         <field name="search_view_id" ref="account.view_account_invoice_filter"/>
-        <field name="domain">[('move_type', '=', 'out_invoice'), ('state', '=', 'posted'), ('payment_state', '=', 'paid'), ('is_advance_invoice', '=', False), ('invoice_user_id', '!=', False), ('l10n_mx_edi_payment_policy', 'in', ('PUE', 'PPD'))]</field>
+        <field name="domain">[('move_type', '=', 'out_invoice'), ('state', '=', 'posted'), ('payment_state', '=', 'paid'), ('invoice_user_id', '!=', False), ('l10n_mx_edi_payment_policy', 'in', ('PUE', 'PPD'))]</field>
         <field name="context">{'default_move_type': 'out_invoice'}</field>
     </record>
     <menuitem id="menu_invoice_commissions" name="Comisiones" parent="menu_osel_reports"

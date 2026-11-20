@@ -115,6 +115,7 @@ Catálogo de entintado
         ],
         "web.assets_backend": [
             "entintados_pdv/static/src/views/sale_order_controls.scss",
+            "entintados_pdv/static/src/views/branch_cash_cut_groups.js",
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.js",
             "entintados_pdv/static/src/fields/pos_tint_grouped_lines.xml",
             "entintados_pdv/static/src/reports/ppd_receivable_line_cell.xml",
