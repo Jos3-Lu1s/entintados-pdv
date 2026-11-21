@@ -189,8 +189,8 @@
                 <t t-set="mat_discount" t-value="any(line.discount for line in mat_lines)"/>
                 <table class="mat-lines" name="mat_invoice_lines" dir="ltr">
                     <thead><tr>
-                        <th>Cantidad</th><th>Código</th><th>UNSPSC</th><th style="width:30%;">Descripción</th><th>UdM</th>
-                        <th t-if="mat_discount">Descuento</th><th>Valor unitario</th><th>Importe</th>
+                        <th>Cantidad</th><th>Código</th><th>Unidad</th><th>Clave SAT</th><th>U.SAT</th>
+                        <th style="width:26%;">Descripción</th><th t-if="mat_discount">Descuento</th><th>Valor unitario</th><th>Importe</th>
                     </tr></thead>
                     <tbody>
                         <t t-foreach="mat_lines" t-as="line">
@@ -198,14 +198,15 @@
                                 <t t-set="mat_values" t-value="o._mat_invoice_line_values(line)"/>
                                 <td><span t-field="line.quantity"/></td>
                                 <td><span t-out="mat_values['code']"/></td>
-                                <td><span t-out="line.product_id.unspsc_code_id.code or ''"/></td>
-                                <td><span t-field="line.name" t-options="{'widget':'text'}"/></td>
                                 <td><span t-if="line.product_uom_id" t-field="line.product_uom_id"/></td>
+                                <td><span t-out="line.product_id.unspsc_code_id.code or ''"/></td>
+                                <td><span t-out="line.product_uom_id.unspsc_code_id.code or ''"/></td>
+                                <td><span t-field="line.name" t-options="{'widget':'text'}"/></td>
                                 <td t-if="mat_discount"><t t-if="line.discount"><span t-field="line.discount"/>%<br/><span t-out="mat_values['discount']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></t></td>
                                 <td><span t-out="mat_values['unit']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td>
-                                <td><span t-field="line.price_subtotal"/></td>
+                                <td><span t-out="mat_values['gross'] if line.quantity &gt; 2 else mat_values['unit']" t-options="{'widget':'monetary','display_currency':o.currency_id}"/></td>
                             </tr>
-                            <tr t-else=""><td t-att-colspan="8 if mat_discount else 7"><span t-field="line.name" t-options="{'widget':'text'}"/></td></tr>
+                            <tr t-else=""><td t-att-colspan="9 if mat_discount else 8"><span t-field="line.name" t-options="{'widget':'text'}"/></td></tr>
                         </t>
                     </tbody>
                 </table>

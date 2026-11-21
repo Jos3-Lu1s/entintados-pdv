@@ -13,6 +13,21 @@ class TestPosBankPayments(TransactionCase):
         action = self.config.action_prepare_bank_payments()
         return self.env['pos.payment.method'].search(action['domain'])
 
+    def test_card_default_does_not_depend_on_company_column(self):
+        company = self.env.company
+        self.assertFalse(company._fields['pos_card_default_journal_id'].store)
+        journal = self.env['account.journal'].search([
+            ('company_id', '=', company.id), ('type', '=', 'bank')], limit=1)
+        self.assertTrue(journal)
+        company.pos_card_default_journal_id = journal
+        company.invalidate_recordset(['pos_card_default_journal_id'])
+        self.assertEqual(company.pos_card_default_journal_id, journal)
+        self.assertEqual(company._payment_method_defaults()['journal_id'], journal.id)
+        company.pos_card_default_journal_id = False
+        company.init()
+        company.invalidate_recordset(['pos_card_default_journal_id'])
+        self.assertFalse(company.pos_card_default_journal_id)
+
     def test_native_methods_are_created_once_and_linked_without_preparation_button(self):
         self.env['pos.payment.method']._ensure_transfer_check_methods()
         methods = self.config.payment_method_ids.filtered(lambda item: item.collection_type in ('transfer', 'check'))

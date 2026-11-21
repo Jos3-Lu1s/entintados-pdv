@@ -25,6 +25,7 @@
                             context="{'all_payment_groups': True}"/>
                 </header>
                 <field name="name"/>
+                <field name="partner_id" optional="show"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="currency_id"/>
                 <field name="invoice_count"/>
@@ -68,7 +69,8 @@
                         </button>
                     </div>
                     <div class="oe_title mb-4">
-                        <div class="text-muted mb-1" invisible="payment_type != 'outbound'">PAGO AGRUPADO DE PROVEEDOR</div>
+                        <div class="text-muted mb-1" invisible="payment_type != 'outbound' or grouping_mode != 'supplier'">PAGO AGRUPADO DE PROVEEDOR</div>
+                        <div class="text-muted mb-1" invisible="payment_type != 'outbound' or grouping_mode != 'petty_cash'">PAGO AGRUPADO CAJA CHICA</div>
                         <div class="text-muted mb-1" invisible="payment_type != 'inbound'">COBRO AGRUPADO DE CLIENTES</div>
                         <h1><field name="name" placeholder="Nuevo"/></h1>
                         <p class="text-muted">Consulta las facturas y los pagos de esta agrupación.</p>
@@ -76,8 +78,14 @@
                     <group>
                         <field name="company_id" invisible="1"/>
                         <field name="payment_type" invisible="1" force_save="1"/>
+                        <field name="grouping_mode" invisible="1" force_save="1"/>
                         <field name="country_code" invisible="1"/>
                         <group string="Datos generales">
+                            <field name="partner_id" invisible="payment_type != 'outbound' or grouping_mode != 'supplier'"
+                                   required="payment_type == 'outbound' and grouping_mode == 'supplier'"
+                                   readonly="state != 'draft' or previous_group_id"
+                                   domain="[('is_purchase_contact', '=', True)]"
+                                   options="{'no_create': True}"/>
                             <field name="currency_id" readonly="state != 'draft' or previous_group_id" options="{'no_create': True}"/>
                             <field name="default_sat_payment_method_id" invisible="country_code != 'MX'"
                                    readonly="state != 'draft'" options="{'no_create': True, 'no_open': True}"/>
@@ -107,15 +115,10 @@
                             <span class="text-muted" invisible="state != 'draft'">Facturas pendientes o con pago parcial.</span>
                             <span class="text-muted" invisible="state != 'registered'">Facturas incluidas y su saldo pendiente actual.</span>
                         </div>
-                        <div class="d-flex flex-wrap gap-2" invisible="state != 'draft' or not line_ids">
-                            <button name="action_select_all" type="object" string="Seleccionar todas"
-                                    class="btn btn-secondary" icon="fa-check-square-o"/>
-                            <button name="action_deselect_all" type="object" string="Deseleccionar todas"
-                                    class="btn btn-secondary" icon="fa-square-o"/>
-                        </div>
                     </div>
-                    <field name="line_ids" readonly="state != 'draft'">
+                    <field name="line_ids" widget="payment_group_invoices" readonly="state != 'draft'">
                         <list editable="bottom" create="0" delete="0" decoration-muted="not selected">
+                            <field name="invoice_reference" column_invisible="True"/>
                             <field name="selected"/>
                             <field name="invoice_id" readonly="1" force_save="1"/>
                             <field name="partner_id" string="Contacto"/>
@@ -135,11 +138,38 @@
     </record>
 
     <record id="vendor_payment_group_action" model="ir.actions.act_window">
+        <field name="name">Pagos agrupados caja chica</field>
+        <field name="res_model">vendor.payment.group</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('payment_type', '=', 'outbound'), ('grouping_mode', '=', 'petty_cash')]</field>
+        <field name="context">{'default_payment_type': 'outbound', 'default_grouping_mode': 'petty_cash'}</field>
+    </record>
+    <record id="vendor_supplier_payment_group_action" model="ir.actions.act_window">
         <field name="name">Pagos agrupados</field>
         <field name="res_model">vendor.payment.group</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('payment_type', '=', 'outbound')]</field>
-        <field name="context">{'default_payment_type': 'outbound'}</field>
+        <field name="domain">[('payment_type', '=', 'outbound'), ('grouping_mode', '=', 'supplier')]</field>
+        <field name="context">{'default_payment_type': 'outbound', 'default_grouping_mode': 'supplier'}</field>
+    </record>
+    <record id="vendor_payment_group_invoice_select_form" model="ir.ui.view">
+        <field name="name">vendor.payment.group.invoice.select.form</field>
+        <field name="model">vendor.payment.group.invoice.select</field>
+        <field name="arch" type="xml">
+            <form string="Buscar y seleccionar facturas">
+                <group>
+                    <field name="group_id"/>
+                    <field name="available_invoice_ids" invisible="1"/>
+                    <field name="invoice_ids" widget="many2many_tags"
+                           placeholder="Buscar factura…"
+                           domain="[('id', 'in', available_invoice_ids)]"
+                           options="{'no_create': True, 'no_open': True}"/>
+                </group>
+                <footer>
+                    <button name="action_apply" type="object" string="Aplicar selección" class="btn-primary"/>
+                    <button special="cancel" string="Cancelar" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
     </record>
     <record id="customer_payment_group_action" model="ir.actions.act_window">
         <field name="name">Pagos agrupados de clientes</field>

@@ -12,6 +12,26 @@ CONFIRM_QUOTATION_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_confirm_qu
 PROMOTION_NOTIFICATION_THRESHOLD = 5
 
 
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
+
+    branch_free_qty = fields.Float(
+        string='Disponible en almacén', digits='Product Unit',
+        compute='_compute_branch_free_qty',
+        help='Existencia sin reservar en el almacén de la cotización o pedido, en la unidad de la línea.',
+    )
+
+    @api.depends('product_id.free_qty', 'product_uom_id', 'order_id.warehouse_id', 'order_id.company_id')
+    def _compute_branch_free_qty(self):
+        for line in self:
+            line.branch_free_qty = 0
+            warehouse = line.order_id.warehouse_id
+            if line.display_type or not line.product_id.is_storable or not warehouse or not line.product_uom_id:
+                continue
+            product = line.product_id.with_company(line.order_id.company_id).with_context(warehouse_id=warehouse.id)
+            line.branch_free_qty = product.uom_id._compute_quantity(product.free_qty, line.product_uom_id)
+
+
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 

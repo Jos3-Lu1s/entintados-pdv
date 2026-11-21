@@ -50,11 +50,19 @@ export class CustomerPaymentSummary extends Component {
     }
 
     get paymentInvoiceUsage() {
-        return this.currentOrder?.l10n_mx_edi_usage || this.currentOrder?.getPartner()?.l10n_mx_edi_usage || "G01";
+        return this.currentOrder?.l10n_mx_edi_usage || "";
     }
 
     get canSplitPaymentInvoice() {
         return canSplitInvoice(this.currentOrder);
+    }
+
+    get isAdvanceReceipt() {
+        return Boolean(this.currentOrder?.lines?.some((line) =>
+            !line.advance_source_ref && line.price_unit * line.qty > 0 &&
+            (line.product_id?.product_tmpl_id?.is_accounting_advance ||
+             line.product_id?.id === this.pos.config.down_payment_product_id?.id)
+        ));
     }
 
     get paymentInvoiceSplitCount() {

@@ -247,6 +247,8 @@
                 <field name="promo_available_info" string=" " widget="promo_hint" readonly="1" nolabel="1" width="32px"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='tax_ids']" position="after">
+                <field name="branch_free_qty" optional="show" readonly="1"
+                       invisible="display_type or product_type != 'consu'"/>
                 <field name="sale_tax_amount_detail" string="Impuesto importe" optional="show"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="attributes">

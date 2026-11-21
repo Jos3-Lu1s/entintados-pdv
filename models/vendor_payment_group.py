@@ -17,6 +17,9 @@ class VendorPaymentGroup(models.Model):
     payment_type = fields.Selection([('outbound', 'Proveedores'), ('inbound', 'Clientes')],
                                     required=True, default='outbound', readonly=True, index=True)
     partner_id = fields.Many2one('res.partner', string='Proveedor', check_company=True)
+    grouping_mode = fields.Selection([
+        ('petty_cash', 'Caja chica'), ('supplier', 'Por proveedor'),
+    ], string='Tipo de agrupación', default='petty_cash', required=True, index=True)
     currency_id = fields.Many2one('res.currency', string='Moneda', required=True, default=lambda self: self.env.company.currency_id)
     payment_method_line_id = fields.Many2one('account.payment.method.line', string='Método de pago', ondelete='restrict')
     country_code = fields.Char(related='company_id.account_fiscal_country_id.code')
@@ -68,6 +71,10 @@ class VendorPaymentGroup(models.Model):
         ]
         if self.previous_group_id:
             domain.append(('id', 'in', self.previous_group_id._selected_invoices().ids))
+        if self.payment_type == 'outbound' and self.grouping_mode == 'supplier':
+            if not self.partner_id:
+                return domain + [('id', '=', 0)]
+            domain.append(('commercial_partner_id', '=', self.partner_id.commercial_partner_id.id))
         return domain
 
     @api.model
@@ -79,6 +86,8 @@ class VendorPaymentGroup(models.Model):
                 'currency_id': values.get('currency_id') or self.env.company.currency_id.id,
                 'payment_type': values.get('payment_type') or self.env.context.get('default_payment_type', 'outbound'),
                 'previous_group_id': values.get('previous_group_id'),
+                'grouping_mode': values.get('grouping_mode') or self.env.context.get('default_grouping_mode', 'petty_cash'),
+                'partner_id': values.get('partner_id') or self.env.context.get('default_partner_id'),
                 'line_ids': [],
             })
             values['line_ids'] = group._pending_invoice_commands()
@@ -105,9 +114,24 @@ class VendorPaymentGroup(models.Model):
     def _refresh_invoices(self):
         self.line_ids = [Command.clear(), *self._pending_invoice_commands()]
 
-    @api.onchange('company_id', 'currency_id')
+    @api.onchange('company_id', 'currency_id', 'partner_id', 'grouping_mode')
     def _onchange_scope(self):
         self._refresh_invoices()
+
+    def action_search_invoices(self):
+        self.ensure_one()
+        self._lock_draft()
+        if self.grouping_mode == 'supplier' and not self.partner_id:
+            raise UserError(_('Selecciona primero el proveedor.'))
+        wizard = self.env['vendor.payment.group.invoice.select'].create({
+            'group_id': self.id,
+            'invoice_ids': [Command.set(self._selected_invoices().filtered_domain(self._invoice_domain()).ids)],
+        })
+        return {
+            'type': 'ir.actions.act_window', 'name': _('Buscar y seleccionar facturas'),
+            'res_model': wizard._name, 'res_id': wizard.id, 'view_mode': 'form', 'target': 'new',
+        }
+
     def action_refresh_invoices(self):
         self.ensure_one()
         self._lock_draft()
@@ -262,6 +286,7 @@ class VendorPaymentGroup(models.Model):
             'company_id': self.company_id.id,
             'currency_id': self.currency_id.id,
             'payment_type': self.payment_type,
+            'grouping_mode': self.grouping_mode,
             'default_sat_payment_method_id': self.default_sat_payment_method_id.id,
             'previous_group_id': self.id,
             'line_ids': [Command.create({
@@ -293,6 +318,8 @@ class VendorPaymentGroup(models.Model):
         self.check_access('read')
         if self.env.context.get('all_payment_groups'):
             selection = 'all-inbound' if self.env.context.get('default_payment_type') == 'inbound' else 'all-outbound'
+            if selection == 'all-outbound':
+                selection += '-supplier' if self.env.context.get('default_grouping_mode') == 'supplier' else '-petty_cash'
         else:
             selection = ','.join(map(str, self.ids))
         if not selection:
@@ -352,6 +379,36 @@ class VendorPaymentGroup(models.Model):
         }
 
 
+class VendorPaymentGroupInvoiceSelect(models.TransientModel):
+    _name = 'vendor.payment.group.invoice.select'
+    _description = 'Buscar facturas para pago agrupado'
+
+    group_id = fields.Many2one('vendor.payment.group', required=True, readonly=True)
+    invoice_ids = fields.Many2many(
+        'account.move', 'vendor_group_invoice_select_rel', string='Facturas seleccionadas',
+    )
+    available_invoice_ids = fields.Many2many(
+        'account.move', compute='_compute_available_invoices', string='Facturas disponibles',
+    )
+
+    @api.depends('group_id')
+    def _compute_available_invoices(self):
+        for wizard in self:
+            wizard.available_invoice_ids = self.env['account.move'].search(wizard.group_id._invoice_domain())
+
+    def action_apply(self):
+        self.ensure_one()
+        group = self.group_id
+        group._lock_draft()
+        if self.invoice_ids:
+            group._check_selected_invoices(self.invoice_ids)
+        group._refresh_invoices()
+        group.line_ids.write({'selected': False})
+        group.line_ids.filtered(lambda line: line.invoice_id in self.invoice_ids).write({'selected': True})
+        group._fill_missing_sat_methods()
+        return {'type': 'ir.actions.act_window_close'}
+
+
 class VendorPaymentGroupLine(models.Model):
     _name = 'vendor.payment.group.line'
     _description = 'Factura del pago agrupado'
@@ -364,6 +421,7 @@ class VendorPaymentGroupLine(models.Model):
     partner_id = fields.Many2one(related='invoice_id.partner_id', string='Proveedor')
     selected = fields.Boolean(string='Pagar')
     invoice_date = fields.Date(related='invoice_id.invoice_date', string='Fecha de factura')
+    invoice_reference = fields.Char(related='invoice_id.ref', string='Referencia de factura')
     due_date = fields.Date(related='invoice_id.invoice_date_due', string='Vencimiento')
     amount_residual = fields.Monetary(related='invoice_id.amount_residual', string='Saldo pendiente')
     amount_to_pay = fields.Monetary(string='Monto a pagar')

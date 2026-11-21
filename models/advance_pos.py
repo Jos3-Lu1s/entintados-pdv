@@ -69,6 +69,9 @@ class PosOrder(models.Model):
             lines = order.lines.filtered(lambda line: line._is_accounting_advance_line())
             if not lines:
                 continue
+            received = lines.filtered(lambda line: not line.advance_source_ref and line.price_unit * line.qty > 0)
+            if received and (len(order.lines) != 1 or len(received) != 1):
+                raise UserError(_('La recepción de un anticipo debe contener únicamente una línea de anticipo.'))
             if not order.partner_id or not order.company_id.advance_risk_enabled:
                 raise UserError(_('Los anticipos requieren un cliente identificado y la integración contable activada.'))
             if order.invoice_split_count > 1 or order.config_id.cash_rounding:

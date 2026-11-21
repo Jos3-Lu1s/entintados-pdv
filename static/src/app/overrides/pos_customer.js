@@ -4,6 +4,7 @@ import { PosStore } from "@point_of_sale/app/services/pos_store";
 import OrderPaymentValidation from "@point_of_sale/app/utils/order_payment_validation";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { CustomerContactInfo } from "@entintados_pdv/app/components/customer_contact_info/customer_contact_info";
+import { initializePaymentInvoice, isInvoiceCollection } from "@entintados_pdv/app/utils/invoice_options";
 
 patch(ProductScreen, {
     components: { ...ProductScreen.components, CustomerContactInfo },
@@ -52,6 +53,13 @@ patch(OrderPaymentValidation.prototype, {
     async validateOrder(...args) {
         if (!this.pos.requireCustomer(this.order)) {
             return false;
+        }
+        if (this.pos.company?.country_id?.code === "MX" && !isInvoiceCollection(this.order)) {
+            initializePaymentInvoice(this.order, true);
+            if (!this.order.l10n_mx_edi_usage) {
+                this.pos.notification.add(_t("Selecciona el uso de CFDI antes de continuar con el pago."), { type: "warning" });
+                return false;
+            }
         }
         return super.validateOrder(...args);
     },

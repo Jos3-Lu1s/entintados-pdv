@@ -1,0 +1,32 @@
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.PaymentGroupInvoices" t-inherit="web.X2ManyField" t-inherit-mode="primary">
+        <xpath expr="//div[hasclass('o_x2m_control_panel')]" position="before">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div class="input-group" style="max-width: 440px;">
+                    <span class="input-group-text"><i class="fa fa-search" aria-hidden="true"/></span>
+                    <input type="search" class="form-control" aria-label="Buscar facturas"
+                           placeholder="Buscar factura, referencia o proveedor…"
+                           t-att-value="search.query" t-on-input="onInvoiceSearch"
+                           t-on-keydown="onSearchKeydown"/>
+                </div>
+                <div t-if="!props.readonly" class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-secondary" t-att-disabled="search.busy"
+                            t-on-click="() => this.selectMatches(true)">
+                        <i class="fa fa-check-square-o me-1" aria-hidden="true"/>
+                        <t t-if="search.query">Seleccionar resultados</t><t t-else="">Seleccionar todas</t>
+                    </button>
+                    <button type="button" class="btn btn-secondary" t-att-disabled="search.busy"
+                            t-on-click="() => this.selectMatches(false)">
+                        <i class="fa fa-square-o me-1" aria-hidden="true"/>
+                        <t t-if="search.query">Deseleccionar resultados</t><t t-else="">Deseleccionar todas</t>
+                    </button>
+                </div>
+            </div>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.PaymentInvoiceRows" t-inherit="web.ListRenderer.Rows" t-inherit-mode="primary">
+        <xpath expr="//t[@t-foreach='list.records']" position="attributes">
+            <attribute name="t-foreach">getMatchingInvoices(list)</attribute>
+        </xpath>
+    </t>
+</templates>

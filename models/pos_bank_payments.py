@@ -5,8 +5,40 @@ from odoo.exceptions import UserError, ValidationError
 class ResCompany(models.Model):
     _inherit = 'res.company'
 
+    # Compatibility field: company reads no longer require a custom SQL column.
     pos_card_default_journal_id = fields.Many2one('account.journal', string='Diario predeterminado para tarjetas',
+        compute='_compute_pos_card_default_journal', inverse='_inverse_pos_card_default_journal',
         check_company=True, domain="[('type', '=', 'bank'), ('company_id', '=', id)]")
+
+    def init(self):
+        super().init()
+        # Preserve previously configured values without requiring the legacy column.
+        self.env.cr.execute("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'res_company'
+              AND column_name = 'pos_card_default_journal_id'
+        """)
+        if self.env.cr.fetchone():
+            self.env.cr.execute("""
+                INSERT INTO ir_config_parameter (key, value)
+                SELECT 'entintados_pdv.pos_card_journal.' || id, pos_card_default_journal_id::text
+                FROM res_company WHERE pos_card_default_journal_id IS NOT NULL
+                ON CONFLICT (key) DO NOTHING
+            """)
+
+    def _compute_pos_card_default_journal(self):
+        params = self.env['ir.config_parameter'].sudo()
+        for company in self:
+            value = params.get_param('entintados_pdv.pos_card_journal.%s' % company.id, '')
+            company.pos_card_default_journal_id = (
+                self.env['account.journal'].browse(int(value)).exists() if value.isdigit() else False)
+
+    def _inverse_pos_card_default_journal(self):
+        params = self.env['ir.config_parameter'].sudo()
+        for company in self:
+            params.set_param('entintados_pdv.pos_card_journal.%s' % company.id,
+                             str(company.pos_card_default_journal_id.id or 0))
+
     def _payment_method_defaults(self):
         self.ensure_one()
         journal = self.pos_card_default_journal_id

@@ -216,10 +216,20 @@ class StockPicking(models.Model):
             self._check_material_evidence_validation(use=True)
         return super().write(vals)
 
+    def _check_internal_transfer_locations(self):
+        for picking in self:
+            if (picking.picking_type_code == 'internal' and picking.location_id
+                    and picking.location_id == picking.location_dest_id):
+                raise ValidationError(_('El origen y el destino del traslado interno deben ser distintos.'))
+
+    def action_confirm(self):
+        self._check_internal_transfer_locations()
+        return super().action_confirm()
+
     def _action_done(self):
-            res = super()._action_done()
-            return res
-                    
+        self._check_internal_transfer_locations()
+        return super()._action_done()
+
     def _generate_material_document(self):
         self.ensure_one()
 
@@ -337,6 +347,7 @@ class StockPicking(models.Model):
             ).action_feedback(feedback=_('Rechazado por Auditoría.'))
 
     def button_validate(self):
+        self._check_internal_transfer_locations()
         for picking in self:
             if picking._is_material_output_type() and picking.material_approval_state != 'approved':
                 raise UserError(_(

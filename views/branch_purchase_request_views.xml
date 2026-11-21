@@ -1,0 +1,181 @@
+<odoo>
+    <record id="branch_purchase_request_company_rule" model="ir.rule">
+        <field name="name">Resurtido entre sucursales por compañía</field>
+        <field name="model_id" ref="model_branch_purchase_request"/>
+        <field name="domain_force">['|', ('company_id', 'in', company_ids), ('source_company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="branch_purchase_request_line_company_rule" model="ir.rule">
+        <field name="name">Productos de requisiciones por compañía</field>
+        <field name="model_id" ref="model_branch_purchase_request_line"/>
+        <field name="domain_force">['|', ('company_id', 'in', company_ids), ('request_id.source_company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="sequence_branch_purchase_request" model="ir.sequence">
+        <field name="name">Requisición de resurtido entre sucursales</field>
+        <field name="code">branch.purchase.request</field>
+        <field name="prefix">SRO/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+    <record id="sequence_branch_purchase_requisition" model="ir.sequence">
+        <field name="name">Requisición de compra por faltante</field>
+        <field name="code">branch.purchase.requisition</field>
+        <field name="prefix">REQ/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+    <record id="branch_purchase_request_list" model="ir.ui.view">
+        <field name="name">branch.purchase.request.list</field>
+        <field name="model">branch.purchase.request</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="source_company_id"/>
+                <field name="warehouse_id" optional="hide"/>
+                <field name="user_id"/>
+                <field name="source_warehouse_id" optional="hide"/>
+                <field name="picking_id"/>
+                <field name="expected_date"/>
+                <field name="state" widget="badge"/>
+                <field name="requisition_ref" optional="show"/>
+                <field name="purchase_id" optional="hide"/>
+                <field name="purchase_state" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="branch_purchase_request_form" model="ir.ui.view">
+        <field name="name">branch.purchase.request.form</field>
+        <field name="model">branch.purchase.request</field>
+        <field name="arch" type="xml">
+            <form string="Pedido de existencias">
+                <header>
+                    <button name="action_send_request" type="object" string="Enviar solicitud"
+                            class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_start_transfer" type="object" string="Iniciar resurtido"
+                            class="oe_highlight" invisible="state != 'sent'"/>
+                    <button name="action_cancel_request" type="object" string="Cancelar"
+                            invisible="state in ('done', 'cancel')"/>
+                    <button name="action_create_purchase" type="object" string="Preparar requisición de compra"
+                            groups="purchase.group_purchase_user" invisible="purchase_id or state in ('done', 'cancel')"/>
+                    <button name="action_close_remainder" type="object" string="Cerrar remanente"
+                            invisible="state != 'progress' or remainder_closed"/>
+                    <field name="remainder_closed" invisible="1"/>
+                    <field name="requisition_ref" invisible="1"/>
+                    <button name="action_print_request" type="object" string="Imprimir solicitud"/>
+                    <button name="action_print_requisition" type="object" string="Imprimir requisición"
+                            groups="purchase.group_purchase_user" invisible="not requisition_ref"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,sent,progress,done,cancel"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_transfers" type="object" class="oe_stat_button"
+                                icon="fa-truck" invisible="not picking_count">
+                            <field name="picking_count" widget="statinfo" string="Transferencias"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <span class="text-muted">Pedido de existencias</span>
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="expected_date" readonly="state != 'draft'"/>
+                            <field name="delivery_policy" readonly="state != 'draft'"/>
+                            <field name="source_company_id" readonly="state != 'draft'" required="1"
+                                   domain="[('id', 'in', context.get('allowed_company_ids', [])), ('branch_supply_center', '=', True)]"
+                                   options="{'no_create': True}"/>
+                            <field name="source_warehouse_id" readonly="state != 'draft'"
+                                   required="1" domain="[('company_id', '=', source_company_id)]"
+                                   options="{'no_create': True}"/>
+                            <field name="source_location_id" options="{'no_open': True}"/>
+                            <field name="user_id"/>
+                        </group>
+                        <group>
+                            <field name="company_id" readonly="state != 'draft'" string="Sucursal destino"
+                                   domain="[('id', 'in', context.get('allowed_company_ids', [])), ('branch_requisition_allowed', '=', True)]"
+                                   options="{'no_create': True}"/>
+                            <field name="warehouse_id" string="Almacén destino" readonly="state != 'draft'"
+                                   domain="[('company_id', '=', company_id)]"
+                                   options="{'no_create': True}"/>
+                            <field name="destination_location_id" options="{'no_open': True}"/>
+                            <field name="route_name"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Elementos" name="elements">
+                            <field name="line_ids" readonly="state != 'draft'">
+                                <list editable="bottom" decoration-success="state == 'done'" decoration-muted="state == 'cancel'">
+                                    <field name="product_id" domain="[('type', '=', 'consu')]"/>
+                                    <field name="product_uom_id"/>
+                                    <field name="route_name"/>
+                                    <field name="quantity"/>
+                                    <field name="quantity_progress"/>
+                                    <field name="quantity_done"/>
+                                    <field name="quantity_pending"/>
+                                    <field name="quantity_reserved" optional="show"/>
+                                    <field name="source_free_qty" optional="show"/>
+                                    <field name="source_physical_qty" optional="hide"/>
+                                    <field name="source_reserved_qty" optional="hide"/>
+                                    <field name="source_forecast_qty" optional="hide"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="request_followup" string="Seguimiento">
+                            <group>
+                                <group string="Requisición de compra">
+                                    <field name="partner_id" domain="[('is_purchase_contact', '=', True)]"
+                                           readonly="purchase_id"/>
+                                    <field name="requisition_ref"/>
+                                    <field name="purchase_id"/>
+                                    <field name="purchase_state"/>
+                                </group>
+                                <group string="Cierre de solicitud">
+                                    <field name="closure_reason"/>
+                                    <field name="remainder_closed"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="branch_purchase_request_search" model="ir.ui.view">
+        <field name="name">branch.purchase.request.search</field>
+        <field name="model">branch.purchase.request</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name" string="Folio" filter_domain="['|', ('name', 'ilike', self), ('requisition_ref', 'ilike', self)]"/>
+                <field name="warehouse_id"/>
+                <field name="company_id"/>
+                <field name="source_company_id"/>
+                <field name="source_warehouse_id"/>
+                <field name="user_id"/>
+                <field name="purchase_id"/>
+                <filter name="pending" string="Pendientes" domain="[('state', 'in', ['draft', 'sent', 'progress'])]"/>
+                <filter name="progress" string="En progreso / parciales" domain="[('state', '=', 'progress')]"/>
+                <filter name="purchase_pending" string="Compra pendiente" domain="[('purchase_id', '!=', False), ('purchase_state', 'in', ['draft', 'sent', 'to approve'])]"/>
+                <separator/>
+                <filter name="by_state" string="Estado" context="{'group_by': 'state'}"/>
+                <filter name="by_branch" string="Sucursal destino" context="{'group_by': 'company_id'}"/>
+                <filter name="by_source" string="Sucursal que surte" context="{'group_by': 'source_company_id'}"/>
+                <filter name="by_user" string="Solicitante" context="{'group_by': 'user_id'}"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_branch_purchase_requests" model="ir.actions.act_window">
+        <field name="name">Resurtido entre sucursales</field>
+        <field name="res_model">branch.purchase.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="branch_purchase_request_search"/>
+    </record>
+    <menuitem id="menu_branch_purchase_requests" name="Resurtido entre sucursales"
+              parent="stock.menu_stock_transfers" action="action_branch_purchase_requests"
+              sequence="25" groups="stock.group_stock_user"/>
+    <record id="menu_branch_purchase_requests" model="ir.ui.menu">
+        <field name="group_ids" eval="[(6, 0, [ref('stock.group_stock_user')])]"/>
+    </record>
+</odoo>
