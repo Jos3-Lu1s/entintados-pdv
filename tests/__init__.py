@@ -64,3 +64,4 @@ from . import test_origin_badge
 from . import test_pos_price_discount_lock
 from . import test_pos_promotions
 from . import test_pos_inline_promotions
+from . import test_pos_global_promotion_parity

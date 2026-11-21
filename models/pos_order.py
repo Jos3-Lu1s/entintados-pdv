@@ -11,6 +11,12 @@ _logger = logging.getLogger(__name__)
 class PosOrder(models.Model):
     _inherit = "pos.order"
 
+    order_promo_reward_id = fields.Many2one(
+        comodel_name='loyalty.reward',
+        string='Promoción de pedido',
+        copy=False,
+        ondelete='set null',
+    )
     invoice_split_count = fields.Integer(string="Facturas a generar", default=1, copy=False)
     split_invoice_ids = fields.Many2many(
         "account.move", "pos_order_split_invoice_rel", "order_id", "move_id",

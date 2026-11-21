@@ -25,6 +25,7 @@ patch(Orderline.prototype, {
             values.pricingRuleOrigin = line.pricing_rule_origin || null;
             values.pricingRuleType = line.pricing_rule_type || null;
             values.hasPricingRule = Boolean(line.pricing_rule_origin);
+            values.hasPromo = Boolean(line.promo_reward_id);
         }
 
         if (this.props.mode === "display" && !this.props.basic_receipt) {

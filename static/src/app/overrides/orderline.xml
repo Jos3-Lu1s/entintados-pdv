@@ -33,7 +33,7 @@
                   role="button"
                   t-on-click.stop="() => this.onSelectLinePromotion(props.line)"
                   t-att-title="this.getPromotionButtonTitle(props.line)">
-                <i t-attf-class="fa #{props.line.promo_reward_id ? 'fa-star text-primary' : 'fa-star-o text-muted'}"/>
+                <i t-attf-class="fa #{vals.hasPromo ? 'fa-star text-primary' : 'fa-star-o text-muted'}"/>
             </span>
         </xpath>
     </t>

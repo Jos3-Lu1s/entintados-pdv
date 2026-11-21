@@ -199,7 +199,7 @@ class TestPosInlinePromotions(TransactionCase):
                     'discount': 10.0,
                     'price_subtotal': 900.0,
                     'price_subtotal_incl': 900.0,
-                    'pricing_rule_type': 'partner_rule',
+                    'pricing_rule_type': 'product',
                     'price_origin': 'agreement',
                     'price_origin_label': 'Acuerdo comercial 10%',
                     'promo_reward_id': False,
@@ -221,5 +221,5 @@ class TestPosInlinePromotions(TransactionCase):
         self.assertEqual(line_promo.promo_reward_id, self.reward)
 
         self.assertEqual(line_agree.discount, 10.0)
-        self.assertEqual(line_agree.pricing_rule_type, 'partner_rule')
+        self.assertEqual(line_agree.pricing_rule_type, 'product')
         self.assertFalse(line_agree.promo_reward_id)

@@ -1,4 +1,5 @@
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
+import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
@@ -6,6 +7,32 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { isTintColorant } from "@entintados_pdv/app/utils/tint_order";
 import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
+
+patch(PosOrder, {
+    extraFields: {
+        ...(PosOrder.extraFields || {}),
+        order_promo_reward_id: {
+            model: "pos.order",
+            name: "order_promo_reward_id",
+            relation: "loyalty.reward",
+            type: "many2one",
+            local: true,
+        },
+    },
+});
+
+patch(PosOrderline, {
+    extraFields: {
+        ...(PosOrderline.extraFields || {}),
+        promo_reward_id: {
+            model: "pos.order.line",
+            name: "promo_reward_id",
+            relation: "loyalty.reward",
+            type: "many2one",
+            local: true,
+        },
+    },
+});
 
 /**
  * Identifica si una recompensa es una promoción porcentual aplicable
@@ -195,7 +222,7 @@ patch(PosOrder.prototype, {
         const lineId = tmpl?.lines_product_id?.id ?? tmpl?.lines_product_id ?? product?.lines_product_id?.id ?? product?.lines_product_id;
         const schemeId = tmpl?.scheme_id?.id ?? tmpl?.scheme_id ?? product?.scheme_id?.id ?? product?.scheme_id;
 
-        const matched = allAvailable.filter((reward) => {
+        let matched = allAvailable.filter((reward) => {
             if (reward.discount_applicability === "order") {
                 return true;
             }
@@ -210,6 +237,10 @@ patch(PosOrder.prototype, {
             }
             return false;
         });
+
+        if (this.order_promo_reward_id) {
+            matched = matched.filter((r) => r.discount_applicability === "order");
+        }
 
         if (line.promo_reward_id && !matched.some((r) => r.id === line.promo_reward_id.id)) {
             matched.unshift(line.promo_reward_id);
@@ -237,7 +268,15 @@ patch(PosOrder.prototype, {
         if (line.combo_parent_id) {
             return true;
         }
-        // 4. Exclusión mutua con acuerdos comerciales de descuento:
+        // 4. Anticipos contables quedan 100% excluidos
+        if (line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref) {
+            return true;
+        }
+        // Para promociones globales de orden completa, los acuerdos comerciales NO excluyen líneas
+        if (reward?.discount_applicability === "order") {
+            return false;
+        }
+        // 5. Exclusión mutua con acuerdos comerciales de descuento para promociones específicas:
         // Si el descuento del acuerdo comercial es mayor o igual al de la promoción, la línea queda excluida
         const agreementDiscount = this._getLineCommercialAgreementDiscount(line);
         const promoDiscount = reward?.discount || 0;
@@ -261,6 +300,7 @@ patch(PosOrder.prototype, {
         const isOrderPromo = reward.discount_applicability === "order";
         if (isOrderPromo) {
             this.order_promo_reward_id = reward;
+            delete this.order_promo_opt_out;
         }
 
         const eligibleLines = this.getOrderlines().filter((line) => {
@@ -291,19 +331,11 @@ patch(PosOrder.prototype, {
         const promoOrigin = `${reward.program_id?.name || "Promoción"}${targetPart} - ${reward.discount}%`;
 
         for (const line of eligibleLines) {
-            if (
-                isOrderPromo &&
-                line.promo_reward_id &&
-                line.promo_reward_id.id !== reward.id &&
-                line.promo_reward_id.discount_applicability === "specific" &&
-                (line.promo_reward_id.discount || line.discount || 0) >= reward.discount
-            ) {
-                continue;
-            }
-
-            const agreementDiscount = this._getLineCommercialAgreementDiscount(line);
-            if (agreementDiscount > 0 && agreementDiscount > reward.discount) {
-                continue;
+            if (!isOrderPromo) {
+                const agreementDiscount = this._getLineCommercialAgreementDiscount(line);
+                if (agreementDiscount > 0 && agreementDiscount > reward.discount) {
+                    continue;
+                }
             }
             line._entintadosSettingDiscount = true;
             try {
@@ -647,11 +679,21 @@ patch(PosOrder.prototype, {
 
     /**
      * Retira la promoción de una partida y restaura su acuerdo comercial vigente.
+     * Si la partida tiene aplicada una promoción global de pedido, se retira de toda la orden.
      */
     _dropLinePromotion(line) {
         if (!line || !line.promo_reward_id) {
             return;
         }
+
+        const isOrderPromo = line.promo_reward_id.discount_applicability === "order" ||
+            (this.order_promo_reward_id && line.promo_reward_id.id === this.order_promo_reward_id.id);
+
+        if (isOrderPromo) {
+            this._dropAllLinePromotions();
+            return;
+        }
+
         line.promo_reward_id = false;
         line.promo_opt_out = true;
         line.pricing_rule_type = "none";
@@ -679,7 +721,7 @@ patch(PosOrder.prototype, {
                 line.discount = agreementDiscount;
             }
             if (agreementDiscount > 0 && rule) {
-                line.pricing_rule_type = rule.originType || "partner_rule";
+                line.pricing_rule_type = rule.originType || "product";
                 line.pricing_rule_origin = rule.name || rule.originLabel || "";
                 line.pricing_rule_id = rule.rule?.id || false;
                 line.price_origin = "agreement";
@@ -697,16 +739,57 @@ patch(PosOrder.prototype, {
     },
 
     /**
-     * Retira las promociones de todas las partidas del pedido.
+     * Retira las promociones de todas las partidas del pedido y restaura sus acuerdos comerciales.
      */
     _dropAllLinePromotions() {
         this.order_promo_reward_id = false;
+        this.order_promo_opt_out = true;
         for (const line of this.getOrderlines()) {
             delete line.promo_opt_out;
             if (line.promo_reward_id) {
-                this._dropLinePromotion(line);
+                line.promo_reward_id = false;
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
+                line.price_origin = "list";
+                line.price_origin_label = "";
+
+                const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+                const models = this.models || this.pos?.models;
+                const rule = (partner && models && line.product_id) ? getPartnerPricingRule(models, partner, line.product_id) : null;
+                const agreementDiscount = rule?.type === "discount" ? Number(rule.discount || 0) : 0;
+
+                line._entintadosSettingDiscount = true;
+                try {
+                    if (typeof line.setDiscount === "function") {
+                        line.setDiscount(agreementDiscount);
+                    } else if (typeof line.set_discount === "function") {
+                        line.set_discount(agreementDiscount);
+                    } else {
+                        line.discount = agreementDiscount;
+                    }
+                    if (agreementDiscount > 0 && rule) {
+                        line.pricing_rule_type = rule.originType || "product";
+                        line.pricing_rule_origin = rule.name || rule.originLabel || "";
+                        line.pricing_rule_id = rule.rule?.id || false;
+                        line.price_origin = "agreement";
+                        line.price_origin_label = rule.name || rule.originLabel || "";
+                    } else {
+                        line.pricing_rule_type = "none";
+                        line.pricing_rule_origin = "";
+                        line.pricing_rule_id = false;
+                        line.price_origin = (this.pricelist || this.config?.pricelist_id) ? "pricelist" : "list";
+                        line.price_origin_label = "";
+                    }
+                } finally {
+                    delete line._entintadosSettingDiscount;
+                }
             }
         }
+    },
+
+    _removeOrderPromotion() {
+        this._dropAllLinePromotions();
     },
 });
 
@@ -746,23 +829,33 @@ patch(ControlButtons.prototype, {
             };
         });
 
-        if (selectedLine?.promo_reward_id) {
+        if (order?.order_promo_reward_id) {
+            rewardsList.unshift({
+                id: "remove_order_promo",
+                label: _t("Sin promoción: quitar promoción de la orden"),
+                description: _t("Vuelve todas las líneas a sus acuerdos vigentes"),
+                item: { isRemoveAction: true, allLines: true },
+                isDanger: true,
+            });
+        } else if (selectedLine?.promo_reward_id) {
             const agreementDiscount = order._getLineCommercialAgreementDiscount(selectedLine);
             const fallbackText = agreementDiscount > 0
                 ? `${agreementDiscount}% de acuerdo comercial`
                 : _t("precio de lista");
             rewardsList.unshift({
                 id: "remove_selected_line_promo",
-                label: _t("✕ Sin promoción: vuelve a %s", fallbackText),
+                label: _t("Sin promoción: vuelve a %s", fallbackText),
                 description: _t("Quitar promoción de la línea seleccionada"),
                 item: { isRemoveAction: true, line: selectedLine },
+                isDanger: true,
             });
-        } else if (order?.lines?.some((l) => l.promo_reward_id) || order?.order_promo_reward_id) {
+        } else if (order?.lines?.some((l) => l.promo_reward_id)) {
             rewardsList.push({
                 id: "remove_all_line_promos",
-                label: _t("✕ Sin promoción: quitar promociones del pedido"),
+                label: _t("Sin promoción: quitar promociones del pedido"),
                 description: _t("Vuelve todas las líneas a sus acuerdos vigentes"),
                 item: { isRemoveAction: true, allLines: true },
+                isDanger: true,
             });
         }
 
@@ -775,7 +868,9 @@ patch(ControlButtons.prototype, {
                         return;
                     }
                     if (selected.isRemoveAction) {
-                        if (selected.line) {
+                        if (selected.allLines || selected.line?.promo_reward_id?.discount_applicability === "order" || order.order_promo_reward_id) {
+                            order._dropAllLinePromotions();
+                        } else if (selected.line) {
                             order._dropLinePromotion(selected.line);
                         } else {
                             order._dropAllLinePromotions();
@@ -783,6 +878,7 @@ patch(ControlButtons.prototype, {
                         if (typeof order._entintadosReconcileDiscounts === "function") {
                             order._entintadosReconcileDiscounts();
                         }
+                        this.pos?.updateRewards?.();
                         return;
                     }
                     const reward = selected.reward || selected.item?.reward;
@@ -790,6 +886,7 @@ patch(ControlButtons.prototype, {
                     const potentialQty = selected.potentialQty || selected.item?.potentialQty;
 
                     if (reward) {
+                        delete order.order_promo_opt_out;
                         if (isLinePromotionReward(reward)) {
                             if (reward.discount_applicability === "order") {
                                 order._applyLinePromotionDirect(reward);
@@ -801,6 +898,7 @@ patch(ControlButtons.prototype, {
                             if (typeof order._entintadosReconcileDiscounts === "function") {
                                 order._entintadosReconcileDiscounts();
                             }
+                            this.pos?.updateRewards?.();
                         } else {
                             this._applyReward(
                                 reward,
@@ -853,7 +951,7 @@ patch(Orderline.prototype, {
     },
 
     async onSelectLinePromotion(line) {
-        const order = line?.order || line?.order_id || this.env?.services?.pos?.getOrder?.();
+        const order = line?.order_id || line?.order || this.env?.services?.pos?.getOrder?.();
         if (!order) return;
 
         const availableRewards = order._getAvailablePromotionRewardsForLine ? order._getAvailablePromotionRewardsForLine(line) : [];
@@ -876,19 +974,27 @@ patch(Orderline.prototype, {
             };
         });
 
-        if (line.promo_reward_id) {
+        const isOrderPromo = line.promo_reward_id?.discount_applicability === "order" ||
+            Boolean(order.order_promo_reward_id);
+
+        if (line.promo_reward_id || order.order_promo_reward_id) {
             const fallbackText = partnerAgreement.discount > 0
                 ? `${partnerAgreement.discount}% (${partnerAgreement.name})`
                 : _t("precio de lista");
+            const removeLabel = isOrderPromo
+                ? _t("Sin promoción: quitar promoción de la orden (vuelve a %s)", fallbackText)
+                : _t("Sin promoción: vuelve a %s", fallbackText);
             list.unshift({
                 id: "remove_line_promo",
-                label: _t("✕ Sin promoción: vuelve a %s", fallbackText),
-                item: { isRemoveAction: true, line },
+                label: removeLabel,
+                item: { isRemoveAction: true, line, isOrderPromo },
+                isDanger: true,
             });
         }
 
         const dialog = this.env?.services?.dialog || this.dialog;
         const notification = this.env?.services?.notification || this.notification;
+        const pos = this.env?.services?.pos || this.pos;
 
         if (!list.length) {
             notification?.add(
@@ -906,17 +1012,30 @@ patch(Orderline.prototype, {
             getPayload: (selected) => {
                 if (!selected) return;
                 if (selected.isRemoveAction) {
-                    order._dropLinePromotion(selected.line);
+                    if (selected.isOrderPromo || order.order_promo_reward_id) {
+                        order._dropAllLinePromotions();
+                    } else {
+                        order._dropLinePromotion(selected.line);
+                    }
                 } else if (selected.reward) {
+                    delete order.order_promo_opt_out;
                     if (selected.reward.discount_applicability === "order") {
                         order._applyLinePromotionDirect(selected.reward);
                     } else {
+                        if (order.order_promo_reward_id) {
+                            notification?.add(
+                                _t("El pedido tiene una promoción global activa en todas sus líneas. Quítala primero para asignar promociones individuales."),
+                                { type: "warning" }
+                            );
+                            return;
+                        }
                         order._applySingleLinePromotion(selected.line, selected.reward);
                     }
                 }
                 if (typeof order._entintadosReconcileDiscounts === "function") {
                     order._entintadosReconcileDiscounts();
                 }
+                pos?.updateRewards?.();
             },
         });
     },

@@ -99,7 +99,7 @@ patch(PosOrder.prototype, {
         }
 
         // Si no hay promoción de orden manual fijada, verificar si califica para una promoción de orden automática
-        if (!activeOrderPromo && typeof this._getAvailablePromotionRewards === "function") {
+        if (!activeOrderPromo && !this.order_promo_opt_out && typeof this._getAvailablePromotionRewards === "function") {
             const availablePromos = this._getAvailablePromotionRewards();
             const orderPromos = availablePromos
                 .filter((r) => r.discount_applicability === "order" && (r.program_id?.trigger === "auto" || r.program_id?.trigger === undefined))
@@ -246,7 +246,7 @@ patch(PosOrder.prototype, {
                         continue;
                     }
                 } else if (reward.discount_applicability === "order") {
-                    if (isPromoStillValid && activeOrderPromo && activeOrderPromo.id === reward.id && reward.discount >= agreementDiscount) {
+                    if (isPromoStillValid && activeOrderPromo && activeOrderPromo.id === reward.id) {
                         continue;
                     }
                 }
@@ -255,36 +255,39 @@ patch(PosOrder.prototype, {
                 line.promo_reward_id = false;
             }
 
-            // Si hay una promoción de orden global activa y la línea no tiene exclusión voluntaria
-            if (activeOrderPromo && !line.promo_opt_out && !line.combo_parent_id) {
-                const promoDiscount = Number(activeOrderPromo.discount || 0);
-                if (promoDiscount > agreementDiscount) {
-                    const targetLabel = activeOrderPromo.reward_target_label || (
-                        activeOrderPromo.lines_product_id?.name ? `Línea: ${activeOrderPromo.lines_product_id.name}` :
-                        activeOrderPromo.scheme_id?.name ? `Esquema: ${activeOrderPromo.scheme_id.name}` : ""
-                    );
-                    const targetPart = targetLabel ? ` · ${targetLabel}` : "";
-                    const promoOrigin = `${activeOrderPromo.program_id?.name || "Promoción"}${targetPart} - ${promoDiscount}%`;
+            // Si hay una promoción de orden global activa, aplica a todas las partidas elegibles (todo o nada)
+            const isExcluded = typeof this._isLineExcludedFromPromo === "function"
+                ? this._isLineExcludedFromPromo(line, activeOrderPromo)
+                : Boolean(line.fixed_price_locked || line.pricing_rule_type === "fixed_price" || line.is_tint_colorant || line.combo_parent_id);
 
-                    line._entintadosSettingDiscount = true;
-                    try {
-                        if (typeof line.setDiscount === "function") {
-                            line.setDiscount(promoDiscount);
-                        } else if (typeof line.set_discount === "function") {
-                            line.set_discount(promoDiscount);
-                        } else {
-                            line.discount = promoDiscount;
-                        }
-                        line.pricing_rule_type = "promo";
-                        line.pricing_rule_origin = promoOrigin;
-                        line.price_origin = "promo";
-                        line.price_origin_label = activeOrderPromo.program_id?.name || "Promoción";
-                        line.promo_reward_id = activeOrderPromo;
-                    } finally {
-                        delete line._entintadosSettingDiscount;
+            if (activeOrderPromo && !isExcluded) {
+                const promoDiscount = Number(activeOrderPromo.discount || 0);
+                const targetLabel = activeOrderPromo.reward_target_label || (
+                    activeOrderPromo.lines_product_id?.name ? `Línea: ${activeOrderPromo.lines_product_id.name}` :
+                    activeOrderPromo.scheme_id?.name ? `Esquema: ${activeOrderPromo.scheme_id.name}` : ""
+                );
+                const targetPart = targetLabel ? ` · ${targetLabel}` : "";
+                const promoOrigin = `${activeOrderPromo.program_id?.name || "Promoción"}${targetPart} - ${promoDiscount}%`;
+
+                line._entintadosSettingDiscount = true;
+                try {
+                    if (typeof line.setDiscount === "function") {
+                        line.setDiscount(promoDiscount);
+                    } else if (typeof line.set_discount === "function") {
+                        line.set_discount(promoDiscount);
+                    } else {
+                        line.discount = promoDiscount;
                     }
-                    continue;
+                    line.pricing_rule_type = "promo";
+                    line.pricing_rule_origin = promoOrigin;
+                    line.price_origin = "promo";
+                    line.price_origin_label = activeOrderPromo.program_id?.name || "Promoción";
+                    line.promo_reward_id = activeOrderPromo;
+                    delete line.promo_opt_out;
+                } finally {
+                    delete line._entintadosSettingDiscount;
                 }
+                continue;
             }
 
             // Aplicar descuento según acuerdo comercial pactado (excluyente frente a promoción)

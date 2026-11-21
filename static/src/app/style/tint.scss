@@ -1214,3 +1214,22 @@ $tint-breakpoint-lg: 1199.98px;
     cursor: not-allowed !important;
     filter: grayscale(0.6);
 }
+
+/* ==========================================================================
+   Indicador para acciones de remoción de promociones en SelectionPopup
+   ========================================================================== */
+.selection-item.is-remove-action {
+    border-color: #dc3545 !important;
+    background-color: #fff5f5 !important;
+    color: #b02a37 !important;
+
+    &:hover, &:focus {
+        background-color: #fee2e2 !important;
+        border-color: #b02a37 !important;
+        color: #7f1d1d !important;
+    }
+
+    span {
+        color: inherit;
+    }
+}
