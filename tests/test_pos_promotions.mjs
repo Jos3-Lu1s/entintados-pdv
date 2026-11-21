@@ -21,6 +21,14 @@ function createPosLoyaltyContext() {
         getOrderlines() {
             return this.lines;
         }
+        _getRewardLineValuesDiscount(args) {
+            return [{
+                product_id: { id: 999 },
+                qty: 1,
+                price_unit: -10,
+                is_reward_line: true,
+            }];
+        }
         _getRewardLineValuesProduct(args) {
             return [{
                 product_id: args.product || args.reward.reward_product_id,
@@ -37,19 +45,27 @@ function createPosLoyaltyContext() {
     }
 
     const source = fs.readFileSync(new URL('overrides/pos_loyalty.js', root), 'utf8')
-        .replace(/^import .*;\r?\n/gm, '');
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace(/^export /gm, '');
 
     const context = {
         PosOrder: MockPosOrder,
         ControlButtons: MockControlButtons,
+        SelectionPopup: class MockSelectionPopup {},
+        Orderline: class MockOrderline {},
         patch,
         _t: (s) => s,
         isTintColorant: helpers.isTintColorant,
+        getPartnerPricingRule: () => ({ type: 'none', discount: 0 }),
         console,
     };
 
     vm.runInNewContext(source, context);
-    return { MockPosOrder, MockControlButtons };
+    return {
+        MockPosOrder,
+        MockControlButtons,
+        isLinePromotionReward: context.isLinePromotionReward,
+    };
 }
 
 test('pos_loyalty: exclusion de lineas protegidas', () => {
@@ -294,3 +310,281 @@ test('pos_loyalty: control buttons valida regalo multi-producto sin componentes 
     const approvedResult = await ctrl._applyReward(mixedReward, false, 1);
     assert.deepEqual(approvedResult, { applied: true });
 });
+
+test('pos_loyalty: identificacion de promociones por linea directas', () => {
+    const { isLinePromotionReward } = createPosLoyaltyContext();
+
+    assert.equal(isLinePromotionReward(null), false);
+    assert.equal(isLinePromotionReward({ reward_type: 'product' }), false);
+    assert.equal(isLinePromotionReward({ reward_type: 'free_shipping' }), false);
+    assert.equal(isLinePromotionReward({
+        reward_type: 'discount',
+        discount_mode: 'per_order',
+        discount_applicability: 'order',
+        program_id: { program_type: 'promotion' },
+    }), false);
+    assert.equal(isLinePromotionReward({
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount_applicability: 'order',
+        discount_max_amount: 100,
+        program_id: { program_type: 'promotion' },
+    }), false);
+    assert.equal(isLinePromotionReward({
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount_applicability: 'cheapest',
+        program_id: { program_type: 'promotion' },
+    }), false);
+    assert.equal(isLinePromotionReward({
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount_applicability: 'order',
+        program_id: { program_type: 'loyalty' },
+    }), false);
+
+    assert.equal(isLinePromotionReward({
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount_applicability: 'order',
+        program_id: { program_type: 'promotion' },
+    }), true);
+    assert.equal(isLinePromotionReward({
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount_applicability: 'specific',
+        program_id: { program_type: 'promotion' },
+    }), true);
+});
+
+test('pos_loyalty: supresion de lineas auxiliares de descuento para promociones directas', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const order = new MockPosOrder();
+
+    const percentReward = {
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount_applicability: 'order',
+        program_id: { program_type: 'promotion' },
+        discount: 20,
+    };
+    const emptyLines = order._getRewardLineValuesDiscount({ reward: percentReward });
+    assert.equal(emptyLines.length, 0, 'Las promociones directas por linea no deben generar lineas auxiliares negativas');
+
+    const fixedReward = {
+        reward_type: 'discount',
+        discount_mode: 'per_order',
+        discount_applicability: 'order',
+        program_id: { program_type: 'promotion' },
+        discount: 50,
+    };
+    const fallbackLines = order._getRewardLineValuesDiscount({ reward: fixedReward });
+    assert.equal(fallbackLines.length, 1);
+    assert.equal(fallbackLines[0].is_reward_line, true);
+});
+
+test('pos_loyalty: aplicacion directa de promocion sobre descuento de linea sin agregar lineas', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+
+    const normalLine = {
+        uuid: 'L1',
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 0,
+        pricing_rule_type: 'none',
+        product_id: { id: 10, tint_role: 'none' },
+    };
+    const lowerAgreementLine = {
+        uuid: 'L2',
+        getQuantity: () => 1,
+        price_unit: 200,
+        discount: 10,
+        pricing_rule_type: 'partner_rule',
+        product_id: { id: 11, tint_role: 'none' },
+    };
+    const higherAgreementLine = {
+        uuid: 'L3',
+        getQuantity: () => 1,
+        price_unit: 300,
+        discount: 30,
+        pricing_rule_type: 'partner_rule',
+        product_id: { id: 12, tint_role: 'none' },
+    };
+    const fixedPriceLine = {
+        uuid: 'L4',
+        getQuantity: () => 1,
+        price_unit: 400,
+        discount: 0,
+        fixed_price_locked: true,
+        pricing_rule_type: 'fixed_price',
+        product_id: { id: 13, tint_role: 'none' },
+    };
+    const colorantLine = {
+        uuid: 'L5',
+        getQuantity: () => 1,
+        price_unit: 50,
+        discount: 0,
+        product_id: { id: 14, tint_role: 'colorant' },
+        is_tint_colorant: true,
+    };
+
+    const lines = [normalLine, lowerAgreementLine, higherAgreementLine, fixedPriceLine, colorantLine];
+    const order = new MockPosOrder(lines);
+
+    const promoReward = {
+        id: 77,
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount: 25,
+        program_id: { name: 'Buen fin' },
+        reward_target_label: 'Línea: Vinil-Acrilica',
+    };
+
+    const applied = order._applyLinePromotionDirect(promoReward);
+    assert.equal(applied, true);
+    assert.equal(order.lines.length, 5, 'No se deben agregar lineas adicionales');
+
+    // Linea normal debe recibir el descuento, etiqueta y origen de promocion
+    assert.equal(normalLine.discount, 25);
+    assert.equal(normalLine.pricing_rule_type, 'promo');
+    assert.equal(normalLine.pricing_rule_origin, 'Buen fin · Línea: Vinil-Acrilica - 25%');
+    assert.equal(normalLine.price_origin, 'promo');
+    assert.deepEqual(normalLine.promo_reward_id, promoReward);
+
+    // Linea con acuerdo menor debe ser sustituida por el descuento mayor de promocion
+    assert.equal(lowerAgreementLine.discount, 25);
+    assert.equal(lowerAgreementLine.pricing_rule_type, 'promo');
+    assert.equal(lowerAgreementLine.price_origin, 'promo');
+    assert.deepEqual(lowerAgreementLine.promo_reward_id, promoReward);
+
+    // Linea con acuerdo comercial superior debe conservar su acuerdo original
+    assert.equal(higherAgreementLine.discount, 30);
+    assert.equal(higherAgreementLine.pricing_rule_type, 'partner_rule');
+    assert.notEqual(higherAgreementLine.promo_reward_id, promoReward);
+
+    // Linea de precio pactado fijo no debe cambiar
+    assert.equal(fixedPriceLine.discount, 0);
+    assert.equal(fixedPriceLine.pricing_rule_type, 'fixed_price');
+
+    // Colorante no debe cambiar
+    assert.equal(colorantLine.discount, 0);
+});
+
+test('pos_loyalty: alternancia libre entre promociones (mayor o menor descuento)', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+
+    const line = {
+        uuid: 'L1',
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 25,
+        pricing_rule_type: 'promo',
+        pricing_rule_origin: 'Promo Alta (25%)',
+        promo_reward_id: { id: 1, discount: 25 },
+        product_id: { id: 10, tint_role: 'none' },
+    };
+    const order = new MockPosOrder([line]);
+
+    const lowerPromoReward = {
+        id: 2,
+        reward_type: 'discount',
+        discount_mode: 'percent',
+        discount: 15,
+        program_id: { name: 'Promo Menor' },
+        reward_target_label: 'Línea: Vinil-Acrilica',
+    };
+
+    // Alternar a promocion de menor descuento debe permitirse si el usuario la selecciona
+    const applied = order._applyLinePromotionDirect(lowerPromoReward);
+    assert.equal(applied, true);
+    assert.equal(line.discount, 15);
+    assert.equal(line.pricing_rule_origin, 'Promo Menor · Línea: Vinil-Acrilica - 15%');
+    assert.equal(line.promo_reward_id.id, 2);
+});
+
+test('pos_loyalty: dejar sin promocion una linea y restaurar acuerdo comercial', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+
+    const line = {
+        uuid: 'L1',
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 20,
+        pricing_rule_type: 'promo',
+        pricing_rule_origin: 'Promo (20%)',
+        price_origin: 'promo',
+        promo_reward_id: { id: 10 },
+        product_id: { id: 55, tint_role: 'none' },
+    };
+    const order = new MockPosOrder([line]);
+    order.order_promo_reward_id = { id: 10 };
+
+    order._dropLinePromotion(line);
+
+    assert.equal(line.promo_reward_id, false);
+    assert.equal(line.pricing_rule_type, 'none');
+    assert.equal(line.pricing_rule_origin, '');
+    assert.equal(line.price_origin, 'list');
+    assert.equal(line.discount, 0);
+    assert.equal(order.order_promo_reward_id, false);
+});
+
+test('pos_loyalty: clickRewards getPayload maneja accion isRemoveAction sin error de undefined reward', async () => {
+    const { MockPosOrder, MockControlButtons } = createPosLoyaltyContext();
+
+    const line = {
+        uuid: 'L1',
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 20,
+        pricing_rule_type: 'promo',
+        promo_reward_id: { id: 10 },
+        product_id: { id: 55, tint_role: 'none' },
+    };
+    const order = new MockPosOrder([line]);
+    order.getSelectedOrderline = () => line;
+    order._getLineCommercialAgreementDiscount = () => 0;
+
+    const ctrl = new MockControlButtons();
+    ctrl.pos = {
+        getOrder: () => order,
+    };
+    ctrl.getPotentialRewards = () => [
+        {
+            reward: {
+                id: 10,
+                program_id: { name: 'Promo Test' },
+                discount: 20,
+                description: '20% desc',
+            },
+            coupon_id: false,
+            potentialQty: 1,
+        },
+    ];
+
+    let popupConfig = null;
+    ctrl.dialog = {
+        add: (popupClass, config) => {
+            popupConfig = config;
+        },
+    };
+
+    await ctrl.clickRewards();
+    assert.ok(popupConfig, 'El popup debe configurarse');
+    assert.ok(popupConfig.list.length >= 2, 'Debe incluir opcion de remocion y opcion de recompensa');
+
+    const removeOption = popupConfig.list.find((opt) => opt.id === 'remove_selected_line_promo');
+    assert.ok(removeOption, 'Debe existir la opcion remove_selected_line_promo');
+    assert.equal(removeOption.item.isRemoveAction, true);
+
+    // Simular que SelectionPopup entrega selected.item a getPayload
+    assert.doesNotThrow(() => {
+        popupConfig.getPayload(removeOption.item);
+    });
+
+    assert.equal(line.promo_reward_id, false, 'La promocion debe quedar retirada');
+    assert.equal(line.discount, 0);
+});
+
+
+

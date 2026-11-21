@@ -5,7 +5,17 @@
             <li t-if="vals.pricingRuleType === 'promo'" class="price-per-unit pricing-rule-indicator promo-indicator" t-att-class="{'text-success': vals.isDisplay}">
                 <i class="fa fa-tag pe-1"/>
                 <t t-esc="vals.pricingRuleOrigin"/>
-                <span t-if="vals.isReceipt and vals.discount"> -<t t-esc="vals.discount"/>%</span>
+                <span t-if="!vals.isReceipt"
+                      class="ms-2 text-danger cursor-pointer o-remove-promo-action"
+                      role="button"
+                      t-on-click.stop="() => this.onRemovePromotion(props.line)"
+                      title="Quitar promoción y volver a acuerdo comercial">
+                    <i class="fa fa-times-circle"/>
+                </span>
+                <t t-if="vals.isReceipt">
+                    <span t-if="vals.discount"> -<t t-esc="vals.discount"/>%</span>
+                    <span t-if="vals.noDiscountPrice"> sobre <t t-esc="vals.noDiscountPrice"/></span>
+                </t>
             </li>
             <li t-elif="vals.pricingRuleOrigin and vals.pricingRuleType === 'fixed_price'" class="price-per-unit pricing-rule-indicator">
                 <i class="fa fa-tag pe-1"/>

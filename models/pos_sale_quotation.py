@@ -237,15 +237,21 @@ class PosOrderQuotation(models.Model):
             if self.lines.filtered(lambda line: line.combo_parent_id and line.product_id.tint_role != 'colorant'):
                 raise UserError(_('Este ticket contiene un combo comercial. Cotízalo desde Ventas antes de cobrarlo en caja.'))
             pricelist = self._quotation_pricelist()
-            quotation = self.env['sale.order'].with_company(self.company_id).create({
+            order_promo_reward = self.lines.filtered(
+                lambda l: l.promo_reward_id and l.promo_reward_id.discount_applicability == 'order'
+            )[:1].promo_reward_id
+            quotation_vals = {
                 'state': 'draft',
                 'partner_id': self.partner_id.id, 'company_id': self.company_id.id,
                 'pricelist_id': pricelist.id, 'fiscal_position_id': self.fiscal_position_id.id,
                 'warehouse_id': self.config_id.warehouse_id.id,
                 'user_id': self.partner_id._contact_sale_owner().id,
                 'team_id': self.config_id.crm_team_id.id, 'origin': self.pos_reference or self.name,
-            })
-            for sequence, line in enumerate(self.lines.filtered(lambda item: not item.combo_parent_id), 1):
+            }
+            if order_promo_reward:
+                quotation_vals['order_promo_reward_id'] = order_promo_reward.id
+            quotation = self.env['sale.order'].with_company(self.company_id).create(quotation_vals)
+            for sequence, line in enumerate(self.lines.filtered(lambda item: not item.combo_parent_id and not (item.is_reward_line and item.price_unit < 0)), 1):
                 if not line.product_id.sale_ok or not line.product_id.active:
                     raise UserError(_('El producto %s no está habilitado para Ventas.') % line.product_id.display_name)
                 if line.product_id.type == 'combo':
@@ -260,6 +266,7 @@ class PosOrderQuotation(models.Model):
                           'product_id': line.product_id.id, 'product_uom_id': line.product_id.uom_id.id,
                           'product_uom_qty': line.qty, 'price_unit': line.price_unit,
                           'technical_price_unit': line.price_unit, 'discount': line.discount,
+                          'technical_discount': line.discount,
                           'price_origin': origin, 'price_origin_label': origin_label,
                           'pricing_rule_type': line.pricing_rule_type or 'none',
                           'pricing_rule_origin': line.pricing_rule_origin or False,
@@ -269,7 +276,7 @@ class PosOrderQuotation(models.Model):
                 if snapshot:
                     values.update(tint_snapshot=snapshot, tint_container_qty=line.qty, price_origin='tint',
                                   price_origin_label=_('Precio del entintado: base más colorantes'))
-                self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION).create(values)
+                self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION, skip_manual_discount_breakdown=True).create(values)
             if self.currency_id.compare_amounts(quotation.amount_total, self.amount_total):
                 raise UserError(_('El total de la cotización difiere del ticket. Revisa impuestos, redondeos o promociones; no se convirtió el ticket.'))
             if self.id:

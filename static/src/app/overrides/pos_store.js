@@ -150,6 +150,7 @@ patch(PosOrder.prototype, {
                     line.pricing_rule_type = rule.originType || "fixed_price";
                     line.pricing_rule_origin = rule.originLabel || "Precio Fijo";
                     line.pricing_rule_id = rule.rule?.id || false;
+                    line.promo_reward_id = false;
                     line.price_origin = line.is_tinted_base ? "tint" : (rule.priceOrigin || "agreement");
                     line.price_origin_label = line.is_tinted_base
                         ? "Precio del entintado: base más colorantes"
@@ -195,9 +196,28 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_type = "none";
                 line.pricing_rule_origin = "";
                 line.pricing_rule_id = false;
+                line.promo_reward_id = false;
                 line.price_origin = "manual";
                 line.price_origin_label = "Precio manual";
                 continue;
+            }
+
+            // Si la partida tiene una promoción activa, protegerla salvo que el acuerdo comercial sea superior
+            if (line.pricing_rule_type === "promo" && (line.promo_reward_id || line.discount > 0)) {
+                const promoDiscount = Number(line.promo_reward_id?.discount ?? line.discount ?? 0);
+                const agreementDiscount = rule.type === "discount" ? Number(rule.discount || 0) : 0;
+
+                let isPromoStillValid = true;
+                const reward = line.promo_reward_id;
+                if (reward && typeof this._isLineExcludedFromPromo === "function") {
+                    if (this._isLineExcludedFromPromo(line, reward)) {
+                        isPromoStillValid = false;
+                    }
+                }
+
+                if (isPromoStillValid && promoDiscount >= agreementDiscount) {
+                    continue;
+                }
             }
 
             // Aplicar descuento según jerarquía comercial (Niveles 2, 3, 4 y 5)
@@ -221,10 +241,12 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_id = rule.rule?.id || false;
                 line.price_origin = rule.priceOrigin || "agreement";
                 line.price_origin_label = rule.originLabel || "";
+                line.promo_reward_id = false;
             } else {
                 line.pricing_rule_type = "none";
                 line.pricing_rule_origin = "";
                 line.pricing_rule_id = false;
+                line.promo_reward_id = false;
                 if (!line.is_tinted_base && line.price_type !== "manual") {
                     line.price_origin = this.pricelist ? "pricelist" : "list";
                     line.price_origin_label = "";

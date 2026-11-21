@@ -66,6 +66,8 @@ class SaleOrderLine(models.Model):
             ('list', 'Precio de venta'),
             ('pricelist', 'Tarifa'),
             ('fixed_price', 'Precio fijo de acuerdo'),
+            ('agreement', 'Acuerdo comercial'),
+            ('promo', 'Promoción'),
             ('manual', 'Manual'),
             ('combo', 'Parte de combo'),
             ('tint', 'Entintado'),

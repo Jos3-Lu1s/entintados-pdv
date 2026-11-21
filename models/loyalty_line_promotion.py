@@ -24,6 +24,24 @@ class LoyaltyReward(models.Model):
         ondelete='restrict',
         help="Aplica el descuento a los productos pertenecientes a este esquema.",
     )
+    reward_target_label = fields.Char(
+        string='Objetivo de la recompensa',
+        compute='_compute_reward_target_label',
+    )
+
+    @api.depends('lines_product_id', 'scheme_id', 'discount_applicability', 'discount_product_ids', 'discount_product_category_id', 'discount_product_tag_id')
+    def _compute_reward_target_label(self):
+        for record in self:
+            record.reward_target_label = record._get_reward_target_label()
+
+    @api.depends('lines_product_id', 'scheme_id')
+    def _compute_description(self):
+        super()._compute_description()
+        for reward in self:
+            if reward.reward_type == 'discount' and reward.discount_applicability == 'specific':
+                target = reward._get_reward_target_label()
+                if target:
+                    reward.description = f"{reward.discount:g}% en {target}"
 
     @api.onchange('lines_product_id')
     def _onchange_lines_product_id(self):
@@ -151,7 +169,7 @@ class LoyaltyReward(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         fields = super()._load_pos_data_fields(config)
-        extra = ['lines_product_id', 'scheme_id']
+        extra = ['lines_product_id', 'scheme_id', 'reward_target_label']
         for field in extra:
             if field not in fields:
                 fields.append(field)
