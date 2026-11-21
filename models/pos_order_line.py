@@ -115,6 +115,13 @@ class PosOrderLine(models.Model):
         readonly=True,
         copy=False,
     )
+    promo_reward_id = fields.Many2one(
+        'loyalty.reward',
+        string='Promoción aplicada',
+        readonly=True,
+        ondelete='set null',
+        copy=False,
+    )
 
     @api.model
     def _load_pos_data_fields(self, config):
@@ -126,5 +133,6 @@ class PosOrderLine(models.Model):
             'tint_color_code',
             'price_origin',
             'price_origin_label',
+            'promo_reward_id',
         ]
         return params

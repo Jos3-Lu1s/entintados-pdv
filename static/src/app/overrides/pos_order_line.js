@@ -274,6 +274,7 @@ patch(PosOrderline.prototype, {
         json.pricing_rule_id = this.pricing_rule_id || false;
         json.price_origin = this.price_origin || "list";
         json.price_origin_label = this.price_origin_label || "";
+        json.promo_reward_id = this.promo_reward_id?.id || this.promo_reward_id || false;
         return json;
     },
 
@@ -286,6 +287,7 @@ patch(PosOrderline.prototype, {
         this.pricing_rule_id = json.pricing_rule_id || false;
         this.price_origin = json.price_origin || "list";
         this.price_origin_label = json.price_origin_label || "";
+        this.promo_reward_id = json.promo_reward_id || false;
     },
 
     serializeForORM() {
@@ -295,6 +297,7 @@ patch(PosOrderline.prototype, {
         values.pricing_rule_id = this.pricing_rule_id || false;
         values.price_origin = this.price_origin || "list";
         values.price_origin_label = this.price_origin_label || "";
+        values.promo_reward_id = this.promo_reward_id?.id || this.promo_reward_id || false;
         return values;
     },
 });

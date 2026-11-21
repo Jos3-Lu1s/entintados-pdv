@@ -102,6 +102,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_stock.js",
             "entintados_pdv/static/src/app/overrides/pos_customer.js",
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
+            "entintados_pdv/static/src/app/overrides/pos_loyalty.js",
             "entintados_pdv/static/src/app/overrides/orderline.js",
             "entintados_pdv/static/src/app/overrides/orderline.xml",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",

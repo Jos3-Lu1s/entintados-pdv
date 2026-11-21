@@ -120,7 +120,8 @@ class PosOrderQuotation(models.Model):
         line_names = ['uuid', 'product_id', 'qty', 'price_unit', 'discount', 'price_subtotal',
                       'price_subtotal_incl', 'full_product_name', 'customer_note', 'tint_color_code',
                       'sale_order_line_id', 'sale_order_origin_id', 'refunded_orderline_id', 'advance_source_ref',
-                      'price_origin', 'price_origin_label', 'pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id']
+                      'price_origin', 'price_origin_label', 'pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id',
+                      'promo_reward_id']
         lines = self.env['pos.order.line']
         parents = {}
         identifiers = {}
@@ -263,6 +264,7 @@ class PosOrderQuotation(models.Model):
                           'pricing_rule_type': line.pricing_rule_type or 'none',
                           'pricing_rule_origin': line.pricing_rule_origin or False,
                           'pricing_rule_id': line.pricing_rule_id.id if line.pricing_rule_id else False,
+                          'promo_reward_id': line.promo_reward_id.id if line.promo_reward_id else False,
                           'tax_ids': [Command.set(line.tax_ids_after_fiscal_position.ids)], 'name': description}
                 if snapshot:
                     values.update(tint_snapshot=snapshot, tint_container_qty=line.qty, price_origin='tint',
@@ -284,6 +286,10 @@ class SaleOrderPosQuotation(models.Model):
     pos_quotation_session_id = fields.Many2one('pos.session', copy=False, readonly=True, check_company=True)
     pos_quotation_snapshot = fields.Json(copy=False, readonly=True)
     _pos_quotation_uuid_unique = models.Constraint('UNIQUE(pos_quotation_uuid)', 'El ticket ya tiene una cotización.')
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['order_promo_reward_id']))
 
     @api.model_create_multi
     def create(self, values_list):
@@ -386,7 +392,7 @@ class SaleOrderLinePosQuotation(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['tint_snapshot', 'tint_display_name']))
+        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['tint_snapshot', 'tint_display_name', 'promo_reward_id']))
 
 
 class StockMovePosQuotation(models.Model):

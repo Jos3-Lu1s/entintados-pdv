@@ -148,6 +148,15 @@ class LoyaltyReward(models.Model):
             and self.program_id.program_type in LINE_PROMOTION_PROGRAM_TYPES
         )
 
+    @api.model
+    def _load_pos_data_fields(self, config):
+        fields = super()._load_pos_data_fields(config)
+        extra = ['lines_product_id', 'scheme_id']
+        for field in extra:
+            if field not in fields:
+                fields.append(field)
+        return fields
+
 
 class LoyaltyProgram(models.Model):
     _inherit = 'loyalty.program'
@@ -181,5 +190,19 @@ class LoyaltyProgram(models.Model):
         counts = Counter()
         for __, native, promo in groups:
             counts.update({program_by_reward[rid] for rid in native + promo if rid in program_by_reward})
+
+        if 'pos.order.line' in self.env:
+            pos_domain = [
+                '|', ('reward_id', 'in', reward_ids), ('promo_reward_id', 'in', reward_ids),
+                ('order_id.state', 'in', ('paid', 'done', 'invoiced')),
+            ]
+            pos_groups = self.env['pos.order.line'].sudo()._read_group(
+                pos_domain,
+                ['order_id'],
+                ['reward_id:array_agg', 'promo_reward_id:array_agg'],
+            )
+            for __, native, promo in pos_groups:
+                counts.update({program_by_reward[rid] for rid in native + promo if rid in program_by_reward})
+
         for program in self:
             program.order_count = counts[program.id]
