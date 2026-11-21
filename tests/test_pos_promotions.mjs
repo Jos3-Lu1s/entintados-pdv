@@ -586,5 +586,422 @@ test('pos_loyalty: clickRewards getPayload maneja accion isRemoveAction sin erro
     assert.equal(line.discount, 0);
 });
 
+test('pos_loyalty: asignacion individual de promocion por partida', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const lineA = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 10,
+        pricing_rule_type: 'partner_rule',
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const lineB = {
+        getQuantity: () => 1,
+        price_unit: 200,
+        discount: 10,
+        pricing_rule_type: 'partner_rule',
+        product_id: { id: 20 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const order = new MockPosOrder([lineA, lineB]);
+
+    const reward = {
+        id: 55,
+        program_id: { name: 'Promo 25%' },
+        discount: 25,
+        discount_applicability: 'specific',
+    };
+
+    const applied = order._applySingleLinePromotion(lineA, reward);
+    assert.equal(applied, true);
+    assert.equal(lineA.discount, 25);
+    assert.equal(lineA.pricing_rule_type, 'promo');
+    assert.equal(lineA.price_origin, 'promo');
+    assert.equal(lineA.promo_reward_id, reward);
+
+    assert.equal(lineB.discount, 10);
+    assert.equal(lineB.pricing_rule_type, 'partner_rule');
+    assert.equal(lineB.promo_reward_id, undefined);
+});
+
+test('pos_loyalty: exclusion de lineas con precio fijo o colorantes en asignacion individual', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const fixedLine = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 0,
+        fixed_price_locked: true,
+        pricing_rule_type: 'fixed_price',
+        product_id: { id: 10 },
+    };
+    const colorantLine = {
+        getQuantity: () => 1,
+        price_unit: 50,
+        discount: 0,
+        is_tint_colorant: true,
+        product_id: { id: 20, tint_role: 'colorant' },
+    };
+    const order = new MockPosOrder([fixedLine, colorantLine]);
+    const reward = { id: 1, discount: 20 };
+
+    assert.equal(order._applySingleLinePromotion(fixedLine, reward), false);
+    assert.equal(order._applySingleLinePromotion(colorantLine, reward), false);
+});
+
+test('pos_loyalty: restaurar acuerdo comercial al retirar promocion de la linea', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const line = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 25,
+        pricing_rule_type: 'promo',
+        price_origin: 'promo',
+        promo_reward_id: { id: 55, discount: 25 },
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const order = new MockPosOrder([line]);
+    order.getPartner = () => ({ id: 5 });
+    order.models = {};
+
+    order._dropLinePromotion(line);
+    assert.equal(line.promo_reward_id, false);
+    assert.equal(line.discount, 0);
+    assert.equal(line.pricing_rule_type, 'none');
+    assert.equal(line.price_origin, 'list');
+});
+
+test('pos_loyalty: aplicacion de promocion de orden completa a lineas elegibles', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const line1 = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 0,
+        pricing_rule_type: 'none',
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const line2 = {
+        getQuantity: () => 2,
+        price_unit: 50,
+        discount: 0,
+        pricing_rule_type: 'none',
+        product_id: { id: 20 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const fixedLine = {
+        getQuantity: () => 1,
+        price_unit: 80,
+        discount: 0,
+        fixed_price_locked: true,
+        pricing_rule_type: 'fixed_price',
+        product_id: { id: 30 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const colorantLine = {
+        getQuantity: () => 1,
+        price_unit: 20,
+        discount: 0,
+        is_tint_colorant: true,
+        product_id: { id: 40, tint_role: 'colorant' },
+        setDiscount(d) { this.discount = d; },
+    };
+
+    const order = new MockPosOrder([line1, line2, fixedLine, colorantLine]);
+    const orderReward = {
+        id: 77,
+        program_id: { name: 'Gran Venta 15%' },
+        discount: 15,
+        discount_applicability: 'order',
+    };
+
+    const applied = order._applyLinePromotionDirect(orderReward);
+    assert.equal(applied, true);
+    assert.equal(order.order_promo_reward_id, orderReward);
+
+    // Lineas normales elegibles toman el 15%
+    assert.equal(line1.discount, 15);
+    assert.equal(line1.pricing_rule_type, 'promo');
+    assert.equal(line1.price_origin, 'promo');
+    assert.equal(line1.promo_reward_id, orderReward);
+
+    assert.equal(line2.discount, 15);
+    assert.equal(line2.pricing_rule_type, 'promo');
+    assert.equal(line2.price_origin, 'promo');
+    assert.equal(line2.promo_reward_id, orderReward);
+
+    // Lineas protegidas quedan excluidas
+    assert.equal(fixedLine.discount, 0);
+    assert.equal(fixedLine.pricing_rule_type, 'fixed_price');
+
+    assert.equal(colorantLine.discount, 0);
+    assert.equal(colorantLine.is_tint_colorant, true);
+});
+
+test('pos_loyalty: promocion de orden respeta linea con acuerdo comercial superior', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const lineWithBetterAgreement = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 20,
+        pricing_rule_type: 'partner_rule',
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const lineWithLowerAgreement = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 5,
+        pricing_rule_type: 'partner_rule',
+        product_id: { id: 20 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const order = new MockPosOrder([lineWithBetterAgreement, lineWithLowerAgreement]);
+    order._getLineCommercialAgreementDiscount = (line) => line === lineWithBetterAgreement ? 20 : 5;
+
+    const orderReward = {
+        id: 88,
+        program_id: { name: 'Promo Orden 15%' },
+        discount: 15,
+        discount_applicability: 'order',
+    };
+
+    const applied = order._applyLinePromotionDirect(orderReward);
+    assert.equal(applied, true);
+
+    // Linea con acuerdo 20% > 15% conserva su acuerdo comercial
+    assert.equal(lineWithBetterAgreement.discount, 20);
+    assert.equal(lineWithBetterAgreement.pricing_rule_type, 'partner_rule');
+
+    // Linea con acuerdo 5% < 15% toma la promocion de orden de 15%
+    assert.equal(lineWithLowerAgreement.discount, 15);
+    assert.equal(lineWithLowerAgreement.pricing_rule_type, 'promo');
+    assert.equal(lineWithLowerAgreement.promo_reward_id, orderReward);
+});
+
+test('pos_loyalty: promocion de orden no pisa promocion individual especifica superior', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const specificReward = {
+        id: 91,
+        program_id: { name: 'Promo Especial 25%' },
+        discount: 25,
+        discount_applicability: 'specific',
+    };
+    const lineWithSpecific = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 25,
+        pricing_rule_type: 'promo',
+        price_origin: 'promo',
+        promo_reward_id: specificReward,
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const normalLine = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 0,
+        pricing_rule_type: 'none',
+        product_id: { id: 20 },
+        setDiscount(d) { this.discount = d; },
+    };
+    const order = new MockPosOrder([lineWithSpecific, normalLine]);
+
+    const orderReward = {
+        id: 92,
+        program_id: { name: 'Promo Orden 15%' },
+        discount: 15,
+        discount_applicability: 'order',
+    };
+
+    order._applyLinePromotionDirect(orderReward);
+
+    // Linea especifica de 25% no es degradada al 15%
+    assert.equal(lineWithSpecific.discount, 25);
+    assert.equal(lineWithSpecific.promo_reward_id, specificReward);
+
+    // Linea comun toma el 15%
+    assert.equal(normalLine.discount, 15);
+    assert.equal(normalLine.promo_reward_id, orderReward);
+});
+
+test('pos_loyalty: _isRewardValidForOrder evalua montos y cantidades minimas', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const line1 = {
+        getQuantity: () => 2,
+        price_unit: 100,
+        discount: 0,
+        product_id: { id: 10 },
+    };
+    const order = new MockPosOrder([line1]);
+
+    const rewardWithAmount = {
+        program_id: {
+            rule_ids: [
+                {
+                    any_product: true,
+                    minimum_amount: 300,
+                    minimum_amount_tax_mode: 'excl',
+                },
+            ],
+        },
+    };
+    // 2 * 100 = 200 < 300 -> falso
+    assert.equal(order._isRewardValidForOrder(rewardWithAmount), false);
+
+    // Subimos cantidad: 4 * 100 = 400 >= 300 -> verdadero
+    line1.getQuantity = () => 4;
+    assert.equal(order._isRewardValidForOrder(rewardWithAmount), true);
+});
+
+function createPosStoreContext() {
+    class MockPosStore {}
+    class MockPosOrder {
+        constructor(lines = []) {
+            this.lines = lines;
+        }
+        getOrderlines() {
+            return this.lines;
+        }
+        getPartner() {
+            return this.partner_id || null;
+        }
+    }
+    const source = fs.readFileSync(new URL('overrides/pos_store.js', root), 'utf8')
+        .replace(/^import .*;\r?\n/gm, '')
+        .replace(/^export /gm, '');
+
+    let partnerRuleMock = { type: 'none', discount: 0 };
+    const context = {
+        PosStore: MockPosStore,
+        PosOrder: MockPosOrder,
+        patch,
+        getPartnerPricingRule: (models, partner, product, options) => partnerRuleMock,
+        console,
+    };
+    vm.runInNewContext(source, context);
+    return {
+        MockPosOrder,
+        setPartnerRule: (rule) => { partnerRuleMock = rule; },
+    };
+}
+
+test('pos_store: reconciliacion propaga promocion de orden a nuevas lineas', () => {
+    const { MockPosOrder, setPartnerRule } = createPosStoreContext();
+    setPartnerRule({ type: 'none', discount: 0 });
+
+    const orderPromo = {
+        id: 77,
+        program_id: { name: 'Promo 15% Orden' },
+        discount: 15,
+        discount_applicability: 'order',
+    };
+
+    const lineExisting = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 15,
+        pricing_rule_type: 'promo',
+        price_origin: 'promo',
+        promo_reward_id: orderPromo,
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+
+    const lineNew = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 0,
+        pricing_rule_type: 'none',
+        product_id: { id: 20 },
+        setDiscount(d) { this.discount = d; },
+    };
+
+    const order = new MockPosOrder([lineExisting, lineNew]);
+    order.order_promo_reward_id = orderPromo;
+    order._isRewardValidForOrder = () => true;
+
+    order._entintadosReconcileDiscounts();
+
+    // La nueva linea recibe la promocion de orden de 15%
+    assert.equal(lineNew.discount, 15);
+    assert.equal(lineNew.pricing_rule_type, 'promo');
+    assert.equal(lineNew.price_origin, 'promo');
+    assert.equal(lineNew.promo_reward_id, orderPromo);
+});
+
+test('pos_store: reconciliacion revierte promocion de orden si deja de ser valida', () => {
+    const { MockPosOrder, setPartnerRule } = createPosStoreContext();
+    setPartnerRule({ type: 'discount', discount: 10, originType: 'partner_rule', originLabel: 'Acuerdo 10%' });
+
+    const orderPromo = {
+        id: 77,
+        program_id: { name: 'Promo 15% Orden' },
+        discount: 15,
+        discount_applicability: 'order',
+    };
+
+    const line = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 15,
+        pricing_rule_type: 'promo',
+        price_origin: 'promo',
+        promo_reward_id: orderPromo,
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+
+    const order = new MockPosOrder([line]);
+    order.order_promo_reward_id = orderPromo;
+    // Simular que el pedido ya no cumple montos minimos
+    order._isRewardValidForOrder = () => false;
+
+    order._entintadosReconcileDiscounts();
+
+    // La promo de orden se invalida
+    assert.equal(order.order_promo_reward_id, false);
+    // La partida revierte a su acuerdo comercial de 10%
+    assert.equal(line.discount, 10);
+    assert.equal(line.pricing_rule_type, 'partner_rule');
+    assert.equal(line.price_origin, 'agreement');
+    assert.equal(line.promo_reward_id, false);
+});
+
+test('pos_store: reconciliacion respeta exclusividad de acuerdo comercial superior a promo de orden', () => {
+    const { MockPosOrder, setPartnerRule } = createPosStoreContext();
+    // Cliente tiene acuerdo comercial de 20%, superior a la promo de orden de 15%
+    setPartnerRule({ type: 'discount', discount: 20, originType: 'partner_rule', originLabel: 'Acuerdo VIP 20%' });
+
+    const orderPromo = {
+        id: 77,
+        program_id: { name: 'Promo 15% Orden' },
+        discount: 15,
+        discount_applicability: 'order',
+    };
+
+    const line = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 0,
+        pricing_rule_type: 'none',
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+
+    const order = new MockPosOrder([line]);
+    order.order_promo_reward_id = orderPromo;
+    order._isRewardValidForOrder = () => true;
+
+    order._entintadosReconcileDiscounts();
+
+    // Como acuerdo 20% > promo 15%, la linea toma el acuerdo comercial
+    assert.equal(line.discount, 20);
+    assert.equal(line.pricing_rule_type, 'partner_rule');
+    assert.equal(line.price_origin, 'agreement');
+    assert.equal(line.promo_reward_id, false);
+});
+
 
 

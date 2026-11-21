@@ -3,14 +3,9 @@
     <t t-name="entintados_pdv.Orderline" t-inherit="point_of_sale.Orderline" t-inherit-mode="extension" owl="1">
         <xpath expr="//li[@t-if='vals.discount']" position="replace">
             <li t-if="vals.pricingRuleType === 'promo'" class="price-per-unit pricing-rule-indicator promo-indicator" t-att-class="{'text-success': vals.isDisplay}">
-                <i class="fa fa-tag pe-1"/>
-                <t t-esc="vals.pricingRuleOrigin"/>
-                <span t-if="!vals.isReceipt"
-                      class="ms-2 text-danger cursor-pointer o-remove-promo-action"
-                      role="button"
-                      t-on-click.stop="() => this.onRemovePromotion(props.line)"
-                      title="Quitar promoción y volver a acuerdo comercial">
-                    <i class="fa fa-times-circle"/>
+                <span class="cursor-pointer" role="button" t-on-click.stop="() => this.onSelectLinePromotion(props.line)" title="Cambiar o ver promociones de la partida">
+                    <i class="fa fa-tag pe-1"/>
+                    <t t-esc="vals.pricingRuleOrigin"/>
                 </span>
                 <t t-if="vals.isReceipt">
                     <span t-if="vals.discount"> -<t t-esc="vals.discount"/>%</span>
@@ -33,6 +28,13 @@
         <xpath expr="//div[hasclass('product-name')]/span[hasclass('qty')]" position="after">
             <span t-if="props.mode === 'receipt' and props.line.product_id?.default_code"
                   class="product-ref text-nowrap pe-2 x-small">[<t t-out="props.line.product_id.default_code"/>]</span>
+            <span t-if="props.mode !== 'receipt' and this.canHavePromotion(props.line)"
+                  class="o-line-promo-star cursor-pointer ms-1 px-1"
+                  role="button"
+                  t-on-click.stop="() => this.onSelectLinePromotion(props.line)"
+                  t-att-title="this.getPromotionButtonTitle(props.line)">
+                <i t-attf-class="fa #{props.line.promo_reward_id ? 'fa-star text-primary' : 'fa-star-o text-muted'}"/>
+            </span>
         </xpath>
     </t>
 </templates>

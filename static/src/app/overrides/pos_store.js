@@ -86,6 +86,30 @@ patch(PosOrder.prototype, {
         const models = this.models || posStoreInstance?.models;
         const nativeAdvanceProduct = (this.config || this.config_id || posStoreInstance?.config)?.down_payment_product_id;
 
+        // Determinar si existe una promoción global o de orden activa o aplicable
+        let activeOrderPromo = this.order_promo_reward_id || null;
+        if (activeOrderPromo) {
+            const isValid = typeof this._isRewardValidForOrder === "function"
+                ? this._isRewardValidForOrder(activeOrderPromo)
+                : true;
+            if (!isValid) {
+                this.order_promo_reward_id = false;
+                activeOrderPromo = null;
+            }
+        }
+
+        // Si no hay promoción de orden manual fijada, verificar si califica para una promoción de orden automática
+        if (!activeOrderPromo && typeof this._getAvailablePromotionRewards === "function") {
+            const availablePromos = this._getAvailablePromotionRewards();
+            const orderPromos = availablePromos
+                .filter((r) => r.discount_applicability === "order" && (r.program_id?.trigger === "auto" || r.program_id?.trigger === undefined))
+                .sort((a, b) => (b.discount || 0) - (a.discount || 0));
+            if (orderPromos.length > 0) {
+                activeOrderPromo = orderPromos[0];
+                this.order_promo_reward_id = activeOrderPromo;
+            }
+        }
+
         for (const line of this.lines || []) {
             // A refund keeps the price and discount actually paid, even if
             // the customer's commercial agreement has changed since the sale.
@@ -202,26 +226,69 @@ patch(PosOrder.prototype, {
                 continue;
             }
 
-            // Si la partida tiene una promoción activa, protegerla salvo que el acuerdo comercial sea superior
-            if (line.pricing_rule_type === "promo" && (line.promo_reward_id || line.discount > 0)) {
-                const promoDiscount = Number(line.promo_reward_id?.discount ?? line.discount ?? 0);
-                const agreementDiscount = rule.type === "discount" ? Number(rule.discount || 0) : 0;
+            const agreementDiscount = rule.type === "discount" ? Number(rule.discount || 0) : 0;
 
-                let isPromoStillValid = true;
+            // Evaluar si la partida conserva una promoción específica individual válida
+            if (line.pricing_rule_type === "promo" && line.promo_reward_id) {
                 const reward = line.promo_reward_id;
-                if (reward && typeof this._isLineExcludedFromPromo === "function") {
+                let isPromoStillValid = true;
+                if (typeof this._isRewardValidForOrder === "function") {
+                    isPromoStillValid = this._isRewardValidForOrder(reward);
+                }
+                if (isPromoStillValid && typeof this._isLineExcludedFromPromo === "function") {
                     if (this._isLineExcludedFromPromo(line, reward)) {
                         isPromoStillValid = false;
                     }
                 }
 
-                if (isPromoStillValid && promoDiscount >= agreementDiscount) {
+                if (reward.discount_applicability === "specific") {
+                    if (isPromoStillValid && (reward.discount || line.discount || 0) >= agreementDiscount) {
+                        continue;
+                    }
+                } else if (reward.discount_applicability === "order") {
+                    if (isPromoStillValid && activeOrderPromo && activeOrderPromo.id === reward.id && reward.discount >= agreementDiscount) {
+                        continue;
+                    }
+                }
+
+                // Si ya no es válida o el acuerdo comercial es superior, limpiar referencia
+                line.promo_reward_id = false;
+            }
+
+            // Si hay una promoción de orden global activa y la línea no tiene exclusión voluntaria
+            if (activeOrderPromo && !line.promo_opt_out && !line.combo_parent_id) {
+                const promoDiscount = Number(activeOrderPromo.discount || 0);
+                if (promoDiscount > agreementDiscount) {
+                    const targetLabel = activeOrderPromo.reward_target_label || (
+                        activeOrderPromo.lines_product_id?.name ? `Línea: ${activeOrderPromo.lines_product_id.name}` :
+                        activeOrderPromo.scheme_id?.name ? `Esquema: ${activeOrderPromo.scheme_id.name}` : ""
+                    );
+                    const targetPart = targetLabel ? ` · ${targetLabel}` : "";
+                    const promoOrigin = `${activeOrderPromo.program_id?.name || "Promoción"}${targetPart} - ${promoDiscount}%`;
+
+                    line._entintadosSettingDiscount = true;
+                    try {
+                        if (typeof line.setDiscount === "function") {
+                            line.setDiscount(promoDiscount);
+                        } else if (typeof line.set_discount === "function") {
+                            line.set_discount(promoDiscount);
+                        } else {
+                            line.discount = promoDiscount;
+                        }
+                        line.pricing_rule_type = "promo";
+                        line.pricing_rule_origin = promoOrigin;
+                        line.price_origin = "promo";
+                        line.price_origin_label = activeOrderPromo.program_id?.name || "Promoción";
+                        line.promo_reward_id = activeOrderPromo;
+                    } finally {
+                        delete line._entintadosSettingDiscount;
+                    }
                     continue;
                 }
             }
 
-            // Aplicar descuento según jerarquía comercial (Niveles 2, 3, 4 y 5)
-            const targetDiscount = rule.type === "discount" ? rule.discount : 0;
+            // Aplicar descuento según acuerdo comercial pactado (excluyente frente a promoción)
+            const targetDiscount = agreementDiscount;
             line._entintadosSettingDiscount = true;
             try {
                 if (typeof line.setDiscount === "function") {
@@ -235,7 +302,7 @@ patch(PosOrder.prototype, {
                 delete line._entintadosSettingDiscount;
             }
 
-            if (rule.type === "discount") {
+            if (rule.type === "discount" && targetDiscount > 0) {
                 line.pricing_rule_type = rule.originType || "product";
                 line.pricing_rule_origin = rule.originLabel || "";
                 line.pricing_rule_id = rule.rule?.id || false;

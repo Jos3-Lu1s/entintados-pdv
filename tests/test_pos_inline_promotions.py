@@ -154,3 +154,72 @@ class TestPosInlinePromotions(TransactionCase):
         self.assertEqual(len(valid_lines), 1)
         self.assertEqual(valid_lines.product_id, self.product)
         self.assertFalse(valid_lines.is_reward_line)
+
+    def test_mixed_lines_promotion_and_commercial_agreement(self):
+        """Verifica que un ticket puede tener una partida con promocion y otra con acuerdo comercial."""
+        product_b = self.env['product.product'].create({
+            'name': 'Pintura Vinilica Comercial',
+            'list_price': 1000.0,
+            'type': 'consu',
+            'available_in_pos': True,
+            'taxes_id': [Command.clear()],
+            'company_id': self.company.id,
+        })
+        # Partida 1: con promocion de 20% (500 - 20% = 400)
+        # Partida 2: con acuerdo comercial de 10% (1000 - 10% = 900)
+        # Total ticket: 1300
+        ticket = self.env['pos.order'].create({
+            'session_id': self.session.id,
+            'company_id': self.company.id,
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+            'amount_total': 1300.0,
+            'amount_tax': 0.0,
+            'amount_paid': 0.0,
+            'amount_return': 0.0,
+            'state': 'draft',
+            'lines': [
+                Command.create({
+                    'product_id': self.product.id,
+                    'qty': 1,
+                    'price_unit': 500.0,
+                    'discount': 20.0,
+                    'price_subtotal': 400.0,
+                    'price_subtotal_incl': 400.0,
+                    'pricing_rule_type': 'promo',
+                    'price_origin': 'promo',
+                    'price_origin_label': 'Promocion directa',
+                    'promo_reward_id': self.reward.id,
+                    'tax_ids': [Command.clear()],
+                }),
+                Command.create({
+                    'product_id': product_b.id,
+                    'qty': 1,
+                    'price_unit': 1000.0,
+                    'discount': 10.0,
+                    'price_subtotal': 900.0,
+                    'price_subtotal_incl': 900.0,
+                    'pricing_rule_type': 'partner_rule',
+                    'price_origin': 'agreement',
+                    'price_origin_label': 'Acuerdo comercial 10%',
+                    'promo_reward_id': False,
+                    'tax_ids': [Command.clear()],
+                }),
+            ],
+        })
+
+        result = ticket.action_create_sale_quotation()
+        quote = self.env['sale.order'].browse(result['id'])
+        self.assertEqual(quote.amount_total, 1300.0)
+        self.assertEqual(len(quote.order_line), 2)
+
+        line_promo = quote.order_line.filtered(lambda l: l.product_id == self.product)
+        line_agree = quote.order_line.filtered(lambda l: l.product_id == product_b)
+
+        self.assertEqual(line_promo.discount, 20.0)
+        self.assertEqual(line_promo.pricing_rule_type, 'promo')
+        self.assertEqual(line_promo.promo_reward_id, self.reward)
+
+        self.assertEqual(line_agree.discount, 10.0)
+        self.assertEqual(line_agree.pricing_rule_type, 'partner_rule')
+        self.assertFalse(line_agree.promo_reward_id)

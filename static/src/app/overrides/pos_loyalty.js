@@ -18,7 +18,7 @@ export function isLinePromotionReward(reward) {
         reward.discount_mode === "percent" &&
         ["order", "specific"].includes(reward.discount_applicability) &&
         !reward.discount_max_amount &&
-        reward.program_id?.program_type === "promotion"
+        ["promotion", "promo_code", "coupons"].includes(reward.program_id?.program_type)
     );
 }
 
@@ -41,18 +41,98 @@ patch(PosOrder.prototype, {
      */
     _applyReward(reward, coupon_id, args) {
         if (isLinePromotionReward(reward)) {
-            if (this._getRealCouponPoints(coupon_id) < reward.required_points) {
-                return _t("No hay suficientes puntos en el cupón para reclamar esta recompensa.");
+            if (coupon_id && typeof this._getRealCouponPoints === "function") {
+                const points = this._getRealCouponPoints(coupon_id);
+                if (reward.required_points > 0 && points < reward.required_points) {
+                    return _t("No hay suficientes puntos en el cupón para reclamar esta recompensa.");
+                }
             }
             if (typeof this._applyLinePromotionDirect === "function") {
                 const applied = this._applyLinePromotionDirect(reward);
-                if (!applied) {
+                if (!applied && !this.getOrderlines().length) {
+                    if (reward.discount_applicability === "order") {
+                        this.order_promo_reward_id = reward;
+                        return true;
+                    }
                     return _t("No hay partidas elegibles para aplicar esta promoción.");
                 }
+                if (!applied && reward.discount_applicability === "order") {
+                    this.order_promo_reward_id = reward;
+                    return true;
+                }
+            }
+            if (typeof this._entintadosReconcileDiscounts === "function") {
+                this._entintadosReconcileDiscounts();
             }
             return true;
         }
         return super._applyReward(...arguments);
+    },
+
+    /**
+     * Valida si una recompensa o programa promocional cumple las condiciones
+     * mínimas del pedido (monto mínimo, cantidad mínima y vigencia).
+     */
+    _isRewardValidForOrder(reward) {
+        if (!reward || !reward.program_id) {
+            return false;
+        }
+        const program = reward.program_id;
+        if (typeof this._programIsApplicable === "function") {
+            if (!this._programIsApplicable(program)) {
+                return false;
+            }
+        }
+        const rules = program.rule_ids || [];
+        if (!rules.length) {
+            return true;
+        }
+
+        const lines = this.getOrderlines ? this.getOrderlines() : (this.lines || []);
+        for (const rule of rules) {
+            if (rule.mode === "with_code" && this.uiState?.codeActivatedProgramRules) {
+                if (!this.uiState.codeActivatedProgramRules.includes(rule.id)) {
+                    return false;
+                }
+            }
+            let totalQty = 0;
+            let amountWithTax = 0;
+            let amountWithoutTax = 0;
+
+            for (const line of lines) {
+                if (line.combo_parent_id || line.refunded_orderline_id) {
+                    continue;
+                }
+                const product = line.product_id;
+                const productId = product?.id;
+                const validIds = rule.validProductIds || new Set((rule.valid_product_ids || []).map((p) => p.id || p));
+                const matches = rule.any_product || (productId && validIds.has(productId));
+
+                if (matches) {
+                    const qty = typeof line.getQuantity === "function" ? line.getQuantity() : (line.qty || 0);
+                    totalQty += qty;
+                    const priceUnit = line.price_unit || 0;
+                    const grossLineIncl = (line.prices?.total_included !== undefined)
+                        ? (line.priceInclNoDiscount || (line.discount ? (line.prices.total_included / (1 - line.discount / 100)) : line.prices.total_included))
+                        : (priceUnit * qty);
+                    const grossLineExcl = (line.prices?.total_excluded !== undefined)
+                        ? (line.priceExclNoDiscount || (line.discount ? (line.prices.total_excluded / (1 - line.discount / 100)) : line.prices.total_excluded))
+                        : (priceUnit * qty);
+
+                    amountWithTax += grossLineIncl;
+                    amountWithoutTax += grossLineExcl;
+                }
+            }
+
+            if (rule.minimum_qty && totalQty < rule.minimum_qty) {
+                return false;
+            }
+            const amountToCheck = rule.minimum_amount_tax_mode === "incl" ? amountWithTax : amountWithoutTax;
+            if (rule.minimum_amount && amountToCheck < rule.minimum_amount) {
+                return false;
+            }
+        }
+        return true;
     },
 
     /**
@@ -70,6 +150,72 @@ patch(PosOrder.prototype, {
         const models = this.models || this.pos?.models;
         const rule = getPartnerPricingRule(models, partner, line.product_id);
         return rule?.type === "discount" ? Number(rule.discount || 0) : 0;
+    },
+
+    /**
+     * Obtiene la información del acuerdo comercial vigente del cliente para la línea,
+     * incluso si la partida tiene actualmente asignada una promoción.
+     */
+    _getLineCommercialAgreementInfo(line) {
+        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
+        if (!partner || !line?.product_id) {
+            return { discount: 0, name: "", originType: "none", rule: null };
+        }
+        const models = this.models || this.pos?.models;
+        const rule = getPartnerPricingRule(models, partner, line.product_id);
+        if (rule?.type === "discount") {
+            return {
+                discount: Number(rule.discount || 0),
+                name: rule.name || "Acuerdo comercial",
+                originType: rule.originType || "partner_rule",
+                rule: rule,
+            };
+        }
+        return { discount: 0, name: "", originType: "none", rule: null };
+    },
+
+    /**
+     * Obtiene las promociones de porcentaje disponibles aplicables a una partida específica.
+     */
+    _getAvailablePromotionRewardsForLine(line) {
+        if (!line || !line.product_id || line.fixed_price_locked || line.pricing_rule_type === "fixed_price") {
+            return [];
+        }
+        if (isTintColorant(line) || line.is_tint_colorant || line.product_id?.tint_role === "colorant") {
+            return [];
+        }
+        if (line.combo_parent_id) {
+            return [];
+        }
+
+        const allAvailable = this._getAvailablePromotionRewards();
+        const product = line.combo_parent_id?.product_id || line.product_id || line.getProduct?.();
+        const productId = product?.id;
+        const tmpl = product?.product_tmpl_id || product?.raw?.product_tmpl_id || product;
+        const lineId = tmpl?.lines_product_id?.id ?? tmpl?.lines_product_id ?? product?.lines_product_id?.id ?? product?.lines_product_id;
+        const schemeId = tmpl?.scheme_id?.id ?? tmpl?.scheme_id ?? product?.scheme_id?.id ?? product?.scheme_id;
+
+        const matched = allAvailable.filter((reward) => {
+            if (reward.discount_applicability === "order") {
+                return true;
+            }
+            if (reward.discount_applicability === "specific") {
+                const applicableProductIds = new Set((reward.all_discount_product_ids || []).map((p) => p.id || p));
+                const rewardLineId = reward.lines_product_id?.id ?? reward.lines_product_id;
+                const rewardSchemeId = reward.scheme_id?.id ?? reward.scheme_id;
+
+                return applicableProductIds.has(productId) ||
+                    (rewardLineId && lineId === rewardLineId) ||
+                    (rewardSchemeId && schemeId === rewardSchemeId);
+            }
+            return false;
+        });
+
+        if (line.promo_reward_id && !matched.some((r) => r.id === line.promo_reward_id.id)) {
+            matched.unshift(line.promo_reward_id);
+        }
+
+        return matched;
     },
 
     /**
@@ -112,6 +258,11 @@ patch(PosOrder.prototype, {
         const rewardLineId = reward.lines_product_id?.id ?? reward.lines_product_id;
         const rewardSchemeId = reward.scheme_id?.id ?? reward.scheme_id;
 
+        const isOrderPromo = reward.discount_applicability === "order";
+        if (isOrderPromo) {
+            this.order_promo_reward_id = reward;
+        }
+
         const eligibleLines = this.getOrderlines().filter((line) => {
             if (this._isLineExcludedFromPromo(line, reward)) {
                 return false;
@@ -140,6 +291,16 @@ patch(PosOrder.prototype, {
         const promoOrigin = `${reward.program_id?.name || "Promoción"}${targetPart} - ${reward.discount}%`;
 
         for (const line of eligibleLines) {
+            if (
+                isOrderPromo &&
+                line.promo_reward_id &&
+                line.promo_reward_id.id !== reward.id &&
+                line.promo_reward_id.discount_applicability === "specific" &&
+                (line.promo_reward_id.discount || line.discount || 0) >= reward.discount
+            ) {
+                continue;
+            }
+
             const agreementDiscount = this._getLineCommercialAgreementDiscount(line);
             if (agreementDiscount > 0 && agreementDiscount > reward.discount) {
                 continue;
@@ -158,17 +319,59 @@ patch(PosOrder.prototype, {
                 line.price_origin = "promo";
                 line.price_origin_label = reward.program_id?.name || "Promoción";
                 line.promo_reward_id = reward;
+                delete line.promo_opt_out;
                 changed = true;
             } finally {
                 delete line._entintadosSettingDiscount;
             }
         }
 
-        if (reward.discount_applicability === "order" && changed) {
-            this.order_promo_reward_id = reward;
+        return changed;
+    },
+
+    /**
+     * Aplica la promoción porcentual directamente sobre una partida individual,
+     * reemplazando de forma excluyente cualquier acuerdo comercial previo.
+     */
+    _applySingleLinePromotion(line, reward) {
+        if (!line || !line.getQuantity() || !line.price_unit) {
+            return false;
+        }
+        if (line.fixed_price_locked || line.pricing_rule_type === "fixed_price") {
+            return false;
+        }
+        if (isTintColorant(line) || line.is_tint_colorant || line.product_id?.tint_role === "colorant") {
+            return false;
+        }
+        if (line.combo_parent_id) {
+            return false;
         }
 
-        return changed;
+        const targetLabel = reward.reward_target_label || (
+            reward.lines_product_id?.name ? `Línea: ${reward.lines_product_id.name}` :
+            reward.scheme_id?.name ? `Esquema: ${reward.scheme_id.name}` : ""
+        );
+        const targetPart = targetLabel ? ` · ${targetLabel}` : "";
+        const promoOrigin = `${reward.program_id?.name || "Promoción"}${targetPart} - ${reward.discount}%`;
+
+        line._entintadosSettingDiscount = true;
+        try {
+            if (typeof line.setDiscount === "function") {
+                line.setDiscount(reward.discount);
+            } else if (typeof line.set_discount === "function") {
+                line.set_discount(reward.discount);
+            } else {
+                line.discount = reward.discount;
+            }
+            line.pricing_rule_type = "promo";
+            line.pricing_rule_origin = promoOrigin;
+            line.price_origin = "promo";
+            line.price_origin_label = reward.program_id?.name || "Promoción";
+            line.promo_reward_id = reward;
+        } finally {
+            delete line._entintadosSettingDiscount;
+        }
+        return true;
     },
 
     /**
@@ -186,19 +389,14 @@ patch(PosOrder.prototype, {
         }
 
         const programs = this.models?.["loyalty.program"]?.getAll?.() || [];
-        const grossPriceIncl = this.getOrderlines().reduce(
-            (sum, l) => sum + (l.priceInclNoDiscount || l.prices?.total_included || 0), 0
-        );
-        const grossPriceExcl = this.getOrderlines().reduce(
-            (sum, l) => sum + (l.priceExclNoDiscount || l.prices?.total_excluded || 0), 0
-        );
-
         for (const program of programs) {
-            if (program.program_type !== "promotion") continue;
+            if (!["promotion", "promo_code", "coupons"].includes(program.program_type)) {
+                continue;
+            }
             for (const reward of program.reward_ids || []) {
                 if (isLinePromotionReward(reward) && !promoRewards.some((r) => r.id === reward.id)) {
-                    if (typeof this._canGenerateRewards === "function") {
-                        if (this._canGenerateRewards(program, grossPriceIncl, grossPriceExcl)) {
+                    if (typeof this._isRewardValidForOrder === "function") {
+                        if (this._isRewardValidForOrder(reward)) {
                             promoRewards.push(reward);
                         }
                     } else {
@@ -455,8 +653,10 @@ patch(PosOrder.prototype, {
             return;
         }
         line.promo_reward_id = false;
+        line.promo_opt_out = true;
         line.pricing_rule_type = "none";
         line.pricing_rule_origin = "";
+        line.pricing_rule_id = false;
         line.price_origin = "list";
         line.price_origin_label = "";
 
@@ -480,9 +680,16 @@ patch(PosOrder.prototype, {
             }
             if (agreementDiscount > 0 && rule) {
                 line.pricing_rule_type = rule.originType || "partner_rule";
-                line.pricing_rule_origin = rule.name || "";
+                line.pricing_rule_origin = rule.name || rule.originLabel || "";
+                line.pricing_rule_id = rule.rule?.id || false;
                 line.price_origin = "agreement";
-                line.price_origin_label = rule.name || "";
+                line.price_origin_label = rule.name || rule.originLabel || "";
+            } else {
+                line.pricing_rule_type = "none";
+                line.pricing_rule_origin = "";
+                line.pricing_rule_id = false;
+                line.price_origin = (this.pricelist || this.config?.pricelist_id) ? "pricelist" : "list";
+                line.price_origin_label = "";
             }
         } finally {
             delete line._entintadosSettingDiscount;
@@ -493,7 +700,9 @@ patch(PosOrder.prototype, {
      * Retira las promociones de todas las partidas del pedido.
      */
     _dropAllLinePromotions() {
+        this.order_promo_reward_id = false;
         for (const line of this.getOrderlines()) {
+            delete line.promo_opt_out;
             if (line.promo_reward_id) {
                 this._dropLinePromotion(line);
             }
@@ -505,10 +714,19 @@ patch(ControlButtons.prototype, {
     async clickRewards() {
         const order = this.pos.getOrder();
         const selectedLine = order?.getSelectedOrderline();
-        const rewards = this.getPotentialRewards();
+        const rewards = (typeof this.getPotentialRewards === "function" ? this.getPotentialRewards() : []) || [];
+        const availableFromOrder = (order && typeof order._getAvailablePromotionRewards === "function")
+            ? order._getAvailablePromotionRewards()
+            : [];
+
+        for (const reward of availableFromOrder) {
+            if (!rewards.some((item) => (item.reward?.id || item.id) === reward.id)) {
+                rewards.push({ reward: reward, coupon_id: false });
+            }
+        }
 
         const rewardsList = rewards.map((item) => {
-            const reward = item.reward;
+            const reward = item.reward || item;
             const programName = reward.program_id?.name || "";
             const targetLabel = reward.reward_target_label || (
                 reward.lines_product_id?.name ? `Línea: ${reward.lines_product_id.name}` :
@@ -516,8 +734,10 @@ patch(ControlButtons.prototype, {
             );
             const targetPart = targetLabel ? ` · ${targetLabel}` : "";
             const discount = reward.discount ? ` - ${reward.discount}%` : "";
-            const isApplied = selectedLine?.promo_reward_id?.id === reward.id;
-            const label = `${programName}${targetPart}${discount}${isApplied ? " ✓" : ""}`;
+            const isApplied = selectedLine?.promo_reward_id?.id === reward.id ||
+                (reward.discount_applicability === "order" && order?.order_promo_reward_id?.id === reward.id);
+            const typeLabel = reward.discount_applicability === "order" ? ` [Orden]` : "";
+            const label = `${programName}${typeLabel}${targetPart}${discount}${isApplied ? " ✓" : ""}`;
             return {
                 id: reward.id,
                 label: label || programName,
@@ -537,7 +757,7 @@ patch(ControlButtons.prototype, {
                 description: _t("Quitar promoción de la línea seleccionada"),
                 item: { isRemoveAction: true, line: selectedLine },
             });
-        } else if (order?.lines?.some((l) => l.promo_reward_id)) {
+        } else if (order?.lines?.some((l) => l.promo_reward_id) || order?.order_promo_reward_id) {
             rewardsList.push({
                 id: "remove_all_line_promos",
                 label: _t("✕ Sin promoción: quitar promociones del pedido"),
@@ -560,14 +780,34 @@ patch(ControlButtons.prototype, {
                         } else {
                             order._dropAllLinePromotions();
                         }
+                        if (typeof order._entintadosReconcileDiscounts === "function") {
+                            order._entintadosReconcileDiscounts();
+                        }
                         return;
                     }
-                    if (selected.reward) {
-                        this._applyReward(
-                            selected.reward,
-                            selected.coupon_id,
-                            selected.potentialQty
-                        );
+                    const reward = selected.reward || selected.item?.reward;
+                    const coupon_id = selected.coupon_id || selected.item?.coupon_id;
+                    const potentialQty = selected.potentialQty || selected.item?.potentialQty;
+
+                    if (reward) {
+                        if (isLinePromotionReward(reward)) {
+                            if (reward.discount_applicability === "order") {
+                                order._applyLinePromotionDirect(reward);
+                            } else if (selectedLine && !order._isLineExcludedFromPromo(selectedLine, reward)) {
+                                order._applySingleLinePromotion(selectedLine, reward);
+                            } else {
+                                order._applyLinePromotionDirect(reward);
+                            }
+                            if (typeof order._entintadosReconcileDiscounts === "function") {
+                                order._entintadosReconcileDiscounts();
+                            }
+                        } else {
+                            this._applyReward(
+                                reward,
+                                coupon_id,
+                                potentialQty
+                            );
+                        }
                     }
                 },
             });
@@ -597,10 +837,97 @@ patch(ControlButtons.prototype, {
 });
 
 patch(Orderline.prototype, {
+    canHavePromotion(line) {
+        if (!line || !line.product_id) return false;
+        if (line.fixed_price_locked || line.pricing_rule_type === "fixed_price") return false;
+        if (isTintColorant(line) || line.is_tint_colorant || line.product_id?.tint_role === "colorant") return false;
+        if (line.combo_parent_id) return false;
+        return true;
+    },
+
+    getPromotionButtonTitle(line) {
+        if (line.promo_reward_id) {
+            return _t("Promoción aplicada: %s (%s%%). Clic para cambiar o quitar.", line.price_origin_label || line.pricing_rule_origin || "", line.discount || 0);
+        }
+        return _t("Ver y asignar promociones disponibles para esta partida.");
+    },
+
+    async onSelectLinePromotion(line) {
+        const order = line?.order || line?.order_id || this.env?.services?.pos?.getOrder?.();
+        if (!order) return;
+
+        const availableRewards = order._getAvailablePromotionRewardsForLine ? order._getAvailablePromotionRewardsForLine(line) : [];
+        const partnerAgreement = order._getLineCommercialAgreementInfo ? order._getLineCommercialAgreementInfo(line) : { discount: 0, name: "" };
+
+        const list = availableRewards.map((reward) => {
+            const isApplied = line.promo_reward_id?.id === reward.id;
+            const targetLabel = reward.reward_target_label || (
+                reward.lines_product_id?.name ? `Línea: ${reward.lines_product_id.name}` :
+                reward.scheme_id?.name ? `Esquema: ${reward.scheme_id.name}` : ""
+            );
+            const targetPart = targetLabel ? ` · ${targetLabel}` : "";
+            const isOrderPromo = reward.discount_applicability === "order";
+            const typeLabel = isOrderPromo ? ` [Orden]` : "";
+            const label = `${reward.program_id?.name || "Promoción"}${typeLabel} - ${reward.discount}%${targetPart}${isApplied ? " ✓" : ""}`;
+            return {
+                id: reward.id,
+                label: label,
+                item: { reward, line },
+            };
+        });
+
+        if (line.promo_reward_id) {
+            const fallbackText = partnerAgreement.discount > 0
+                ? `${partnerAgreement.discount}% (${partnerAgreement.name})`
+                : _t("precio de lista");
+            list.unshift({
+                id: "remove_line_promo",
+                label: _t("✕ Sin promoción: vuelve a %s", fallbackText),
+                item: { isRemoveAction: true, line },
+            });
+        }
+
+        const dialog = this.env?.services?.dialog || this.dialog;
+        const notification = this.env?.services?.notification || this.notification;
+
+        if (!list.length) {
+            notification?.add(
+                _t("No hay promociones disponibles para esta partida."),
+                { type: "info" }
+            );
+            return;
+        }
+
+        const title = _t("Promociones para %s", line.product_id?.display_name || line.product_id?.name || "");
+
+        dialog?.add(SelectionPopup, {
+            title: title,
+            list: list,
+            getPayload: (selected) => {
+                if (!selected) return;
+                if (selected.isRemoveAction) {
+                    order._dropLinePromotion(selected.line);
+                } else if (selected.reward) {
+                    if (selected.reward.discount_applicability === "order") {
+                        order._applyLinePromotionDirect(selected.reward);
+                    } else {
+                        order._applySingleLinePromotion(selected.line, selected.reward);
+                    }
+                }
+                if (typeof order._entintadosReconcileDiscounts === "function") {
+                    order._entintadosReconcileDiscounts();
+                }
+            },
+        });
+    },
+
     onRemovePromotion(line) {
         const order = line?.order || line?.order_id || this.env?.services?.pos?.getOrder?.();
         if (order && typeof order._dropLinePromotion === "function") {
             order._dropLinePromotion(line);
+            if (typeof order._entintadosReconcileDiscounts === "function") {
+                order._entintadosReconcileDiscounts();
+            }
         }
     },
 });
