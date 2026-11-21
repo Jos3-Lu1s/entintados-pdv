@@ -283,3 +283,196 @@ class TestPosGlobalPromotionParity(TransactionCase):
         self.assertFalse(line_fixed.promo_reward_id)
         self.assertEqual(line_fixed.discount, 0.0)
         self.assertEqual(line_fixed.pricing_rule_type, 'fixed_price')
+
+    def test_specific_scheme_promotions_can_differ_per_line_without_global_promo(self):
+        """Verifica que se puedan asignar diferentes promociones por linea segun su esquema
+        sin que se active una promocion global ni se sobreescriban entre si."""
+        scheme_a = self.env['tint.schema'].create({'name': 'Esquema Automotriz QA'})
+        scheme_b = self.env['tint.schema'].create({'name': 'Esquema Arquitectonico QA'})
+
+        product_scheme_a = self.env['product.product'].create({
+            'name': 'Pintura Automotriz',
+            'list_price': 600.0,
+            'type': 'consu',
+            'scheme_id': scheme_a.id,
+            'available_in_pos': True,
+            'taxes_id': [Command.clear()],
+            'company_id': self.company.id,
+        })
+        product_scheme_b = self.env['product.product'].create({
+            'name': 'Pintura Vinilica Arquitectonica',
+            'list_price': 400.0,
+            'type': 'consu',
+            'scheme_id': scheme_b.id,
+            'available_in_pos': True,
+            'taxes_id': [Command.clear()],
+            'company_id': self.company.id,
+        })
+
+        reward_scheme_a = self.env['loyalty.reward'].create({
+            'program_id': self.program.id,
+            'reward_type': 'discount',
+            'discount': 15.0,
+            'discount_mode': 'percent',
+            'discount_applicability': 'specific',
+            'scheme_id': scheme_a.id,
+        })
+        reward_scheme_b = self.env['loyalty.reward'].create({
+            'program_id': self.program.id,
+            'reward_type': 'discount',
+            'discount': 10.0,
+            'discount_mode': 'percent',
+            'discount_applicability': 'specific',
+            'scheme_id': scheme_b.id,
+        })
+
+        ticket = self.env['pos.order'].create({
+            'session_id': self.session.id,
+            'company_id': self.company.id,
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+            'amount_total': 870.0,
+            'amount_tax': 0.0,
+            'amount_paid': 0.0,
+            'amount_return': 0.0,
+            'state': 'draft',
+            'lines': [
+                Command.create({
+                    'product_id': product_scheme_a.id,
+                    'qty': 1,
+                    'price_unit': 600.0,
+                    'discount': 15.0,
+                    'price_subtotal': 510.0,
+                    'price_subtotal_incl': 510.0,
+                    'pricing_rule_type': 'promo',
+                    'price_origin': 'promo',
+                    'price_origin_label': 'Promocion Automotriz 15%',
+                    'promo_reward_id': reward_scheme_a.id,
+                    'tax_ids': [Command.clear()],
+                }),
+                Command.create({
+                    'product_id': product_scheme_b.id,
+                    'qty': 1,
+                    'price_unit': 400.0,
+                    'discount': 10.0,
+                    'price_subtotal': 360.0,
+                    'price_subtotal_incl': 360.0,
+                    'pricing_rule_type': 'promo',
+                    'price_origin': 'promo',
+                    'price_origin_label': 'Promocion Arquitectonica 10%',
+                    'promo_reward_id': reward_scheme_b.id,
+                    'tax_ids': [Command.clear()],
+                }),
+            ],
+        })
+
+        self.assertFalse(ticket.order_promo_reward_id)
+
+        result = ticket.action_create_sale_quotation()
+        quote = self.env['sale.order'].browse(result['id'])
+
+        # La cotizacion no debe portar promocion global de pedido
+        self.assertFalse(quote.order_promo_reward_id)
+        self.assertEqual(len(quote.order_line), 2)
+
+        line_a = quote.order_line.filtered(lambda l: l.product_id == product_scheme_a)
+        line_b = quote.order_line.filtered(lambda l: l.product_id == product_scheme_b)
+
+        self.assertEqual(line_a.discount, 15.0)
+        self.assertEqual(line_a.promo_reward_id, reward_scheme_a)
+        self.assertEqual(line_a.pricing_rule_type, 'promo')
+
+        self.assertEqual(line_b.discount, 10.0)
+        self.assertEqual(line_b.promo_reward_id, reward_scheme_b)
+        self.assertEqual(line_b.pricing_rule_type, 'promo')
+
+    def test_specific_promotion_on_one_line_leaves_other_line_with_agreement(self):
+        """Verifica que asignar una promocion especifica a una linea mantenga a la otra con su acuerdo comercial."""
+        scheme_a = self.env['tint.schema'].create({'name': 'Esquema Esmalte QA'})
+        product_promo = self.env['product.product'].create({
+            'name': 'Esmalte Promo',
+            'list_price': 500.0,
+            'type': 'consu',
+            'scheme_id': scheme_a.id,
+            'available_in_pos': True,
+            'taxes_id': [Command.clear()],
+            'company_id': self.company.id,
+        })
+        product_agreement = self.env['product.product'].create({
+            'name': 'Solvente con Acuerdo',
+            'list_price': 200.0,
+            'type': 'consu',
+            'available_in_pos': True,
+            'taxes_id': [Command.clear()],
+            'company_id': self.company.id,
+        })
+
+        # Acuerdo comercial de 5% en product_agreement
+        self.env['res.partner.discount.rule'].create({
+            'partner_id': self.partner.id,
+            'product_id': product_agreement.id,
+            'discount': 5.0,
+            'company_id': self.company.id,
+        })
+
+        reward_specific = self.env['loyalty.reward'].create({
+            'program_id': self.program.id,
+            'reward_type': 'discount',
+            'discount': 25.0,
+            'discount_mode': 'percent',
+            'discount_applicability': 'specific',
+            'scheme_id': scheme_a.id,
+        })
+
+        ticket = self.env['pos.order'].create({
+            'session_id': self.session.id,
+            'company_id': self.company.id,
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+            'amount_total': 565.0,
+            'amount_tax': 0.0,
+            'amount_paid': 0.0,
+            'amount_return': 0.0,
+            'state': 'draft',
+            'lines': [
+                Command.create({
+                    'product_id': product_promo.id,
+                    'qty': 1,
+                    'price_unit': 500.0,
+                    'discount': 25.0,
+                    'price_subtotal': 375.0,
+                    'price_subtotal_incl': 375.0,
+                    'pricing_rule_type': 'promo',
+                    'price_origin': 'promo',
+                    'promo_reward_id': reward_specific.id,
+                    'tax_ids': [Command.clear()],
+                }),
+                Command.create({
+                    'product_id': product_agreement.id,
+                    'qty': 1,
+                    'price_unit': 200.0,
+                    'discount': 5.0,
+                    'price_subtotal': 190.0,
+                    'price_subtotal_incl': 190.0,
+                    'pricing_rule_type': 'product',
+                    'price_origin': 'agreement',
+                    'promo_reward_id': False,
+                    'tax_ids': [Command.clear()],
+                }),
+            ],
+        })
+
+        result = ticket.action_create_sale_quotation()
+        quote = self.env['sale.order'].browse(result['id'])
+
+        self.assertFalse(quote.order_promo_reward_id)
+
+        line_promo = quote.order_line.filtered(lambda l: l.product_id == product_promo)
+        line_agreement = quote.order_line.filtered(lambda l: l.product_id == product_agreement)
+
+        self.assertEqual(line_promo.discount, 25.0)
+        self.assertEqual(line_promo.promo_reward_id, reward_specific)
+
+        self.assertEqual(line_agreement.discount, 5.0)
+        self.assertFalse(line_agreement.promo_reward_id)
+        self.assertEqual(line_agreement.pricing_rule_type, 'product')

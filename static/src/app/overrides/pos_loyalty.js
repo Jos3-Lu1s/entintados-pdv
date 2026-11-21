@@ -68,6 +68,12 @@ patch(PosOrder.prototype, {
      */
     _applyReward(reward, coupon_id, args) {
         if (isLinePromotionReward(reward)) {
+            const isExplicit = Boolean(args?.isUserExplicit || this._entintadosExplicitReward);
+            if (!isExplicit) {
+                // Las promociones porcentuales de línea y de pedido son electivas por el usuario:
+                // no se aplican automáticamente en segundo plano por el motor de lealtad.
+                return true;
+            }
             if (coupon_id && typeof this._getRealCouponPoints === "function") {
                 const points = this._getRealCouponPoints(coupon_id);
                 if (reward.required_points > 0 && points < reward.required_points) {
@@ -400,6 +406,7 @@ patch(PosOrder.prototype, {
             line.price_origin = "promo";
             line.price_origin_label = reward.program_id?.name || "Promoción";
             line.promo_reward_id = reward;
+            delete line.promo_opt_out;
         } finally {
             delete line._entintadosSettingDiscount;
         }
@@ -467,14 +474,23 @@ patch(PosOrder.prototype, {
             }
         }
 
-        // 2. Promociones específicas por línea: evaluar por mayor porcentaje
-        const specificPromos = available
-            .filter((r) => r.discount_applicability === "specific")
-            .sort((a, b) => (b.discount || 0) - (a.discount || 0));
+        // 2. Promociones específicas por línea: evaluar cada partida de forma independiente
+        for (const line of this.getOrderlines()) {
+            if (this._isLineExcludedFromPromo(line)) {
+                continue;
+            }
+            const lineRewards = this._getAvailablePromotionRewardsForLine(line)
+                .filter((r) => r.discount_applicability === "specific")
+                .sort((a, b) => (b.discount || 0) - (a.discount || 0));
 
-        for (const promo of specificPromos) {
-            if (this._applyLinePromotionDirect(promo)) {
-                totalBenefited++;
+            if (lineRewards.length > 0) {
+                const best = lineRewards[0];
+                const currentDiscount = Number(line.discount || 0);
+                if (best.id !== line.promo_reward_id?.id && Number(best.discount || 0) > currentDiscount) {
+                    if (this._applySingleLinePromotion(line, best)) {
+                        totalBenefited++;
+                    }
+                }
             }
         }
         return totalBenefited;
@@ -829,6 +845,15 @@ patch(ControlButtons.prototype, {
             };
         });
 
+        if (availableFromOrder.length > 0) {
+            rewardsList.unshift({
+                id: "apply_best_promos",
+                label: _t("⚡ Aplicar mejores promociones"),
+                description: _t("Aplica la mejor promoción global o por partida si mejora el descuento actual"),
+                item: { isApplyBestAction: true },
+            });
+        }
+
         if (order?.order_promo_reward_id) {
             rewardsList.unshift({
                 id: "remove_order_promo",
@@ -867,6 +892,29 @@ patch(ControlButtons.prototype, {
                     if (!selected) {
                         return;
                     }
+                    if (selected.isApplyBestAction) {
+                        delete order.order_promo_opt_out;
+                        const benefited = typeof order._applyBestLinePromotions === "function"
+                            ? order._applyBestLinePromotions()
+                            : 0;
+                        if (typeof order._entintadosReconcileDiscounts === "function") {
+                            order._entintadosReconcileDiscounts();
+                        }
+                        const notification = this.env?.services?.notification || this.notification;
+                        if (benefited > 0) {
+                            notification?.add(
+                                _t("Se aplicó la mejor promoción en %s partida(s).", benefited),
+                                { type: "success" }
+                            );
+                        } else {
+                            notification?.add(
+                                _t("Ninguna promoción disponible mejora el descuento actual de las líneas."),
+                                { type: "info" }
+                            );
+                        }
+                        this.pos?.updateRewards?.();
+                        return;
+                    }
                     if (selected.isRemoveAction) {
                         if (selected.allLines || selected.line?.promo_reward_id?.discount_applicability === "order" || order.order_promo_reward_id) {
                             order._dropAllLinePromotions();
@@ -890,10 +938,20 @@ patch(ControlButtons.prototype, {
                         if (isLinePromotionReward(reward)) {
                             if (reward.discount_applicability === "order") {
                                 order._applyLinePromotionDirect(reward);
-                            } else if (selectedLine && !order._isLineExcludedFromPromo(selectedLine, reward)) {
-                                order._applySingleLinePromotion(selectedLine, reward);
                             } else {
-                                order._applyLinePromotionDirect(reward);
+                                if (order.order_promo_reward_id) {
+                                    const notification = this.env?.services?.notification || this.notification;
+                                    notification?.add(
+                                        _t("El pedido tiene una promoción global activa en todas sus líneas. Quítala primero para asignar promociones individuales."),
+                                        { type: "warning" }
+                                    );
+                                    return;
+                                }
+                                if (selectedLine && !order._isLineExcludedFromPromo(selectedLine, reward)) {
+                                    order._applySingleLinePromotion(selectedLine, reward);
+                                } else {
+                                    order._applyLinePromotionDirect(reward);
+                                }
                             }
                             if (typeof order._entintadosReconcileDiscounts === "function") {
                                 order._entintadosReconcileDiscounts();
