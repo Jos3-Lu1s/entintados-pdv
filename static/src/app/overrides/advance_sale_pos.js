@@ -27,9 +27,16 @@ patch(PosStore.prototype, {
     },
     async addLineToCurrentOrder(values, options = {}, configure = true) {
         const order = this.getOrder();
+        const downPaymentId = this.config.down_payment_product_id?.id ||
+            (typeof this.config.down_payment_product_id === "number" ? this.config.down_payment_product_id : null);
+        const incomingProductId = values.product_id?.id || (typeof values.product_id === "number" ? values.product_id : null);
+        const isMatchingDownPayment = Boolean(downPaymentId && incomingProductId && incomingProductId === downPaymentId);
+        const isAccountingAdvance = Boolean(
+            values.product_tmpl_id?.is_accounting_advance === true ||
+            values.product_id?.product_tmpl_id?.is_accounting_advance === true
+        );
         const incomingAdvance = !values.advance_source_ref && Number(values.price_unit ?? 0) >= 0 &&
-            (values.product_id?.id === this.config.down_payment_product_id?.id ||
-             values.product_tmpl_id?.is_accounting_advance);
+            (isMatchingDownPayment || isAccountingAdvance);
         const receivingAdvance = order?.lines.some((line) =>
             line.isAdvanceLocked && !line.advance_source_ref && line.price_unit * line.qty > 0
         );
@@ -38,8 +45,7 @@ patch(PosStore.prototype, {
             return;
         }
         const line = await super.addLineToCurrentOrder(...arguments);
-        if (line && this.config.advance_risk_enabled &&
-            values.product_id?.id === this.config.down_payment_product_id?.id) {
+        if (line && this.config.advance_risk_enabled && isMatchingDownPayment) {
             line.order_id.setToInvoice(true);
         }
         return line;

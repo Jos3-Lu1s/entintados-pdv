@@ -11,7 +11,13 @@ function fixture() {
         async refreshTotalDueOfPartner(partner) { return [{ id: partner.id, customer_advance_available: 3500 }]; }
         async pay() { this.payCalls = (this.payCalls || 0) + 1; }
         async addDownPaymentProductOrderlineToOrder(...args) { this.nativeCalls.push(args); }
-        async addLineToCurrentOrder() { return { order_id: this.order }; }
+        async addLineToCurrentOrder(values) {
+            const line = { ...values, order_id: this.order };
+            if (this.order?.lines) {
+                this.order.lines.push(line);
+            }
+            return line;
+        }
     }
     vm.runInNewContext(source, {
         PosStore: Store, _t: (text) => text,
@@ -25,7 +31,8 @@ function fixture() {
     store.notices = [];
     store.notification = { add: (message) => store.notices.push(message) };
     store.config = { advance_risk_enabled: true, down_payment_product_id: { id: 7 } };
-    store.order = { to_invoice: false, setToInvoice(value) { this.to_invoice = value; } };
+    store.order = { lines: [], to_invoice: false, setToInvoice(value) { this.to_invoice = value; } };
+    store.getOrder = () => store.order;
     return store;
 }
 
@@ -111,4 +118,34 @@ test('Customer refresh replaces the displayed advance balance after purchase', a
     store.models = { 'res.partner': { get: () => partner } };
     await store.refreshTotalDueOfPartner(partner);
     assert.equal(partner.customer_advance_available, 3500);
+});
+
+test('Adding regular product templates sequentially never triggers advance notice', async () => {
+    const store = fixture();
+    await store.addLineToCurrentOrder({ product_tmpl_id: { id: 101, is_accounting_advance: false } });
+    await store.addLineToCurrentOrder({ product_tmpl_id: { id: 102, is_accounting_advance: false } });
+    await store.addLineToCurrentOrder({ product_tmpl_id: { id: 103 } });
+    assert.equal(store.notices.length, 0);
+    assert.equal(store.order.lines.length, 3);
+});
+
+test('Adding products when down_payment_product_id is undefined or null never triggers false positive', async () => {
+    const store = fixture();
+    store.config.down_payment_product_id = undefined;
+    await store.addLineToCurrentOrder({ product_tmpl_id: { id: 101 } });
+    await store.addLineToCurrentOrder({ product_tmpl_id: { id: 102 } });
+    await store.addLineToCurrentOrder({ product_id: { id: 50 } });
+    assert.equal(store.notices.length, 0);
+    assert.equal(store.order.lines.length, 3);
+});
+
+test('Genuine advance product on clean cart followed by regular product triggers advance warning', async () => {
+    const store = fixture();
+    await store.addLineToCurrentOrder({ product_id: { id: 7 }, price_unit: 500, qty: 1 });
+    assert.equal(store.order.lines.length, 1);
+    store.order.lines[0].isAdvanceLocked = true;
+    await store.addLineToCurrentOrder({ product_tmpl_id: { id: 101 } });
+    assert.equal(store.notices.length, 1);
+    assert.match(store.notices[0], /La recepción de un anticipo debe contener únicamente el anticipo/);
+    assert.equal(store.order.lines.length, 1);
 });
