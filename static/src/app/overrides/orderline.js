@@ -10,24 +10,37 @@ export const POS_PRICE_ORIGINS = {
     list: { icon: "fa-tag", color: "text-muted", title: _t("Precio de venta") },
     pricelist: { icon: "fa-list-alt", color: "text-info", title: _t("Tarifa") },
     agreement: { icon: "fa-lock", color: "text-success", title: _t("Acuerdo comercial") },
-    fixed_price: { icon: "fa-lock", color: "text-success", title: _t("Precio fijo pactado") },
-    manual: { icon: "fa-pencil", color: "text-warning", title: _t("Modificado manualmente") },
+    fixed_price: { icon: "fa-lock", color: "text-success", title: _t("Precio fijo de acuerdo") },
+    manual: { icon: "fa-pencil", color: "text-warning", title: _t("Manual") },
     promo: { icon: "fa-star", color: "text-primary", title: _t("Promoción") },
-    combo: { icon: "fa-cubes", color: "text-primary", title: _t("Combo") },
-    tint: { icon: "fa-tint", color: "text-info", title: _t("Colorante entintado") },
+    combo: { icon: "fa-cubes", color: "text-primary", title: _t("Parte de combo") },
+    tint: { icon: "fa-tint", color: "text-info", title: _t("Entintado") },
 };
 
 export function getPriceOriginData(line) {
     if (!line) {
         return null;
     }
-    const originKey = line.price_origin || (line.fixed_price_locked ? "fixed_price" : (line.pricing_rule_origin ? "agreement" : "list"));
+    const originKey = line.price_origin || (line.fixed_price_locked ? "fixed_price" : "list");
     const config = POS_PRICE_ORIGINS[originKey] || POS_PRICE_ORIGINS.list;
-    const detail = line.price_origin_label || line.pricing_rule_origin || (
+    const detail = line.price_origin_label || (
         originKey === "list" ? _t("Precio de venta del producto") :
-        originKey === "manual" ? _t("Precio unitario tecleado manualmente") :
-        originKey === "pricelist" ? _t("Precio determinado por tarifa activa") :
-        config.title
+        originKey === "manual" ? _t("Modificado de forma manual") :
+        originKey === "fixed_price" ? (line.pricing_rule_origin || _t("Precio fijo")) :
+        originKey === "pricelist" ? (
+            line.order_id?.pricelist_id
+                ? formatPricelistOriginLabel(
+                    line.order_id.pricelist_id,
+                    getPricelistItemRule(line.order_id.pricelist_id, line.product_id, line.qty || 1, line.models),
+                    line.product_id,
+                    line.price_unit
+                )
+                : _t("Precio determinado por tarifa activa")
+        ) :
+        originKey === "tint" ? _t("Precio del entintado: base más colorantes") :
+        originKey === "combo" ? _t("Parte de combo") :
+        originKey === "promo" ? _t("Regalo de promoción") :
+        line.pricing_rule_origin || config.title
     );
     return {
         key: originKey,

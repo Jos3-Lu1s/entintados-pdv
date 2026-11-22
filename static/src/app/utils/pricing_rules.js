@@ -100,8 +100,8 @@ export function getPartnerPricingRule(pos, partner, product, options = {}) {
         return {
             type: "fixed_price",
             originType: "fixed_price",
-            priceOrigin: "agreement",
-            originLabel: "Precio Fijo",
+            priceOrigin: "fixed_price",
+            originLabel: "Precio fijo",
             price: calculatedPrice,
             discount: 0,
             rule: fixedRule,
@@ -293,17 +293,49 @@ export function getPricelistItemRule(pricelist, product, quantity = 1, models = 
  * @returns {string} Etiqueta descriptiva canónica
  */
 export function formatPricelistOriginLabel(pricelist, itemRule, product, finalPrice) {
-    const pricelistName = pricelist?.name || pricelist?.display_name || "Tarifa";
     if (!itemRule) {
         return "Precio de venta del producto";
     }
-    const ruleName = itemRule.name || itemRule.display_name || product?.display_name || "";
-    const priceStr = finalPrice !== undefined && finalPrice !== null ? String(finalPrice) : "";
-    if (ruleName && ruleName.includes(":")) {
+    const pricelistName = pricelist?.name || pricelist?.display_name || "Tarifa";
+
+    let ruleName = itemRule.name || "";
+    if (!ruleName) {
+        if (itemRule.product_id) {
+            ruleName = product?.display_name || "Variante";
+        } else if (itemRule.product_tmpl_id) {
+            ruleName = product?.product_tmpl_id?.name || product?.display_name || "Producto";
+        } else if (itemRule.categ_id) {
+            const catName = itemRule.categ_id?.name || itemRule.categ_id?.display_name || "";
+            ruleName = catName ? `Categoría: ${catName}` : "Todas las categorías";
+        } else {
+            ruleName = "Todos los productos";
+        }
+    }
+
+    let rulePrice = itemRule.price || "";
+    if (!rulePrice) {
+        if (itemRule.compute_price === "fixed") {
+            const val = itemRule.fixed_price ?? finalPrice;
+            rulePrice = val !== undefined && val !== null ? String(val) : "";
+        } else if (itemRule.compute_price === "percentage") {
+            const percent = itemRule.percent_price ?? 0;
+            rulePrice = `${percent} % de descuento`;
+        } else if (itemRule.compute_price === "formula") {
+            const disc = itemRule.price_discount ?? 0;
+            rulePrice = itemRule.price_surcharge
+                ? `${disc} % de descuento y ${itemRule.price_surcharge} recargo`
+                : `${disc} % de descuento`;
+        } else if (finalPrice !== undefined && finalPrice !== null) {
+            rulePrice = String(finalPrice);
+        }
+    }
+
+    if (ruleName && ruleName.includes(":") && !itemRule.price) {
         return `Tarifa: ${pricelistName} — ${ruleName}`;
     }
-    return priceStr
-        ? `Tarifa: ${pricelistName} — ${ruleName}: ${priceStr}`
+
+    return rulePrice
+        ? `Tarifa: ${pricelistName} — ${ruleName}: ${rulePrice}`
         : `Tarifa: ${pricelistName} — ${ruleName}`;
 }
 

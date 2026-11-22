@@ -67,13 +67,13 @@ const mockPos = {
 // Test 1.1: Regla de precio fijo en misma UdM
 const ruleSameUom = getPartnerPricingRule(mockPos, partnerWithFixed, productA);
 assert.equal(ruleSameUom.type, 'fixed_price');
-assert.equal(ruleSameUom.priceOrigin, 'agreement');
+assert.equal(ruleSameUom.priceOrigin, 'fixed_price');
 assert.equal(ruleSameUom.price, 100);
 
 // Test 1.2: Conversión de UdM (Litro a Galón)
 const ruleGallon = getPartnerPricingRule(mockPos, partnerWithFixed, productA, { uom: uomGallon });
 assert.equal(ruleGallon.type, 'fixed_price');
-assert.equal(ruleGallon.priceOrigin, 'agreement');
+assert.equal(ruleGallon.priceOrigin, 'fixed_price');
 assert.equal(Math.round(ruleGallon.price * 100) / 100, 378.50);
 
 // Test 1.3: UdM de distinta categoría no se escala (mantiene precio base)

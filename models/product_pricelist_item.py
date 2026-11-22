@@ -94,3 +94,12 @@ class ProductPricelistItem(models.Model):
         if self.linea_id and product.lines_product_id != self.linea_id:
             return False
         return True
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        params = super()._load_pos_data_fields(config)
+        for field_name in ('name', 'price', 'display_name'):
+            if field_name not in params:
+                params.append(field_name)
+        return params
+

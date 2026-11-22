@@ -116,11 +116,12 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_origin = "";
                 line.pricing_rule_id = false;
                 line.price_origin = "manual";
-                line.price_origin_label = "Anticipo contable";
+                line.price_origin_label = "Modificado de forma manual";
                 continue;
             }
             if (line.is_reward_line) {
                 line.price_origin = "promo";
+                line.price_origin_label = "Regalo de promoción";
                 continue;
             }
             if (line.is_tint_colorant || line.product_id?.tint_role === "colorant") {
@@ -128,7 +129,7 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_origin = "";
                 line.pricing_rule_id = false;
                 line.price_origin = "tint";
-                line.price_origin_label = "Colorante entintado";
+                line.price_origin_label = "Precio del entintado: base más colorantes";
                 continue;
             }
 
@@ -166,13 +167,13 @@ patch(PosOrder.prototype, {
                     }
 
                     line.pricing_rule_type = rule.originType || "fixed_price";
-                    line.pricing_rule_origin = rule.originLabel || "Precio Fijo";
+                    line.pricing_rule_origin = rule.originLabel || "Precio fijo";
                     line.pricing_rule_id = rule.rule?.id || false;
                     line.promo_reward_id = false;
-                    line.price_origin = line.is_tinted_base ? "tint" : (rule.priceOrigin || "agreement");
+                    line.price_origin = line.is_tinted_base ? "tint" : (rule.priceOrigin || "fixed_price");
                     line.price_origin_label = line.is_tinted_base
                         ? "Precio del entintado: base más colorantes"
-                        : (rule.originLabel || "Precio Fijo");
+                        : (rule.originLabel || "Precio fijo");
                 } finally {
                     delete line._entintadosSettingPrice;
                     delete line._entintadosSettingDiscount;
@@ -193,7 +194,7 @@ patch(PosOrder.prototype, {
                 line.price_origin_label = "Modificado de forma manual";
             } else if (!line.is_tinted_base) {
                 // Actualizar el precio unitario base según la tarifa activa de la orden
-                const pricelist = this.pricelist_id || this.pricelist || this.config?.pricelist_id || posStoreInstance?.pricelist;
+                const pricelist = this.pricelist_id || this.pricelist || this.config?.pricelist_id || posStoreInstance?.pricelist || (models?.["product.pricelist"]?.getFirst?.()) || (models?.["product.pricelist"]?.getAll?.()?.[0]);
                 let restoredPrice = null;
                 if (product.product_tmpl_id?.getPrice) {
                     restoredPrice = product.product_tmpl_id.getPrice(

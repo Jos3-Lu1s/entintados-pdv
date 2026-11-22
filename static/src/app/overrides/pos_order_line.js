@@ -137,7 +137,12 @@ patch(PosOrderline.prototype, {
             }
             return false;
         }
-        return super.setUnitPrice(unitPrice);
+        const res = super.setUnitPrice(unitPrice);
+        if (!this._entintadosSettingPrice && !this.is_tinted_base) {
+            this.price_origin = "manual";
+            this.price_origin_label = "Modificado de forma manual";
+        }
+        return res;
     },
 
     setDiscount(discount) {

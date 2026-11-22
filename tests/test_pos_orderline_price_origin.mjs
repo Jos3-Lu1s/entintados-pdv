@@ -75,11 +75,11 @@ test('POS_PRICE_ORIGINS maps all expected origin mechanisms with icons and color
     assert.deepEqual(origins.list, { icon: 'fa-tag', color: 'text-muted', title: 'Precio de venta' });
     assert.deepEqual(origins.pricelist, { icon: 'fa-list-alt', color: 'text-info', title: 'Tarifa' });
     assert.deepEqual(origins.agreement, { icon: 'fa-lock', color: 'text-success', title: 'Acuerdo comercial' });
-    assert.deepEqual(origins.fixed_price, { icon: 'fa-lock', color: 'text-success', title: 'Precio fijo pactado' });
-    assert.deepEqual(origins.manual, { icon: 'fa-pencil', color: 'text-warning', title: 'Modificado manualmente' });
+    assert.deepEqual(origins.fixed_price, { icon: 'fa-lock', color: 'text-success', title: 'Precio fijo de acuerdo' });
+    assert.deepEqual(origins.manual, { icon: 'fa-pencil', color: 'text-warning', title: 'Manual' });
     assert.deepEqual(origins.promo, { icon: 'fa-star', color: 'text-primary', title: 'Promoción' });
-    assert.deepEqual(origins.combo, { icon: 'fa-cubes', color: 'text-primary', title: 'Combo' });
-    assert.deepEqual(origins.tint, { icon: 'fa-tint', color: 'text-info', title: 'Colorante entintado' });
+    assert.deepEqual(origins.combo, { icon: 'fa-cubes', color: 'text-primary', title: 'Parte de combo' });
+    assert.deepEqual(origins.tint, { icon: 'fa-tint', color: 'text-info', title: 'Entintado' });
 });
 
 test('getPriceOriginData extracts custom label and falls back cleanly', () => {
@@ -105,8 +105,15 @@ test('getPriceOriginData extracts custom label and falls back cleanly', () => {
     const resManual = getPriceOriginData(lineManual);
     assert.equal(resManual.icon, 'fa-pencil');
     assert.equal(resManual.color, 'text-warning');
-    assert.equal(resManual.title, 'Modificado manualmente');
-    assert.equal(resManual.detail, 'Precio unitario tecleado manualmente');
+    assert.equal(resManual.title, 'Manual');
+    assert.equal(resManual.detail, 'Modificado de forma manual');
+
+    const lineTint = { price_origin: 'tint' };
+    const resTint = getPriceOriginData(lineTint);
+    assert.equal(resTint.icon, 'fa-tint');
+    assert.equal(resTint.color, 'text-info');
+    assert.equal(resTint.title, 'Entintado');
+    assert.equal(resTint.detail, 'Precio del entintado: base más colorantes');
 });
 
 test('getPriceOriginData handles legacy and unclassified lines with smart fallback', () => {
@@ -119,7 +126,7 @@ test('getPriceOriginData handles legacy and unclassified lines with smart fallba
     assert.equal(resLocked.icon, 'fa-lock');
     assert.equal(resLocked.detail, 'Precio contractual');
 
-    const agreementLine = { pricing_rule_origin: 'Desc. Global Cliente (5.0%)' };
+    const agreementLine = { price_origin: 'agreement', pricing_rule_origin: 'Desc. Global Cliente (5.0%)' };
     const resAgreement = getPriceOriginData(agreementLine);
     assert.equal(resAgreement.key, 'agreement');
     assert.equal(resAgreement.icon, 'fa-lock');
@@ -177,7 +184,7 @@ test('onPriceOriginClick stops propagation and opens popover with line detail', 
     instance.onPriceOriginClick(mockEvent, instance.line);
     assert.equal(stopped, true);
     assert.equal(instance.priceOriginPopover.isOpen, true);
-    assert.equal(instance.priceOriginPopover.openedProps.title, 'Precio fijo pactado');
+    assert.equal(instance.priceOriginPopover.openedProps.title, 'Precio fijo de acuerdo');
     assert.equal(instance.priceOriginPopover.openedProps.detail, 'Precio Fijo: 150.00');
 
     instance.onPriceOriginClick(mockEvent, instance.line);
