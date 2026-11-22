@@ -36,5 +36,23 @@
                 <i t-attf-class="fa #{vals.hasPromo ? 'fa-star text-primary' : 'fa-star-o text-muted'}"/>
             </span>
         </xpath>
+        <xpath expr="//div[hasclass('product-price')]" position="before">
+            <span t-if="props.mode === 'display' and vals.priceOriginIcon"
+                  role="button"
+                  tabindex="0"
+                  class="o_pos_price_origin_icon d-flex align-items-center cursor-pointer px-1 me-1"
+                  t-att-title="vals.priceOriginTitle + (vals.priceOriginDetail ? ' — ' + vals.priceOriginDetail : '')"
+                  t-att-aria-label="vals.priceOriginTitle"
+                  t-on-click.stop="(ev) => this.onPriceOriginClick(ev, props.line)">
+                <i role="img" t-attf-class="fa fa-fw {{vals.priceOriginIcon}} {{vals.priceOriginColor}}"/>
+            </span>
+        </xpath>
+    </t>
+
+    <t t-name="entintados_pdv.PosPriceOriginPopover">
+        <div class="o_pos_price_origin_popover p-2" style="max-width: 320px;">
+            <div class="fw-bold" t-esc="props.title"/>
+            <div t-if="props.detail" class="text-muted small mt-1" t-esc="props.detail"/>
+        </div>
     </t>
 </templates>

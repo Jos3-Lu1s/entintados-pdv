@@ -1236,3 +1236,25 @@ $tint-breakpoint-lg: 1199.98px;
         color: inherit;
     }
 }
+
+/* ==========================================================================
+   Indicador de origen de precio en el ticket del POS
+   ========================================================================== */
+.o_pos_price_origin_icon {
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: transform 0.12s ease;
+
+    &:hover {
+        transform: scale(1.18);
+    }
+}
+
+.o_pos_price_origin_popover {
+    max-width: 320px;
+    font-size: 0.875rem;
+    color: #212529;
+}
