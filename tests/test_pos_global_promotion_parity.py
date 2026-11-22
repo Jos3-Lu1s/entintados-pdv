@@ -476,3 +476,72 @@ class TestPosGlobalPromotionParity(TransactionCase):
         self.assertEqual(line_agreement.discount, 5.0)
         self.assertFalse(line_agreement.promo_reward_id)
         self.assertEqual(line_agreement.pricing_rule_type, 'product')
+
+    def test_specific_line_promo_allowed_when_agreement_discount_is_higher_or_equal(self):
+        """Verifica que una promocion especifica se aplique y sincronice aunque el cliente tenga acuerdo superior."""
+        scheme = self.env['tint.schema'].create({'name': 'Esquema Industrial Prueba'})
+        product = self.env['product.product'].create({
+            'name': 'Anticorrosivo Industrial',
+            'list_price': 800.0,
+            'type': 'consu',
+            'available_in_pos': True,
+            'scheme_id': scheme.id,
+            'taxes_id': [Command.clear()],
+            'company_id': self.company.id,
+        })
+        self.env['res.partner.discount.rule'].create({
+            'partner_id': self.partner.id,
+            'applied_on': '0_product',
+            'rule_type': 'discount',
+            'product_id': product.id,
+            'discount': 25.0,
+        })
+
+        promo_program = self.env['loyalty.program'].create({
+            'name': 'Promocion Industrial 10%',
+            'program_type': 'promotion',
+            'applies_on': 'current',
+            'company_id': self.company.id,
+        })
+        reward_specific = self.env['loyalty.reward'].create({
+            'program_id': promo_program.id,
+            'reward_type': 'discount',
+            'discount': 10.0,
+            'discount_mode': 'percent',
+            'discount_applicability': 'specific',
+            'scheme_id': scheme.id,
+        })
+
+        ticket = self.env['pos.order'].create({
+            'session_id': self.session.id,
+            'company_id': self.company.id,
+            'partner_id': self.partner.id,
+            'pricelist_id': self.pricelist.id,
+            'amount_total': 720.0,
+            'amount_tax': 0.0,
+            'amount_paid': 0.0,
+            'amount_return': 0.0,
+            'state': 'draft',
+            'lines': [
+                Command.create({
+                    'product_id': product.id,
+                    'qty': 1,
+                    'price_unit': 800.0,
+                    'discount': 10.0,
+                    'price_subtotal': 720.0,
+                    'price_subtotal_incl': 720.0,
+                    'pricing_rule_type': 'promo',
+                    'price_origin': 'promo',
+                    'promo_reward_id': reward_specific.id,
+                    'tax_ids': [Command.clear()],
+                }),
+            ],
+        })
+
+        result = ticket.action_create_sale_quotation()
+        quote = self.env['sale.order'].browse(result['id'])
+
+        line_quote = quote.order_line.filtered(lambda l: l.product_id == product)
+        self.assertEqual(line_quote.discount, 10.0)
+        self.assertEqual(line_quote.promo_reward_id, reward_specific)
+        self.assertEqual(line_quote.pricing_rule_type, 'promo')

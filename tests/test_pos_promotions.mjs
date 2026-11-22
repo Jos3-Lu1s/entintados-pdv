@@ -50,6 +50,7 @@ function createPosLoyaltyContext() {
 
     const context = {
         PosOrder: MockPosOrder,
+        PosOrderline: class MockPosOrderline {},
         ControlButtons: MockControlButtons,
         SelectionPopup: class MockSelectionPopup {},
         Orderline: class MockOrderline {},
@@ -109,22 +110,24 @@ test('pos_loyalty: exclusion de lineas protegidas', () => {
     };
     assert.equal(order._isLineExcludedFromPromo(comboChildLine, reward), true);
 
-    // 5. Acuerdo comercial con descuento mayor o igual a la promocion
+    // 5. Acuerdo comercial con descuento mayor o igual a la promocion (no excluido de recibir promocion)
     const higherAgreementLine = {
         getQuantity: () => 1,
         price_unit: 100,
         discount: 25,
         pricing_rule_type: 'partner_rule',
+        product_id: { id: 25, tint_role: 'none' },
     };
-    assert.equal(order._isLineExcludedFromPromo(higherAgreementLine, reward), true);
+    assert.equal(order._isLineExcludedFromPromo(higherAgreementLine, reward), false);
 
     const equalAgreementLine = {
         getQuantity: () => 1,
         price_unit: 100,
         discount: 20,
         pricing_rule_type: 'scheme_rule',
+        product_id: { id: 26, tint_role: 'none' },
     };
-    assert.equal(order._isLineExcludedFromPromo(equalAgreementLine, reward), true);
+    assert.equal(order._isLineExcludedFromPromo(equalAgreementLine, reward), false);
 
     // 6. Acuerdo comercial con descuento menor a la promocion (no excluido, sustitucion diferencial)
     const lowerAgreementLine = {
@@ -457,10 +460,10 @@ test('pos_loyalty: aplicacion directa de promocion sobre descuento de linea sin 
     assert.equal(lowerAgreementLine.price_origin, 'promo');
     assert.deepEqual(lowerAgreementLine.promo_reward_id, promoReward);
 
-    // Linea con acuerdo comercial superior debe conservar su acuerdo original
-    assert.equal(higherAgreementLine.discount, 30);
-    assert.equal(higherAgreementLine.pricing_rule_type, 'partner_rule');
-    assert.notEqual(higherAgreementLine.promo_reward_id, promoReward);
+    // Linea con acuerdo comercial previo tambien recibe la promocion al aplicarla directamente
+    assert.equal(higherAgreementLine.discount, 25);
+    assert.equal(higherAgreementLine.pricing_rule_type, 'promo');
+    assert.deepEqual(higherAgreementLine.promo_reward_id, promoReward);
 
     // Linea de precio pactado fijo no debe cambiar
     assert.equal(fixedPriceLine.discount, 0);
@@ -739,7 +742,7 @@ test('pos_loyalty: aplicacion de promocion de orden completa a lineas elegibles'
     assert.equal(colorantLine.is_tint_colorant, true);
 });
 
-test('pos_loyalty: promocion de orden respeta linea con acuerdo comercial superior', () => {
+test('pos_loyalty: promocion de orden aplica bajo exclusividad total a todas las lineas elegibles', () => {
     const { MockPosOrder } = createPosLoyaltyContext();
     const lineWithBetterAgreement = {
         getQuantity: () => 1,
@@ -770,17 +773,17 @@ test('pos_loyalty: promocion de orden respeta linea con acuerdo comercial superi
     const applied = order._applyLinePromotionDirect(orderReward);
     assert.equal(applied, true);
 
-    // Linea con acuerdo 20% > 15% conserva su acuerdo comercial
-    assert.equal(lineWithBetterAgreement.discount, 20);
-    assert.equal(lineWithBetterAgreement.pricing_rule_type, 'partner_rule');
+    // Ambas lineas adoptan la promocion de orden por exclusividad total (todo o nada)
+    assert.equal(lineWithBetterAgreement.discount, 15);
+    assert.equal(lineWithBetterAgreement.pricing_rule_type, 'promo');
+    assert.equal(lineWithBetterAgreement.promo_reward_id, orderReward);
 
-    // Linea con acuerdo 5% < 15% toma la promocion de orden de 15%
     assert.equal(lineWithLowerAgreement.discount, 15);
     assert.equal(lineWithLowerAgreement.pricing_rule_type, 'promo');
     assert.equal(lineWithLowerAgreement.promo_reward_id, orderReward);
 });
 
-test('pos_loyalty: promocion de orden no pisa promocion individual especifica superior', () => {
+test('pos_loyalty: promocion de orden sustituye promocion individual previa', () => {
     const { MockPosOrder } = createPosLoyaltyContext();
     const specificReward = {
         id: 91,
@@ -817,9 +820,9 @@ test('pos_loyalty: promocion de orden no pisa promocion individual especifica su
 
     order._applyLinePromotionDirect(orderReward);
 
-    // Linea especifica de 25% no es degradada al 15%
-    assert.equal(lineWithSpecific.discount, 25);
-    assert.equal(lineWithSpecific.promo_reward_id, specificReward);
+    // Promocion de orden es todo o nada: sustituye la promocion individual
+    assert.equal(lineWithSpecific.discount, 15);
+    assert.equal(lineWithSpecific.promo_reward_id, orderReward);
 
     // Linea comun toma el 15%
     assert.equal(normalLine.discount, 15);
@@ -969,9 +972,9 @@ test('pos_store: reconciliacion revierte promocion de orden si deja de ser valid
     assert.equal(line.promo_reward_id, false);
 });
 
-test('pos_store: reconciliacion respeta exclusividad de acuerdo comercial superior a promo de orden', () => {
+test('pos_store: reconciliacion propaga promocion de orden bajo principio todo o nada', () => {
     const { MockPosOrder, setPartnerRule } = createPosStoreContext();
-    // Cliente tiene acuerdo comercial de 20%, superior a la promo de orden de 15%
+    // Cliente tiene acuerdo comercial de 20%, y la orden tiene promo de orden de 15%
     setPartnerRule({ type: 'discount', discount: 20, originType: 'partner_rule', originLabel: 'Acuerdo VIP 20%' });
 
     const orderPromo = {
@@ -996,12 +999,64 @@ test('pos_store: reconciliacion respeta exclusividad de acuerdo comercial superi
 
     order._entintadosReconcileDiscounts();
 
-    // Como acuerdo 20% > promo 15%, la linea toma el acuerdo comercial
-    assert.equal(line.discount, 20);
-    assert.equal(line.pricing_rule_type, 'partner_rule');
-    assert.equal(line.price_origin, 'agreement');
-    assert.equal(line.promo_reward_id, false);
+    // Promocion de orden es todo o nada: cubre la linea elegible con 15%
+    assert.equal(line.discount, 15);
+    assert.equal(line.pricing_rule_type, 'promo');
+    assert.equal(line.price_origin, 'promo');
+    assert.equal(line.promo_reward_id, orderPromo);
 });
+
+test('pos_store: reconciliacion mantiene promocion especifica asignada aunque acuerdo comercial sea superior', () => {
+    const { MockPosOrder, setPartnerRule } = createPosStoreContext();
+    // Cliente tiene acuerdo de 20%, y la partida tiene asignada promocion especifica del 10%
+    setPartnerRule({ type: 'discount', discount: 20, originType: 'partner_rule', originLabel: 'Acuerdo VIP 20%' });
+
+    const specificPromo = {
+        id: 88,
+        program_id: { name: 'Promo Vinilicas 10%' },
+        discount: 10,
+        discount_applicability: 'specific',
+    };
+
+    const line = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 10,
+        pricing_rule_type: 'promo',
+        promo_reward_id: specificPromo,
+        product_id: { id: 10 },
+        setDiscount(d) { this.discount = d; },
+    };
+
+    const order = new MockPosOrder([line]);
+    order._isRewardValidForOrder = () => true;
+    order._isLineExcludedFromPromo = () => false;
+
+    order._entintadosReconcileDiscounts();
+
+    // La eleccion explicita del cajero se respeta y no se revierte al acuerdo
+    assert.equal(line.discount, 10);
+    assert.equal(line.pricing_rule_type, 'promo');
+    assert.equal(line.price_origin, 'promo');
+    assert.equal(line.promo_reward_id, specificPromo);
+});
+
+test('pos_loyalty: _isLineExcludedFromPromo no excluye linea con acuerdo comercial previo', () => {
+    const { MockPosOrder } = createPosLoyaltyContext();
+    const order = new MockPosOrder();
+    const specificReward = { discount: 10, discount_applicability: 'specific' };
+
+    const lineWithAgreement = {
+        getQuantity: () => 1,
+        price_unit: 100,
+        discount: 20,
+        pricing_rule_type: 'product',
+        product_id: { id: 10, tint_role: 'none' },
+    };
+
+    assert.equal(order._isLineExcludedFromPromo(lineWithAgreement, specificReward), false);
+});
+
 
 
 

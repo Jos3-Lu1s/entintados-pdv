@@ -254,7 +254,7 @@ patch(PosOrder.prototype, {
             }
 
             // 2. Si NO hay promoción global activa, evaluar si la partida porta una promoción específica válida
-            if (line.pricing_rule_type === "promo" && line.promo_reward_id) {
+            if (line.promo_reward_id) {
                 const reward = line.promo_reward_id;
                 let isPromoStillValid = Boolean(reward.discount_applicability === "specific");
                 if (isPromoStillValid && typeof this._isRewardValidForOrder === "function") {
@@ -267,6 +267,31 @@ patch(PosOrder.prototype, {
                 }
 
                 if (isPromoStillValid) {
+                    const promoDiscount = Number(reward.discount || 0);
+                    const targetLabel = reward.reward_target_label || (
+                        reward.lines_product_id?.name ? `Línea: ${reward.lines_product_id.name}` :
+                        reward.scheme_id?.name ? `Esquema: ${reward.scheme_id.name}` : ""
+                    );
+                    const targetPart = targetLabel ? ` · ${targetLabel}` : "";
+                    const promoOrigin = `${reward.program_id?.name || "Promoción"}${targetPart} - ${promoDiscount}%`;
+
+                    line._entintadosSettingDiscount = true;
+                    try {
+                        if (typeof line.setDiscount === "function") {
+                            line.setDiscount(promoDiscount);
+                        } else if (typeof line.set_discount === "function") {
+                            line.set_discount(promoDiscount);
+                        } else {
+                            line.discount = promoDiscount;
+                        }
+                        line.pricing_rule_type = "promo";
+                        line.pricing_rule_origin = promoOrigin;
+                        line.price_origin = "promo";
+                        line.price_origin_label = reward.program_id?.name || "Promoción";
+                        delete line.promo_opt_out;
+                    } finally {
+                        delete line._entintadosSettingDiscount;
+                    }
                     continue;
                 }
 

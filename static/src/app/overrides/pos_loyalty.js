@@ -278,17 +278,6 @@ patch(PosOrder.prototype, {
         if (line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref) {
             return true;
         }
-        // Para promociones globales de orden completa, los acuerdos comerciales NO excluyen líneas
-        if (reward?.discount_applicability === "order") {
-            return false;
-        }
-        // 5. Exclusión mutua con acuerdos comerciales de descuento para promociones específicas:
-        // Si el descuento del acuerdo comercial es mayor o igual al de la promoción, la línea queda excluida
-        const agreementDiscount = this._getLineCommercialAgreementDiscount(line);
-        const promoDiscount = reward?.discount || 0;
-        if (agreementDiscount > 0 && promoDiscount <= agreementDiscount) {
-            return true;
-        }
         return false;
     },
 
@@ -337,12 +326,6 @@ patch(PosOrder.prototype, {
         const promoOrigin = `${reward.program_id?.name || "Promoción"}${targetPart} - ${reward.discount}%`;
 
         for (const line of eligibleLines) {
-            if (!isOrderPromo) {
-                const agreementDiscount = this._getLineCommercialAgreementDiscount(line);
-                if (agreementDiscount > 0 && agreementDiscount > reward.discount) {
-                    continue;
-                }
-            }
             line._entintadosSettingDiscount = true;
             try {
                 if (typeof line.setDiscount === "function") {
