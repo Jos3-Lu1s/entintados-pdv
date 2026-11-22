@@ -700,40 +700,18 @@ patch(PosOrder.prototype, {
         line.pricing_rule_id = false;
         line.price_origin = "list";
         line.price_origin_label = "";
+        if (typeof line.setDiscount === "function") {
+            line.setDiscount(0);
+        } else {
+            line.discount = 0;
+        }
 
         if (this.order_promo_reward_id && !this.getOrderlines().some((l) => l.promo_reward_id?.id === this.order_promo_reward_id.id)) {
             this.order_promo_reward_id = false;
         }
 
-        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
-        const models = this.models || this.pos?.models;
-        const rule = (partner && models && line.product_id) ? getPartnerPricingRule(models, partner, line.product_id) : null;
-        const agreementDiscount = rule?.type === "discount" ? Number(rule.discount || 0) : 0;
-
-        line._entintadosSettingDiscount = true;
-        try {
-            if (typeof line.setDiscount === "function") {
-                line.setDiscount(agreementDiscount);
-            } else if (typeof line.set_discount === "function") {
-                line.set_discount(agreementDiscount);
-            } else {
-                line.discount = agreementDiscount;
-            }
-            if (agreementDiscount > 0 && rule) {
-                line.pricing_rule_type = rule.originType || "product";
-                line.pricing_rule_origin = rule.name || rule.originLabel || "";
-                line.pricing_rule_id = rule.rule?.id || false;
-                line.price_origin = "agreement";
-                line.price_origin_label = rule.name || rule.originLabel || "";
-            } else {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                line.price_origin = (this.pricelist || this.config?.pricelist_id) ? "pricelist" : "list";
-                line.price_origin_label = "";
-            }
-        } finally {
-            delete line._entintadosSettingDiscount;
+        if (typeof this._entintadosReconcileDiscounts === "function") {
+            this._entintadosReconcileDiscounts();
         }
     },
 
@@ -752,38 +730,15 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_id = false;
                 line.price_origin = "list";
                 line.price_origin_label = "";
-
-                const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
-                const models = this.models || this.pos?.models;
-                const rule = (partner && models && line.product_id) ? getPartnerPricingRule(models, partner, line.product_id) : null;
-                const agreementDiscount = rule?.type === "discount" ? Number(rule.discount || 0) : 0;
-
-                line._entintadosSettingDiscount = true;
-                try {
-                    if (typeof line.setDiscount === "function") {
-                        line.setDiscount(agreementDiscount);
-                    } else if (typeof line.set_discount === "function") {
-                        line.set_discount(agreementDiscount);
-                    } else {
-                        line.discount = agreementDiscount;
-                    }
-                    if (agreementDiscount > 0 && rule) {
-                        line.pricing_rule_type = rule.originType || "product";
-                        line.pricing_rule_origin = rule.name || rule.originLabel || "";
-                        line.pricing_rule_id = rule.rule?.id || false;
-                        line.price_origin = "agreement";
-                        line.price_origin_label = rule.name || rule.originLabel || "";
-                    } else {
-                        line.pricing_rule_type = "none";
-                        line.pricing_rule_origin = "";
-                        line.pricing_rule_id = false;
-                        line.price_origin = (this.pricelist || this.config?.pricelist_id) ? "pricelist" : "list";
-                        line.price_origin_label = "";
-                    }
-                } finally {
-                    delete line._entintadosSettingDiscount;
+                if (typeof line.setDiscount === "function") {
+                    line.setDiscount(0);
+                } else {
+                    line.discount = 0;
                 }
             }
+        }
+        if (typeof this._entintadosReconcileDiscounts === "function") {
+            this._entintadosReconcileDiscounts();
         }
     },
 

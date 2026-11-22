@@ -99,6 +99,7 @@ class PosOrderLine(models.Model):
             ('list', 'Precio de venta'),
             ('pricelist', 'Tarifa'),
             ('agreement', 'Acuerdo comercial'),
+            ('fixed_price', 'Precio fijo pactado'),
             ('manual', 'Manual'),
             ('promo', 'Promoción'),
             ('combo', 'Combo'),

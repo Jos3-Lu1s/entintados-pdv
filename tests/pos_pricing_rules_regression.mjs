@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const source = fs.readFileSync(new URL('../static/src/app/utils/pricing_rules.js', import.meta.url), 'utf8')
-    .replace(/^export function /m, 'function ');
+    .replace(/^export function /gm, 'function ');
 const getPartnerPricingRule = new Function(`${source}\nreturn getPartnerPricingRule;`)();
 
 const goods = { id: 1, type: 'consu' };

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 const pricingRulesSource = fs.readFileSync(
     new URL('../static/src/app/utils/pricing_rules.js', import.meta.url),
     'utf8'
-).replace(/^export function /m, 'function ');
+).replace(/^export function /gm, 'function ');
 const getPartnerPricingRule = new Function(`${pricingRulesSource}\nreturn getPartnerPricingRule;`)();
 
 const uomLitre = { id: 1, name: 'L', category_id: { id: 10 }, factor: 1.0 };
@@ -156,6 +156,7 @@ new Function(
     'PosOrderline',
     'PosOrder',
     'TicketScreen',
+    'ProductScreen',
     'AlertDialog',
     posOrderLineSource
 )(
@@ -164,6 +165,7 @@ new Function(
     FakePosOrderline,
     FakePosOrder,
     FakeTicketScreen,
+    class FakeProductScreen {},
     class FakeAlertDialog {}
 );
 

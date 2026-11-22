@@ -190,3 +190,120 @@ export function getPartnerPricingRule(pos, partner, product, options = {}) {
 
     return { type: "none", originType: "none", priceOrigin: "list", originLabel: "", price: null, discount: 0, rule: null };
 }
+
+/**
+ * Busca si aplica una regla específica de la tarifa (product.pricelist.item)
+ * para un producto y cantidad dados en el Punto de Venta.
+ *
+ * @param {Object} pricelist - Registro de product.pricelist
+ * @param {Object} product - Registro de product.product
+ * @param {number} quantity - Cantidad vendida
+ * @param {Object} models - Modelos de PosStore (opcional)
+ * @returns {Object|null} El item de tarifa aplicable, o null si aplica catálogo base.
+ */
+export function getPricelistItemRule(pricelist, product, quantity = 1, models = null) {
+    if (!pricelist || !product) {
+        return null;
+    }
+    const productId = product.id ?? product;
+    const tmpl = product.product_tmpl_id || product.raw?.product_tmpl_id || product;
+    const tmplId = tmpl?.id ?? tmpl;
+    const parentCategories = tmpl?.parentCategories || product.parentCategories || [];
+
+    // 1. Relaciones en memoria cargadas en el frontend de POS
+    if (typeof product.backLink === "function" || typeof tmpl?.backLink === "function") {
+        const productTmpl = tmpl || product;
+        const tmplRules = (productTmpl.backLink?.("<-product.pricelist.item.product_tmpl_id") || [])
+            .filter((rule) => (rule.pricelist_id?.id ?? rule.pricelist_id) === pricelist.id && !rule.product_id)
+            .sort((a, b) => (b.min_quantity || 0) - (a.min_quantity || 0));
+        const productRules = (product.backLink?.("<-product.pricelist.item.product_id") || [])
+            .filter((rule) => (rule.pricelist_id?.id ?? rule.pricelist_id) === pricelist.id)
+            .sort((a, b) => (b.min_quantity || 0) - (a.min_quantity || 0));
+
+        const tmplRulesSet = new Set(tmplRules.map((r) => r.id));
+        const productRulesSet = new Set(productRules.map((r) => r.id));
+        const generalRulesIds = typeof pricelist.getGeneralRulesIdsByCategories === "function"
+            ? pricelist.getGeneralRulesIdsByCategories(parentCategories)
+            : [];
+
+        const itemModel = models?.["product.pricelist.item"] || productTmpl.models?.["product.pricelist.item"];
+        if (itemModel && typeof itemModel.readMany === "function") {
+            const rules = itemModel.readMany([...productRulesSet, ...tmplRulesSet, ...generalRulesIds])
+                .filter((r) => !r.min_quantity || r.min_quantity <= quantity);
+            if (rules.length > 0) {
+                return rules[0];
+            }
+        }
+    }
+
+    // 2. Búsqueda en los items asociados a la tarifa o en el registro general de items
+    const allItems = pricelist.item_ids || (models?.["product.pricelist.item"]?.getAll?.() || []).filter(
+        (item) => (item.pricelist_id?.id ?? item.pricelist_id) === pricelist.id
+    );
+
+    if (Array.isArray(allItems) && allItems.length > 0) {
+        const matchingRules = allItems.filter((item) => {
+            if (item.min_quantity && item.min_quantity > quantity) {
+                return false;
+            }
+            const itemPId = item.product_id?.id ?? item.product_id;
+            if (itemPId) {
+                return itemPId === productId;
+            }
+            const itemTId = item.product_tmpl_id?.id ?? item.product_tmpl_id;
+            if (itemTId) {
+                return itemTId === tmplId;
+            }
+            const itemCId = item.categ_id?.id ?? item.categ_id;
+            if (itemCId) {
+                const pCatIds = Array.isArray(parentCategories)
+                    ? parentCategories.map((c) => (c?.id ?? c))
+                    : [];
+                return pCatIds.includes(itemCId);
+            }
+            return true; // Regla global para cualquier producto
+        });
+
+        if (matchingRules.length > 0) {
+            matchingRules.sort((a, b) => {
+                const getPriority = (item) => {
+                    if (item.product_id) return 3;
+                    if (item.product_tmpl_id) return 2;
+                    if (item.categ_id) return 1;
+                    return 0;
+                };
+                const diffPrio = getPriority(b) - getPriority(a);
+                if (diffPrio !== 0) return diffPrio;
+                return (b.min_quantity || 0) - (a.min_quantity || 0);
+            });
+            return matchingRules[0];
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Genera la etiqueta informativa de origen cuando el precio proviene de una tarifa.
+ *
+ * @param {Object} pricelist - Registro de la tarifa activa
+ * @param {Object} itemRule - Item de la tarifa aplicado
+ * @param {Object} product - Producto vendido
+ * @param {number|string} finalPrice - Precio unitario resultante
+ * @returns {string} Etiqueta descriptiva canónica
+ */
+export function formatPricelistOriginLabel(pricelist, itemRule, product, finalPrice) {
+    const pricelistName = pricelist?.name || pricelist?.display_name || "Tarifa";
+    if (!itemRule) {
+        return "Precio de venta del producto";
+    }
+    const ruleName = itemRule.name || itemRule.display_name || product?.display_name || "";
+    const priceStr = finalPrice !== undefined && finalPrice !== null ? String(finalPrice) : "";
+    if (ruleName && ruleName.includes(":")) {
+        return `Tarifa: ${pricelistName} — ${ruleName}`;
+    }
+    return priceStr
+        ? `Tarifa: ${pricelistName} — ${ruleName}: ${priceStr}`
+        : `Tarifa: ${pricelistName} — ${ruleName}`;
+}
+

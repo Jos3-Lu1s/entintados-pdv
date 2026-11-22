@@ -2,7 +2,7 @@
 import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
-import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
+import { getPartnerPricingRule, getPricelistItemRule, formatPricelistOriginLabel } from "@entintados_pdv/app/utils/pricing_rules";
 
 let posStoreInstance = null;
 
@@ -75,6 +75,12 @@ patch(PosOrder.prototype, {
         } finally {
             this._entintadosSettingPartner = false;
         }
+    },
+
+    setPricelist(pricelist) {
+        const res = super.setPricelist ? super.setPricelist(pricelist) : null;
+        this._entintadosReconcileDiscounts();
+        return res;
     },
 
     _entintadosHandlePartnerAssignment(partner) {
@@ -177,23 +183,41 @@ patch(PosOrder.prototype, {
             // Si la línea tenía precio fijo bloqueado y ya no aplica regla de precio fijo:
             if (line.fixed_price_locked && rule.type !== "fixed_price") {
                 line.fixed_price_locked = false;
-                if (!line.is_tinted_base) {
-                    line.price_type = "original";
-                    line.manual_price = false;
-                    const pricelist = this.pricelist || this.config?.pricelist_id || posStoreInstance?.pricelist;
-                    let restoredPrice = null;
-                    if (pricelist && typeof pricelist.get_price === "function") {
-                        restoredPrice = pricelist.get_price(product, line.qty || 1);
-                    } else if (pricelist && typeof pricelist.getPrice === "function") {
-                        restoredPrice = pricelist.getPrice(product, line.qty || 1);
-                    }
-                    if (restoredPrice === null || restoredPrice === undefined) {
-                        restoredPrice = product.lst_price ?? line.price_unit;
-                    }
+                line.price_type = "original";
+                line.manual_price = false;
+            }
+
+            // Si el cajero colocó un precio manual en un producto común (y no es base entintada), no pisar
+            if (line.price_type === "manual" && !line.is_tinted_base) {
+                line.price_origin = "manual";
+                line.price_origin_label = "Modificado de forma manual";
+            } else if (!line.is_tinted_base) {
+                // Actualizar el precio unitario base según la tarifa activa de la orden
+                const pricelist = this.pricelist_id || this.pricelist || this.config?.pricelist_id || posStoreInstance?.pricelist;
+                let restoredPrice = null;
+                if (product.product_tmpl_id?.getPrice) {
+                    restoredPrice = product.product_tmpl_id.getPrice(
+                        pricelist,
+                        line.qty || 1,
+                        line.getPriceExtra?.() || 0,
+                        false,
+                        product
+                    );
+                } else if (pricelist && typeof pricelist.get_price === "function") {
+                    restoredPrice = pricelist.get_price(product, line.qty || 1);
+                } else if (pricelist && typeof pricelist.getPrice === "function") {
+                    restoredPrice = pricelist.getPrice(product, line.qty || 1);
+                }
+                if (restoredPrice === null || restoredPrice === undefined) {
+                    restoredPrice = product.lst_price ?? line.price_unit;
+                }
+                if (typeof restoredPrice === "number" && !isNaN(restoredPrice) && line.price_unit !== restoredPrice) {
                     line._entintadosSettingPrice = true;
                     try {
                         if (typeof line.setUnitPrice === "function") {
                             line.setUnitPrice(restoredPrice);
+                        } else if (typeof line.set_unit_price === "function") {
+                            line.set_unit_price(restoredPrice);
                         } else {
                             line.price_unit = restoredPrice;
                         }
@@ -201,17 +225,16 @@ patch(PosOrder.prototype, {
                         delete line._entintadosSettingPrice;
                     }
                 }
-            }
 
-            // Si el cajero colocó un precio manual en un producto común (y no es base entintada), no pisar
-            if (line.price_type === "manual" && !line.is_tinted_base) {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                line.promo_reward_id = false;
-                line.price_origin = "manual";
-                line.price_origin_label = "Precio manual";
-                continue;
+                // Evaluar si aplica una regla específica de la tarifa o catálogo base
+                const itemRule = getPricelistItemRule(pricelist, product, line.qty || 1, models);
+                if (itemRule) {
+                    line.price_origin = "pricelist";
+                    line.price_origin_label = formatPricelistOriginLabel(pricelist, itemRule, product, line.price_unit);
+                } else {
+                    line.price_origin = "list";
+                    line.price_origin_label = "Precio de venta del producto";
+                }
             }
 
             const agreementDiscount = rule.type === "discount" ? Number(rule.discount || 0) : 0;
@@ -242,8 +265,6 @@ patch(PosOrder.prototype, {
                         }
                         line.pricing_rule_type = "promo";
                         line.pricing_rule_origin = promoOrigin;
-                        line.price_origin = "promo";
-                        line.price_origin_label = activeOrderPromo.program_id?.name || "Promoción";
                         line.promo_reward_id = activeOrderPromo;
                         delete line.promo_opt_out;
                     } finally {
@@ -286,8 +307,6 @@ patch(PosOrder.prototype, {
                         }
                         line.pricing_rule_type = "promo";
                         line.pricing_rule_origin = promoOrigin;
-                        line.price_origin = "promo";
-                        line.price_origin_label = reward.program_id?.name || "Promoción";
                         delete line.promo_opt_out;
                     } finally {
                         delete line._entintadosSettingDiscount;
@@ -318,18 +337,17 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_type = rule.originType || "product";
                 line.pricing_rule_origin = rule.originLabel || "";
                 line.pricing_rule_id = rule.rule?.id || false;
-                line.price_origin = rule.priceOrigin || "agreement";
-                line.price_origin_label = rule.originLabel || "";
                 line.promo_reward_id = false;
             } else {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                line.promo_reward_id = false;
-                if (!line.is_tinted_base && line.price_type !== "manual") {
-                    line.price_origin = this.pricelist ? "pricelist" : "list";
-                    line.price_origin_label = "";
+                if (line.manual_discount && Number(line.discount) > 0) {
+                    line.pricing_rule_type = "manual";
+                    line.pricing_rule_origin = `Desc. Manual (${Number(line.discount).toFixed(1)}%)`;
+                } else {
+                    line.pricing_rule_type = "none";
+                    line.pricing_rule_origin = "";
+                    line.pricing_rule_id = false;
                 }
+                line.promo_reward_id = false;
             }
         }
     },

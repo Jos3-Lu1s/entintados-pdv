@@ -28,8 +28,8 @@ class PosOrderline {
 const storeSource = fs.readFileSync(new URL('../static/src/app/overrides/pos_store.js', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
 
-new Function('patch', 'PosStore', 'PosOrder', 'getPartnerPricingRule', storeSource)(
-    patch, PosStore, class PosOrder {}, () => ({ type: 'none' })
+new Function('patch', 'PosStore', 'PosOrder', 'getPartnerPricingRule', 'getPricelistItemRule', 'formatPricelistOriginLabel', storeSource)(
+    patch, PosStore, class PosOrder {}, () => ({ type: 'none' }), () => null, () => ''
 );
 
 class ProductScreen {

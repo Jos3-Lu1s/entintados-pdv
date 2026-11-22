@@ -8,6 +8,20 @@ const source = fs.readFileSync(new URL('../static/src/app/overrides/orderline.js
     .replace(/export const /g, 'var ')
     .replace(/export (function|class)/g, '$1');
 
+const pricingRulesSource = fs.readFileSync(new URL('../static/src/app/utils/pricing_rules.js', import.meta.url), 'utf8')
+    .replace(/^import .*;\r?\n/gm, '')
+    .replace(/export (function|const|class)/g, '$1');
+
+function pricingRulesFixture() {
+    const sandbox = {};
+    vm.runInNewContext(pricingRulesSource, sandbox);
+    return {
+        getPartnerPricingRule: sandbox.getPartnerPricingRule,
+        getPricelistItemRule: sandbox.getPricelistItemRule,
+        formatPricelistOriginLabel: sandbox.formatPricelistOriginLabel,
+    };
+}
+
 function fixture() {
     class BaseOrderline {
         setup() {}
@@ -169,3 +183,139 @@ test('onPriceOriginClick stops propagation and opens popover with line detail', 
     instance.onPriceOriginClick(mockEvent, instance.line);
     assert.equal(instance.priceOriginPopover.isOpen, false);
 });
+
+test('getPricelistItemRule resolves matching rules by precedence and formats labels', () => {
+    const { getPricelistItemRule, formatPricelistOriginLabel } = pricingRulesFixture();
+
+    const pricelist = {
+        id: 10,
+        name: 'Tarifa Mayoreo',
+        item_ids: [
+            { id: 101, pricelist_id: 10, categ_id: 5, compute_price: 'percentage', percent_price: 5, name: 'Pinturas: -5%' },
+            { id: 102, pricelist_id: 10, product_tmpl_id: 20, compute_price: 'fixed', fixed_price: 90, name: 'Esmalte Base: 90.00' },
+            { id: 103, pricelist_id: 10, product_id: 50, compute_price: 'fixed', fixed_price: 85, name: 'Esmalte Azul: 85.00' },
+        ],
+    };
+
+    // Producto específico coincide con regla 103 (prioridad producto sobre plantilla y categoría)
+    const productSpecific = {
+        id: 50,
+        product_tmpl_id: { id: 20, parentCategories: [5] },
+        display_name: 'Esmalte Azul',
+    };
+    const ruleProd = getPricelistItemRule(pricelist, productSpecific, 1);
+    assert.equal(ruleProd.id, 103);
+    const labelProd = formatPricelistOriginLabel(pricelist, ruleProd, productSpecific, 85);
+    assert.equal(labelProd, 'Tarifa: Tarifa Mayoreo — Esmalte Azul: 85.00');
+
+    // Plantilla coincide con regla 102 cuando el producto no tiene regla específica
+    const productTmpl = {
+        id: 51,
+        product_tmpl_id: { id: 20, parentCategories: [5] },
+        display_name: 'Esmalte Rojo',
+    };
+    const ruleTmpl = getPricelistItemRule(pricelist, productTmpl, 1);
+    assert.equal(ruleTmpl.id, 102);
+
+    // Categoría coincide con regla 101
+    const productCateg = {
+        id: 99,
+        product_tmpl_id: { id: 999, parentCategories: [5] },
+        display_name: 'Brocha',
+    };
+    const ruleCateg = getPricelistItemRule(pricelist, productCateg, 1);
+    assert.equal(ruleCateg.id, 101);
+
+    // Sin regla en la tarifa: retorna null y label de catálogo estándar
+    const productUnmatched = {
+        id: 888,
+        product_tmpl_id: { id: 777, parentCategories: [99] },
+        display_name: 'Thinner',
+    };
+    const ruleUnmatched = getPricelistItemRule(pricelist, productUnmatched, 1);
+    assert.equal(ruleUnmatched, null);
+    const labelUnmatched = formatPricelistOriginLabel(pricelist, ruleUnmatched, productUnmatched, 50);
+    assert.equal(labelUnmatched, 'Precio de venta del producto');
+});
+
+test('lineScreenValues resolves colors and icons for agreement, promo, fixed_price, and manual discounts', () => {
+    const { Orderline } = fixture();
+
+    // 1. Acuerdo comercial de descuento
+    const instAgreement = new Orderline();
+    instAgreement.props = { mode: 'display', basic_receipt: false };
+    instAgreement.line = {
+        qty: 1,
+        currency: { id: 1 },
+        priceExcl: 180,
+        priceExclNoDiscount: 200,
+        price_origin: 'pricelist',
+        price_origin_label: 'Tarifa: Mayoreo — Producto X: 200.00',
+        pricing_rule_type: 'line',
+        pricing_rule_origin: 'Desc. Línea: Esmaltes (10.0%)',
+    };
+    const valsAgreement = instAgreement.lineScreenValues;
+    assert.equal(valsAgreement.priceOriginIcon, 'fa-list-alt');
+    assert.equal(valsAgreement.priceOriginColor, 'text-info');
+    assert.equal(valsAgreement.pricingRuleColor, 'text-info');
+    assert.equal(valsAgreement.pricingRuleIcon, 'fa-tag');
+
+    // 2. Precio fijo pactado
+    const instFixed = new Orderline();
+    instFixed.props = { mode: 'display', basic_receipt: false };
+    instFixed.line = {
+        qty: 1,
+        currency: { id: 1 },
+        priceExcl: 120,
+        priceExclNoDiscount: 120,
+        price_origin: 'fixed_price',
+        price_origin_label: 'Precio Fijo: Cliente (120.00)',
+        pricing_rule_type: 'fixed_price',
+        pricing_rule_origin: 'Precio Fijo: Cliente (120.00)',
+    };
+    const valsFixed = instFixed.lineScreenValues;
+    assert.equal(valsFixed.priceOriginIcon, 'fa-lock');
+    assert.equal(valsFixed.priceOriginColor, 'text-success');
+    assert.equal(valsFixed.pricingRuleColor, 'text-success');
+    assert.equal(valsFixed.pricingRuleIcon, 'fa-lock');
+
+    // 3. Promoción aplicada
+    const instPromo = new Orderline();
+    instPromo.props = { mode: 'display', basic_receipt: false };
+    instPromo.line = {
+        qty: 1,
+        currency: { id: 1 },
+        priceExcl: 150,
+        priceExclNoDiscount: 200,
+        price_origin: 'list',
+        price_origin_label: 'Precio de venta del producto',
+        pricing_rule_type: 'promo',
+        pricing_rule_origin: 'Promoción Buen Fin - 25%',
+        promo_reward_id: 1,
+    };
+    const valsPromo = instPromo.lineScreenValues;
+    assert.equal(valsPromo.priceOriginIcon, 'fa-tag');
+    assert.equal(valsPromo.priceOriginColor, 'text-muted');
+    assert.equal(valsPromo.pricingRuleColor, 'text-primary');
+    assert.equal(valsPromo.pricingRuleIcon, 'fa-star');
+
+    // 4. Descuento manual
+    const instManual = new Orderline();
+    instManual.props = { mode: 'display', basic_receipt: false };
+    instManual.line = {
+        qty: 1,
+        currency: { id: 1 },
+        priceExcl: 190,
+        priceExclNoDiscount: 200,
+        price_origin: 'manual',
+        price_origin_label: 'Precio unitario tecleado manualmente',
+        pricing_rule_type: 'manual',
+        pricing_rule_origin: 'Desc. Manual (5.0%)',
+    };
+    const valsManual = instManual.lineScreenValues;
+    assert.equal(valsManual.priceOriginIcon, 'fa-pencil');
+    assert.equal(valsManual.priceOriginColor, 'text-warning');
+    assert.equal(valsManual.pricingRuleColor, 'text-warning');
+    assert.equal(valsManual.pricingRuleIcon, 'fa-pencil');
+});
+

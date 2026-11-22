@@ -881,6 +881,8 @@ function createPosStoreContext() {
         PosOrder: MockPosOrder,
         patch,
         getPartnerPricingRule: (models, partner, product, options) => partnerRuleMock,
+        getPricelistItemRule: () => null,
+        formatPricelistOriginLabel: () => 'Precio de venta del producto',
         console,
     };
     vm.runInNewContext(source, context);
@@ -930,7 +932,7 @@ test('pos_store: reconciliacion propaga promocion de orden a nuevas lineas', () 
     // La nueva linea recibe la promocion de orden de 15%
     assert.equal(lineNew.discount, 15);
     assert.equal(lineNew.pricing_rule_type, 'promo');
-    assert.equal(lineNew.price_origin, 'promo');
+    assert.equal(lineNew.price_origin, 'list');
     assert.equal(lineNew.promo_reward_id, orderPromo);
 });
 
@@ -950,7 +952,7 @@ test('pos_store: reconciliacion revierte promocion de orden si deja de ser valid
         price_unit: 100,
         discount: 15,
         pricing_rule_type: 'promo',
-        price_origin: 'promo',
+        price_origin: 'list',
         promo_reward_id: orderPromo,
         product_id: { id: 10 },
         setDiscount(d) { this.discount = d; },
@@ -968,7 +970,7 @@ test('pos_store: reconciliacion revierte promocion de orden si deja de ser valid
     // La partida revierte a su acuerdo comercial de 10%
     assert.equal(line.discount, 10);
     assert.equal(line.pricing_rule_type, 'partner_rule');
-    assert.equal(line.price_origin, 'agreement');
+    assert.equal(line.price_origin, 'list');
     assert.equal(line.promo_reward_id, false);
 });
 
@@ -1002,7 +1004,7 @@ test('pos_store: reconciliacion propaga promocion de orden bajo principio todo o
     // Promocion de orden es todo o nada: cubre la linea elegible con 15%
     assert.equal(line.discount, 15);
     assert.equal(line.pricing_rule_type, 'promo');
-    assert.equal(line.price_origin, 'promo');
+    assert.equal(line.price_origin, 'list');
     assert.equal(line.promo_reward_id, orderPromo);
 });
 
@@ -1037,7 +1039,7 @@ test('pos_store: reconciliacion mantiene promocion especifica asignada aunque ac
     // La eleccion explicita del cajero se respeta y no se revierte al acuerdo
     assert.equal(line.discount, 10);
     assert.equal(line.pricing_rule_type, 'promo');
-    assert.equal(line.price_origin, 'promo');
+    assert.equal(line.price_origin, 'list');
     assert.equal(line.promo_reward_id, specificPromo);
 });
 

@@ -99,6 +99,17 @@ patch(Orderline.prototype, {
             values.pricingRuleType = line.pricing_rule_type || null;
             values.hasPricingRule = Boolean(line.pricing_rule_origin);
             values.hasPromo = Boolean(line.promo_reward_id);
+            values.pricingRuleColor =
+                values.pricingRuleType === "fixed_price" ? "text-success" :
+                values.pricingRuleType === "promo" ? "text-primary" :
+                values.pricingRuleType === "manual" ? "text-warning" :
+                values.pricingRuleType && values.pricingRuleType !== "none" ? "text-info" :
+                "";
+            values.pricingRuleIcon =
+                values.pricingRuleType === "fixed_price" ? "fa-lock" :
+                values.pricingRuleType === "promo" ? "fa-star" :
+                values.pricingRuleType === "manual" ? "fa-pencil" :
+                "fa-tag";
         }
 
         if (this.props.mode === "display" && !this.props.basic_receipt) {
