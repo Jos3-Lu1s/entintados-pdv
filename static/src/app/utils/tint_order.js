@@ -1,7 +1,7 @@
 
 import { _t } from "@web/core/l10n/translation";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
-import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
+import { resolveAgreement } from "@entintados_pdv/app/utils/agreement_rules";
 
 /**
  * Utilidades para transformar fórmulas y bases en líneas de orden enlazadas (padre e hijas de colorante).
@@ -108,7 +108,7 @@ export function computeTintedPriceDetails(pos, baseProduct, formula, partner = n
 
     let isFixedPrice = false;
     if (partner) {
-        const rule = getPartnerPricingRule(pos, partner, baseProduct);
+        const rule = resolveAgreement(pos?.models, partner, baseProduct, { currency: pos?.currency });
         if (rule.type === "fixed_price") {
             basePrice = rule.price;
             isFixedPrice = true;
@@ -289,7 +289,7 @@ export async function addTintedBaseToOrder(
         parent.price_origin = "tint";
         parent.price_origin_label = "Precio del entintado: base más colorantes";
 
-        const rule = getPartnerPricingRule(pos, partner, baseProduct);
+        const rule = resolveAgreement(pos?.models, partner, baseProduct, { currency: pos?.currency });
         parent._entintadosSettingDiscount = true;
         try {
             if (rule.type === "fixed_price") {

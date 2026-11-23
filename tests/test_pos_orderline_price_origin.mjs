@@ -8,20 +8,6 @@ const source = fs.readFileSync(new URL('../static/src/app/overrides/orderline.js
     .replace(/export const /g, 'var ')
     .replace(/export (function|class)/g, '$1');
 
-const pricingRulesSource = fs.readFileSync(new URL('../static/src/app/utils/pricing_rules.js', import.meta.url), 'utf8')
-    .replace(/^import .*;\r?\n/gm, '')
-    .replace(/export (function|const|class)/g, '$1');
-
-function pricingRulesFixture() {
-    const sandbox = {};
-    vm.runInNewContext(pricingRulesSource, sandbox);
-    return {
-        getPartnerPricingRule: sandbox.getPartnerPricingRule,
-        getPricelistItemRule: sandbox.getPricelistItemRule,
-        formatPricelistOriginLabel: sandbox.formatPricelistOriginLabel,
-    };
-}
-
 function fixture() {
     class BaseOrderline {
         setup() {}
@@ -189,60 +175,6 @@ test('onPriceOriginClick stops propagation and opens popover with line detail', 
 
     instance.onPriceOriginClick(mockEvent, instance.line);
     assert.equal(instance.priceOriginPopover.isOpen, false);
-});
-
-test('getPricelistItemRule resolves matching rules by precedence and formats labels', () => {
-    const { getPricelistItemRule, formatPricelistOriginLabel } = pricingRulesFixture();
-
-    const pricelist = {
-        id: 10,
-        name: 'Tarifa Mayoreo',
-        item_ids: [
-            { id: 101, pricelist_id: 10, categ_id: 5, compute_price: 'percentage', percent_price: 5, name: 'Pinturas: -5%' },
-            { id: 102, pricelist_id: 10, product_tmpl_id: 20, compute_price: 'fixed', fixed_price: 90, name: 'Esmalte Base: 90.00' },
-            { id: 103, pricelist_id: 10, product_id: 50, compute_price: 'fixed', fixed_price: 85, name: 'Esmalte Azul: 85.00' },
-        ],
-    };
-
-    // Producto específico coincide con regla 103 (prioridad producto sobre plantilla y categoría)
-    const productSpecific = {
-        id: 50,
-        product_tmpl_id: { id: 20, parentCategories: [5] },
-        display_name: 'Esmalte Azul',
-    };
-    const ruleProd = getPricelistItemRule(pricelist, productSpecific, 1);
-    assert.equal(ruleProd.id, 103);
-    const labelProd = formatPricelistOriginLabel(pricelist, ruleProd, productSpecific, 85);
-    assert.equal(labelProd, 'Tarifa: Tarifa Mayoreo — Esmalte Azul: 85.00');
-
-    // Plantilla coincide con regla 102 cuando el producto no tiene regla específica
-    const productTmpl = {
-        id: 51,
-        product_tmpl_id: { id: 20, parentCategories: [5] },
-        display_name: 'Esmalte Rojo',
-    };
-    const ruleTmpl = getPricelistItemRule(pricelist, productTmpl, 1);
-    assert.equal(ruleTmpl.id, 102);
-
-    // Categoría coincide con regla 101
-    const productCateg = {
-        id: 99,
-        product_tmpl_id: { id: 999, parentCategories: [5] },
-        display_name: 'Brocha',
-    };
-    const ruleCateg = getPricelistItemRule(pricelist, productCateg, 1);
-    assert.equal(ruleCateg.id, 101);
-
-    // Sin regla en la tarifa: retorna null y label de catálogo estándar
-    const productUnmatched = {
-        id: 888,
-        product_tmpl_id: { id: 777, parentCategories: [99] },
-        display_name: 'Thinner',
-    };
-    const ruleUnmatched = getPricelistItemRule(pricelist, productUnmatched, 1);
-    assert.equal(ruleUnmatched, null);
-    const labelUnmatched = formatPricelistOriginLabel(pricelist, ruleUnmatched, productUnmatched, 50);
-    assert.equal(labelUnmatched, 'Precio de venta del producto');
 });
 
 test('lineScreenValues resolves colors and icons for agreement, promo, fixed_price, and manual discounts', () => {

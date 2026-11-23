@@ -5,6 +5,7 @@ import { _t } from "@web/core/l10n/translation";
 import { formatCurrency } from "@web/core/currency";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { tintedProductName } from "@entintados_pdv/app/utils/tint_order";
+import { findPricelistRule, pricelistOriginLabel } from "@entintados_pdv/app/utils/pricelist_rules";
 
 export const POS_PRICE_ORIGINS = {
     list: { icon: "fa-tag", color: "text-muted", title: _t("Precio de venta") },
@@ -29,11 +30,9 @@ export function getPriceOriginData(line) {
         originKey === "fixed_price" ? (line.pricing_rule_origin || _t("Precio fijo")) :
         originKey === "pricelist" ? (
             line.order_id?.pricelist_id
-                ? formatPricelistOriginLabel(
+                ? pricelistOriginLabel(
                     line.order_id.pricelist_id,
-                    getPricelistItemRule(line.order_id.pricelist_id, line.product_id, line.qty || 1, line.models),
-                    line.product_id,
-                    line.price_unit
+                    findPricelistRule(line.order_id.pricelist_id, line.product_id, line.getQuantity())
                 )
                 : _t("Precio determinado por tarifa activa")
         ) :

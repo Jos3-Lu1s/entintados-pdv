@@ -98,7 +98,7 @@ class ProductPricelistItem(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         params = super()._load_pos_data_fields(config)
-        for field_name in ('name', 'price', 'display_name'):
+        for field_name in ('name', 'price', 'display_name', 'display_applied_on', 'esquema_id', 'linea_id'):
             if field_name not in params:
                 params.append(field_name)
         return params

@@ -95,9 +95,8 @@ patch(PosOrderline.prototype, {
             }
         }
 
-        const order = this.order_id || this.order;
-        if (order && typeof order._entintadosReconcileDiscounts === "function") {
-            order._entintadosReconcileDiscounts();
+        if (!this._entintadosSyncingQuantity) {
+            this.order_id?.refreshOrderPricing?.();
         }
 
         return res;
@@ -137,12 +136,7 @@ patch(PosOrderline.prototype, {
             }
             return false;
         }
-        const res = super.setUnitPrice(unitPrice);
-        if (!this._entintadosSettingPrice && !this.is_tinted_base) {
-            this.price_origin = "manual";
-            this.price_origin_label = "Modificado de forma manual";
-        }
-        return res;
+        return super.setUnitPrice(unitPrice);
     },
 
     setDiscount(discount) {
