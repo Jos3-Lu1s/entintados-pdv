@@ -2,7 +2,13 @@
 import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
+import { _t } from "@web/core/l10n/translation";
 import { getPartnerPricingRule, getPricelistItemRule, formatPricelistOriginLabel } from "@entintados_pdv/app/utils/pricing_rules";
+import { formatOriginBadge } from "@entintados_pdv/app/utils/origin_badge";
+import { admitsLinePromotion } from "@entintados_pdv/app/utils/promotion_rules";
+
+// Más avisos que estos se agrupan en uno solo, como en Ventas.
+const PROMOTION_NOTIFICATION_THRESHOLD = 5;
 
 let posStoreInstance = null;
 
@@ -45,6 +51,79 @@ patch(PosStore.prototype, {
             order._entintadosReconcileDiscounts();
         }
         return line;
+    },
+
+    // El core la llama dentro de `updateRewards` tras cada cambio del pedido: producto,
+    // teclado, cliente, tarifa o código de barras.
+    async orderUpdateLoyaltyPrograms() {
+        await super.orderUpdateLoyaltyPrograms(...arguments);
+        this._refreshLinePromotions(this.getOrder());
+    },
+
+    async pay() {
+        this._refreshLinePromotions(this.getOrder());
+        return super.pay(...arguments);
+    },
+
+    /**
+     * Descuento tecleado: con promoción de pedido activa no se cambia, como en Ventas. En una
+     * línea en promoción la sustituye y queda manual; si la caja rechaza el valor (precio fijo o
+     * sin permiso), la promoción se conserva.
+     */
+    async setDiscountFromUI(line, val) {
+        const order = line.order_id;
+        const orderReward = order?.order_promo_reward_id;
+        if (orderReward && admitsLinePromotion(line)) {
+            this.notification.add(
+                _t(
+                    "El pedido tiene la promoción %s en todas sus líneas. Quítala del pedido para cambiar el descuento.",
+                    orderReward.program_id?.name || ""
+                ),
+                { type: "warning" }
+            );
+            return;
+        }
+        if (!line.promo_reward_id) {
+            return super.setDiscountFromUI(...arguments);
+        }
+        const previous = {
+            promo_reward_id: line.promo_reward_id,
+            pricing_rule_type: line.pricing_rule_type,
+            pricing_rule_origin: line.pricing_rule_origin,
+            discount: line.discount,
+        };
+        const discount = Number(val) || 0;
+        line.promo_reward_id = false;
+        line.pricing_rule_type = "manual";
+        line.pricing_rule_origin = formatOriginBadge(_t("Manual"), discount);
+        const result = await super.setDiscountFromUI(...arguments);
+        if (line.discount === previous.discount && discount !== previous.discount) {
+            Object.assign(line, previous);
+        }
+        return result;
+    },
+
+    _refreshLinePromotions(order) {
+        if (!order || order.finalized) {
+            return;
+        }
+        this._notifyPromotionChanges(order.reevaluateLinePromotions());
+    },
+
+    _notifyPromotionChanges(notices) {
+        if (!notices.length) {
+            return;
+        }
+        if (notices.length > PROMOTION_NOTIFICATION_THRESHOLD) {
+            this.notification.add(
+                _t("Se actualizaron o retiraron promociones en %s líneas del pedido.", notices.length),
+                { title: _t("Promociones"), type: "warning" }
+            );
+            return;
+        }
+        for (const notice of notices) {
+            this.notification.add(notice.message, { title: notice.title, type: notice.type });
+        }
     },
 });
 
@@ -91,18 +170,6 @@ patch(PosOrder.prototype, {
         const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
         const models = this.models || posStoreInstance?.models;
         const nativeAdvanceProduct = (this.config || this.config_id || posStoreInstance?.config)?.down_payment_product_id;
-
-        // Determinar si existe una promoción global o de orden activa o aplicable
-        let activeOrderPromo = this.order_promo_reward_id || null;
-        if (activeOrderPromo) {
-            const isValid = typeof this._isRewardValidForOrder === "function"
-                ? this._isRewardValidForOrder(activeOrderPromo)
-                : true;
-            if (!isValid) {
-                this.order_promo_reward_id = false;
-                activeOrderPromo = null;
-            }
-        }
 
         for (const line of this.lines || []) {
             // A refund keeps the price and discount actually paid, even if
@@ -236,86 +303,12 @@ patch(PosOrder.prototype, {
                 }
             }
 
-            const agreementDiscount = rule.type === "discount" ? Number(rule.discount || 0) : 0;
-
-            // 1. Si hay una promoción global activa en la orden (todo o nada):
-            if (activeOrderPromo) {
-                const isExcluded = typeof this._isLineExcludedFromPromo === "function"
-                    ? this._isLineExcludedFromPromo(line, activeOrderPromo)
-                    : Boolean(line.fixed_price_locked || line.pricing_rule_type === "fixed_price" || line.is_tint_colorant || line.combo_parent_id);
-
-                if (!isExcluded) {
-                    const promoDiscount = Number(activeOrderPromo.discount || 0);
-                    const targetLabel = activeOrderPromo.reward_target_label || (
-                        activeOrderPromo.lines_product_id?.name ? `Línea: ${activeOrderPromo.lines_product_id.name}` :
-                        activeOrderPromo.scheme_id?.name ? `Esquema: ${activeOrderPromo.scheme_id.name}` : ""
-                    );
-                    const targetPart = targetLabel ? ` · ${targetLabel}` : "";
-                    const promoOrigin = `${activeOrderPromo.program_id?.name || "Promoción"}${targetPart} - ${promoDiscount}%`;
-
-                    line._entintadosSettingDiscount = true;
-                    try {
-                        if (typeof line.setDiscount === "function") {
-                            line.setDiscount(promoDiscount);
-                        } else if (typeof line.set_discount === "function") {
-                            line.set_discount(promoDiscount);
-                        } else {
-                            line.discount = promoDiscount;
-                        }
-                        line.pricing_rule_type = "promo";
-                        line.pricing_rule_origin = promoOrigin;
-                        line.promo_reward_id = activeOrderPromo;
-                        delete line.promo_opt_out;
-                    } finally {
-                        delete line._entintadosSettingDiscount;
-                    }
-                    continue;
-                }
-            }
-
-            // 2. Si NO hay promoción global activa, evaluar si la partida porta una promoción específica válida
+            // La promoción de la línea la decide el motor de promociones: aquí solo el acuerdo.
             if (line.promo_reward_id) {
-                const reward = line.promo_reward_id;
-                let isPromoStillValid = Boolean(reward.discount_applicability === "specific");
-                if (isPromoStillValid && typeof this._isRewardValidForOrder === "function") {
-                    isPromoStillValid = this._isRewardValidForOrder(reward);
-                }
-                if (isPromoStillValid && typeof this._isLineExcludedFromPromo === "function") {
-                    if (this._isLineExcludedFromPromo(line, reward)) {
-                        isPromoStillValid = false;
-                    }
-                }
-
-                if (isPromoStillValid) {
-                    const promoDiscount = Number(reward.discount || 0);
-                    const targetLabel = reward.reward_target_label || (
-                        reward.lines_product_id?.name ? `Línea: ${reward.lines_product_id.name}` :
-                        reward.scheme_id?.name ? `Esquema: ${reward.scheme_id.name}` : ""
-                    );
-                    const targetPart = targetLabel ? ` · ${targetLabel}` : "";
-                    const promoOrigin = `${reward.program_id?.name || "Promoción"}${targetPart} - ${promoDiscount}%`;
-
-                    line._entintadosSettingDiscount = true;
-                    try {
-                        if (typeof line.setDiscount === "function") {
-                            line.setDiscount(promoDiscount);
-                        } else if (typeof line.set_discount === "function") {
-                            line.set_discount(promoDiscount);
-                        } else {
-                            line.discount = promoDiscount;
-                        }
-                        line.pricing_rule_type = "promo";
-                        line.pricing_rule_origin = promoOrigin;
-                        delete line.promo_opt_out;
-                    } finally {
-                        delete line._entintadosSettingDiscount;
-                    }
-                    continue;
-                }
-
-                // Si ya no es válida o era una promoción de orden huérfana, limpiar referencia
-                line.promo_reward_id = false;
+                continue;
             }
+
+            const agreementDiscount = rule.type === "discount" ? Number(rule.discount || 0) : 0;
 
             // Aplicar descuento según acuerdo comercial pactado (excluyente frente a promoción)
             const targetDiscount = agreementDiscount;

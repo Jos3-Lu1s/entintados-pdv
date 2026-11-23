@@ -79,6 +79,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/tint_points.js",
             "entintados_pdv/static/src/app/utils/pos_stock.js",
             "entintados_pdv/static/src/app/utils/pricing_rules.js",
+            "entintados_pdv/static/src/app/utils/origin_badge.js",
+            "entintados_pdv/static/src/app/utils/promotion_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             "entintados_pdv/static/src/app/utils/invoice_options.js",
@@ -102,7 +104,9 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_stock.js",
             "entintados_pdv/static/src/app/overrides/pos_customer.js",
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
-            "entintados_pdv/static/src/app/overrides/pos_loyalty.js",
+            "entintados_pdv/static/src/app/overrides/pos_order_promotions.js",
+            "entintados_pdv/static/src/app/overrides/native_rewards.js",
+            "entintados_pdv/static/src/app/overrides/promotion_selector.js",
             "entintados_pdv/static/src/app/overrides/orderline.js",
             "entintados_pdv/static/src/app/overrides/orderline.xml",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
@@ -165,6 +169,12 @@ Catálogo de entintado
         "web.report_assets_common": [
             # PDF de cotizaciones y órdenes de venta
             "entintados_pdv/static/src/reports/sale_quotation.scss",
+        ],
+        "web.assets_unit_tests": [
+            "entintados_pdv/static/tests/unit/**/*",
+        ],
+        "web.assets_tests": [
+            "entintados_pdv/static/tests/tours/**/*",
         ],
     },
 

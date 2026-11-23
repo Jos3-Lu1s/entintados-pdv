@@ -197,7 +197,28 @@ class LoyaltyProgram(models.Model):
             ('order_promo_reward_id', 'in', rewards.ids),
             ('state', 'in', ('draft', 'sent')),
         ])._clear_order_promotion()
-        return super().unlink()
+        # La cascada borraría las recompensas sin pasar por `LoyaltyReward.unlink`: un programa
+        # que ya se usó en un pedido o una venta se archiva con sus recompensas.
+        used_reward_ids = {
+            reward.id
+            for model, field in (
+                ('pos.order.line', 'promo_reward_id'),
+                ('pos.order.line', 'reward_id'),
+                ('pos.order', 'order_promo_reward_id'),
+                ('sale.order.line', 'promo_reward_id'),
+                ('sale.order.line', 'reward_id'),
+                ('sale.order', 'order_promo_reward_id'),
+            )
+            for (reward,) in self.env[model].sudo()._read_group([(field, 'in', rewards.ids)], [field])
+        }
+        in_use = self.filtered(
+            lambda program: any(reward.id in used_reward_ids for reward in program.with_context(active_test=False).reward_ids)
+        )
+        if in_use:
+            in_use.with_context(active_test=False).reward_ids.write({'active': False})
+            in_use.write({'active': False})
+        remaining = self - in_use
+        return super(LoyaltyProgram, remaining).unlink() if remaining else True
 
     def _compute_order_count(self):
         # Reemplaza al core para contar una sola vez el pedido que tiene líneas de recompensa

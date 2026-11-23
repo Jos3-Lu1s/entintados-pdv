@@ -192,6 +192,23 @@ export function getPartnerPricingRule(pos, partner, product, options = {}) {
 }
 
 /**
+ * Acuerdo comercial vigente de la línea, con su UdM y la moneda del pedido.
+ *
+ * Es el único punto por el que las promociones leen el acuerdo al que vuelve una línea.
+ *
+ * @param {Object} order - Pedido del PDV
+ * @param {Object} line - Línea del pedido
+ * @returns {Object} El mismo resultado que `getPartnerPricingRule`
+ */
+export function agreementForLine(order, line) {
+    const product = line?.product_id;
+    return getPartnerPricingRule(order?.models, order?.getPartner?.(), product, {
+        uom: line?.uom_id || line?.product_uom_id || product?.uom_id,
+        currency: line?.currency || order?.currency,
+    });
+}
+
+/**
  * Busca si aplica una regla específica de la tarifa (product.pricelist.item)
  * para un producto y cantidad dados en el Punto de Venta.
  *

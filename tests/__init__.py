@@ -66,4 +66,6 @@ from . import test_pos_promotions
 from . import test_pos_inline_promotions
 from . import test_pos_global_promotion_parity
 from . import test_pos_pricing_persistence
+from . import test_loyalty_program_unlink
+from . import test_pos_line_promotion_tour
 from . import test_osel_operation_controls
