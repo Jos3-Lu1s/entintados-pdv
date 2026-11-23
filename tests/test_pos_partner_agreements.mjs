@@ -203,18 +203,4 @@ assert.equal(line.setDiscount(0), true);
 assert.equal(line.discount, 0);
 delete line._entintadosSettingDiscount;
 
-// Serialización de price_origin
-line.price_origin = 'agreement';
-line.price_origin_label = 'Precio Fijo';
-line.pricing_rule_type = 'fixed_price';
-line.pricing_rule_origin = 'Precio Fijo';
-
-const json = line.export_as_JSON();
-assert.equal(json.price_origin, 'agreement');
-assert.equal(json.price_origin_label, 'Precio Fijo');
-
-const ormData = line.serializeForORM();
-assert.equal(ormData.price_origin, 'agreement');
-assert.equal(ormData.price_origin_label, 'Precio Fijo');
-
 console.log('test_pos_partner_agreements: Todos los casos pasaron correctamente.');

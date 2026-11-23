@@ -120,8 +120,6 @@ patch(PosOrder.prototype, {
                 continue;
             }
             if (line.is_reward_line) {
-                line.price_origin = "promo";
-                line.price_origin_label = "Regalo de promoción";
                 continue;
             }
             if (line.is_tint_colorant || line.product_id?.tint_role === "colorant") {

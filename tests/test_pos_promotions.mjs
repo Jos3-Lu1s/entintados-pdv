@@ -272,9 +272,9 @@ test('pos_loyalty: rechazo de bases entintadas y colorantes en regalos', () => {
     const validResult = order._getRewardLineValuesProduct({ reward: standardReward });
     assert.ok(Array.isArray(validResult));
     assert.equal(validResult.length, 1);
-    assert.equal(validResult[0].price_origin, 'promo');
+    assert.equal(validResult[0].price_origin, undefined, 'La promoción no cambia el origen del precio');
     assert.equal(validResult[0].pricing_rule_type, 'promo');
-    assert.equal(validResult[0].promo_reward_id, standardReward);
+    assert.equal(validResult[0].promo_reward_id, undefined, 'El regalo nativo se identifica por su reward_id');
 });
 
 test('pos_loyalty: control buttons valida regalo multi-producto sin componentes formulados', async () => {
@@ -451,13 +451,13 @@ test('pos_loyalty: aplicacion directa de promocion sobre descuento de linea sin 
     assert.equal(normalLine.discount, 25);
     assert.equal(normalLine.pricing_rule_type, 'promo');
     assert.equal(normalLine.pricing_rule_origin, 'Buen fin · Línea: Vinil-Acrilica - 25%');
-    assert.equal(normalLine.price_origin, 'promo');
+    assert.equal(normalLine.price_origin, undefined, 'La promoción no cambia el origen del precio');
     assert.deepEqual(normalLine.promo_reward_id, promoReward);
 
     // Linea con acuerdo menor debe ser sustituida por el descuento mayor de promocion
     assert.equal(lowerAgreementLine.discount, 25);
     assert.equal(lowerAgreementLine.pricing_rule_type, 'promo');
-    assert.equal(lowerAgreementLine.price_origin, 'promo');
+    assert.equal(lowerAgreementLine.price_origin, undefined, 'La promoción no cambia el origen del precio');
     assert.deepEqual(lowerAgreementLine.promo_reward_id, promoReward);
 
     // Linea con acuerdo comercial previo tambien recibe la promocion al aplicarla directamente
@@ -515,7 +515,7 @@ test('pos_loyalty: dejar sin promocion una linea y restaurar acuerdo comercial',
         discount: 20,
         pricing_rule_type: 'promo',
         pricing_rule_origin: 'Promo (20%)',
-        price_origin: 'promo',
+        price_origin: 'list',
         promo_reward_id: { id: 10 },
         product_id: { id: 55, tint_role: 'none' },
     };
@@ -620,7 +620,7 @@ test('pos_loyalty: asignacion individual de promocion por partida', () => {
     assert.equal(applied, true);
     assert.equal(lineA.discount, 25);
     assert.equal(lineA.pricing_rule_type, 'promo');
-    assert.equal(lineA.price_origin, 'promo');
+    assert.equal(lineA.price_origin, undefined, 'La promoción no cambia el origen del precio');
     assert.equal(lineA.promo_reward_id, reward);
 
     assert.equal(lineB.discount, 10);
@@ -659,7 +659,7 @@ test('pos_loyalty: restaurar acuerdo comercial al retirar promocion de la linea'
         price_unit: 100,
         discount: 25,
         pricing_rule_type: 'promo',
-        price_origin: 'promo',
+        price_origin: 'list',
         promo_reward_id: { id: 55, discount: 25 },
         product_id: { id: 10 },
         setDiscount(d) { this.discount = d; },
@@ -726,12 +726,12 @@ test('pos_loyalty: aplicacion de promocion de orden completa a lineas elegibles'
     // Lineas normales elegibles toman el 15%
     assert.equal(line1.discount, 15);
     assert.equal(line1.pricing_rule_type, 'promo');
-    assert.equal(line1.price_origin, 'promo');
+    assert.equal(line1.price_origin, undefined, 'La promoción no cambia el origen del precio');
     assert.equal(line1.promo_reward_id, orderReward);
 
     assert.equal(line2.discount, 15);
     assert.equal(line2.pricing_rule_type, 'promo');
-    assert.equal(line2.price_origin, 'promo');
+    assert.equal(line2.price_origin, undefined, 'La promoción no cambia el origen del precio');
     assert.equal(line2.promo_reward_id, orderReward);
 
     // Lineas protegidas quedan excluidas
@@ -796,7 +796,7 @@ test('pos_loyalty: promocion de orden sustituye promocion individual previa', ()
         price_unit: 100,
         discount: 25,
         pricing_rule_type: 'promo',
-        price_origin: 'promo',
+        price_origin: 'list',
         promo_reward_id: specificReward,
         product_id: { id: 10 },
         setDiscount(d) { this.discount = d; },
@@ -908,7 +908,7 @@ test('pos_store: reconciliacion propaga promocion de orden a nuevas lineas', () 
         price_unit: 100,
         discount: 15,
         pricing_rule_type: 'promo',
-        price_origin: 'promo',
+        price_origin: 'list',
         promo_reward_id: orderPromo,
         product_id: { id: 10 },
         setDiscount(d) { this.discount = d; },

@@ -77,7 +77,7 @@ class TestPosInlinePromotions(TransactionCase):
                     'price_subtotal': discounted_price,
                     'price_subtotal_incl': discounted_price,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'price_origin_label': 'Promocion directa',
                     'promo_reward_id': self.reward.id,
                     'tax_ids': [Command.clear()],
@@ -103,7 +103,7 @@ class TestPosInlinePromotions(TransactionCase):
         self.assertEqual(line.discount, 20.0)
         self.assertEqual(line.technical_discount, 20.0)
         self.assertEqual(line.pricing_rule_type, 'promo')
-        self.assertEqual(line.price_origin, 'promo')
+        self.assertEqual(line.price_origin, 'list')
         self.assertEqual(line.promo_reward_id, self.reward)
 
     def test_quotation_filters_negative_reward_line(self):
@@ -187,7 +187,7 @@ class TestPosInlinePromotions(TransactionCase):
                     'price_subtotal': 400.0,
                     'price_subtotal_incl': 400.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'price_origin_label': 'Promocion directa',
                     'promo_reward_id': self.reward.id,
                     'tax_ids': [Command.clear()],
@@ -200,7 +200,7 @@ class TestPosInlinePromotions(TransactionCase):
                     'price_subtotal': 900.0,
                     'price_subtotal_incl': 900.0,
                     'pricing_rule_type': 'product',
-                    'price_origin': 'agreement',
+                    'price_origin': 'list',
                     'price_origin_label': 'Acuerdo comercial 10%',
                     'promo_reward_id': False,
                     'tax_ids': [Command.clear()],

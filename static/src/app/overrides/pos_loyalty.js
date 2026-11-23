@@ -1,5 +1,4 @@
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
-import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
@@ -7,32 +6,6 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { isTintColorant } from "@entintados_pdv/app/utils/tint_order";
 import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
-
-patch(PosOrder, {
-    extraFields: {
-        ...(PosOrder.extraFields || {}),
-        order_promo_reward_id: {
-            model: "pos.order",
-            name: "order_promo_reward_id",
-            relation: "loyalty.reward",
-            type: "many2one",
-            local: true,
-        },
-    },
-});
-
-patch(PosOrderline, {
-    extraFields: {
-        ...(PosOrderline.extraFields || {}),
-        promo_reward_id: {
-            model: "pos.order.line",
-            name: "promo_reward_id",
-            relation: "loyalty.reward",
-            type: "many2one",
-            local: true,
-        },
-    },
-});
 
 /**
  * Identifica si una recompensa es una promoción porcentual aplicable
@@ -45,7 +18,7 @@ export function isLinePromotionReward(reward) {
         reward.discount_mode === "percent" &&
         ["order", "specific"].includes(reward.discount_applicability) &&
         !reward.discount_max_amount &&
-        ["promotion", "promo_code", "coupons"].includes(reward.program_id?.program_type)
+        reward.program_id?.program_type === "promotion"
     );
 }
 
@@ -337,8 +310,6 @@ patch(PosOrder.prototype, {
                 }
                 line.pricing_rule_type = "promo";
                 line.pricing_rule_origin = promoOrigin;
-                line.price_origin = "promo";
-                line.price_origin_label = reward.program_id?.name || "Promoción";
                 line.promo_reward_id = reward;
                 delete line.promo_opt_out;
                 changed = true;
@@ -386,8 +357,6 @@ patch(PosOrder.prototype, {
             }
             line.pricing_rule_type = "promo";
             line.pricing_rule_origin = promoOrigin;
-            line.price_origin = "promo";
-            line.price_origin_label = reward.program_id?.name || "Promoción";
             line.promo_reward_id = reward;
             delete line.promo_opt_out;
         } finally {
@@ -412,7 +381,7 @@ patch(PosOrder.prototype, {
 
         const programs = this.models?.["loyalty.program"]?.getAll?.() || [];
         for (const program of programs) {
-            if (!["promotion", "promo_code", "coupons"].includes(program.program_type)) {
+            if (program.program_type !== "promotion") {
                 continue;
             }
             for (const reward of program.reward_ids || []) {
@@ -653,9 +622,6 @@ patch(PosOrder.prototype, {
         const lines = super._getRewardLineValuesProduct(args);
         if (Array.isArray(lines)) {
             for (const line of lines) {
-                line.price_origin = "promo";
-                line.price_origin_label = reward?.program_id?.name || "Regalo de promoción";
-                line.promo_reward_id = reward;
                 line.pricing_rule_type = "promo";
             }
         }
@@ -663,17 +629,11 @@ patch(PosOrder.prototype, {
     },
 
     /**
-     * Asigna trazabilidad comercial al crear la línea de recompensa.
+     * La línea de recompensa nativa se identifica por su `reward_id`; `promo_reward_id`
+     * queda solo para las promociones por línea.
      */
     applyRewardLine(rewardLine) {
-        const prepareRewards = {
-            ...rewardLine,
-            price_origin: "promo",
-            price_origin_label: rewardLine.reward_id?.program_id?.name || "Promoción",
-            promo_reward_id: rewardLine.reward_id,
-            pricing_rule_type: "promo",
-        };
-        return super.applyRewardLine(prepareRewards);
+        return super.applyRewardLine({ ...rewardLine, pricing_rule_type: "promo" });
     },
 
     /**
@@ -698,8 +658,6 @@ patch(PosOrder.prototype, {
         line.pricing_rule_type = "none";
         line.pricing_rule_origin = "";
         line.pricing_rule_id = false;
-        line.price_origin = "list";
-        line.price_origin_label = "";
         if (typeof line.setDiscount === "function") {
             line.setDiscount(0);
         } else {
@@ -728,8 +686,6 @@ patch(PosOrder.prototype, {
                 line.pricing_rule_type = "none";
                 line.pricing_rule_origin = "";
                 line.pricing_rule_id = false;
-                line.price_origin = "list";
-                line.price_origin_label = "";
                 if (typeof line.setDiscount === "function") {
                     line.setDiscount(0);
                 } else {

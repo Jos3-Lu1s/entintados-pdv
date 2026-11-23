@@ -99,3 +99,11 @@ export const priceOriginField = {
 };
 
 registry.category("fields").add("price_origin_icon", priceOriginField);
+
+// Líneas del pedido del PDV: sin desglose de combo, cuyos campos solo existen en Ventas.
+export const posPriceOriginField = {
+    ...priceOriginField,
+    fieldDependencies: [{ name: "price_origin_label", type: "char" }],
+};
+
+registry.category("fields").add("pos_price_origin_icon", posPriceOriginField);

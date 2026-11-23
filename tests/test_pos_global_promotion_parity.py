@@ -84,7 +84,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 400.0,
                     'price_subtotal_incl': 400.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'price_origin_label': 'Promocion global',
                     'promo_reward_id': self.reward.id,
                     'tax_ids': [Command.clear()],
@@ -97,7 +97,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 800.0,
                     'price_subtotal_incl': 800.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'price_origin_label': 'Promocion global',
                     'promo_reward_id': self.reward.id,
                     'tax_ids': [Command.clear()],
@@ -115,7 +115,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
         for line in quote.order_line:
             self.assertEqual(line.discount, 20.0)
             self.assertEqual(line.pricing_rule_type, 'promo')
-            self.assertEqual(line.price_origin, 'promo')
+            self.assertEqual(line.price_origin, 'list')
             self.assertEqual(line.promo_reward_id, self.reward)
 
     def test_global_promo_removal_preserves_restored_commercial_agreement(self):
@@ -148,7 +148,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 450.0,
                     'price_subtotal_incl': 450.0,
                     'pricing_rule_type': 'product',
-                    'price_origin': 'agreement',
+                    'price_origin': 'list',
                     'price_origin_label': 'Acuerdo comercial 10%',
                     'promo_reward_id': False,
                     'tax_ids': [Command.clear()],
@@ -238,7 +238,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 400.0,
                     'price_subtotal_incl': 400.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'promo_reward_id': self.reward.id,
                     'tint_color_code': 'QA-TEST',
                     'tax_ids': [Command.clear()],
@@ -251,7 +251,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 250.0,
                     'price_subtotal_incl': 250.0,
                     'pricing_rule_type': 'fixed_price',
-                    'price_origin': 'agreement',
+                    'price_origin': 'list',
                     'price_origin_label': 'Precio Fijo',
                     'promo_reward_id': False,
                     'tax_ids': [Command.clear()],
@@ -345,7 +345,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 510.0,
                     'price_subtotal_incl': 510.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'price_origin_label': 'Promocion Automotriz 15%',
                     'promo_reward_id': reward_scheme_a.id,
                     'tax_ids': [Command.clear()],
@@ -358,7 +358,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 360.0,
                     'price_subtotal_incl': 360.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'price_origin_label': 'Promocion Arquitectonica 10%',
                     'promo_reward_id': reward_scheme_b.id,
                     'tax_ids': [Command.clear()],
@@ -443,7 +443,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 375.0,
                     'price_subtotal_incl': 375.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'promo_reward_id': reward_specific.id,
                     'tax_ids': [Command.clear()],
                 }),
@@ -455,7 +455,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 190.0,
                     'price_subtotal_incl': 190.0,
                     'pricing_rule_type': 'product',
-                    'price_origin': 'agreement',
+                    'price_origin': 'list',
                     'promo_reward_id': False,
                     'tax_ids': [Command.clear()],
                 }),
@@ -531,7 +531,7 @@ class TestPosGlobalPromotionParity(TransactionCase):
                     'price_subtotal': 720.0,
                     'price_subtotal_incl': 720.0,
                     'pricing_rule_type': 'promo',
-                    'price_origin': 'promo',
+                    'price_origin': 'list',
                     'promo_reward_id': reward_specific.id,
                     'tax_ids': [Command.clear()],
                 }),

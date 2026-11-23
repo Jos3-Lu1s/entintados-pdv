@@ -139,7 +139,12 @@ class LoyaltyReward(models.Model):
         # de eliminarse físicamente para mantener la integridad de los descuentos aplicados.
         used_ids = {
             reward.id
-            for model, field in (('sale.order.line', 'promo_reward_id'), ('sale.order', 'order_promo_reward_id'))
+            for model, field in (
+                ('sale.order.line', 'promo_reward_id'),
+                ('sale.order', 'order_promo_reward_id'),
+                ('pos.order.line', 'promo_reward_id'),
+                ('pos.order', 'order_promo_reward_id'),
+            )
             for (reward,) in self.env[model].sudo()._read_group([(field, 'in', self.ids)], [field])
         }
         rewards_in_use = self.filtered(lambda r: r.id in used_ids)

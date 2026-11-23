@@ -260,7 +260,7 @@ class PosOrderQuotation(models.Model):
                 description = (quotation._tint_base_description(snapshot) if snapshot
                                else '\n'.join(filter(None, [line.full_product_name or line.product_id.display_name,
                                                             line.customer_note])))
-                origin = line.price_origin or ('agreement' if line.pricing_rule_type and line.pricing_rule_type != 'none' else 'manual')
+                origin = line.price_origin or 'manual'
                 origin_label = line.price_origin_label or line.pricing_rule_origin or _('Precio conservado del Punto de Venta')
                 values = {'order_id': quotation.id, 'sequence': sequence * 10,
                           'product_id': line.product_id.id, 'product_uom_id': line.product_id.uom_id.id,

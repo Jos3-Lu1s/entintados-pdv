@@ -271,40 +271,6 @@ patch(PosOrderline.prototype, {
 
         return selfPrice + comboSum;
     },
-
-    export_as_JSON() {
-        const json = super.export_as_JSON ? super.export_as_JSON() : {};
-        json.pricing_rule_type = this.pricing_rule_type || "none";
-        json.pricing_rule_origin = this.pricing_rule_origin || "";
-        json.pricing_rule_id = this.pricing_rule_id || false;
-        json.price_origin = this.price_origin || "list";
-        json.price_origin_label = this.price_origin_label || "";
-        json.promo_reward_id = this.promo_reward_id?.id || this.promo_reward_id || false;
-        return json;
-    },
-
-    init_from_JSON(json) {
-        if (super.init_from_JSON) {
-            super.init_from_JSON(json);
-        }
-        this.pricing_rule_type = json.pricing_rule_type || "none";
-        this.pricing_rule_origin = json.pricing_rule_origin || "";
-        this.pricing_rule_id = json.pricing_rule_id || false;
-        this.price_origin = json.price_origin || "list";
-        this.price_origin_label = json.price_origin_label || "";
-        this.promo_reward_id = json.promo_reward_id || false;
-    },
-
-    serializeForORM() {
-        const values = super.serializeForORM ? super.serializeForORM(...arguments) : {};
-        values.pricing_rule_type = this.pricing_rule_type || "none";
-        values.pricing_rule_origin = this.pricing_rule_origin || "";
-        values.pricing_rule_id = this.pricing_rule_id || false;
-        values.price_origin = this.price_origin || "list";
-        values.price_origin_label = this.price_origin_label || "";
-        values.promo_reward_id = this.promo_reward_id?.id || this.promo_reward_id || false;
-        return values;
-    },
 });
 
 /**
@@ -337,7 +303,6 @@ patch(PosOrder.prototype, {
     serializeForORM(...args) {
         const data = super.serializeForORM(...args);
         const n = Number(this.uiState?.invoice_split_count || this.invoice_split_count);
-        console.log("[ENTINTADOS] serializeForORM n =", n);
         if (data && typeof data === "object" && Number.isInteger(n) && n >= 1) {
             data.invoice_split_count = n;
         }
