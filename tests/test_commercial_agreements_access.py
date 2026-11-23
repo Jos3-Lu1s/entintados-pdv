@@ -158,7 +158,8 @@ class TestCommercialAgreementsAccess(TransactionCase):
     def test_pos_cashier_loads_agreements(self):
         """Un cajero sin el grupo sigue cargando los acuerdos del cliente en el PDV."""
         pos_config = self.env['pos.config'].create({'name': 'PDV Acuerdos'})
-        loaded = self.env['res.partner.discount.rule'].with_user(self.cashier)._load_pos_data_search_read({}, pos_config)
+        data = {'res.partner': [{'id': self.partner.id}]}
+        loaded = self.env['res.partner.discount.rule'].with_user(self.cashier)._load_pos_data_search_read(data, pos_config)
         loaded_rule = next((rule for rule in loaded if rule['id'] == self.rule.id), None)
         self.assertTrue(loaded_rule)
         self.assertEqual(loaded_rule['discount'], 5.0)

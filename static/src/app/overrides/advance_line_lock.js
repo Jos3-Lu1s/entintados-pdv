@@ -8,10 +8,12 @@ const lockedMessage = () => _t("Las líneas de anticipo no se pueden editar desd
 
 patch(PosOrderline.prototype, {
     get isAdvanceLocked() {
-        return Boolean(this.product_id?.id && (
-            this.advance_source_ref || this.product_id.product_tmpl_id?.is_accounting_advance ||
-            this.product_id.id === this.config?.down_payment_product_id?.id
-        ));
+        const lineProductId = this.product_id?.id;
+        const configDownPaymentId = this.config?.down_payment_product_id?.id ||
+            (typeof this.config?.down_payment_product_id === "number" ? this.config.down_payment_product_id : null);
+        const isDownPayment = Boolean(configDownPaymentId && lineProductId && lineProductId === configDownPaymentId);
+        const isAccountingAdvance = Boolean(this.product_id?.product_tmpl_id?.is_accounting_advance === true);
+        return Boolean(lineProductId && (Boolean(this.advance_source_ref) || isAccountingAdvance || isDownPayment));
     },
     setQuantity(value, ...args) {
         if (this.isAdvanceLocked && Number(value) !== Number(this.qty)) {

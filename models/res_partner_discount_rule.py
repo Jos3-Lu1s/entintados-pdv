@@ -290,4 +290,7 @@ class ResPartnerDiscountRule(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        return [('partner_id.active', '=', True)]
+        # Solo los clientes que la caja ya cargó: los que busca después llegan con sus
+        # reglas por `res.partner.get_new_partner`.
+        partner_ids = [partner['id'] for partner in data.get('res.partner', [])]
+        return [('partner_id', 'in', partner_ids)]

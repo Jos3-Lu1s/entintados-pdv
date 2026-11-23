@@ -1,10 +1,17 @@
 /** @odoo-module */
 import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
-import { PosOrder } from "@point_of_sale/app/models/pos_order";
-import { getPartnerPricingRule } from "@entintados_pdv/app/utils/pricing_rules";
+import { _t } from "@web/core/l10n/translation";
+import { formatOriginBadge } from "@entintados_pdv/app/utils/origin_badge";
+import { admitsLinePromotion } from "@entintados_pdv/app/utils/promotion_rules";
+import { agreementForLine } from "@entintados_pdv/app/utils/pricing_rules";
+import { isTintColorant, isTintedBase } from "@entintados_pdv/app/utils/tint_order";
 
-let posStoreInstance = null;
+// Más avisos que estos se agrupan en uno solo, como en Ventas.
+const PROMOTION_NOTIFICATION_THRESHOLD = 5;
+
+// Mitad del último decimal de la precisión `Discount`.
+const DISCOUNT_TOLERANCE = 0.005;
 
 patch(PosStore.prototype, {
     editPartnerContext(partner) {
@@ -15,213 +22,117 @@ patch(PosStore.prototype, {
         };
     },
 
-    setup(...args) {
-        const result = super.setup(...args);
-        posStoreInstance = this;
-        return result;
+    get canEditUnitPrice() {
+        return Boolean(this.config?.user_can_edit_price ?? true);
+    },
+
+    get canEditDiscount() {
+        return Boolean(this.config?.user_can_edit_discount ?? true);
     },
 
     async addLineToCurrentOrder(...args) {
         const line = await super.addLineToCurrentOrder(...args);
-        const order = this.getOrder?.() || this.currentOrder;
-        if (order && typeof order._entintadosReconcileDiscounts === "function") {
-            order._entintadosReconcileDiscounts();
-        }
+        (line?.order_id || this.getOrder())?.refreshOrderPricing();
         return line;
     },
 
     async addLineToOrder(...args) {
         const line = await super.addLineToOrder(...args);
-        const order = this.getOrder?.() || this.currentOrder;
-        if (order && typeof order._entintadosReconcileDiscounts === "function") {
-            order._entintadosReconcileDiscounts();
-        }
+        (line?.order_id || this.getOrder())?.refreshOrderPricing();
         return line;
     },
-});
 
-patch(PosOrder.prototype, {
-    set_partner(partner) {
-        if (this._entintadosSettingPartner) {
-            return super.set_partner ? super.set_partner(partner) : null;
-        }
-        this._entintadosSettingPartner = true;
-        try {
-            const res = super.set_partner ? super.set_partner(partner) : null;
-            this._entintadosHandlePartnerAssignment(partner);
-            return res;
-        } finally {
-            this._entintadosSettingPartner = false;
-        }
+    // El core la llama dentro de `updateRewards` tras cada cambio del pedido: producto,
+    // teclado, cliente, tarifa o código de barras.
+    async orderUpdateLoyaltyPrograms() {
+        await super.orderUpdateLoyaltyPrograms(...arguments);
+        this._refreshLinePromotions(this.getOrder());
     },
 
-    setPartner(partner) {
-        if (this._entintadosSettingPartner) {
-            return super.setPartner ? super.setPartner(partner) : null;
-        }
-        this._entintadosSettingPartner = true;
-        try {
-            const res = super.setPartner ? super.setPartner(partner) : null;
-            this._entintadosHandlePartnerAssignment(partner);
-            return res;
-        } finally {
-            this._entintadosSettingPartner = false;
-        }
+    async pay() {
+        this._refreshLinePromotions(this.getOrder());
+        return super.pay(...arguments);
     },
 
-    _entintadosHandlePartnerAssignment(partner) {
-        this._entintadosReconcileDiscounts();
+    /**
+     * Descuento tecleado, con las reglas de Ventas:
+     * 1. con promoción de pedido activa no se cambia;
+     * 2. en un entintado no se teclea: lo dan su acuerdo o su promoción;
+     * 3. el mismo % del acuerdo vigente, en una línea sin promoción, conserva el acuerdo;
+     * 4. cualquier otro valor deja la línea manual y le quita la promoción.
+     * Si la caja rechaza el valor (precio fijo o sin permiso), la línea queda como estaba.
+     */
+    async setDiscountFromUI(line, val) {
+        const order = line.order_id;
+        const orderReward = order?.order_promo_reward_id;
+        if (orderReward && admitsLinePromotion(line)) {
+            this.notification.add(
+                _t(
+                    "El pedido tiene la promoción %s en todas sus líneas. Quítala del pedido para cambiar el descuento.",
+                    orderReward.program_id?.name || ""
+                ),
+                { type: "warning" }
+            );
+            return;
+        }
+        if (isTintedBase(line) || isTintColorant(line)) {
+            this.notification.add(
+                _t("El descuento de un entintado no se teclea: lo da su acuerdo o su promoción."),
+                { type: "warning" }
+            );
+            return;
+        }
+        const previousDiscount = line.discount;
+        const hadPromotion = Boolean(line.promo_reward_id);
+        const requested = Number(val) || 0;
+        const result = await super.setDiscountFromUI(...arguments);
+        const rejected = line.discount === previousDiscount && requested !== previousDiscount;
+        if (rejected || line.fixed_price_locked) {
+            return result;
+        }
+        const agreement = agreementForLine(order, line);
+        const agreementDiscount = agreement.type === "discount" ? Number(agreement.discount || 0) : 0;
+        const keepsAgreement =
+            !hadPromotion &&
+            agreement.type !== "fixed_price" &&
+            Math.abs(Number(line.discount || 0) - agreementDiscount) < DISCOUNT_TOLERANCE;
+        line.promo_reward_id = false;
+        if (keepsAgreement && agreement.type === "discount") {
+            line.pricing_rule_type = agreement.originType;
+            line.pricing_rule_origin = agreement.originLabel;
+            line.pricing_rule_id = agreement.rule || false;
+        } else if (keepsAgreement) {
+            line.pricing_rule_type = "none";
+            line.pricing_rule_origin = "";
+            line.pricing_rule_id = false;
+        } else {
+            line.pricing_rule_type = "manual";
+            line.pricing_rule_origin = formatOriginBadge(_t("Manual"), line.discount);
+            line.pricing_rule_id = false;
+        }
+        return result;
     },
 
-    _entintadosReconcileDiscounts() {
-        const partner = this.getPartner?.() || this.get_partner?.() || this.partner_id;
-        const models = this.models || posStoreInstance?.models;
-        const nativeAdvanceProduct = (this.config || this.config_id || posStoreInstance?.config)?.down_payment_product_id;
+    _refreshLinePromotions(order) {
+        if (!order || order.finalized) {
+            return;
+        }
+        this._notifyPromotionChanges(order.reevaluateLinePromotions());
+    },
 
-        for (const line of this.lines || []) {
-            // A refund keeps the price and discount actually paid, even if
-            // the customer's commercial agreement has changed since the sale.
-            if (line.refunded_orderline_id) {
-                continue;
-            }
-            if (line.product_id?.product_tmpl_id?.is_accounting_advance || line.advance_source_ref ||
-                (line.sale_order_origin_id && line.product_id?.id === nativeAdvanceProduct?.id)) {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                line.price_origin = "manual";
-                line.price_origin_label = "Anticipo contable";
-                continue;
-            }
-            if (line.is_reward_line) {
-                line.price_origin = "promo";
-                continue;
-            }
-            if (line.is_tint_colorant || line.product_id?.tint_role === "colorant") {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                line.price_origin = "tint";
-                line.price_origin_label = "Colorante entintado";
-                continue;
-            }
-
-            const product = line.product_id;
-            const options = {
-                uom: line.uom_id || line.product_uom_id || product?.uom_id,
-                currency: line.currency || this.currency,
-            };
-            const rule = getPartnerPricingRule(models, partner, product, options);
-
-            if (rule.type === "fixed_price") {
-                // Prioridad 1: Precio Fijo en Producto (inviolable frente a promociones y descuentos)
-                line._entintadosSettingPrice = true;
-                line._entintadosSettingDiscount = true;
-                try {
-                    if (!line.is_tinted_base) {
-                        if (typeof line.setUnitPrice === "function") {
-                            line.setUnitPrice(rule.price);
-                        } else if (typeof line.set_unit_price === "function") {
-                            line.set_unit_price(rule.price);
-                        } else {
-                            line.price_unit = rule.price;
-                        }
-                        line.price_type = "manual";
-                        line.manual_price = true;
-                    }
-                    line.fixed_price_locked = true;
-
-                    if (typeof line.setDiscount === "function") {
-                        line.setDiscount(0);
-                    } else if (typeof line.set_discount === "function") {
-                        line.set_discount(0);
-                    } else {
-                        line.discount = 0;
-                    }
-
-                    line.pricing_rule_type = rule.originType || "fixed_price";
-                    line.pricing_rule_origin = rule.originLabel || "Precio Fijo";
-                    line.pricing_rule_id = rule.rule?.id || false;
-                    line.price_origin = line.is_tinted_base ? "tint" : (rule.priceOrigin || "agreement");
-                    line.price_origin_label = line.is_tinted_base
-                        ? "Precio del entintado: base más colorantes"
-                        : (rule.originLabel || "Precio Fijo");
-                } finally {
-                    delete line._entintadosSettingPrice;
-                    delete line._entintadosSettingDiscount;
-                }
-                continue;
-            }
-
-            // Si la línea tenía precio fijo bloqueado y ya no aplica regla de precio fijo:
-            if (line.fixed_price_locked && rule.type !== "fixed_price") {
-                line.fixed_price_locked = false;
-                if (!line.is_tinted_base) {
-                    line.price_type = "original";
-                    line.manual_price = false;
-                    const pricelist = this.pricelist || this.config?.pricelist_id || posStoreInstance?.pricelist;
-                    let restoredPrice = null;
-                    if (pricelist && typeof pricelist.get_price === "function") {
-                        restoredPrice = pricelist.get_price(product, line.qty || 1);
-                    } else if (pricelist && typeof pricelist.getPrice === "function") {
-                        restoredPrice = pricelist.getPrice(product, line.qty || 1);
-                    }
-                    if (restoredPrice === null || restoredPrice === undefined) {
-                        restoredPrice = product.lst_price ?? line.price_unit;
-                    }
-                    line._entintadosSettingPrice = true;
-                    try {
-                        if (typeof line.setUnitPrice === "function") {
-                            line.setUnitPrice(restoredPrice);
-                        } else {
-                            line.price_unit = restoredPrice;
-                        }
-                    } finally {
-                        delete line._entintadosSettingPrice;
-                    }
-                }
-            }
-
-            // Si el cajero colocó un precio manual en un producto común (y no es base entintada), no pisar
-            if (line.price_type === "manual" && !line.is_tinted_base) {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                line.price_origin = "manual";
-                line.price_origin_label = "Precio manual";
-                continue;
-            }
-
-            // Aplicar descuento según jerarquía comercial (Niveles 2, 3, 4 y 5)
-            const targetDiscount = rule.type === "discount" ? rule.discount : 0;
-            line._entintadosSettingDiscount = true;
-            try {
-                if (typeof line.setDiscount === "function") {
-                    line.setDiscount(targetDiscount);
-                } else if (typeof line.set_discount === "function") {
-                    line.set_discount(targetDiscount);
-                } else {
-                    line.discount = targetDiscount;
-                }
-            } finally {
-                delete line._entintadosSettingDiscount;
-            }
-
-            if (rule.type === "discount") {
-                line.pricing_rule_type = rule.originType || "product";
-                line.pricing_rule_origin = rule.originLabel || "";
-                line.pricing_rule_id = rule.rule?.id || false;
-                line.price_origin = rule.priceOrigin || "agreement";
-                line.price_origin_label = rule.originLabel || "";
-            } else {
-                line.pricing_rule_type = "none";
-                line.pricing_rule_origin = "";
-                line.pricing_rule_id = false;
-                if (!line.is_tinted_base && line.price_type !== "manual") {
-                    line.price_origin = this.pricelist ? "pricelist" : "list";
-                    line.price_origin_label = "";
-                }
-            }
+    _notifyPromotionChanges(notices) {
+        if (!notices.length) {
+            return;
+        }
+        if (notices.length > PROMOTION_NOTIFICATION_THRESHOLD) {
+            this.notification.add(
+                _t("Se actualizaron o retiraron promociones en %s líneas del pedido.", notices.length),
+                { title: _t("Promociones"), type: "warning" }
+            );
+            return;
+        }
+        for (const notice of notices) {
+            this.notification.add(notice.message, { title: notice.title, type: notice.type });
         }
     },
 });

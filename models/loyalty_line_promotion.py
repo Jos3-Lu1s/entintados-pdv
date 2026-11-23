@@ -24,6 +24,24 @@ class LoyaltyReward(models.Model):
         ondelete='restrict',
         help="Aplica el descuento a los productos pertenecientes a este esquema.",
     )
+    reward_target_label = fields.Char(
+        string='Objetivo de la recompensa',
+        compute='_compute_reward_target_label',
+    )
+
+    @api.depends('lines_product_id', 'scheme_id', 'discount_applicability', 'discount_product_ids', 'discount_product_category_id', 'discount_product_tag_id')
+    def _compute_reward_target_label(self):
+        for record in self:
+            record.reward_target_label = record._get_reward_target_label()
+
+    @api.depends('lines_product_id', 'scheme_id')
+    def _compute_description(self):
+        super()._compute_description()
+        for reward in self:
+            if reward.reward_type == 'discount' and reward.discount_applicability == 'specific':
+                target = reward._get_reward_target_label()
+                if target:
+                    reward.description = f"{reward.discount:g}% en {target}"
 
     @api.onchange('lines_product_id')
     def _onchange_lines_product_id(self):
@@ -121,7 +139,12 @@ class LoyaltyReward(models.Model):
         # de eliminarse físicamente para mantener la integridad de los descuentos aplicados.
         used_ids = {
             reward.id
-            for model, field in (('sale.order.line', 'promo_reward_id'), ('sale.order', 'order_promo_reward_id'))
+            for model, field in (
+                ('sale.order.line', 'promo_reward_id'),
+                ('sale.order', 'order_promo_reward_id'),
+                ('pos.order.line', 'promo_reward_id'),
+                ('pos.order', 'order_promo_reward_id'),
+            )
             for (reward,) in self.env[model].sudo()._read_group([(field, 'in', self.ids)], [field])
         }
         rewards_in_use = self.filtered(lambda r: r.id in used_ids)
@@ -148,6 +171,15 @@ class LoyaltyReward(models.Model):
             and self.program_id.program_type in LINE_PROMOTION_PROGRAM_TYPES
         )
 
+    @api.model
+    def _load_pos_data_fields(self, config):
+        fields = super()._load_pos_data_fields(config)
+        extra = ['lines_product_id', 'scheme_id', 'reward_target_label']
+        for field in extra:
+            if field not in fields:
+                fields.append(field)
+        return fields
+
 
 class LoyaltyProgram(models.Model):
     _inherit = 'loyalty.program'
@@ -165,7 +197,28 @@ class LoyaltyProgram(models.Model):
             ('order_promo_reward_id', 'in', rewards.ids),
             ('state', 'in', ('draft', 'sent')),
         ])._clear_order_promotion()
-        return super().unlink()
+        # La cascada borraría las recompensas sin pasar por `LoyaltyReward.unlink`: un programa
+        # que ya se usó en un pedido o una venta se archiva con sus recompensas.
+        used_reward_ids = {
+            reward.id
+            for model, field in (
+                ('pos.order.line', 'promo_reward_id'),
+                ('pos.order.line', 'reward_id'),
+                ('pos.order', 'order_promo_reward_id'),
+                ('sale.order.line', 'promo_reward_id'),
+                ('sale.order.line', 'reward_id'),
+                ('sale.order', 'order_promo_reward_id'),
+            )
+            for (reward,) in self.env[model].sudo()._read_group([(field, 'in', rewards.ids)], [field])
+        }
+        in_use = self.filtered(
+            lambda program: any(reward.id in used_reward_ids for reward in program.with_context(active_test=False).reward_ids)
+        )
+        if in_use:
+            in_use.with_context(active_test=False).reward_ids.write({'active': False})
+            in_use.write({'active': False})
+        remaining = self - in_use
+        return super(LoyaltyProgram, remaining).unlink() if remaining else True
 
     def _compute_order_count(self):
         # Reemplaza al core para contar una sola vez el pedido que tiene líneas de recompensa
@@ -181,5 +234,19 @@ class LoyaltyProgram(models.Model):
         counts = Counter()
         for __, native, promo in groups:
             counts.update({program_by_reward[rid] for rid in native + promo if rid in program_by_reward})
+
+        if 'pos.order.line' in self.env:
+            pos_domain = [
+                '|', ('reward_id', 'in', reward_ids), ('promo_reward_id', 'in', reward_ids),
+                ('order_id.state', 'in', ('paid', 'done', 'invoiced')),
+            ]
+            pos_groups = self.env['pos.order.line'].sudo()._read_group(
+                pos_domain,
+                ['order_id'],
+                ['reward_id:array_agg', 'promo_reward_id:array_agg'],
+            )
+            for __, native, promo in pos_groups:
+                counts.update({program_by_reward[rid] for rid in native + promo if rid in program_by_reward})
+
         for program in self:
             program.order_count = counts[program.id]

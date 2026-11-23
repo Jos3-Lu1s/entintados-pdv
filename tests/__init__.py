@@ -61,4 +61,11 @@ from . import test_ppd_receivable_report
 from . import test_sale_discount_and_price_consistency
 from . import test_sale_quotation_report
 from . import test_origin_badge
+from . import test_pos_price_discount_lock
+from . import test_pos_promotions
+from . import test_pos_inline_promotions
+from . import test_pos_global_promotion_parity
+from . import test_pos_pricing_persistence
+from . import test_loyalty_program_unlink
+from . import test_pos_line_promotion_tour
 from . import test_osel_operation_controls

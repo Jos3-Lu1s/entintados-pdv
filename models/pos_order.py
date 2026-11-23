@@ -3,7 +3,7 @@ import logging
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
-from odoo.tools import float_round
+from odoo.tools import float_is_zero, float_round
 
 _logger = logging.getLogger(__name__)
 
@@ -11,6 +11,12 @@ _logger = logging.getLogger(__name__)
 class PosOrder(models.Model):
     _inherit = "pos.order"
 
+    order_promo_reward_id = fields.Many2one(
+        comodel_name='loyalty.reward',
+        string='Promoción de pedido',
+        copy=False,
+        ondelete='set null',
+    )
     invoice_split_count = fields.Integer(string="Facturas a generar", default=1, copy=False)
     split_invoice_ids = fields.Many2many(
         "account.move", "pos_order_split_invoice_rel", "order_id", "move_id",
@@ -71,7 +77,53 @@ class PosOrder(models.Model):
         order_id = super()._process_order(order, existing_order)
         self.browse(order_id)._check_pos_refunds_disabled()
         self.browse(order_id)._check_colorant_lines()
+        self.browse(order_id)._check_pricing_coherence()
         return order_id
+
+    def _check_pricing_coherence(self):
+        """Rechaza líneas cuyo acuerdo, promoción o descuento no pueden darse juntos.
+
+        Solo revisa los datos de la propia línea: el pedido ya está cobrado y el acuerdo vigente
+        pudo cambiar después de cargar la caja. El descuento de un colorante no se revisa: el core
+        le copia el de su base entintada y el colorante vale 0.
+        """
+        digits = self.env['decimal.precision'].precision_get('Discount')
+        for order in self:
+            reward = order.order_promo_reward_id
+            if reward and not (reward._is_line_promotion() and reward.discount_applicability == 'order'):
+                raise UserError(_(
+                    "La recompensa «%(reward)s» del pedido %(order)s no es una promoción de pedido.",
+                    reward=reward.display_name, order=order.name,
+                ))
+            for line in order.lines.filtered(lambda l: l.qty > 0):
+                values = {'product': line.product_id.display_name, 'order': order.name}
+                is_colorant = line.product_id.tint_role == 'colorant'
+                if line.pricing_rule_type == 'fixed_price' and not float_is_zero(
+                    line.discount, precision_digits=digits,
+                ):
+                    raise UserError(_(
+                        "La línea «%(product)s» del pedido %(order)s tiene precio fijo de acuerdo: "
+                        "no admite descuento.", **values,
+                    ))
+                if is_colorant and (line.promo_reward_id or line.pricing_rule_type not in (False, 'none')):
+                    raise UserError(_(
+                        "El colorante «%(product)s» del pedido %(order)s no lleva acuerdo ni promoción: "
+                        "el entintado se cobra en su base.", **values,
+                    ))
+                if line.promo_reward_id and not line.promo_reward_id._is_line_promotion():
+                    raise UserError(_(
+                        "La recompensa «%(reward)s» de la línea «%(product)s» no es una promoción por línea.",
+                        reward=line.promo_reward_id.display_name, **values,
+                    ))
+                if line.promo_reward_id and not line._admits_pos_line_promotion():
+                    raise UserError(_(
+                        "La línea «%(product)s» del pedido %(order)s no admite promociones.", **values,
+                    ))
+                if line.pricing_rule_type == 'promo' and not line.promo_reward_id and not line.reward_id:
+                    raise UserError(_(
+                        "La línea «%(product)s» del pedido %(order)s indica una promoción que no trae.",
+                        **values,
+                    ))
 
     def _check_pos_refunds_disabled(self):
         for order in self:

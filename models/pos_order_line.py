@@ -4,6 +4,8 @@ import re
 
 from odoo import api, fields, models
 
+from ..utils.pricing_selection import PRICE_ORIGINS, PRICING_RULE_TYPES
+
 
 class PosOrderLine(models.Model):
     _inherit = 'pos.order.line'
@@ -68,15 +70,7 @@ class PosOrderLine(models.Model):
         return '%s + %s' % (self.product_id.display_name, color), '\n'.join(notes).strip()
 
     pricing_rule_type = fields.Selection(
-        selection=[
-            ('none', 'Sin acuerdo'),
-            ('fixed_price', 'Precio Fijo'),
-            ('product', 'Descuento por Producto'),
-            ('line', 'Descuento por Línea'),
-            ('scheme', 'Descuento por Esquema'),
-            ('global', 'Descuento Global'),
-            ('promo', 'Promoción'),
-        ],
+        selection=PRICING_RULE_TYPES,
         string='Tipo de Acuerdo',
         default='none',
         readonly=True,
@@ -95,15 +89,7 @@ class PosOrderLine(models.Model):
         ondelete='set null',
     )
     price_origin = fields.Selection(
-        selection=[
-            ('list', 'Precio de venta'),
-            ('pricelist', 'Tarifa'),
-            ('agreement', 'Acuerdo comercial'),
-            ('manual', 'Manual'),
-            ('promo', 'Promoción'),
-            ('combo', 'Combo'),
-            ('tint', 'Entintado'),
-        ],
+        selection=PRICE_ORIGINS,
         string='Origen del precio',
         default='list',
         readonly=True,
@@ -115,6 +101,27 @@ class PosOrderLine(models.Model):
         readonly=True,
         copy=False,
     )
+    promo_reward_id = fields.Many2one(
+        'loyalty.reward',
+        string='Promoción aplicada',
+        readonly=True,
+        ondelete='set null',
+        copy=False,
+    )
+
+    def _admits_pos_line_promotion(self):
+        """Línea que puede llevar una promoción por línea, como `_admits_line_promotion` de Ventas.
+
+        El colorante se cobra en su base entintada y el producto de un combo en su paquete.
+        """
+        self.ensure_one()
+        return not (
+            self.product_id.tint_role == 'colorant'
+            or self.combo_parent_id
+            or self.reward_id
+            or self.pricing_rule_type == 'fixed_price'
+            or self._is_accounting_advance_line()
+        )
 
     @api.model
     def _load_pos_data_fields(self, config):
@@ -126,5 +133,6 @@ class PosOrderLine(models.Model):
             'tint_color_code',
             'price_origin',
             'price_origin_label',
+            'promo_reward_id',
         ]
         return params

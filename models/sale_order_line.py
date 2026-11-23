@@ -5,6 +5,7 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.tools import float_compare, format_amount
 
 from ..utils.origin_badge import COMBO_ORIGIN_PREFIX, FIXED_PRICE_LABEL, format_origin_badge
+from ..utils.pricing_selection import PRICE_ORIGINS, PRICING_RULE_TYPES
 
 AGREEMENT_DISCOUNT_TYPES = ('product', 'line', 'scheme', 'global')
 # Campos del acuerdo que los productos de un combo copian de su paquete.
@@ -18,16 +19,7 @@ class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
     pricing_rule_type = fields.Selection(
-        selection=[
-            ('none', 'Sin acuerdo'),
-            ('fixed_price', 'Precio Fijo'),
-            ('product', 'Descuento por Producto'),
-            ('line', 'Descuento por Línea'),
-            ('scheme', 'Descuento por Esquema'),
-            ('global', 'Descuento Global'),
-            ('manual', 'Descuento Manual'),
-            ('promo', 'Promoción'),
-        ],
+        selection=PRICING_RULE_TYPES,
         string='Tipo de Acuerdo',
         compute='_compute_discount',
         store=True,
@@ -62,14 +54,7 @@ class SaleOrderLine(models.Model):
     promo_available_info = fields.Json(string='Promociones disponibles', compute='_compute_promo_available')
     promo_available_count = fields.Integer(string='Número de promociones disponibles', compute='_compute_promo_available')
     price_origin = fields.Selection(
-        selection=[
-            ('list', 'Precio de venta'),
-            ('pricelist', 'Tarifa'),
-            ('fixed_price', 'Precio fijo de acuerdo'),
-            ('manual', 'Manual'),
-            ('combo', 'Parte de combo'),
-            ('tint', 'Entintado'),
-        ],
+        selection=PRICE_ORIGINS,
         string='Origen del precio',
         compute='_compute_price_unit',
         store=True,

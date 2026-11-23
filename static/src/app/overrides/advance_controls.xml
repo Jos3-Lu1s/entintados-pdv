@@ -3,6 +3,14 @@
     <t t-name="entintados_pdv.SelectionPopupDisabledItems" t-inherit="point_of_sale.SelectionPopup" t-inherit-mode="extension">
         <xpath expr="//button[@t-foreach='props.list']" position="attributes">
             <attribute name="t-att-disabled">item.disabled</attribute>
+            <attribute name="t-att-class">{'selected active': item.isSelected, 'is-remove-action border-danger text-danger bg-danger-subtle': item.isDanger or item.item?.isRemoveAction}</attribute>
+        </xpath>
+        <xpath expr="//button[@t-foreach='props.list']/i" position="replace">
+            <div t-if="item.isDanger or item.item?.isRemoveAction" class="text-danger d-flex align-items-center justify-content-center flex-shrink-0 ms-2" style="width: 32px; height: 32px; border-radius: 50%; background-color: #fee2e2;">
+                <i class="fa fa-times text-danger fs-5"/>
+            </div>
+            <i t-elif="item.isSelected" class="fa fa-check text-action"/>
+            <i t-else="" class="oi oi-chevron-right"/>
         </xpath>
     </t>
     <t t-name="entintados_pdv.PartnerAdvanceBalance" t-inherit="point_of_sale.PartnerLine" t-inherit-mode="extension">

@@ -54,7 +54,7 @@ function fixture() {
     }
     class Order {}
     const alerts = [];
-    const context = { TicketScreen: Ticket, PosOrderline: Line, PosOrder: Order, patch, tintHelpers: helpers,
+    const context = { TicketScreen: Ticket, ProductScreen: class {}, PosOrderline: Line, PosOrder: Order, patch, tintHelpers: helpers,
         _t: (s) => s, AlertDialog: class {}, console };
     vm.runInNewContext(source('pos_order_line.js'), context);
     const parent = Object.assign(new Line(), { id: 1, qty: 2, refundedQty: 0, price_unit: 500,
@@ -108,10 +108,10 @@ test('refund edits update native component refund tracking and reject positive r
 
 test('refund prices and discounts are preserved when partner agreements change', () => {
     const { Order, context } = fixture();
-    vm.runInNewContext(source('pos_store.js'), { ...context, PosStore: class {},
-        getPartnerPricingRule: () => ({ type: 'fixed_price', price: 999 }) });
+    vm.runInNewContext(source('pos_order_pricing.js'), { ...context, OrderSummary: class {},
+        resolveAgreement: () => ({ type: 'fixed_price', price: 999 }) });
     const refund = { refunded_orderline_id: {}, price_unit: 500, discount: 12, product_id: {} };
-    Object.assign(new Order(), { lines: [refund] })._entintadosReconcileDiscounts();
+    Object.assign(new Order(), { lines: [refund], getPartner: () => ({ id: 1 }) }).refreshOrderPricing();
     assert.equal(refund.price_unit, 500);
     assert.equal(refund.discount, 12);
 });

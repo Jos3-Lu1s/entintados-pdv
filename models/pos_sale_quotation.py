@@ -137,7 +137,8 @@ class PosOrderQuotation(models.Model):
         line_names = ['uuid', 'product_id', 'qty', 'price_unit', 'discount', 'price_subtotal',
                       'price_subtotal_incl', 'full_product_name', 'customer_note', 'tint_color_code',
                       'sale_order_line_id', 'sale_order_origin_id', 'refunded_orderline_id', 'advance_source_ref',
-                      'price_origin', 'price_origin_label', 'pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id']
+                      'price_origin', 'price_origin_label', 'pricing_rule_type', 'pricing_rule_origin', 'pricing_rule_id',
+                      'promo_reward_id']
         lines = self.env['pos.order.line']
         parents = {}
         identifiers = {}
@@ -259,16 +260,23 @@ class PosOrderQuotation(models.Model):
                 raise UserError(_('Este ticket contiene un combo comercial. Cotízalo desde Ventas antes de cobrarlo en caja.'))
             pricelist = self._quotation_pricelist()
             printing = self.env.context.get('_quotation_print') is _QUOTATION_PRINT
-            quotation = self.env['sale.order'].with_company(self.company_id).create({
-                **({'name': self.pos_reference or self.name or _('Borrador de caja')} if printing else {}),
+            order_promo_reward = self.lines.filtered(
+                lambda l: l.promo_reward_id and l.promo_reward_id.discount_applicability == 'order'
+            )[:1].promo_reward_id
+            quotation_vals = {
                 'state': 'draft',
                 'partner_id': self.partner_id.id, 'company_id': self.company_id.id,
                 'pricelist_id': pricelist.id, 'fiscal_position_id': self.fiscal_position_id.id,
                 'warehouse_id': self.config_id.warehouse_id.id,
                 'user_id': self.partner_id._contact_sale_owner().id,
                 'team_id': self.config_id.crm_team_id.id, 'origin': self.pos_reference or self.name,
-            })
-            for sequence, line in enumerate(self.lines.filtered(lambda item: not item.combo_parent_id), 1):
+            }
+            if printing:
+                quotation_vals['name'] = self.pos_reference or self.name or _('Borrador de caja')
+            if order_promo_reward:
+                quotation_vals['order_promo_reward_id'] = order_promo_reward.id
+            quotation = self.env['sale.order'].with_company(self.company_id).create(quotation_vals)
+            for sequence, line in enumerate(self.lines.filtered(lambda item: not item.combo_parent_id and not (item.is_reward_line and item.price_unit < 0)), 1):
                 if not line.product_id.sale_ok or not line.product_id.active:
                     raise UserError(_('El producto %s no está habilitado para Ventas.') % line.product_id.display_name)
                 if line.product_id.type == 'combo':
@@ -277,21 +285,23 @@ class PosOrderQuotation(models.Model):
                 description = (quotation._tint_base_description(snapshot) if snapshot
                                else '\n'.join(filter(None, [line.full_product_name or line.product_id.display_name,
                                                             line.customer_note])))
-                origin = line.price_origin or ('agreement' if line.pricing_rule_type and line.pricing_rule_type != 'none' else 'manual')
+                origin = line.price_origin or 'manual'
                 origin_label = line.price_origin_label or line.pricing_rule_origin or _('Precio conservado del Punto de Venta')
                 values = {'order_id': quotation.id, 'sequence': sequence * 10,
                           'product_id': line.product_id.id, 'product_uom_id': line.product_id.uom_id.id,
                           'product_uom_qty': line.qty, 'price_unit': line.price_unit,
                           'technical_price_unit': line.price_unit, 'discount': line.discount,
+                          'technical_discount': line.discount,
                           'price_origin': origin, 'price_origin_label': origin_label,
                           'pricing_rule_type': line.pricing_rule_type or 'none',
                           'pricing_rule_origin': line.pricing_rule_origin or False,
                           'pricing_rule_id': line.pricing_rule_id.id if line.pricing_rule_id else False,
+                          'promo_reward_id': line.promo_reward_id.id if line.promo_reward_id else False,
                           'tax_ids': [Command.set(line.tax_ids_after_fiscal_position.ids)], 'name': description}
                 if snapshot:
                     values.update(tint_snapshot=snapshot, tint_container_qty=line.qty, price_origin='tint',
                                   price_origin_label=_('Precio del entintado: base más colorantes'))
-                self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION).create(values)
+                self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION, skip_manual_discount_breakdown=True).create(values)
             if self.currency_id.compare_amounts(quotation.amount_total, self.amount_total):
                 raise UserError(_('El total de la cotización difiere del ticket. Revisa impuestos, redondeos o promociones; no se convirtió el ticket.'))
             if self.id:
@@ -309,6 +319,10 @@ class SaleOrderPosQuotation(models.Model):
     pos_quotation_session_id = fields.Many2one('pos.session', copy=False, readonly=True, check_company=True)
     pos_quotation_snapshot = fields.Json(copy=False, readonly=True)
     _pos_quotation_uuid_unique = models.Constraint('UNIQUE(pos_quotation_uuid)', 'El ticket ya tiene una cotización.')
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['order_promo_reward_id']))
 
     @api.model_create_multi
     def create(self, values_list):
@@ -411,7 +425,7 @@ class SaleOrderLinePosQuotation(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['tint_snapshot', 'tint_display_name']))
+        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['tint_snapshot', 'tint_display_name', 'promo_reward_id']))
 
 
 class StockMovePosQuotation(models.Model):
