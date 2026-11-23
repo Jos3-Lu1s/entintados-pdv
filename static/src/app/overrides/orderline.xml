@@ -2,6 +2,10 @@
 <templates id="template" xml:space="preserve">
     <t t-name="entintados_pdv.Orderline" t-inherit="point_of_sale.Orderline" t-inherit-mode="extension" owl="1">
         <xpath expr="//li[@t-if='vals.discount']" position="replace">
+            <li t-if="vals.availablePromotions" class="text-success small">
+                <i class="fa fa-tag me-1" aria-hidden="true"/>Promoción disponible:
+                <t t-esc="vals.availablePromotions"/>
+            </li>
             <li t-if="vals.pricingRuleType === 'promo'" class="price-per-unit pricing-rule-indicator promo-indicator" t-att-class="{'text-success': vals.isDisplay}">
                 <i class="fa fa-tag pe-1"/>
                 <t t-esc="vals.pricingRuleOrigin"/>

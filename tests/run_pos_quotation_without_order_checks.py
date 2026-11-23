@@ -28,7 +28,7 @@ class WithoutPosOrder(TestPosSaleQuotation):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env.registry.init_models(cls.env.cr, ['sale.order'], {'module': 'entintados_pdv'}, install=False)
+        cls.env.registry.init_models(cls.env.cr, ['sale.order', 'pos.order.line'], {'module': 'entintados_pdv'}, install=False)
 
     def payload(self, ticket):
         data = {name: ticket[name] for name in (
@@ -130,8 +130,38 @@ class WithoutPosOrder(TestPosSaleQuotation):
         self.assertEqual(ticket.state, 'draft')
         self.assertEqual(self.env['sale.order'].search_count([]), count)
 
+    def test_print_current_ticket_preserves_draft(self):
+        ticket = self._ticket(tinted=True, discount=10)
+        data, _expected = self.payload(ticket)
+        base = ticket.lines.filtered(lambda line: not line.combo_parent_id)
+        rule = self.env['res.partner.discount.rule'].create({
+            'partner_id': ticket.partner_id.id, 'product_id': base.product_id.id, 'discount': 10,
+        })
+        for command in data['lines']:
+            if command[2]['uuid'] == base.uuid:
+                command[2]['pricing_rule_id'] = {'id': rule.id, 'model': 'res.partner.discount.rule'}
+        virtual = self.env['pos.order']._quotation_ticket_from_ui(data)
+        self.assertEqual(virtual.lines.filtered(lambda line: not line.combo_parent_id).pricing_rule_id, rule)
+        quotes = self.env['sale.order']
+        count = quotes.search_count([])
+
+        def render_pdf(report, refs):
+            self.assertEqual(report, 'sale.action_report_saleorder')
+            quotation = quotes.browse(refs)
+            self.assertEqual(quotation.amount_total, ticket.amount_total)
+            self.assertEqual(quotation.order_line.tint_snapshot['doses'][0]['points'], 12)
+            return b'%PDF-test', 'pdf'
+
+        with patch.object(type(self.env['ir.actions.report']), '_render_qweb_pdf', side_effect=render_pdf):
+            result = self.env['pos.order'].print_sale_quotation_from_ui(data)
+        self.assertEqual(result, 'JVBERi10ZXN0')
+        self.assertEqual(ticket.state, 'draft')
+        self.assertFalse(ticket.generated_quotation_id or ticket.payment_ids or ticket.picking_ids)
+        self.assertEqual(quotes.search_count([]), count)
+
 
 names = sys.argv[2:] or ['test_ui_creates_only_quotation_and_retries', 'test_synced_draft_is_removed_without_cancellation',
-         'test_failed_conversion_preserves_synced_draft', 'test_cashier_permissions_and_taxes']
+         'test_failed_conversion_preserves_synced_draft', 'test_cashier_permissions_and_taxes',
+         'test_print_current_ticket_preserves_draft']
 result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(WithoutPosOrder(name) for name in names))
 raise SystemExit(0 if result.wasSuccessful() else 1)

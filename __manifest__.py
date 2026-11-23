@@ -43,6 +43,7 @@ Catálogo de entintado
         "point_of_sale._assets_pos": [
             "entintados_pdv/static/src/app/overrides/pos_sale_quotation.js",
             "entintados_pdv/static/src/app/overrides/pos_sale_quotation.xml",
+            "entintados_pdv/static/src/app/components/branch_stock_dialog.js",
             # Corrección de incompatibilidad Odoo 19 (community vs enterprise pos_settle_due)
             ("after", "web/static/src/core/registry.js", "entintados_pdv/static/src/app/overrides/patch_registry.js"),
             "entintados_pdv/static/src/app/overrides/advance_controls.js",

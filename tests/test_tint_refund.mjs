@@ -72,6 +72,15 @@ function fixture() {
     return { parent, children, order, screen, Line, Order, context, alerts };
 }
 
+test('serializes commercial agreements as IDs for POS quotation printing', () => {
+    const { parent } = fixture();
+    for (const rule of [17, { id: 17, model: 'res.partner.discount.rule' }]) {
+        parent.pricing_rule_id = rule;
+        assert.equal(parent.serializeForORM().pricing_rule_id, 17);
+        assert.equal(parent.export_as_JSON().pricing_rule_id, 17);
+    }
+});
+
 test('editing the base preserves doses and protects standalone colorants', () => {
     const { parent, children } = fixture();
     assert.equal(children[0].setQuantity(100), false);

@@ -120,6 +120,7 @@ class PosOrder(models.Model):
         return vals_list
 
     def _create_invoice(self, move_vals):
+        self._check_restored_order_invoicing()
         n = self.invoice_split_count if len(self) == 1 else 1
         if n <= 1 or self.is_refund:
             return super()._create_invoice(move_vals)

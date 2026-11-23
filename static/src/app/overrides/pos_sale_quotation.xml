@@ -1,23 +1,73 @@
 <templates xml:space="preserve">
     <t t-name="entintados_pdv.CreateSaleQuotation" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
         <xpath expr="//div[hasclass('control-buttons-modal')]" position="inside">
+            <button t-if="pos.cashier._role != 'minimal' and canPrintCurrentQuotation"
+                    t-att-class="buttonClass" t-on-click="onClickPrintCurrentQuotation">
+                <i class="fa fa-print me-1" aria-hidden="true"/>Imprimir cotización de esta orden
+            </button>
             <button t-if="printableSaleQuotations.length" t-att-class="buttonClass" t-on-click="onClickPrintSaleQuotation">
                 <i class="fa fa-print me-1"/>Imprimir cotización
             </button>
             <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="() => this.onClickCreateSaleQuotation()">
                 <i class="fa fa-file-text-o me-1"/>Crear cotización
             </button>
+            <button t-if="pos.cashier._role != 'minimal' and canCheckQuotationStock"
+                    t-att-class="buttonClass" t-on-click="onClickQuotationStock">
+                <i class="fa fa-cubes me-1" aria-hidden="true"/>Disponibilidad
+            </button>
             <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="onClickReinvoiceSaleOrder">
-                <i class="fa fa-repeat me-1"/>Refacturar venta
+                <i class="fa fa-repeat me-1"/>Restablecer orden
             </button>
         </xpath>
         <xpath expr="//SelectPartnerButton" position="after">
-            <button t-if="!props.showRemainingButtons and printableSaleQuotations.length"
+            <button t-if="!props.showRemainingButtons and pos.cashier._role != 'minimal' and canPrintCurrentQuotation"
+                    class="btn btn-secondary btn-lg flex-shrink-0" title="Imprimir cotización de esta orden"
+                    t-on-click="onClickPrintCurrentQuotation">
+                <i class="fa fa-print" aria-label="Imprimir cotización de esta orden"/>
+            </button>
+            <button t-elif="!props.showRemainingButtons and printableSaleQuotations.length"
                     class="btn btn-secondary btn-lg flex-shrink-0" title="Imprimir cotización"
                     t-on-click="onClickPrintSaleQuotation">
                 <i class="fa fa-print" aria-label="Imprimir cotización"/>
             </button>
         </xpath>
+    </t>
+    <t t-name="entintados_pdv.BranchStockDialog">
+        <Dialog title="props.title" size="'xl'">
+            <div t-if="props.rows.length" class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Sucursal</th>
+                            <th scope="col">Producto</th>
+                            <th scope="col">Unidad</th>
+                            <th scope="col" class="text-end">Solicitado</th>
+                            <th scope="col" class="text-end">Existencia física</th>
+                            <th scope="col" class="text-end">Reservado</th>
+                            <th scope="col" class="text-end">Disponible</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="props.rows" t-as="row" t-key="row_index">
+                            <td t-esc="row.warehouse"/>
+                            <td t-esc="row.product"/>
+                            <td t-esc="row.uom"/>
+                            <td class="text-end" t-esc="formatQuantity(row.required)"/>
+                            <td class="text-end" t-esc="formatQuantity(row.onHand)"/>
+                            <td class="text-end" t-esc="formatQuantity(row.reserved)"/>
+                            <td class="text-end" t-att-class="{'text-danger fw-bold': row.shortage}">
+                                <t t-esc="formatQuantity(row.available)"/>
+                                <span t-if="row.shortage" class="d-block small">Insuficiente</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p t-else="" class="mb-0">No se encontraron existencias por sucursal para los productos consultados.</p>
+            <t t-set-slot="footer">
+                <button class="btn btn-secondary" t-on-click="props.close">Cerrar</button>
+            </t>
+        </Dialog>
     </t>
     <t t-name="entintados_pdv.CancelReinvoiceRefund" t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
         <xpath expr="//div[hasclass('payment-buttons')]" position="inside">

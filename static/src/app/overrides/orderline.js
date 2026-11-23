@@ -28,6 +28,23 @@ patch(Orderline.prototype, {
         }
 
         if (this.props.mode === "display" && !this.props.basic_receipt) {
+            const order = line.order_id;
+            if (order && !order.finalized && !order.isRefund && line.qty > 0 && !line.is_reward_line &&
+                !line.combo_parent_id && line.pricing_rule_type !== "fixed_price") {
+                const applied = new Set(order.lines.map((item) => item.reward_id?.id));
+                const promotions = (order.getClaimableRewards?.() || []).filter(({ reward, product }) => {
+                    if (reward.program_id.program_type !== "promotion" || applied.has(reward.id)) {
+                        return false;
+                    }
+                    if (reward.reward_type === "product") {
+                        return product?.id === line.product_id.id;
+                    }
+                    return reward.reward_type === "discount" && reward.discount_applicability === "specific" &&
+                        order._getSpecificDiscountableLines(reward).includes(line);
+                });
+                values.availablePromotions = [...new Set(promotions.map(({ reward }) => reward.description))]
+                    .filter(Boolean).join(" · ");
+            }
             const components = [line, ...(line.combo_line_ids || [])];
             const priceExcl = components.reduce((total, component) => total + component.priceExcl, 0);
             const priceExclNoDiscount = components.reduce(

@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.tools.float_utils import float_compare
 
 
@@ -33,6 +33,54 @@ class ProductProduct(models.Model):
         products = self.with_company(config.company_id).with_context(
             location=config.picking_type_id.default_location_src_id.id)
         return {p.id: p.free_qty for p in products if p.type == 'consu' and p.is_storable}
+
+    @api.model
+    def get_pos_quotation_branch_stock(self, config_id, quantities, tint_points=None):
+        if not self.env.user.has_group('point_of_sale.group_pos_user'):
+            raise AccessError(_('Se requiere acceso al Punto de Venta.'))
+        config = self.env['pos.config'].browse(config_id).exists()
+        if not config or config.company_id not in self.env.companies:
+            raise AccessError(_('Selecciona un Punto de Venta de una compañía habilitada.'))
+        config.check_access('read')
+        tint_points = tint_points or {}
+        product_ids = {int(product_id) for product_id in quantities.keys() | tint_points.keys()}
+        products = self.browse(sorted(product_ids)).exists()
+        products.check_access('read')
+        products = products.filtered(lambda product: product.is_storable
+                                     and (not product.company_id or product.company_id in config.company_id.parent_ids))
+        point = self.env.ref('entintados_pdv.uom_tint_point')
+        required_by_product = {}
+        for product in products:
+            key = str(product.id)
+            required = float(quantities.get(key, 0))
+            if key in tint_points:
+                if product.tint_role != 'colorant' or not product.uom_id._has_common_reference(point):
+                    raise UserError(_('Revisa la unidad del colorante %s.') % product.display_name)
+                required += point._compute_quantity(float(tint_points[key]), product.uom_id, round=False)
+            required_by_product[product.id] = required
+        if set(map(int, tint_points)) - required_by_product.keys():
+            raise UserError(_('No se pudo consultar todos los colorantes de la fórmula.'))
+        companies = self.env.user.company_ids.filtered(
+            lambda company: company.root_id == config.company_id.root_id)
+        warehouses = self.env['stock.warehouse'].sudo().search(
+            [('company_id', 'in', companies.ids)], order='name, id')
+        rows = []
+        for warehouse in warehouses:
+            lookup = self.env['product.stock.lookup'].new({'company_id': warehouse.company_id.id})
+            applicable = products.filtered(lambda product: not product.company_id
+                                          or product.company_id in warehouse.company_id.parent_ids)
+            stock = lookup._warehouse_component_stock(warehouse, applicable.ids, self.env['stock.quant'].sudo())
+            for product in products:
+                required = required_by_product[product.id]
+                on_hand, reserved = stock.get(product.id, (0, 0))
+                available = on_hand - reserved
+                rows.append({
+                    'warehouse': warehouse.display_name, 'product': product.display_name,
+                    'uom': product.uom_id.name, 'required': required, 'onHand': on_hand,
+                    'reserved': reserved, 'available': available,
+                    'shortage': product.uom_id.compare(required, available) > 0,
+                })
+        return rows
 
 
 class ProductTemplate(models.Model):

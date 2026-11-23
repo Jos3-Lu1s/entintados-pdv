@@ -21,7 +21,7 @@ export function matchingInvoices(records, query) {
 
 class PaymentInvoiceListRenderer extends ListRenderer {
     static rowsTemplate = "entintados_pdv.PaymentInvoiceRows";
-    static props = { ...ListRenderer.props, invoiceQuery: { type: String } };
+    static props = [...ListRenderer.props, "invoiceQuery"];
 
     getMatchingInvoices(list) {
         return matchingInvoices(list.records, this.props.invoiceQuery);

@@ -236,7 +236,7 @@ patch(PosOrderline.prototype, {
         const json = super.export_as_JSON ? super.export_as_JSON() : {};
         json.pricing_rule_type = this.pricing_rule_type || "none";
         json.pricing_rule_origin = this.pricing_rule_origin || "";
-        json.pricing_rule_id = this.pricing_rule_id || false;
+        json.pricing_rule_id = this.pricing_rule_id?.id ?? (this.pricing_rule_id || false);
         json.price_origin = this.price_origin || "list";
         json.price_origin_label = this.price_origin_label || "";
         return json;
@@ -257,7 +257,7 @@ patch(PosOrderline.prototype, {
         const values = super.serializeForORM ? super.serializeForORM(...arguments) : {};
         values.pricing_rule_type = this.pricing_rule_type || "none";
         values.pricing_rule_origin = this.pricing_rule_origin || "";
-        values.pricing_rule_id = this.pricing_rule_id || false;
+        values.pricing_rule_id = this.pricing_rule_id?.id ?? (this.pricing_rule_id || false);
         values.price_origin = this.price_origin || "list";
         values.price_origin_label = this.price_origin_label || "";
         return values;
