@@ -220,7 +220,6 @@ class StockMove(models.Model):
                     raise UserError(_('No hay suficiente colorante disponible para validar la salida: %s.') % product.display_name)
                 consumption.picked = True
                 consumption._action_done(cancel_backorder=True)
-            base_move.picking_id.invalidate_recordset(['tint_consumption_count'])
 
 
 class StockPicking(models.Model):
@@ -235,25 +234,8 @@ class StockPicking(models.Model):
             component.picking_id = component.tint_base_move_id.picking_id
         return result
 
-    tint_consumption_count = fields.Integer(string='Movimientos de colorante', compute='_compute_tint_consumption_count')
-
     def _tint_consumption_moves(self):
         return self.env['stock.move'].search([('tint_base_move_id', 'in', self.move_ids.ids)])
-
-    @api.depends('move_ids.state')
-    def _compute_tint_consumption_count(self):
-        for picking in self:
-            picking.tint_consumption_count = len(picking._tint_consumption_moves())
-
-    def action_view_tint_consumptions(self):
-        self.ensure_one()
-        self.check_access('read')
-        return {
-            'type': 'ir.actions.act_window', 'name': _('Colorantes del entintado'),
-            'res_model': 'stock.move', 'view_mode': 'list,form',
-            'domain': [('tint_base_move_id', 'in', self.move_ids.ids)],
-            'context': {'create': False},
-        }
 
 
 class StockReturnPicking(models.TransientModel):

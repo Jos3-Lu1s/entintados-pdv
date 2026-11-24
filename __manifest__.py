@@ -241,7 +241,6 @@ Catálogo de entintado
         'report/invoice_tint.xml',
         'report/invoice_mat.xml',
         'report/sale_quotation.xml',
-        'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/branch_purchase_request_views.xml',
         'views/osel_operation_controls_views.xml',
