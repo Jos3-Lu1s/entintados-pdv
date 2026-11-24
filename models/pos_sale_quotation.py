@@ -54,14 +54,13 @@ class PosOrderQuotation(models.Model):
         if quotation:
             self._check_quotation_ticket_snapshot(expected)
             quotation.check_access('read')
-            return {'id': quotation.id, 'name': quotation.name}
+            return self._quotation_result(quotation)
         return False
 
     @api.model
     def create_sale_quotation_from_ui(self, order, expected=None):
         """Create a quotation from an in-memory ticket, without a POS sale."""
-        if not self.env.user.has_group('point_of_sale.group_pos_user'):
-            raise AccessError(_('Se requieren permisos de Punto de Venta.'))
+        self._check_pos_quotation_user()
         if not order.get('uuid') or order.get('state') != 'draft':
             raise UserError(_('Solo se puede cotizar un ticket pendiente, sin cobrar.'))
         uuid = order['uuid']
@@ -73,7 +72,7 @@ class PosOrderQuotation(models.Model):
                 quotation.check_access('read')
                 if expected is not None and quotation.pos_quotation_snapshot != expected:
                     raise UserError(_('El ticket ya se convirtió con otros datos. Recupera su cotización.'))
-                return {'id': quotation.id, 'name': quotation.name}
+                return self._quotation_result(quotation)
             ticket = self.search([('uuid', '=', uuid)], limit=1)
             if ticket:
                 self.env['res.company']._with_locked_records(ticket)
@@ -102,8 +101,7 @@ class PosOrderQuotation(models.Model):
 
     @api.model
     def print_sale_quotation_from_ui(self, order):
-        if not self.env.user.has_group('point_of_sale.group_pos_user'):
-            raise AccessError(_('Se requieren permisos de Punto de Venta.'))
+        self._check_pos_quotation_user()
         if order.get('state') != 'draft':
             raise UserError(_('Solo puedes imprimir la cotización desde una orden pendiente.'))
         with self.env.cr.savepoint() as temporary:
@@ -211,10 +209,6 @@ class PosOrderQuotation(models.Model):
             raise UserError(_('El ticket todavía está sincronizándose o cambió en otra caja. Espera y vuelve a intentar.'))
         for uuid, product, qty, price, discount, parent, note, color in sent:
             line = stored[uuid]
-            # Newly added POS component lines can omit their zero discount.
-            # JSON sends that slot as null, while Odoo stores it as 0.0.
-            if discount is None:
-                discount = 0
             if (product != line.product_id.id or parent != (line.combo_parent_id.uuid or False)
                     or note != (line.customer_note or '') or color != (line.tint_color_code or False)
                     or any(not isinstance(value, (int, float)) or not math.isfinite(value)
@@ -225,8 +219,7 @@ class PosOrderQuotation(models.Model):
     def action_create_sale_quotation(self, expected=None):
         self.ensure_one()
         self.check_access('write')
-        if not self.env.user.has_group('point_of_sale.group_pos_user'):
-            raise AccessError(_('Se requieren permisos de Punto de Venta.'))
+        self._check_pos_quotation_user()
         with self.env.cr.savepoint():
             if self.id:
                 self.env['res.company']._with_locked_records(self)
@@ -234,7 +227,7 @@ class PosOrderQuotation(models.Model):
             self._check_quotation_ticket_snapshot(expected)
             if self.generated_quotation_id:
                 self.generated_quotation_id.check_access('read')
-                return {'id': self.generated_quotation_id.id, 'name': self.generated_quotation_id.name}
+                return self._quotation_result(self.generated_quotation_id)
             try:
                 self.env['sale.order'].check_access('create')
             except AccessError:
@@ -259,6 +252,7 @@ class PosOrderQuotation(models.Model):
             if self.lines.filtered(lambda line: line.combo_parent_id and line.product_id.tint_role != 'colorant'):
                 raise UserError(_('Este ticket contiene un combo comercial. Cotízalo desde Ventas antes de cobrarlo en caja.'))
             pricelist = self._quotation_pricelist()
+            reference = self.pos_reference or self.name
             printing = self.env.context.get('_quotation_print') is _QUOTATION_PRINT
             order_promo_reward = self.lines.filtered(
                 lambda l: l.promo_reward_id and l.promo_reward_id.discount_applicability == 'order'
@@ -269,10 +263,10 @@ class PosOrderQuotation(models.Model):
                 'pricelist_id': pricelist.id, 'fiscal_position_id': self.fiscal_position_id.id,
                 'warehouse_id': self.config_id.warehouse_id.id,
                 'user_id': self.partner_id._contact_sale_owner().id,
-                'team_id': self.config_id.crm_team_id.id, 'origin': self.pos_reference or self.name,
+                'team_id': self.config_id.crm_team_id.id, 'origin': reference,
             }
             if printing:
-                quotation_vals['name'] = self.pos_reference or self.name or _('Borrador de caja')
+                quotation_vals['name'] = reference or _('Borrador de caja')
             if order_promo_reward:
                 quotation_vals['order_promo_reward_id'] = order_promo_reward.id
             quotation = self.env['sale.order'].with_company(self.company_id).create(quotation_vals)
@@ -285,8 +279,12 @@ class PosOrderQuotation(models.Model):
                 description = (quotation._tint_base_description(snapshot) if snapshot
                                else '\n'.join(filter(None, [line.full_product_name or line.product_id.display_name,
                                                             line.customer_note])))
-                origin = line.price_origin or 'manual'
-                origin_label = line.price_origin_label or line.pricing_rule_origin or _('Precio conservado del Punto de Venta')
+                if snapshot:
+                    origin, origin_label = 'tint', _('Precio del entintado: base más colorantes')
+                else:
+                    origin = line.price_origin or 'manual'
+                    origin_label = (line.price_origin_label or line.pricing_rule_origin
+                                    or _('Precio conservado del Punto de Venta'))
                 values = {'order_id': quotation.id, 'sequence': sequence * 10,
                           'product_id': line.product_id.id, 'product_uom_id': line.product_id.uom_id.id,
                           'product_uom_qty': line.qty, 'price_unit': line.price_unit,
@@ -295,12 +293,11 @@ class PosOrderQuotation(models.Model):
                           'price_origin': origin, 'price_origin_label': origin_label,
                           'pricing_rule_type': line.pricing_rule_type or 'none',
                           'pricing_rule_origin': line.pricing_rule_origin or False,
-                          'pricing_rule_id': line.pricing_rule_id.id if line.pricing_rule_id else False,
-                          'promo_reward_id': line.promo_reward_id.id if line.promo_reward_id else False,
+                          'pricing_rule_id': line.pricing_rule_id.id,
+                          'promo_reward_id': line.promo_reward_id.id,
                           'tax_ids': [Command.set(line.tax_ids_after_fiscal_position.ids)], 'name': description}
                 if snapshot:
-                    values.update(tint_snapshot=snapshot, tint_container_qty=line.qty, price_origin='tint',
-                                  price_origin_label=_('Precio del entintado: base más colorantes'))
+                    values.update(tint_snapshot=snapshot, tint_container_qty=line.qty)
                 self.env['sale.order.line'].with_context(_tint_operation=_TINT_OPERATION, skip_manual_discount_breakdown=True).create(values)
             if self.currency_id.compare_amounts(quotation.amount_total, self.amount_total):
                 raise UserError(_('El total de la cotización difiere del ticket. Revisa impuestos, redondeos o promociones; no se convirtió el ticket.'))
@@ -308,37 +305,17 @@ class PosOrderQuotation(models.Model):
                 self.with_context(_quotation_operation=_QUOTATION_OPERATION).write({'generated_quotation_id': quotation.id})
                 self.action_pos_order_cancel()
             if not printing:
-                quotation.message_post(body=_('Cotización creada desde el ticket %s, sin cobro ni salida de inventario.') % (self.pos_reference or self.name))
-            return {'id': quotation.id, 'name': quotation.name}
-
-
-class SaleOrderPosQuotation(models.Model):
-    _inherit = 'sale.order'
-
-    pos_quotation_uuid = fields.Char(copy=False, readonly=True, index=True)
-    pos_quotation_session_id = fields.Many2one('pos.session', copy=False, readonly=True, check_company=True)
-    pos_quotation_snapshot = fields.Json(copy=False, readonly=True)
-    _pos_quotation_uuid_unique = models.Constraint('UNIQUE(pos_quotation_uuid)', 'El ticket ya tiene una cotización.')
+                quotation.message_post(body=_('Cotización creada desde el ticket %s, sin cobro ni salida de inventario.') % reference)
+            return self._quotation_result(quotation)
 
     @api.model
-    def _load_pos_data_fields(self, config):
-        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['order_promo_reward_id']))
+    def _check_pos_quotation_user(self):
+        if not self.env.user.has_group('point_of_sale.group_pos_user'):
+            raise AccessError(_('Se requieren permisos de Punto de Venta.'))
 
-    @api.model_create_multi
-    def create(self, values_list):
-        if any(values.get('pos_quotation_uuid') for values in values_list):
-            raise UserError(_('La referencia de caja se asigna al crear la cotización desde POS.'))
-        return super().create(values_list)
-
-    def write(self, values):
-        if ({'pos_quotation_uuid', 'pos_quotation_session_id', 'pos_quotation_snapshot'} & values.keys()
-                and self.env.context.get('_quotation_operation') is not _QUOTATION_OPERATION):
-            raise UserError(_('No se puede cambiar la referencia de la cotización de caja.'))
-        return super().write(values)
-
-
-class PosOrderQuotationPricelist(models.Model):
-    _inherit = 'pos.order'
+    @api.model
+    def _quotation_result(self, quotation):
+        return {'id': quotation.id, 'name': quotation.name}
 
     def _quotation_pricelist(self):
         self.ensure_one()
@@ -354,19 +331,15 @@ class PosOrderQuotationPricelist(models.Model):
             return matching[:1]
         # With pricelists disabled, POS sells at card prices in its own currency.
         # A matching sales pricelist supplies the quotation currency; line prices stay frozen.
-        matching = self.env['product.pricelist'].search([
-            ('currency_id', '=', self.currency_id.id),
-            '|', ('company_id', '=', False), ('company_id', '=', self.company_id.id),
-        ], limit=1)
+        domain = [('currency_id', '=', self.currency_id.id),
+                  '|', ('company_id', '=', False), ('company_id', '=', self.company_id.id)]
+        matching = self.env['product.pricelist'].search(domain, limit=1)
         if not matching:
             # Creating this currency-only bridge does not grant pricelist administration
             # to the cashier, nor enable or change the POS pricing configuration.
             self.env['res.company']._with_locked_records(self.company_id)
             Pricelist = self.env['product.pricelist'].sudo().with_company(self.company_id)
-            matching = Pricelist.search([
-                ('currency_id', '=', self.currency_id.id),
-                '|', ('company_id', '=', False), ('company_id', '=', self.company_id.id),
-            ], limit=1)
+            matching = Pricelist.search(domain, limit=1)
             if not matching:
                 matching = Pricelist.create({
                     'name': _('Cotizaciones de Punto de Venta — %s') % self.currency_id.name,
@@ -398,6 +371,31 @@ class PosOrderQuotationPricelist(models.Model):
             snapshot['doses'].append({'product_id': child.product_id.id, 'name': child.product_id.display_name,
                                       'points': points, 'unit_price': 0})
         return snapshot
+
+
+class SaleOrderPosQuotation(models.Model):
+    _inherit = 'sale.order'
+
+    pos_quotation_uuid = fields.Char(copy=False, readonly=True, index=True)
+    pos_quotation_session_id = fields.Many2one('pos.session', copy=False, readonly=True, check_company=True)
+    pos_quotation_snapshot = fields.Json(copy=False, readonly=True)
+    _pos_quotation_uuid_unique = models.Constraint('UNIQUE(pos_quotation_uuid)', 'El ticket ya tiene una cotización.')
+
+    @api.model
+    def _load_pos_data_fields(self, config):
+        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['order_promo_reward_id']))
+
+    @api.model_create_multi
+    def create(self, values_list):
+        if any(values.get('pos_quotation_uuid') for values in values_list):
+            raise UserError(_('La referencia de caja se asigna al crear la cotización desde POS.'))
+        return super().create(values_list)
+
+    def write(self, values):
+        if ({'pos_quotation_uuid', 'pos_quotation_session_id', 'pos_quotation_snapshot'} & values.keys()
+                and self.env.context.get('_quotation_operation') is not _QUOTATION_OPERATION):
+            raise UserError(_('No se puede cambiar la referencia de la cotización de caja.'))
+        return super().write(values)
 
 
 class StockPickingPosQuotation(models.Model):
