@@ -37,7 +37,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'account_reports', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
+    'depends': ['base', 'contacts', 'account', 'account_reports', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos', 'pos_hr'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -85,6 +85,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/origin_badge.js",
             "entintados_pdv/static/src/app/utils/combo_rules.js",
             "entintados_pdv/static/src/app/utils/promotion_rules.js",
+            "entintados_pdv/static/src/app/utils/cashier_permissions.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             "entintados_pdv/static/src/app/utils/invoice_options.js",
@@ -111,6 +112,9 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
             "entintados_pdv/static/src/app/overrides/pos_order_pricing.js",
             "entintados_pdv/static/src/app/overrides/pos_order_promotions.js",
+            # Después de los parches de las entradas del teclado (pos_store, pos_order_line,
+            # pos_order_pricing y advance_line_lock): así el permiso se revisa primero.
+            "entintados_pdv/static/src/app/overrides/cashier_permissions.js",
             "entintados_pdv/static/src/app/overrides/native_rewards.js",
             "entintados_pdv/static/src/app/overrides/promotion_selector.js",
             "entintados_pdv/static/src/app/overrides/orderline.js",

@@ -23,14 +23,6 @@ patch(PosStore.prototype, {
         };
     },
 
-    get canEditUnitPrice() {
-        return Boolean(this.config?.user_can_edit_price ?? true);
-    },
-
-    get canEditDiscount() {
-        return Boolean(this.config?.user_can_edit_discount ?? true);
-    },
-
     async addLineToCurrentOrder(...args) {
         const line = await super.addLineToCurrentOrder(...args);
         (line?.order_id || this.getOrder())?.refreshOrderPricing();
@@ -63,7 +55,8 @@ patch(PosStore.prototype, {
      * 3. el mismo % del acuerdo vigente, en una línea sin promoción, conserva el acuerdo;
      * 4. cualquier otro valor deja la línea manual y le quita la promoción.
      * En un paquete de combo, sus productos copian el resultado.
-     * Si la caja rechaza el valor (precio fijo o sin permiso), la línea queda como estaba.
+     * Si la línea rechaza el valor (anticipo), queda como estaba. El permiso y el precio fijo
+     * se revisan antes, en `overrides/cashier_permissions.js`.
      */
     async setDiscountFromUI(line, val) {
         const order = line.order_id;
@@ -103,7 +96,7 @@ patch(PosStore.prototype, {
         const requested = Number(val) || 0;
         const result = await super.setDiscountFromUI(...arguments);
         const rejected = line.discount === previousDiscount && requested !== previousDiscount;
-        if (rejected || line.fixed_price_locked) {
+        if (rejected) {
             // El core copia el descuento a los productos del combo antes que al paquete.
             if (isComboPackage(line)) {
                 order.syncComboItems(line);

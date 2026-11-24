@@ -62,6 +62,7 @@ from . import test_sale_discount_and_price_consistency
 from . import test_sale_quotation_report
 from . import test_origin_badge
 from . import test_pos_price_discount_lock
+from . import test_pos_cashier_permissions_tour
 from . import test_pos_promotions
 from . import test_pos_inline_promotions
 from . import test_pos_global_promotion_parity

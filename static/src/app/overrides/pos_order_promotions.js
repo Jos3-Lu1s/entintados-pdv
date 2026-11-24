@@ -56,12 +56,7 @@ patch(PosOrder.prototype, {
             line.discount = 0;
             line.pricing_rule_type = "fixed_price";
             line.pricing_rule_origin = rule.originLabel || "";
-            line._entintadosSettingPrice = true;
-            try {
-                line.setUnitPrice(rule.price);
-            } finally {
-                delete line._entintadosSettingPrice;
-            }
+            line.setUnitPrice(rule.price);
             line.price_type = "manual";
             line.fixed_price_locked = true;
             line.price_origin = "fixed_price";

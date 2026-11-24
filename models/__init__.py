@@ -37,6 +37,7 @@ from . import crm_material_line
 from . import stock_picking
 from . import product_pricelist_wizard
 from . import res_users
+from . import hr_employee
 from . import approvals
 from . import approvals_product_line
 from . import res_partner_discount_rule

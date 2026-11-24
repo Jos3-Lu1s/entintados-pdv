@@ -70,8 +70,7 @@ function writeDiscountAgreement(line, agreement) {
  * fijo del cliente gana; el precio y el descuento tecleados sobreviven a la cantidad, a la
  * tarifa y al cliente; la promoción de la línea la decide el motor de promociones.
  *
- * Escribe los campos directamente: `setUnitPrice` y `setDiscount` llevan los bloqueos que
- * son para el cajero.
+ * Escribe los campos directamente, con el redondeo de `Product Price`.
  */
 patch(PosOrder.prototype, {
     setPartner(partner) {

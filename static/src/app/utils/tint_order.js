@@ -271,18 +271,7 @@ export async function addTintedBaseToOrder(
                 }
             });
         }
-        parent._entintadosSettingPrice = true;
-        try {
-            if (typeof parent.setUnitPrice === "function") {
-                parent.setUnitPrice(finalUnitPrice);
-            } else if (typeof parent.set_unit_price === "function") {
-                parent.set_unit_price(finalUnitPrice);
-            } else {
-                parent.price_unit = finalUnitPrice;
-            }
-        } finally {
-            delete parent._entintadosSettingPrice;
-        }
+        parent.setUnitPrice(finalUnitPrice);
         parent.price_type = "manual";
         parent.manual_price = true;
 
@@ -290,28 +279,11 @@ export async function addTintedBaseToOrder(
         parent.price_origin_label = "Precio del entintado: base más colorantes";
 
         const rule = resolveAgreement(pos?.models, partner, baseProduct, { currency: pos?.currency });
-        parent._entintadosSettingDiscount = true;
-        try {
-            if (rule.type === "fixed_price") {
-                parent.fixed_price_locked = true;
-                if (typeof parent.setDiscount === "function") {
-                    parent.setDiscount(0);
-                } else if (typeof parent.set_discount === "function") {
-                    parent.set_discount(0);
-                } else {
-                    parent.discount = 0;
-                }
-            } else if (rule.type === "discount" && rule.discount > 0) {
-                if (typeof parent.setDiscount === "function") {
-                    parent.setDiscount(rule.discount);
-                } else if (typeof parent.set_discount === "function") {
-                    parent.set_discount(rule.discount);
-                } else {
-                    parent.discount = rule.discount;
-                }
-            }
-        } finally {
-            delete parent._entintadosSettingDiscount;
+        if (rule.type === "fixed_price") {
+            parent.fixed_price_locked = true;
+            parent.setDiscount(0);
+        } else if (rule.type === "discount" && rule.discount > 0) {
+            parent.setDiscount(rule.discount);
         }
 
         const gallery = formula?.gallery_id;
