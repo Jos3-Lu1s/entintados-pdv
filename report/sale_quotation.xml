@@ -171,24 +171,23 @@
     </template>
 
     <template id="sale_quotation_lines">
-        <t t-set="show_discount" t-value="quotation['show_discount']"/>
         <t t-set="show_breakdown" t-value="quotation['is_quotation'] and not env.context.get('proforma')"/>
-        <t t-set="columns" t-value="6 + (1 if show_discount else 0) + (4 if show_breakdown else 0) + (1 if show_breakdown and show_discount else 0)"/>
-        <table class="o_sq_lines" t-att-class="'o_sq_lines_detailed' if show_breakdown else ''" name="sale_quotation_lines">
+        <t t-set="show_discount" t-value="show_breakdown or quotation['show_discount']"/>
+        <t t-set="columns" t-value="11 if show_breakdown else 6 + (1 if show_discount else 0)"/>
+        <table t-attf-class="o_sq_lines {{ 'o_sq_lines_detailed' if show_breakdown else '' }}" name="sale_quotation_lines">
             <thead>
                 <tr>
                     <th class="o_sq_col_code">Código</th>
-                    <th>Descripción</th>
-                    <th class="o_sq_col_qty o_sq_num">Cant.<br/>UdM</th>
-                    <th class="o_sq_col_sat">Código SAT</th>
-                    <th class="o_sq_col_price o_sq_num">Precio unit.</th>
-                    <th t-if="show_discount" class="o_sq_col_disc o_sq_num">% Desc.</th>
-                    <th t-if="show_breakdown and show_discount" class="o_sq_col_price o_sq_num">Desc. importe</th>
-                    <th t-if="show_breakdown" class="o_sq_col_price o_sq_num">Antes de desc.</th>
-                    <th t-if="show_breakdown" class="o_sq_col_price">Impuestos</th>
-                    <th t-if="show_breakdown" class="o_sq_col_price o_sq_num">Imp. importe</th>
-                    <th class="o_sq_col_total o_sq_num">Importe</th>
-                    <th t-if="show_breakdown" class="o_sq_col_total o_sq_num">Total con impuestos</th>
+                    <th>Producto</th>
+                    <th class="o_sq_col_qty o_sq_num">Cantidad</th>
+                    <th class="o_sq_col_uom">Unidad</th>
+                    <th class="o_sq_col_price o_sq_num">Precio<br/>unitario</th>
+                    <th t-if="show_breakdown" class="o_sq_col_gross o_sq_num">Importe antes<br/>de descuento</th>
+                    <th t-if="show_discount" class="o_sq_col_disc o_sq_num">Desc. %</th>
+                    <th t-if="show_breakdown" class="o_sq_col_price o_sq_num">Desc.<br/>importe</th>
+                    <th class="o_sq_col_total o_sq_num">Subtotal</th>
+                    <th t-if="show_breakdown" class="o_sq_col_tax o_sq_num">Impuestos<br/>importe</th>
+                    <th t-if="show_breakdown" class="o_sq_col_grand o_sq_num">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -212,9 +211,9 @@
                         </td>
                         <t t-if="show_total">
                             <td class="o_sq_num"/>
-                            <td t-att-colspan="columns - (5 if show_breakdown else 4)"/>
+                            <td t-att-colspan="columns - (6 if show_breakdown else 4)"/>
                             <td class="o_sq_num" t-out="section['total']" t-options="money"/>
-                            <td t-if="show_breakdown"/>
+                            <td t-if="show_breakdown" colspan="2"/>
                         </t>
                     </tr>
                     <tr t-elif="line.display_type == 'line_note'" class="o_sq_note" name="sale_quotation_note">
@@ -225,40 +224,40 @@
                         <td colspan="2">
                             <span class="o_sq_marker"/><span t-out="line.name"/>
                         </td>
-                        <td class="o_sq_num">
+                        <td class="o_sq_num o_sq_quantity">
                             <span t-out="line.product_uom_qty" t-options="{'widget': 'float', 'precision': 2}"/>
-                            <div t-if="line.product_uom_id" t-field="line.product_uom_id"/>
                         </td>
-                        <td t-att-colspan="columns - (5 if show_breakdown else 4)"/>
+                        <td><span t-field="line.product_uom_id"/></td>
+                        <td t-att-colspan="columns - (7 if show_breakdown else 5)"/>
                         <td class="o_sq_num">
                             <t t-if="not collapse_prices" t-out="line._get_combo_totals('price_subtotal')" t-options="money"/>
                         </td>
-                        <td t-if="show_breakdown"/>
+                        <td t-if="show_breakdown" colspan="2"/>
                     </tr>
                     <tr t-else="" class="o_sq_product" name="sale_quotation_product">
-                        <td class="o_sq_code" t-out="line.product_id.default_code"/>
+                        <td class="o_sq_code" t-out="line._quotation_product_code()"/>
                         <td class="o_sq_desc" t-out="line.name" t-options="{'widget': 'text'}"/>
-                        <td class="o_sq_num">
+                        <td class="o_sq_num o_sq_quantity">
                             <span t-out="line.product_uom_qty" t-options="{'widget': 'float', 'precision': 2}"/>
-                            <div t-if="line.product_uom_id" t-field="line.product_uom_id"/>
                         </td>
-                        <td class="o_sq_code" t-out="line.product_id.unspsc_code_id.code or ''"/>
+                        <td><span t-field="line.product_uom_id"/></td>
                         <td class="o_sq_num">
                             <t t-if="not collapse_prices" t-out="line._quotation_unit_price()" t-options="money"/>
+                        </td>
+                        <td t-if="show_breakdown" class="o_sq_num">
+                            <t t-if="not collapse_prices" t-out="line.sale_amount_before_discount" t-options="money"/>
                         </td>
                         <td t-if="show_discount" class="o_sq_num o_sq_disc">
                             <t t-if="not collapse_prices" t-out="('%g' % line.discount) + '%' if line.discount else '—'"/>
                         </td>
-                        <td t-if="show_breakdown and show_discount" class="o_sq_num">
+                        <td t-if="show_breakdown" class="o_sq_num">
                             <t t-if="not collapse_prices" t-out="line.discount_amount" t-options="money"/>
                         </td>
-                        <t t-if="show_breakdown">
-                            <td class="o_sq_num"><t t-if="not collapse_prices" t-out="line.sale_amount_before_discount" t-options="money"/></td>
-                            <td><t t-if="not collapse_prices" t-out="', '.join(tax.invoice_label or tax.name for tax in line.tax_ids)"/></td>
-                            <td class="o_sq_num"><t t-if="not collapse_prices" t-out="line.sale_tax_amount_detail or ''"/></td>
-                        </t>
                         <td class="o_sq_num o_sq_amount">
                             <t t-if="not collapse_prices" t-out="line.price_subtotal" t-options="money"/>
+                        </td>
+                        <td t-if="show_breakdown" class="o_sq_num o_sq_tax">
+                            <t t-if="not collapse_prices" t-out="line.sale_tax_amount_detail or ''"/>
                         </td>
                         <td t-if="show_breakdown" class="o_sq_num">
                             <t t-if="not collapse_prices" t-out="line.price_total" t-options="money"/>

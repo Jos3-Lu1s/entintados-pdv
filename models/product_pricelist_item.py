@@ -102,4 +102,3 @@ class ProductPricelistItem(models.Model):
             if field_name not in params:
                 params.append(field_name)
         return params
-

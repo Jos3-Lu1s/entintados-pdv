@@ -33,6 +33,12 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
+    def _quotation_product_code(self):
+        self.ensure_one()
+        recipe = self._tint_recipe()
+        color_code = recipe.get('color_code') if recipe.get('base_id') == self.product_id.id else False
+        return ' + '.join(filter(None, (self.product_id.default_code, color_code)))
+
     def _quotation_unit_price(self):
         """Precio unitario sin impuestos y antes de descuento."""
         self.ensure_one()

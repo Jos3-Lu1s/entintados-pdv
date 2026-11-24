@@ -54,7 +54,7 @@ function fixture() {
     }
     class Order {}
     const alerts = [];
-    const context = { TicketScreen: Ticket, PosOrderline: Line, PosOrder: Order, patch, tintHelpers: helpers,
+    const context = { TicketScreen: Ticket, ProductScreen: class {}, PosOrderline: Line, PosOrder: Order, patch, tintHelpers: helpers,
         _t: (s) => s, AlertDialog: class {}, console };
     vm.runInNewContext(source('pos_order_line.js'), context);
     const parent = Object.assign(new Line(), { id: 1, qty: 2, refundedQty: 0, price_unit: 500,
@@ -71,6 +71,15 @@ function fixture() {
         numberBuffer: { reset() {} }, dialog: { add(...args) { alerts.push(args); } } });
     return { parent, children, order, screen, Line, Order, context, alerts };
 }
+
+test('serializes commercial agreements as IDs for POS quotation printing', () => {
+    const { parent } = fixture();
+    for (const rule of [17, { id: 17, model: 'res.partner.discount.rule' }]) {
+        parent.pricing_rule_id = rule;
+        assert.equal(parent.serializeForORM().pricing_rule_id, 17);
+        assert.equal(parent.export_as_JSON().pricing_rule_id, 17);
+    }
+});
 
 test('editing the base preserves doses and protects standalone colorants', () => {
     const { parent, children } = fixture();
@@ -99,7 +108,7 @@ test('refund edits update native component refund tracking and reject positive r
 
 test('refund prices and discounts are preserved when partner agreements change', () => {
     const { Order, context } = fixture();
-    vm.runInNewContext(source('pos_order_pricing.js'), { ...context,
+    vm.runInNewContext(source('pos_order_pricing.js'), { ...context, OrderSummary: class {},
         resolveAgreement: () => ({ type: 'fixed_price', price: 999 }) });
     const refund = { refunded_orderline_id: {}, price_unit: 500, discount: 12, product_id: {} };
     Object.assign(new Order(), { lines: [refund], getPartner: () => ({ id: 1 }) }).refreshOrderPricing();

@@ -265,6 +265,36 @@ patch(PosOrderline.prototype, {
 
         return selfPrice + comboSum;
     },
+    export_as_JSON() {
+        const json = super.export_as_JSON ? super.export_as_JSON() : {};
+        json.pricing_rule_type = this.pricing_rule_type || "none";
+        json.pricing_rule_origin = this.pricing_rule_origin || "";
+        json.pricing_rule_id = this.pricing_rule_id?.id ?? (this.pricing_rule_id || false);
+        json.price_origin = this.price_origin || "list";
+        json.price_origin_label = this.price_origin_label || "";
+        return json;
+    },
+
+    init_from_JSON(json) {
+        if (super.init_from_JSON) {
+            super.init_from_JSON(json);
+        }
+        this.pricing_rule_type = json.pricing_rule_type || "none";
+        this.pricing_rule_origin = json.pricing_rule_origin || "";
+        this.pricing_rule_id = json.pricing_rule_id || false;
+        this.price_origin = json.price_origin || "list";
+        this.price_origin_label = json.price_origin_label || "";
+    },
+
+    serializeForORM() {
+        const values = super.serializeForORM ? super.serializeForORM(...arguments) : {};
+        values.pricing_rule_type = this.pricing_rule_type || "none";
+        values.pricing_rule_origin = this.pricing_rule_origin || "";
+        values.pricing_rule_id = this.pricing_rule_id?.id ?? (this.pricing_rule_id || false);
+        values.price_origin = this.price_origin || "list";
+        values.price_origin_label = this.price_origin_label || "";
+        return values;
+    },
 });
 
 /**

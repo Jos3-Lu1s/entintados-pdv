@@ -40,6 +40,10 @@
                 <attribute name="groups"/>
                 <attribute name="readonly">1</attribute>
             </xpath>
+            <xpath expr="//field[@name='company_id']" position="after">
+                <field name="reinvoice_pos_source_id" string="Ticket original" invisible="not reinvoice_pos_source_id"/>
+                <field name="reinvoice_sale_source_id" string="Orden de venta original" invisible="not reinvoice_sale_source_id"/>
+            </xpath>
         </field>
     </record>
     <record id="view_pos_order_branch_list" model="ir.ui.view">

@@ -1,3 +1,4 @@
+import base64
 import math
 
 from odoo import api, Command, fields, models, _
@@ -6,6 +7,7 @@ from odoo.exceptions import AccessError, UserError
 from .sale_tint import _TINT_OPERATION
 
 _QUOTATION_OPERATION = object()
+_QUOTATION_PRINT = object()
 
 
 class PosOrderQuotation(models.Model):
@@ -99,6 +101,21 @@ class PosOrderQuotation(models.Model):
             return result
 
     @api.model
+    def print_sale_quotation_from_ui(self, order):
+        if not self.env.user.has_group('point_of_sale.group_pos_user'):
+            raise AccessError(_('Se requieren permisos de Punto de Venta.'))
+        if order.get('state') != 'draft':
+            raise UserError(_('Solo puedes imprimir la cotización desde una orden pendiente.'))
+        with self.env.cr.savepoint() as temporary:
+            ticket = self._quotation_ticket_from_ui(order).with_context(_quotation_print=_QUOTATION_PRINT)
+            quotation = ticket.action_create_sale_quotation()
+            pdf, _format = self.env['ir.actions.report'].with_context(
+                force_report_rendering=True,
+            )._render_qweb_pdf('sale.action_report_saleorder', [quotation['id']])
+            temporary.close(rollback=True)
+        return base64.b64encode(pdf).decode('ascii')
+
+    @api.model
     def _lock_sale_quotation_uuid(self, uuid):
         if not isinstance(uuid, str) or not uuid or len(uuid) > 64:
             raise UserError(_('Referencia de ticket inválida.'))
@@ -130,6 +147,11 @@ class PosOrderQuotation(models.Model):
                 continue
             data = command[2]
             line_values = {name: data[name] for name in line_names if name in data}
+            rule = line_values.get('pricing_rule_id')
+            if isinstance(rule, dict):
+                # Older POS assets can serialize a loaded agreement as a record object.
+                rule = rule.get('id')
+            line_values['pricing_rule_id'] = rule if type(rule) is int and rule > 0 else False
             tax_ids = []
             for tax_command in data.get('tax_ids') or []:
                 # POS serializes many2many values as IDs as well as ORM
@@ -237,6 +259,7 @@ class PosOrderQuotation(models.Model):
             if self.lines.filtered(lambda line: line.combo_parent_id and line.product_id.tint_role != 'colorant'):
                 raise UserError(_('Este ticket contiene un combo comercial. Cotízalo desde Ventas antes de cobrarlo en caja.'))
             pricelist = self._quotation_pricelist()
+            printing = self.env.context.get('_quotation_print') is _QUOTATION_PRINT
             order_promo_reward = self.lines.filtered(
                 lambda l: l.promo_reward_id and l.promo_reward_id.discount_applicability == 'order'
             )[:1].promo_reward_id
@@ -248,6 +271,8 @@ class PosOrderQuotation(models.Model):
                 'user_id': self.partner_id._contact_sale_owner().id,
                 'team_id': self.config_id.crm_team_id.id, 'origin': self.pos_reference or self.name,
             }
+            if printing:
+                quotation_vals['name'] = self.pos_reference or self.name or _('Borrador de caja')
             if order_promo_reward:
                 quotation_vals['order_promo_reward_id'] = order_promo_reward.id
             quotation = self.env['sale.order'].with_company(self.company_id).create(quotation_vals)
@@ -282,7 +307,8 @@ class PosOrderQuotation(models.Model):
             if self.id:
                 self.with_context(_quotation_operation=_QUOTATION_OPERATION).write({'generated_quotation_id': quotation.id})
                 self.action_pos_order_cancel()
-            quotation.message_post(body=_('Cotización creada desde el ticket %s, sin cobro ni salida de inventario.') % (self.pos_reference or self.name))
+            if not printing:
+                quotation.message_post(body=_('Cotización creada desde el ticket %s, sin cobro ni salida de inventario.') % (self.pos_reference or self.name))
             return {'id': quotation.id, 'name': quotation.name}
 
 

@@ -129,6 +129,14 @@ class ProductStockLookup(models.TransientModel):
                 add(product, point._compute_quantity(dose['points'] * pending, product.uom_id, round=False), color)
         return True, components
 
+    def _warehouse_component_stock(self, warehouse, product_ids, quants):
+        amounts = quants._read_group([
+            ('product_id', 'in', product_ids), ('company_id', '=', self.company_id.id),
+            ('location_id', 'child_of', warehouse.view_location_id.id),
+            ('location_id.usage', '=', 'internal'),
+        ], ['product_id'], ['quantity:sum', 'reserved_quantity:sum'])
+        return {product.id: (quantity or 0, reserved or 0) for product, quantity, reserved in amounts}
+
     @api.depends('product_id', 'company_id', 'warehouse_id', 'sale_order_id', 'sale_line_id',
                  'sale_order_id.order_line.product_id', 'sale_order_id.order_line.product_uom_qty',
                  'sale_order_id.order_line.product_uom_id',
@@ -147,12 +155,8 @@ class ProductStockLookup(models.TransientModel):
                 ('company_id', '=', wizard.company_id.id)], order='name, id')
             commands = []
             for warehouse in warehouses:
-                amounts = self.env['stock.quant']._read_group([
-                    ('product_id', 'in', [product.id for product in components]), ('company_id', '=', wizard.company_id.id),
-                    ('location_id', 'child_of', warehouse.view_location_id.id),
-                    ('location_id.usage', '=', 'internal'),
-                ], ['product_id'], ['quantity:sum', 'reserved_quantity:sum'])
-                stock = {product.id: (quantity or 0, reserved or 0) for product, quantity, reserved in amounts}
+                stock = wizard._warehouse_component_stock(
+                    warehouse, [product.id for product in components], self.env['stock.quant'])
                 for product, component in components.items():
                     on_hand, reserved = stock.get(product.id, (0, 0))
                     available = on_hand - reserved

@@ -3,12 +3,110 @@ from odoo.exceptions import AccessError, UserError
 
 
 _REINVOICE = object()
+_RESTORE = object()
 _SOURCE_FIELDS = ('reinvoice_pos_source_id', 'reinvoice_sale_source_id')
 _REOPEN_HISTORY = ('reopened_move_ids', 'reopened_picking_ids')
 
 
 class PosOrder(models.Model):
     _inherit = 'pos.order'
+
+    @api.model
+    def restore_order(self, model, source_id, session_id, cash_returned=False):
+        if (not self.env.user.has_group('point_of_sale.group_pos_manager')
+                or not self.env.user.has_group('account.group_account_invoice')):
+            raise AccessError(_('Restablecer una orden requiere permisos de administración de PdV y facturación.'))
+        if model not in ('pos.order', 'sale.order') or cash_returned is not True:
+            raise UserError(_('Selecciona la orden original y confirma la devolución del cobro.'))
+        is_pos = model == 'pos.order'
+        source = self.env[model].browse(source_id).exists()
+        session = self.env['pos.session'].browse(session_id).exists()
+        source.check_access('write')
+        session.check_access('read')
+        if (not source or not session or session.state != 'opened' or source.company_id != session.company_id
+                or source.currency_id != session.config_id.currency_id
+                or (is_pos and (source.is_refund or source.session_id != session))):
+            raise UserError(_('Selecciona una venta válida de la misma compañía, moneda y sesión de caja.'))
+        lock = self.env['res.company']._with_locked_records
+        lock(source)
+        source.invalidate_recordset()
+        field = 'reinvoice_pos_source_id' if is_pos else 'reinvoice_sale_source_id'
+        existing = self.search([(field, '=', source.id)], limit=1)
+        if existing:
+            if existing.state == 'draft' and existing.session_id == session:
+                return {'uuid': existing.uuid}
+            raise UserError(_('La orden ya tiene un reemplazo: %s.', existing.display_name))
+        invoices = ((source.account_move | source.split_invoice_ids | source.reopened_move_ids.filtered(
+            lambda move: move.move_type == 'out_invoice')) if is_pos else source._normal_customer_invoices())
+        invoices.check_access('read')
+        if not invoices:
+            raise UserError(_('La orden original debe tener una factura vinculada.'))
+        lock(invoices)
+        invoices.invalidate_recordset()
+        pending = self._restore_pending_sat_invoices(invoices)
+        if pending:
+            return {'invoice_id': pending[0].id}
+        if invoices.filtered(lambda invoice: invoice.state != 'cancel'):
+            orders = self.with_context(_restore_operation=_RESTORE)
+            reopen = orders.reopen_original_pos_for_reinvoice if is_pos else orders.reopen_original_sale_for_reinvoice
+            return {'uuid': reopen(source_id, session_id, cash_returned=True)}
+        if is_pos:
+            uuid = self.with_context(skip_stock_return_credit=True).prepare_reinvoice_ticket(
+                model, source_id, session_id)
+            source._mark_restored_pos_order_canceled()
+            session.config_id.notify_synchronisation(session.id, 0)
+            return {'uuid': uuid}
+        if source.state not in ('sale', 'cancel') or (source.invoice_ids - invoices).filtered(
+                lambda move: move.state != 'cancel') or source.pos_order_line_ids.order_id.filtered(
+                    lambda order: order.state not in ('draft', 'cancel')):
+            raise UserError(_('Revisa los documentos y cobros relacionados antes de restablecer la orden.'))
+        rows = self._reinvoice_sale_lines(source)
+        self.with_context(skip_stock_return_credit=True)._return_reinvoice_stock(source, automatic=True)
+        if source.state == 'sale':
+            source.action_cancel()
+        return {'uuid': self._create_replacement_ticket(source, session, field, rows)}
+
+    def _restore_pending_sat_invoices(self, invoices):
+        documents = self.env['l10n_mx_edi.document'].sudo().search([
+            ('move_id', 'in', invoices.ids), ('state', 'in', ('invoice_sent', 'invoice_cancel')),
+        ])
+        return invoices.filtered(lambda invoice:
+            invoice.l10n_mx_edi_cfdi_state in ('sent', 'global_sent', 'cancel_requested')
+            or (invoice.state != 'cancel' and invoice._need_cancel_request())
+            or any(not any(cancel.attachment_uuid == sent.attachment_uuid
+                           and cancel.sat_state in ('cancelled', 'canceled', 'cancel')
+                           for cancel in documents if cancel.move_id == invoice and cancel.state == 'invoice_cancel')
+                   and sent.sat_state not in ('cancelled', 'canceled', 'cancel')
+                   for sent in documents if sent.move_id == invoice and sent.state == 'invoice_sent')
+            or (invoice.l10n_mx_edi_cfdi_state in ('cancel', 'cancelled', 'canceled')
+                and not any(doc.move_id == invoice and doc.sat_state in ('cancelled', 'canceled', 'cancel')
+                            for doc in documents)))
+
+    def _check_restored_order_invoicing(self):
+        for order in self.sudo():
+            source_pos = order.reinvoice_pos_source_id
+            source_sale = order.reinvoice_sale_source_id
+            invoices = (source_pos.account_move | source_pos.split_invoice_ids |
+                        source_pos.reopened_move_ids.filtered(lambda move: move.move_type == 'out_invoice') |
+                        source_sale._normal_customer_invoices())
+            if invoices and (invoices.filtered(lambda invoice: invoice.state != 'cancel')
+                             or self._restore_pending_sat_invoices(invoices)):
+                raise UserError(_('La factura original debe estar cancelada y, si fue timbrada, el SAT debe confirmar su cancelación.'))
+
+    def _generate_pos_order_invoice(self):
+        self._check_restored_order_invoicing()
+        return super()._generate_pos_order_invoice()
+
+    def _l10n_mx_edi_check_orders_for_global_invoice(self, origin=None):
+        self._check_restored_order_invoicing()
+        return super()._l10n_mx_edi_check_orders_for_global_invoice(origin=origin)
+
+    def _mark_restored_pos_order_canceled(self):
+        self.ensure_one()
+        self.flush_recordset(['state'])
+        self.env.cr.execute("UPDATE pos_order SET state = 'cancel' WHERE id = %s", [self.id])
+        self.invalidate_recordset(['state'])
+        self.modified(['state'])
 
     reinvoice_pos_source_id = fields.Many2one('pos.order', readonly=True, copy=False, ondelete='restrict')
     reinvoice_sale_source_id = fields.Many2one('sale.order', readonly=True, copy=False, ondelete='restrict')
@@ -140,6 +238,11 @@ class PosOrder(models.Model):
             })
         pickings.write({'pos_order_id': False})
         payments.unlink()
+        if self.env.context.get('_restore_operation') is _RESTORE:
+            source._mark_restored_pos_order_canceled()
+            session.config_id.notify_synchronisation(session.id, 0)
+            return self._create_replacement_ticket(source, session, 'reinvoice_pos_source_id',
+                                                   self._reinvoice_pos_lines(source))
         # The native write guard protects paid tickets. Only reset the state
         # here, under the order lock, after every original movement is reversed.
         source.flush_recordset(['state'])
@@ -234,6 +337,9 @@ class PosOrder(models.Model):
         if any(invoice.state != 'cancel' for invoice in active) or any(payment.state != 'canceled' for payment in payments):
             raise UserError(_('Odoo no pudo cancelar todos los documentos originales.'))
         source.action_cancel()
+        if self.env.context.get('_restore_operation') is _RESTORE:
+            return self._create_replacement_ticket(source, session, 'reinvoice_sale_source_id',
+                                                   self._reinvoice_sale_lines(source))
         source.action_draft()
         return {'sale_id': source.id}
 
@@ -339,6 +445,11 @@ class PosOrder(models.Model):
         if not is_pos and source.state == 'sale':
             source.check_access('write')
             source.action_cancel()
+        return self._create_replacement_ticket(source, session, field, rows)
+
+    def _create_replacement_ticket(self, source, session, field, rows):
+        if not rows:
+            raise UserError(_('La orden no contiene productos para recuperar.'))
         reference, tracking = session.config_id._get_next_order_refs()
         ticket = self.with_context(_reinvoice_operation=_REINVOICE).create({
             field: source.id,

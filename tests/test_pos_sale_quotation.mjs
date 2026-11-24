@@ -15,12 +15,17 @@ function fixture(fail = false) {
         }
     }
     class PosStore extends NativePosStore {}
+    const BranchStockDialog = class {};
     vm.runInNewContext(source, { ControlButtons, PosStore, PosOrder: class {}, PaymentScreen: class {}, useService() {}, ask: async () => true,
+        BranchStockDialog, FormViewDialog: class {}, requiresPosStock: (product) => Boolean(product?.is_storable),
+        downloadFile: (...args) => downloads.push(args),
+        isTintColorant: (line) => Boolean(line.is_tint_colorant),
         _t: (text) => text, patch: (target, extension) => {
             Object.setPrototypeOf(extension, Object.getPrototypeOf(target));
             Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
         } });
     const calls = [];
+    const downloads = [];
     const order = { id: 'local', uuid: 'ticket', state: 'draft', payment_ids: [],
         getPartner: () => ({ id: 1 }), lines: [{ uuid: 'line', product_id: { id: 2 }, qty: 1, price_unit: 100, discount: 0 }],
         setOrderPrices() { calls.push('prices'); this.lines[0].price_unit = 120; },
@@ -36,8 +41,94 @@ function fixture(fail = false) {
             } },
             removePendingOrder() { calls.push('removePending'); }, removeOrder() { calls.push('remove'); },
             navigate() {}, addNewOrder() {} } });
-    return { button, calls, PosStore };
+    return { button, calls, PosStore, BranchStockDialog, downloads };
 }
+
+test('prints all current order lines without converting or removing the ticket', async () => {
+    const { button, calls, downloads } = fixture();
+    const order = button.pos.getOrder();
+    const base = order.lines[0];
+    base.serializeForORM = () => ({ uuid: base.uuid, product_id: 2 });
+    order.lines.push({
+        combo_parent_id: base,
+        serializeForORM: () => ({ uuid: 'component', product_id: 3 }),
+    });
+    order.serializeForORM = () => ({ state: 'draft', lines: [] });
+    button.pos.data.call = async (model, method, [snapshot]) => {
+        assert.equal(model, 'pos.order');
+        assert.equal(method, 'print_sale_quotation_from_ui');
+        assert.equal(JSON.stringify(snapshot.lines), '[[0,0,{"uuid":"line","product_id":2,"combo_parent_id":false}],[0,0,{"uuid":"component","product_id":3,"combo_parent_id":"line"}]]');
+        return 'JVBERi0=';
+    };
+    await button.onClickPrintCurrentQuotation();
+    assert.deepEqual(downloads, [['data:application/pdf;base64,JVBERi0=', 'Cotizacion.pdf', 'application/pdf']]);
+    assert.deepEqual(calls, ['unblock']);
+    assert.equal(button.pos.getOrder(), order);
+});
+
+test('opens the original invoice when SAT confirmation is pending', async () => {
+    const { button } = fixture();
+    button.pos.session = { id: 7 };
+    button.pos.data.call = async (model, method, args) => {
+        assert.equal(method, 'restore_order');
+        assert.equal(JSON.stringify(args), '["pos.order",8,7,true]');
+        return { invoice_id: 9 };
+    };
+    let opened;
+    button.dialog.add = (dialog, props) => { opened = props; };
+    await button.recoverReinvoiceTicket('pos.order', 8);
+    assert.equal(opened.resModel, 'account.move');
+    assert.equal(opened.resId, 9);
+});
+
+test('selects the new draft ticket after restoring an order from Ventas', async () => {
+    const { button } = fixture();
+    button.pos.session = { id: 7 };
+    button.pos.data.call = async () => ({ uuid: 'replacement' });
+    const replacement = { uuid: 'replacement', state: 'draft' };
+    button.pos.data.loadServerOrders = async () => [replacement];
+    let selected;
+    button.pos.setOrder = (ticket) => { selected = ticket; };
+    await button.recoverReinvoiceTicket('sale.order', 8);
+    assert.equal(selected, replacement);
+});
+
+test('checks branch availability for positive stock lines without saving the quotation', async () => {
+    const { button, calls, BranchStockDialog } = fixture();
+    const order = button.pos.getOrder();
+    const base = { id: 2, is_storable: true };
+    const nativeColorant = { product_id: { id: 3 }, qty: 24, is_tint_colorant: true };
+    const importedColorant = { product_id: { id: 3 }, qty: 4, is_tint_colorant: true };
+    order.lines = [
+        { product_id: base, qty: 1 },
+        { product_id: base, qty: 2, combo_line_ids: [nativeColorant] },
+        { product_id: base, qty: -1 },
+        { product_id: base, qty: 2, combo_line_ids: [importedColorant], sale_order_line_id: {
+            tint_snapshot: { base_id: 2, doses: [{ product_id: 3, points: 2 }, { product_id: 5, points: 8 }] },
+        } },
+        nativeColorant,
+        importedColorant,
+        { product_id: { id: 4 }, qty: 1 },
+    ];
+    const stockRows = [{ warehouse: 'Centro', product: 'Base', available: 2, shortage: true }];
+    button.pos.config = { id: 7 };
+    button.pos.data.call = async (model, method, args) => {
+        calls.push([model, method, JSON.stringify(args)]);
+        return stockRows;
+    };
+    button.dialog.add = (component, props) => {
+        assert.equal(component, BranchStockDialog);
+        assert.equal(props.rows, stockRows);
+        calls.push('opened');
+    };
+    await button.onClickQuotationStock();
+    assert.deepEqual(calls, [
+        ['product.product', 'get_pos_quotation_branch_stock', '[7,{"2":5},{"3":28,"5":16}]'],
+        'opened',
+    ]);
+    order.finalized = true;
+    assert.equal(button.canCheckQuotationStock, false);
+});
 
 test('loads missing original lines before the native refund payment validation', async () => {
     const { PosStore } = fixture();

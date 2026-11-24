@@ -257,4 +257,3 @@ test('lineScreenValues resolves colors and icons for agreement, promo, fixed_pri
     assert.equal(valsManual.pricingRuleColor, 'text-warning');
     assert.equal(valsManual.pricingRuleIcon, 'fa-pencil');
 });
-

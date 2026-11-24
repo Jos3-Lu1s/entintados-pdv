@@ -7,9 +7,13 @@ import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { useService } from "@web/core/utils/hooks";
+import { downloadFile } from "@web/core/network/download";
 import { SelectCreateDialog } from "@web/views/view_dialogs/select_create_dialog";
 import { FormViewDialog } from "@web/views/view_dialogs/form_view_dialog";
 import { printableQuotations } from "../utils/quotation_print";
+import { BranchStockDialog } from "../components/branch_stock_dialog";
+import { requiresPosStock } from "../utils/pos_stock";
+import { isTintColorant } from "../utils/tint_order";
 
 patch(PosOrder.prototype, {
     serializeForORM() {
@@ -95,6 +99,70 @@ patch(ControlButtons.prototype, {
         return printableQuotations(this.pos.getOrder(), this.pos.lastCreatedSaleQuotation);
     },
 
+    get canCheckQuotationStock() {
+        const order = this.pos.getOrder();
+        return order?.state === "draft" && !order.finalized && !order.isRefund &&
+            order.lines.some((line) => line.qty > 0 && requiresPosStock(line.product_id));
+    },
+
+    async onClickQuotationStock() {
+        if (!this.canCheckQuotationStock || this._checkingQuotationStock) {
+            return;
+        }
+        const order = this.pos.getOrder();
+        const quantities = {};
+        const tintPoints = {};
+        const lines = new Set(order.lines);
+        const recipeChildren = new Set();
+        for (const line of order.lines) {
+            for (const child of line.combo_line_ids || []) {
+                lines.add(child);
+                if (isTintColorant(child) && line.sale_order_line_id?.tint_snapshot?.doses?.length) {
+                    recipeChildren.add(child);
+                }
+            }
+        }
+        const add = (totals, productId, quantity) => {
+            if (productId && quantity > 0) {
+                totals[productId] = (totals[productId] || 0) + quantity;
+            }
+        };
+        for (const line of lines) {
+            const product = line.product_id;
+            if (line.qty <= 0 || recipeChildren.has(line)) {
+                continue;
+            }
+            if (isTintColorant(line)) {
+                if (!line.combo_parent_id?.sale_order_line_id?.tint_snapshot?.doses?.length) {
+                    add(tintPoints, product?.id, Number(line.qty));
+                }
+                continue;
+            }
+            if (requiresPosStock(product)) {
+                add(quantities, product.id, Number(line.qty));
+            }
+            const recipe = line.sale_order_line_id?.tint_snapshot;
+            if (recipe?.base_id && recipe.base_id === product?.id) {
+                for (const dose of recipe.doses || []) {
+                    add(tintPoints, dose.product_id, dose.points * Number(line.qty));
+                }
+            }
+        }
+        this._checkingQuotationStock = true;
+        try {
+            const rows = await this.pos.data.call("product.product", "get_pos_quotation_branch_stock",
+                [this.pos.config.id, quantities, tintPoints]);
+            if (order === this.pos.getOrder() && this.canCheckQuotationStock) {
+                this.dialog.add(BranchStockDialog, { rows, title: _t("Disponibilidad por sucursal") });
+            }
+        } catch (error) {
+            this.notification.add(error.data?.message || _t("No se pudo consultar la disponibilidad. Revisa la conexión."),
+                { type: "warning" });
+        } finally {
+            this._checkingQuotationStock = false;
+        }
+    },
+
     async onClickReinvoiceSaleOrder() {
         const model = await makeAwaitable(this.dialog, SelectionPopup, {
             title: _t("¿Dónde se registró la venta original?"),
@@ -107,64 +175,56 @@ patch(ControlButtons.prototype, {
             return;
         }
         const isPos = model === "pos.order";
-        const paid = [["move_type", "=", "out_invoice"], ["is_advance_invoice", "=", false],
-            ["state", "=", "posted"], ["payment_state", "=", "paid"], ["amount_total", ">", 0]];
-        const unpaid = [["state", "!=", "cancel"], "|", ["state", "!=", "posted"], ["payment_state", "!=", "paid"]];
-        const saleInvoiceLines = (invoiceDomain) =>
-            [["order_line", "any", [["invoice_lines", "any", [["move_id", "any", invoiceDomain]]]]]];
-        const paidDomain = isPos
-            ? [["account_move", "any", paid], ["split_invoice_ids", "=", false]]
-            : [...saleInvoiceLines(paid), ["order_line", "not any",
-                [["invoice_lines", "any", [["move_id", "any", [
-                    ["move_type", "=", "out_invoice"], ["is_advance_invoice", "=", false], ...unpaid,
-                ]]]]]]];
+        const invoiceDomain = [["move_type", "=", "out_invoice"], ["is_advance_invoice", "=", false],
+            "|", ["state", "=", "cancel"], ["payment_state", "=", "paid"]];
+        const invoiced = isPos
+            ? [["account_move", "any", invoiceDomain], ["split_invoice_ids", "=", false]]
+            : [["order_line", "any", [["invoice_lines", "any", [["move_id", "any", invoiceDomain]]]]]];
         this.dialog.add(SelectCreateDialog, {
-            title: _t("Selecciona la orden para refacturar"),
+            title: _t("Selecciona la orden para restablecer"),
             resModel: model,
             noCreate: true,
             multiSelect: false,
             domain: [
                 ["company_id", "=", this.pos.company.id],
-                ["state", "in", isPos ? ["paid", "done"] : ["sale", "cancel"]],
+                ["state", "in", isPos ? ["paid", "done", "cancel"] : ["sale", "cancel"]],
                 ["currency_id", "=", this.pos.currency.id],
                 ...(isPos ? [["is_refund", "=", false], ["session_id", "=", this.pos.session.id]] : []),
-                ...paidDomain,
+                ...invoiced,
             ],
             onSelected: ([orderId]) => this.recoverReinvoiceTicket(model, orderId),
         });
     },
 
     async recoverReinvoiceTicket(model, orderId) {
-        const isPos = model === "pos.order";
         const confirmed = await ask(this.dialog, {
-            title: _t("Reabrir la orden original"),
-            body: _t("Confirma que devolviste el efectivo al cliente. Odoo cancelará la factura y el cobro elegibles, devolverá las existencias y abrirá esta misma orden en borrador."),
+            title: _t("Restablecer orden"),
+            body: _t("Confirma que devolviste el cobro al cliente. Odoo revertirá las operaciones elegibles y abrirá un ticket nuevo vinculado al original. Si falta confirmar la cancelación ante el SAT, se abrirá la factura anterior para revisarla."),
         });
         if (!confirmed) {
             return;
         }
         this.quotationUI.block();
         try {
-            const method = isPos ? "reopen_original_pos_for_reinvoice" : "reopen_original_sale_for_reinvoice";
-            const result = await this.pos.data.call("pos.order", method, [
-                orderId, this.pos.session.id, true,
+            const result = await this.pos.data.call("pos.order", "restore_order", [
+                model, orderId, this.pos.session.id, true,
             ]);
-            if (isPos) {
-                const orders = await this.pos.data.loadServerOrders([["uuid", "=", result]]);
-                const ticket = orders.find((order) => order.uuid === result && order.state === "draft");
-                if (!ticket) {
-                    throw new Error(_t("La orden quedó reabierta. Recarga la caja para recuperarla."));
-                }
-                this.pos.setOrder(ticket);
+            if (result.invoice_id) {
                 this.props.close?.();
-                this.pos.navigate("ProductScreen");
+                this.dialog.add(FormViewDialog, {
+                    resModel: "account.move", resId: result.invoice_id, canExpand: false,
+                    title: _t("Confirma la cancelación ante el SAT y vuelve a restablecer la orden"),
+                });
                 return;
             }
+            const orders = await this.pos.data.loadServerOrders([["uuid", "=", result.uuid]]);
+            const ticket = orders.find((order) => order.uuid === result.uuid && order.state === "draft");
+            if (!ticket) {
+                throw new Error(_t("Recarga la caja para recuperar el nuevo ticket."));
+            }
+            this.pos.setOrder(ticket);
             this.props.close?.();
-            this.dialog.add(FormViewDialog, {
-                resModel: "sale.order", resId: result.sale_id, canExpand: false,
-                title: _t("Editar la orden original"),
-            });
+            this.pos.navigate("ProductScreen");
         } catch (error) {
             this.notification.add(error.data?.message || error.message, { type: "warning" });
         } finally {
@@ -180,6 +240,44 @@ patch(ControlButtons.prototype, {
         } catch (error) {
             this.notification.add(error.data?.message || _t("No se pudo imprimir la cotización. Puedes reintentar desde Ventas."),
                 { type: "danger" });
+        }
+    },
+
+    get canPrintCurrentQuotation() {
+        const order = this.pos.getOrder();
+        return order?.state === "draft" && !order.finalized && !order.isRefund && order.lines.length > 0;
+    },
+
+    async onClickPrintCurrentQuotation() {
+        if (!this.canPrintCurrentQuotation || this._printingCurrentQuotation) {
+            return;
+        }
+        const order = this.pos.getOrder();
+        if (!order.getPartner()) {
+            this.notification.add(_t("Selecciona un cliente para imprimir la cotización."), { type: "warning" });
+            return;
+        }
+        this._printingCurrentQuotation = true;
+        this.quotationUI.block();
+        try {
+            const snapshot = order.serializeForORM({ keepCommands: true });
+            // Synchronization sends only changed lines. The PDF needs the full order.
+            snapshot.lines = order.lines.map((line) => [0, 0, {
+                ...line.serializeForORM({ keepCommands: true }),
+                combo_parent_id: line.combo_parent_id?.uuid || false,
+            }]);
+            const pdf = await this.pos.data.call("pos.order", "print_sale_quotation_from_ui", [
+                snapshot,
+            ], { context: this.pos.getSyncAllOrdersContext([order]) });
+            await downloadFile(`data:application/pdf;base64,${pdf}`, "Cotizacion.pdf", "application/pdf");
+            this.props.close?.();
+        } catch (error) {
+            this.notification.add(error.data?.message || _t("No se pudo imprimir la cotización de la orden."), {
+                type: "warning",
+            });
+        } finally {
+            this._printingCurrentQuotation = false;
+            this.quotationUI.unblock();
         }
     },
 

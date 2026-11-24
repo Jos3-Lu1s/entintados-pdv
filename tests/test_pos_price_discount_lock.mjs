@@ -69,7 +69,7 @@ new Function(
 
 test('PosStore getters reflect pos.config user permissions', () => {
     const pos = new PosStore();
-    
+
     // Default fallback when config has no flags
     pos.config = {};
     assert.equal(pos.canEditUnitPrice, true);
