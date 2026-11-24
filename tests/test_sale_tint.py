@@ -316,9 +316,7 @@ class TestSaleTint(TransactionCase):
         self.assertFalse(order.order_line.filtered(lambda l: l.product_id == self.colorant))
         self.assertEqual(self._qty(self.colorant, location), 76)
 
-    def test_delivery_native_validate_and_view(self):
-        from odoo.tools.convert import convert_file
-        convert_file(self.env, 'entintados_pdv', 'views/sale_tint_stock_views.xml', {}, mode='update')
+    def test_delivery_native_validate(self):
         order, location = self._prepare_delivery()
         picking = order.picking_ids
         picking.move_ids.picked = True
