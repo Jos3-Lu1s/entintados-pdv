@@ -83,6 +83,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/agreement_rules.js",
             "entintados_pdv/static/src/app/utils/pricelist_rules.js",
             "entintados_pdv/static/src/app/utils/origin_badge.js",
+            "entintados_pdv/static/src/app/utils/combo_rules.js",
             "entintados_pdv/static/src/app/utils/promotion_rules.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",

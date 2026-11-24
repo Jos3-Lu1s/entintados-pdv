@@ -3,9 +3,18 @@
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { OrderSummary } from "@point_of_sale/app/screens/product_screen/order_summary/order_summary";
 import { patch } from "@web/core/utils/patch";
+import { _t } from "@web/core/l10n/translation";
 import { resolveAgreement } from "@entintados_pdv/app/utils/agreement_rules";
 import { findPricelistRule, pricelistOriginLabel } from "@entintados_pdv/app/utils/pricelist_rules";
 import { isTintColorant, isTintedBase } from "@entintados_pdv/app/utils/tint_order";
+import {
+    comboItemAgreementValues,
+    comboItemPriceLabel,
+    distributeComboPrice,
+    isComboItem,
+    isComboPackage,
+    splitComboLines,
+} from "@entintados_pdv/app/utils/combo_rules";
 
 const MANUAL_PRICE_LABEL = "Modificado de forma manual";
 const TINT_PRICE_LABEL = "Precio del entintado: base más colorantes";
@@ -17,10 +26,6 @@ function isAdvanceLine(order, line) {
             line.advance_source_ref ||
             (line.sale_order_origin_id && nativeAdvanceProduct && line.product_id?.id === nativeAdvanceProduct.id)
     );
-}
-
-function isComboLine(line) {
-    return Boolean(line.combo_line_ids?.length || line.combo_parent_id);
 }
 
 /** Precio tecleado por el cajero: lo conservan la cantidad, la tarifa y el cliente. */
@@ -100,6 +105,14 @@ patch(PosOrder.prototype, {
         if (line.refunded_orderline_id || line.is_reward_line || line.reward_id) {
             return;
         }
+        // El producto de un combo no tiene acuerdo propio: lo resuelve su paquete.
+        if (isComboItem(line)) {
+            return;
+        }
+        if (isComboPackage(line)) {
+            this._refreshComboPricing(line, partner, partnerChanged);
+            return;
+        }
         if (isAdvanceLine(this, line)) {
             clearAgreement(line);
             line.price_origin = "manual";
@@ -125,14 +138,6 @@ patch(PosOrder.prototype, {
             return;
         }
 
-        if (isComboLine(line)) {
-            // El core reparte el precio del paquete: aquí solo el descuento del acuerdo.
-            if (!line.promo_reward_id && line.pricing_rule_type !== "manual") {
-                writeDiscountAgreement(line, agreement);
-            }
-            return;
-        }
-
         if (agreement.type === "fixed_price" && (partnerChanged || !hasManualPricing(line))) {
             this._writeLinePrice(line, agreement.price);
             line.price_type = "manual";
@@ -154,6 +159,60 @@ patch(PosOrder.prototype, {
             return;
         }
         writeDiscountAgreement(line, agreement);
+    },
+
+    /**
+     * Acuerdo del combo, resuelto sobre el paquete como en Ventas: el paquete vale 0, su precio
+     * (tarifa o precio fijo) se reparte entre sus productos y estos copian su descuento y badge.
+     */
+    _refreshComboPricing(packageLine, partner, partnerChanged) {
+        const product = packageLine.product_id;
+        const agreement = resolveAgreement(this.models, partner, product, { currency: this.currency });
+        let total;
+        packageLine.price_unit = 0;
+        if (agreement.type === "fixed_price" && (partnerChanged || !hasManualPricing(packageLine))) {
+            writeFixedPriceAgreement(packageLine, agreement);
+            packageLine.price_origin = "fixed_price";
+            packageLine.price_origin_label = agreement.originLabel;
+            total = agreement.price;
+        } else {
+            const pricelist = this.pricelist_id;
+            packageLine.fixed_price_locked = false;
+            total = product.product_tmpl_id.getPrice(pricelist, 1, 0, false, product);
+            const rule = findPricelistRule(pricelist, product, 1);
+            packageLine.price_origin = rule ? "pricelist" : "list";
+            packageLine.price_origin_label = pricelistOriginLabel(pricelist, rule);
+            if (!packageLine.promo_reward_id && packageLine.pricing_rule_type !== "manual") {
+                writeDiscountAgreement(packageLine, agreement);
+            }
+        }
+
+        const { freeLines, extraLines, packageQty } = splitComboLines(packageLine);
+        const prices = distributeComboPrice({
+            total,
+            packageQty,
+            freeLines,
+            extraLines,
+            rounding: this.currency,
+        });
+        for (const [itemLine, price] of prices) {
+            this._writeLinePrice(itemLine, price);
+            itemLine.price_origin = "combo";
+            itemLine.price_origin_label = comboItemPriceLabel(packageLine, itemLine);
+        }
+        this.syncComboItems(packageLine);
+    },
+
+    /** Copia a los productos del combo el descuento y el badge de su paquete. */
+    syncComboItems(packageLine) {
+        const values = comboItemAgreementValues(packageLine);
+        for (const itemLine of packageLine.combo_line_ids || []) {
+            if (!isComboItem(itemLine)) {
+                continue;
+            }
+            Object.assign(itemLine, values);
+            itemLine.promo_reward_id = false;
+        }
     },
 
     _refreshTintedBaseAgreement(line, agreement) {
@@ -195,9 +254,32 @@ patch(PosOrder.prototype, {
     },
 });
 
+/** Aviso de por qué no se teclea el precio de una línea de combo, o `null`. */
+function comboPriceLockMessage(line) {
+    if (isComboItem(line)) {
+        return _t(
+            "No se puede cambiar el precio de «%(product)s»: es parte del combo «%(package)s» y su precio sale del reparto del paquete. Cambia el precio o el descuento en el paquete.",
+            {
+                product: line.product_id?.display_name || "",
+                package: line.combo_parent_id?.product_id?.display_name || "",
+            }
+        );
+    }
+    if (isComboPackage(line)) {
+        return _t("El precio de un combo es el reparto de sus productos: no se teclea.");
+    }
+    return null;
+}
+
 patch(OrderSummary.prototype, {
     /** Precio tecleado: queda manual solo si cambió, como `_onchange_price_unit_manual`. */
     async setLinePrice(line, price) {
+        const lockMessage = comboPriceLockMessage(line);
+        if (lockMessage) {
+            this.numberBuffer.reset();
+            this.pos.notification.add(lockMessage, { type: "warning" });
+            return;
+        }
         const previousPrice = line.price_unit;
         const previousType = line.price_type;
         const result = await super.setLinePrice(...arguments);

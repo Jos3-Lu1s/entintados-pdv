@@ -92,8 +92,10 @@ describe("entintados_pdv: promotion_rules", () => {
             reembolso: line(regular, { refunded_orderline_id: 9 }),
             colorante: line(colorant),
             "producto de un combo": line(regular, { combo_parent_id: { id: 7 } }),
-            "paquete de combo": line(product(5, { type: "combo" })),
-            "paquete con productos": line(regular, { combo_line_ids: [line(product(6))] }),
+            "paquete de combo con precio fijo": line(product(5, { type: "combo" }), {
+                pricing_rule_type: "fixed_price",
+                fixed_price_locked: true,
+            }),
             "recompensa nativa": line(regular, { is_reward_line: true }),
             "recompensa por reward_id": line(regular, { reward_id: { id: 1 } }),
             "precio fijo": line(regular, { pricing_rule_type: "fixed_price" }),
@@ -111,6 +113,44 @@ describe("entintados_pdv: promotion_rules", () => {
         });
         expect(admitsLinePromotion(tintedBase)).toBe(true);
         expect(admitsLinePromotion(line(regular))).toBe(true);
+        expect(admitsLinePromotion(line(product(5, { type: "combo" })))).toBe(true);
+    });
+
+    test("el dominio specific se evalúa contra el producto combo, no contra sus productos", () => {
+        const paint = product(1);
+        const comboProduct = product(5, { type: "combo" });
+        const promo = program(1, {
+            rewards: [
+                { id: 1, discount: 20, discount_applicability: "specific", all_discount_product_ids: [paint] },
+                { id: 2, discount: 15, discount_applicability: "specific", all_discount_product_ids: [comboProduct] },
+            ],
+        });
+        const packageLine = line(comboProduct, { untaxed: 0 });
+        const paintItem = line(paint, { combo_parent_id: packageLine, combo_item_id: { id: 3 } });
+        packageLine.combo_line_ids = [paintItem];
+        const rewards = lineRewards(order([packageLine, paintItem], [promo]));
+
+        expect(rewards.get(packageLine).map((reward) => reward.id)).toEqual([2]);
+        expect(rewards.get(paintItem)).toEqual([]);
+    });
+
+    test("el mínimo de un combo en promoción se mide sin el descuento de sus productos", () => {
+        const promo = program(1, { rules: [{ minimum_amount: 950 }] });
+        const reward = { id: 1, program_id: promo };
+        const packageLine = line(product(5, { type: "combo" }), { untaxed: 0, promo_reward_id: reward });
+        const items = [700, 200, 100].map((amount, index) =>
+            line(product(10 + index), {
+                untaxed: amount,
+                discount: 10,
+                combo_parent_id: packageLine,
+                combo_item_id: { id: index + 1 },
+            })
+        );
+        packageLine.combo_line_ids = items;
+        expect(programPoints(order([packageLine, ...items], [promo]), promo)).toBe(1);
+
+        packageLine.promo_reward_id = false;
+        expect(programPoints(order([packageLine, ...items], [promo]), promo)).toBe(null);
     });
 
     test("una recompensa de línea no se ofrece al resto de su esquema", () => {

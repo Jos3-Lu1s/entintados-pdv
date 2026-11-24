@@ -34,14 +34,6 @@ export function isColorant(product) {
     return (product?.tint_role || product?.product_tmpl_id?.tint_role) === "colorant";
 }
 
-function isComboPackage(line) {
-    if (line.product_id?.type === "combo") {
-        return true;
-    }
-    // La base entintada también lleva hijos, pero todos son colorantes.
-    return (line.combo_line_ids || []).some((child) => !isColorant(child.product_id));
-}
-
 export function isAdvanceLine(line) {
     const product = line.product_id;
     if (product?.is_accounting_advance || product?.product_tmpl_id?.is_accounting_advance) {
@@ -66,7 +58,6 @@ export function admitsLinePromotion(line) {
     return !(
         isColorant(line.product_id) ||
         line.combo_parent_id ||
-        isComboPackage(line) ||
         line.is_reward_line ||
         line.reward_id ||
         line.pricing_rule_type === "fixed_price" ||

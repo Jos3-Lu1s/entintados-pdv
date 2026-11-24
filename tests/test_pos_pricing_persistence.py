@@ -71,6 +71,24 @@ class TestPosPricingPersistence(TransactionCase):
             'discount_applicability': 'specific',
             'discount_product_ids': [Command.set(cls.product.ids)],
         })
+        cls.combo_choices = []
+        for name, base_price in (('Pintura', 500.0), ('Rodillo', 150.0), ('Brocha', 50.0)):
+            product = cls._create_product(f'{name} combo precios')
+            combo = cls.env['product.combo'].create({
+                'name': f'{name} precios',
+                'base_price': base_price,
+                'combo_item_ids': [Command.create({'product_id': product.id})],
+            })
+            cls.combo_choices.append((product, combo))
+        cls.combo_product = cls.env['product.product'].create({
+            'name': 'Paquete combo precios',
+            'type': 'combo',
+            'list_price': 1000.0,
+            'available_in_pos': True,
+            'taxes_id': [Command.clear()],
+            'combo_ids': [Command.set([combo.id for _product, combo in cls.combo_choices])],
+        })
+
         cls.amount_reward = cls.env['loyalty.reward'].create({
             'program_id': cls.program.id,
             'reward_type': 'discount',
@@ -137,6 +155,19 @@ class TestPosPricingPersistence(TransactionCase):
                        price_subtotal=0.0, price_subtotal_incl=0.0, **(colorant_values or {})),
         ]
         return lines, {colorant_uuid: {'combo_parent_id': base_uuid}}
+
+    def _combo(self, package_values=None, item_values=None):
+        """Paquete de combo con sus tres productos, como lo envía la caja."""
+        package_uuid = str(uuid4())
+        lines = [self._line(self.combo_product, package_uuid, price_unit=0.0, price_subtotal=0.0,
+                            price_subtotal_incl=0.0, **(package_values or {}))]
+        mapping = {}
+        item_values = item_values or [{}] * len(self.combo_choices)
+        for (product, combo), values in zip(self.combo_choices, item_values):
+            item_uuid = str(uuid4())
+            lines.append(self._line(product, item_uuid, combo_item_id=combo.combo_item_ids.id, **values))
+            mapping[item_uuid] = {'combo_parent_id': package_uuid}
+        return lines, mapping
 
     def _create_order(self, line_values, **order_values):
         return self.env['pos.order'].create({
@@ -255,6 +286,53 @@ class TestPosPricingPersistence(TransactionCase):
         colorant_line = order.lines.filtered(lambda line: line.product_id == self.colorant)
         self.assertEqual(colorant_line.combo_parent_id.product_id, self.base)
         self.assertEqual(colorant_line.discount, 10.0)
+
+    # --- Combos (C4 y C7) -----------------------------------------------
+
+    def test_combo_items_with_package_promotion_accepted(self):
+        promo = {'discount': 20.0, 'pricing_rule_type': 'promo', 'pricing_rule_origin': '↳ Promo · 20%'}
+        lines, mapping = self._combo(
+            package_values={'discount': 20.0, 'pricing_rule_type': 'promo',
+                            'pricing_rule_origin': 'Promo · 20%', 'promo_reward_id': self.line_reward.id},
+            item_values=[promo] * 3,
+        )
+        order = self._sync(lines, mapping)
+        package = order.lines.filtered(lambda line: line.product_id == self.combo_product)
+        items = order.lines - package
+        self.assertEqual(package.promo_reward_id, self.line_reward)
+        self.assertEqual(items.combo_parent_id, package)
+        self.assertEqual(set(items.mapped('pricing_rule_type')), {'promo'})
+        self.assertFalse(items.promo_reward_id)
+
+    def test_combo_fixed_price_accepted(self):
+        fixed = {'discount': 0.0, 'pricing_rule_type': 'fixed_price', 'pricing_rule_origin': '↳ Precio fijo',
+                 'price_origin': 'combo'}
+        lines, mapping = self._combo(
+            package_values={'pricing_rule_type': 'fixed_price', 'pricing_rule_origin': 'Precio fijo',
+                            'price_origin': 'fixed_price'},
+            item_values=[dict(fixed, price_unit=price) for price in (142.86, 42.86, 14.28)],
+        )
+        order = self._sync(lines, mapping)
+        items = order.lines.filtered('combo_item_id')
+        self.assertEqual(items.mapped('price_unit'), [142.86, 42.86, 14.28])
+        self.assertEqual(set(items.mapped('price_origin')), {'combo'})
+
+    def test_rejects_combo_item_with_own_discount(self):
+        agreement = {'discount': 15.0, 'pricing_rule_type': 'product', 'pricing_rule_origin': '↳ Producto · 15%'}
+        lines, mapping = self._combo(
+            package_values={'discount': 15.0, 'pricing_rule_type': 'product',
+                            'pricing_rule_origin': 'Producto · 15%'},
+            item_values=[dict(agreement, discount=10.0), agreement, agreement],
+        )
+        with self.assertRaisesRegex(UserError, 'no lleva el descuento de su paquete'):
+            self._sync(lines, mapping)
+
+    def test_rejects_combo_item_with_own_rule_type(self):
+        lines, mapping = self._combo(item_values=[
+            {'pricing_rule_type': 'product', 'pricing_rule_origin': 'Producto · 0%'}, {}, {},
+        ])
+        with self.assertRaisesRegex(UserError, 'del combo «Paquete combo precios»'):
+            self._sync(lines, mapping)
 
     # --- Carga a la caja ------------------------------------------------
 
