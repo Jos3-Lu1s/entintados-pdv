@@ -3,19 +3,30 @@ import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_p
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
+import { formatCurrency } from "@web/core/currency";
+import { promoHintLines } from "@entintados_pdv/common/promo_hint_rows";
 import { agreementForLine } from "@entintados_pdv/app/utils/pricing_rules";
 import {
-    admitsLinePromotion,
     availablePromotionRewards,
+    linePromotionInfo,
     lineRewards,
+    promotionLineCount,
 } from "@entintados_pdv/app/utils/promotion_rules";
 
 const sameRecord = (a, b) => Boolean(a && b && (a.id ?? a) === (b.id ?? b));
 
-function rewardLabel(reward, applied) {
-    const target = reward.reward_target_label ? ` · ${reward.reward_target_label}` : "";
-    const scope = reward.discount_applicability === "order" ? " [Orden]" : "";
-    return `${reward.program_id?.name || ""}${scope} - ${reward.discount}%${target}${applied ? " ✓" : ""}`;
+/** Texto de una promoción, el mismo que la estrella: `Programa · Objetivo - 20 % (todo el pedido)`. */
+function rewardText(reward) {
+    const option = {
+        reward_id: reward.id,
+        name: reward.program_id?.name || "",
+        target: reward.reward_target_label || "",
+        discount: reward.discount,
+        difference: 0,
+        applied: false,
+        scope: reward.discount_applicability,
+    };
+    return promoHintLines({ options: [option], fallback: false }, _t, String)[0].text;
 }
 
 /** Destino de «Sin promoción»: el acuerdo vigente de la línea, como el selector de Ventas. */
@@ -33,51 +44,75 @@ function removeLinePromotion(order, line) {
 }
 
 patch(Orderline.prototype, {
+    /** La estrella sale solo si la línea tiene algo que ofrecer o informar, como en Ventas. */
     canHavePromotion(line) {
-        return admitsLinePromotion(line);
+        return Boolean(linePromotionInfo(line.order_id, line));
+    },
+
+    isPromotionStarFilled(line) {
+        const info = linePromotionInfo(line.order_id, line);
+        return Boolean(info?.options?.some((option) => option.applied));
     },
 
     getPromotionButtonTitle(line) {
-        if (line.promo_reward_id) {
-            return _t("Promoción aplicada: %s. Clic para cambiar o quitar.", line.pricing_rule_origin || "");
+        const info = linePromotionInfo(line.order_id, line);
+        if (info?.from_package) {
+            return _t("Promoción del paquete");
         }
-        return _t("Ver y asignar promociones disponibles para esta partida.");
+        if (line.promo_reward_id) {
+            return _t(
+                "Promoción aplicada: %s. Toca para cambiarla o quitarla.",
+                line.pricing_rule_origin || ""
+            );
+        }
+        return _t("Promociones disponibles para esta línea.");
     },
 
     async onSelectLinePromotion(line) {
         const order = line.order_id;
         const { dialog, notification, pos } = this.env.services;
-        const rewards = [...(lineRewards(order).get(line) || [])];
-        if (line.promo_reward_id && !rewards.some((reward) => sameRecord(reward, line.promo_reward_id))) {
-            rewards.unshift(line.promo_reward_id);
-        }
-        const list = rewards.map((reward) => ({
-            id: reward.id,
-            label: rewardLabel(reward, sameRecord(reward, line.promo_reward_id)),
-            item: { reward },
-        }));
-        if (line.promo_reward_id) {
-            const isOrderPromo = sameRecord(line.promo_reward_id, order.order_promo_reward_id);
-            list.unshift({
-                id: "remove_line_promo",
-                label: isOrderPromo
-                    ? _t("Sin promoción: quitar promoción de la orden (vuelve a %s)", fallbackLabel(order, line))
-                    : _t("Sin promoción: vuelve a %s", fallbackLabel(order, line)),
-                item: { remove: true },
-            });
-        }
-        if (!list.length) {
-            notification.add(_t("No hay promociones disponibles para esta partida."), { type: "info" });
+        const info = linePromotionInfo(order, line);
+        if (info?.from_package) {
+            const packageLine = line.combo_parent_id;
+            notification.add(
+                _t(
+                    "Promoción del paquete «%(package)s»: %(badge)s. Se cambia en el paquete.",
+                    {
+                        package: packageLine.product_id?.name || packageLine.product_id?.display_name || "",
+                        badge: packageLine.pricing_rule_origin || "",
+                    }
+                ),
+                { type: "info" }
+            );
             return;
+        }
+        const rows = promoHintLines(info, _t, (amount) => formatCurrency(amount, order.currency.id));
+        if (!rows.length) {
+            notification.add(_t("No hay promociones disponibles para esta línea."), { type: "info" });
+            return;
+        }
+        const rewards = [...(lineRewards(order).get(line) || [])];
+        if (line.promo_reward_id) {
+            rewards.push(line.promo_reward_id);
         }
         dialog.add(SelectionPopup, {
             title: _t("Promociones para %s", line.getFullProductName?.() || line.product_id?.display_name || ""),
-            list,
-            getPayload: (selected) => {
-                if (selected?.remove) {
+            list: rows.map((row) => ({
+                id: row.key,
+                label: row.text,
+                description: row.detail,
+                isSelected: row.applied,
+                item: row,
+            })),
+            getPayload: (row) => {
+                if (!row || row.applied) {
+                    return;
+                }
+                if (!row.rewardId) {
                     removeLinePromotion(order, line);
-                } else if (selected?.reward && !sameRecord(selected.reward, line.promo_reward_id)) {
-                    const result = order.applyLinePromotion(line, selected.reward);
+                } else {
+                    const reward = rewards.find((item) => sameRecord(item, row.rewardId));
+                    const result = reward ? order.applyLinePromotion(line, reward) : true;
                     if (result !== true) {
                         notification.add(result, { type: "warning" });
                     }
@@ -94,6 +129,12 @@ patch(Orderline.prototype, {
 });
 
 patch(ControlButtons.prototype, {
+    /** Líneas con promociones disponibles sin aplicar: el `(N)` del botón de promociones. */
+    get promotionLineCount() {
+        const order = this.pos.getOrder();
+        return order ? promotionLineCount(order) : 0;
+    },
+
     /** Recompensas nativas del core más las promociones por línea y de pedido de la caja. */
     async clickRewards() {
         const order = this.pos.getOrder();
@@ -102,43 +143,49 @@ patch(ControlButtons.prototype, {
         const list = this.getPotentialRewards().map((item) => ({
             id: item.reward.id,
             label: item.reward.program_id.name,
-            description: `Add "${item.reward.description}"`,
+            description: _t("Agregar «%s»", item.reward.description),
             item: { native: item },
         }));
 
         for (const reward of promotions) {
-            const applied =
-                sameRecord(selectedLine?.promo_reward_id, reward) ||
-                sameRecord(order.order_promo_reward_id, reward);
-            list.push({ id: `promo_${reward.id}`, label: rewardLabel(reward, applied), item: { reward } });
+            list.push({
+                id: `promo_${reward.id}`,
+                label: rewardText(reward),
+                isSelected:
+                    sameRecord(selectedLine?.promo_reward_id, reward) ||
+                    sameRecord(order.order_promo_reward_id, reward),
+                item: { reward },
+            });
         }
         if (promotions.length) {
             list.unshift({
                 id: "apply_best_promos",
-                label: _t("⚡ Aplicar mejores promociones"),
-                description: _t("Aplica la mejor promoción global o por partida si mejora el descuento actual"),
+                label: _t("Aplicar mejores promociones"),
+                description: _t(
+                    "Aplica la mejor promoción de pedido o, si no hay, la mejor de cada línea cuando mejora su descuento."
+                ),
                 item: { best: true },
             });
         }
         if (order?.order_promo_reward_id) {
             list.unshift({
                 id: "remove_order_promo",
-                label: _t("Sin promoción: quitar promoción de la orden"),
-                description: _t("Vuelve todas las líneas a sus acuerdos vigentes"),
+                label: _t("Quitar la promoción del pedido"),
+                description: _t("Todas las líneas vuelven a su acuerdo."),
                 item: { removeOrder: true },
             });
         } else if (selectedLine?.promo_reward_id) {
             list.unshift({
                 id: "remove_selected_line_promo",
                 label: _t("Sin promoción: vuelve a %s", fallbackLabel(order, selectedLine)),
-                description: _t("Quitar promoción de la línea seleccionada"),
+                description: _t("Quita la promoción de la línea seleccionada."),
                 item: { removeLine: selectedLine },
             });
         } else if (order?.getOrderlines().some((line) => line.promo_reward_id)) {
             list.push({
                 id: "remove_all_line_promos",
-                label: _t("Sin promoción: quitar promociones del pedido"),
-                description: _t("Vuelve todas las líneas a sus acuerdos vigentes"),
+                label: _t("Sin promoción en todo el pedido"),
+                description: _t("Todas las líneas vuelven a su acuerdo."),
                 item: { removeAll: true },
             });
         }
@@ -147,7 +194,7 @@ patch(ControlButtons.prototype, {
         }
 
         this.dialog.add(SelectionPopup, {
-            title: _t("Available rewards"),
+            title: _t("Promociones y recompensas"),
             list,
             getPayload: (selected) => {
                 if (!selected) {
@@ -162,7 +209,7 @@ patch(ControlButtons.prototype, {
                     const changed = order.applyBestLinePromotions();
                     this.notification.add(
                         changed.length
-                            ? _t("Se aplicó la mejor promoción en %s partida(s).", changed.length)
+                            ? _t("Se aplicó la mejor promoción en %s línea(s).", changed.length)
                             : _t("Ninguna promoción disponible mejora el descuento actual de las líneas."),
                         { type: changed.length ? "success" : "info" }
                     );

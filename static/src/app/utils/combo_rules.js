@@ -64,13 +64,43 @@ function basePrice(line) {
     return Number(line.combo_item_id?.combo_id?.base_price || 0);
 }
 
-/** `extra_price` del producto en el combo más el `price_extra` de sus atributos. */
-function extraCharges(line) {
-    const attributes = (line.attribute_value_ids || []).reduce(
+/** `price_extra` de los atributos del producto. */
+function attributesExtra(line) {
+    return (line.attribute_value_ids || []).reduce(
         (total, value) => total + Number(value?.price_extra || 0),
         0
     );
-    return Number(line.combo_item_id?.extra_price || 0) + attributes;
+}
+
+/** `extra_price` del producto en el combo más el `price_extra` de sus atributos. */
+function extraCharges(line) {
+    return Number(line.combo_item_id?.extra_price || 0) + attributesExtra(line);
+}
+
+/**
+ * Parte del precio del paquete de cada producto incluido: su referencia (`base_price` por la
+ * cantidad por paquete), la parte redondeada y, en el último, el ajuste que absorbe el residuo.
+ * Es el cálculo que comparten el reparto y su desglose.
+ */
+function comboShares({ total, packageQty = 1, freeLines = [], rounding }) {
+    const round = (value) => (rounding ? rounding.round(value) : value);
+    const amount = Number(total) || 0;
+    const referenceTotal = freeLines.reduce(
+        (sum, line) => sum + basePrice(line) * quantityPerPackage(line, packageQty),
+        0
+    );
+    let remaining = amount;
+    return {
+        referenceTotal,
+        shares: freeLines.map((line, index) => {
+            const reference = basePrice(line) * quantityPerPackage(line, packageQty);
+            const share = referenceTotal ? round((basePrice(line) * amount) / referenceTotal) : 0;
+            remaining -= share * quantityPerPackage(line, packageQty);
+            // El último incluido absorbe el residuo del redondeo.
+            const adjustment = index === freeLines.length - 1 ? round(round(share + remaining) - share) : 0;
+            return { line, reference, share, adjustment };
+        }),
+    };
 }
 
 /**
@@ -87,22 +117,11 @@ function extraCharges(line) {
  */
 export function distributeComboPrice({ total, packageQty = 1, freeLines = [], extraLines = [], rounding }) {
     const round = (value) => (rounding ? rounding.round(value) : value);
-    const amount = Number(total) || 0;
     const prices = new Map();
-    const referenceTotal = freeLines.reduce(
-        (sum, line) => sum + basePrice(line) * quantityPerPackage(line, packageQty),
-        0
-    );
-    let remaining = amount;
-    freeLines.forEach((line, index) => {
-        let price = referenceTotal ? round((basePrice(line) * amount) / referenceTotal) : 0;
-        remaining -= price * quantityPerPackage(line, packageQty);
-        // El último incluido absorbe el residuo del redondeo.
-        if (index === freeLines.length - 1) {
-            price = round(price + remaining);
-        }
-        prices.set(line, price + extraCharges(line));
-    });
+    const { shares } = comboShares({ total, packageQty, freeLines, rounding });
+    for (const { line, share, adjustment } of shares) {
+        prices.set(line, (adjustment ? round(share + adjustment) : share) + extraCharges(line));
+    }
     for (const line of extraLines) {
         prices.set(line, round(basePrice(line)) + extraCharges(line));
     }
@@ -125,4 +144,88 @@ export function comboItemPriceLabel(packageLine, itemLine) {
     const packageName = packageLine.product_id?.name || packageLine.product_id?.display_name || "";
     const comboName = itemLine.combo_item_id?.combo_id?.name || "";
     return `Parte del combo «${packageName}»: ${comboName}`;
+}
+
+/** La opción más barata del grupo, la que Ventas toma como referencia. */
+function referenceProductName(combo) {
+    const items = combo?.combo_item_ids || [];
+    let cheapest = null;
+    for (const comboItem of items) {
+        if (!cheapest || Number(comboItem.product_id?.lst_price || 0) < Number(cheapest.product_id?.lst_price || 0)) {
+            cheapest = comboItem;
+        }
+    }
+    return cheapest?.product_id?.display_name || "";
+}
+
+/**
+ * Desglose del precio del paquete, con la forma de `buildComboBreakdown` de Ventas para usar su
+ * plantilla: precio que se reparte (tarifa o precio fijo), parte de cada producto incluido con su
+ * ajuste por redondeo y descuento heredado del paquete.
+ *
+ * @param {Object} packageLine - Línea del paquete.
+ * @param {Object} context
+ * @param {number} context.pricelistPrice - Precio de tarifa de un paquete.
+ * @param {{ originLabel: string, price: number }|null} context.agreement - Acuerdo de precio fijo
+ *        vigente del paquete, o nada si el paquete no está en precio fijo.
+ * @param {string} context.packagePriceOrigin - `Tarifa: <tarifa>` o `Precio de venta`.
+ * @param {{ round: (value: number) => number }} [context.rounding] - Moneda de la caja.
+ * @param {(value: number) => string} context.formatMoney
+ * @param {(value: number) => string} context.formatNumber
+ */
+export function comboBreakdown(packageLine, context) {
+    const { pricelistPrice = 0, agreement = null, packagePriceOrigin = "", rounding } = context;
+    const money = context.formatMoney;
+    const number = context.formatNumber;
+    const { freeLines, extraLines, packageQty } = splitComboLines(packageLine);
+    const items = [...freeLines, ...extraLines];
+    if (!items.length) {
+        return { empty: true };
+    }
+    const total = agreement ? Number(agreement.price) || 0 : Number(pricelistPrice) || 0;
+    const { referenceTotal, shares } = comboShares({ total, packageQty, freeLines, rounding });
+    const discounted = (line) => line.price_unit * (1 - (Number(line.discount) || 0) / 100);
+    const perPackage = (line, amount) => amount * quantityPerPackage(line, packageQty);
+
+    const groups = shares.map(({ line, reference, share, adjustment }) => {
+        const combo = line.combo_item_id?.combo_id;
+        const extraPrice = Number(line.combo_item_id?.extra_price || 0);
+        const attributes = attributesExtra(line);
+        return {
+            name: combo?.name || "",
+            referenceProduct: referenceProductName(combo),
+            formula: `${number(reference)} / ${number(referenceTotal)} × ${number(total)} = ${number(share)}`,
+            adjustment: adjustment
+                ? `${number(share)} ${adjustment < 0 ? "−" : "+"} ${number(Math.abs(adjustment))} = ${number(
+                      share + adjustment
+                  )}`
+                : false,
+            chosenProduct: line.product_id?.display_name || line.product_id?.name || "",
+            extraPrice: extraPrice ? money(extraPrice) : false,
+            attributesExtra: attributes ? money(attributes) : false,
+            unitPrice: money(line.price_unit),
+            // El precio de un producto del combo no se teclea en la caja.
+            manualPrice: false,
+            discount: Number(line.discount)
+                ? `${money(line.price_unit)} − ${number(Number(line.discount))} % = ${money(discounted(line))}`
+                : false,
+        };
+    });
+    const hasDiscount = items.some((line) => Number(line.discount));
+    return {
+        empty: false,
+        pricelistPrice: money(pricelistPrice),
+        packagePriceOrigin,
+        agreement: agreement ? { label: agreement.originLabel, price: money(agreement.price) } : false,
+        distributedPrice: money(total),
+        referenceSum: `${shares.map(({ reference }) => number(reference)).join(" + ")} = ${number(referenceTotal)}`,
+        groups,
+        packageTotal: money(items.reduce((sum, line) => sum + perPackage(line, line.price_unit), 0)),
+        discountOrigin: hasDiscount ? packageLine.pricing_rule_origin || "" : false,
+        packageTotalDiscounted: hasDiscount
+            ? money(items.reduce((sum, line) => sum + perPackage(line, discounted(line)), 0))
+            : false,
+        quantity: number(packageQty),
+        quantityTotal: money(items.reduce((sum, line) => sum + (Number(line.priceExcl) || 0), 0)),
+    };
 }

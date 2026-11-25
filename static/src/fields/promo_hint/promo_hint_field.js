@@ -5,7 +5,8 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { formatMonetary } from "@web/views/fields/formatters";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
-import { promoHintLines, resolveLineRecord } from "./promo_hint_text";
+import { promoHintLines } from "@entintados_pdv/common/promo_hint_rows";
+import { resolveLineRecord } from "./promo_hint_text";
 
 export class PromoHintPopover extends Component {
     static template = "entintados_pdv.PromoHintPopover";

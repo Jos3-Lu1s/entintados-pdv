@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@odoo/hoot";
 import {
+    comboBreakdown,
     comboItemAgreementValues,
     comboItemPriceLabel,
     distributeComboPrice,
@@ -42,6 +43,32 @@ function distribute(packageLine, total) {
     const { freeLines, extraLines, packageQty } = splitComboLines(packageLine);
     const prices = distributeComboPrice({ total, packageQty, freeLines, extraLines, rounding });
     return packageLine.combo_line_ids.map((line) => prices.get(line));
+}
+
+// Precios ya repartidos por la capa de precios, como los deja `_refreshComboPricing`.
+function pricedPackage(prices, { qty = 1, discount = 0, origin = "" } = {}) {
+    const items = [PAINT, ROLLER, BRUSH].map((comboRecord, index) => ({
+        ...item(comboRecord, { qty }),
+        price_unit: prices[index],
+        discount,
+        priceExcl: prices[index] * qty * (1 - discount / 100),
+    }));
+    return { ...comboPackage(qty, items), pricing_rule_origin: origin };
+}
+
+const money = (value) => `$ ${Number(value).toFixed(2)}`;
+const number = (value) => (Number.isInteger(value) ? String(value) : value.toFixed(2));
+
+function breakdown(packageLine, context = {}) {
+    return comboBreakdown(packageLine, {
+        pricelistPrice: 1000,
+        agreement: null,
+        packagePriceOrigin: "Precio de venta",
+        rounding,
+        formatMoney: money,
+        formatNumber: number,
+        ...context,
+    });
 }
 
 describe("entintados_pdv: combo_rules", () => {
@@ -141,5 +168,70 @@ describe("entintados_pdv: combo_rules", () => {
         expect(isComboItem(colorant)).toBe(false);
         expect(isComboPackage(comboPackage(1, []))).toBe(true);
         expect(isComboItem(item(PAINT))).toBe(true);
+    });
+    test("desglose del precio de tarifa: fórmulas, ajuste y totales", () => {
+        const result = breakdown(pricedPackage([714.29, 214.29, 71.42]));
+        expect(result.empty).toBe(false);
+        expect(result.agreement).toBe(false);
+        expect(result.pricelistPrice).toBe("$ 1000.00");
+        expect(result.distributedPrice).toBe("$ 1000.00");
+        expect(result.referenceSum).toBe("500 + 150 + 50 = 700");
+        expect(result.groups.map((group) => group.formula)).toEqual([
+            "500 / 700 × 1000 = 714.29",
+            "150 / 700 × 1000 = 214.29",
+            "50 / 700 × 1000 = 71.43",
+        ]);
+        expect(result.groups.map((group) => group.adjustment)).toEqual([false, false, "71.43 − 0.01 = 71.42"]);
+        expect(result.groups.map((group) => group.unitPrice)).toEqual(["$ 714.29", "$ 214.29", "$ 71.42"]);
+        expect(result.packageTotal).toBe("$ 1000.00");
+        expect(result.quantity).toBe("1");
+        expect(result.quantityTotal).toBe("$ 1000.00");
+        expect(result.discountOrigin).toBe(false);
+        expect(result.groups.every((group) => group.manualPrice === false)).toBe(true);
+    });
+
+    test("desglose con precio fijo: se reparte el acuerdo", () => {
+        const result = breakdown(pricedPackage([142.86, 42.86, 14.28]), {
+            agreement: { originLabel: "Precio fijo", price: 200 },
+        });
+        expect(result.agreement).toEqual({ label: "Precio fijo", price: "$ 200.00" });
+        expect(result.distributedPrice).toBe("$ 200.00");
+        expect(result.groups.map((group) => group.formula)).toEqual([
+            "500 / 700 × 200 = 142.86",
+            "150 / 700 × 200 = 42.86",
+            "50 / 700 × 200 = 14.29",
+        ]);
+        expect(result.groups[2].adjustment).toBe("14.29 − 0.01 = 14.28");
+        expect(result.packageTotal).toBe("$ 200.00");
+    });
+
+    test("la referencia del grupo es la opción más barata", () => {
+        const options = [
+            { product_id: { display_name: "Pintura Premium", lst_price: 800 } },
+            { product_id: { display_name: "Pintura Económica", lst_price: 500 } },
+        ];
+        const packageLine = pricedPackage([714.29, 214.29, 71.42]);
+        packageLine.combo_line_ids[0].combo_item_id.combo_id = { ...PAINT, combo_item_ids: options };
+        expect(breakdown(packageLine).groups[0].referenceProduct).toBe("Pintura Económica");
+    });
+
+    test("descuento del paquete en cada producto", () => {
+        const result = breakdown(pricedPackage([714.29, 214.29, 71.42], { discount: 15, origin: "Producto · 15%" }));
+        expect(result.discountOrigin).toBe("Producto · 15%");
+        expect(result.groups[0].discount).toBe("$ 714.29 − 15 % = $ 607.15");
+        expect(result.packageTotalDiscounted).toBe("$ 850.00");
+        expect(result.quantityTotal).toBe("$ 850.00");
+    });
+
+    test("con 3 paquetes el desglose es por paquete", () => {
+        const result = breakdown(pricedPackage([714.29, 214.29, 71.42], { qty: 3 }));
+        expect(result.groups[0].formula).toBe("500 / 700 × 1000 = 714.29");
+        expect(result.packageTotal).toBe("$ 1000.00");
+        expect(result.quantity).toBe("3");
+        expect(result.quantityTotal).toBe("$ 3000.00");
+    });
+
+    test("sin productos no hay desglose", () => {
+        expect(breakdown(comboPackage(1, []))).toEqual({ empty: true });
     });
 });
