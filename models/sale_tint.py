@@ -32,14 +32,17 @@ class SaleOrder(models.Model):
             'context': {'default_order_id': self.id},
         }
 
-    def _tint_component_price(self, product, uom=None):
-        """Card price in the sale UoM/currency, with the normal fiscal-position mapping."""
+    def _tint_sale_price(self, product, price, uom=None):
+        """Company-currency price converted to the sale UoM/currency, with the fiscal-position mapping."""
         self.ensure_one()
-        product = product.with_company(self.company_id)
         return product._get_tax_included_unit_price(
             self.company_id, self.currency_id, self.date_order.date(), 'sale',
-            product_uom=uom or product.uom_id, product_price_unit=product.lst_price,
+            product_uom=uom or product.uom_id, product_price_unit=price,
             product_currency=self.company_id.currency_id, fiscal_position=self.fiscal_position_id)
+
+    def _tint_component_price(self, product, uom=None):
+        product = product.with_company(self.company_id)
+        return self._tint_sale_price(product, product.lst_price, uom)
 
     def _tint_unit_price(self, formula, base):
         self.ensure_one()
@@ -49,10 +52,7 @@ class SaleOrder(models.Model):
             dose.colorant_id.uom_id._compute_price(
                 dose.colorant_id.with_company(self.company_id).lst_price, point) * dose.points
             for dose in formula.line_ids)
-        return base._get_tax_included_unit_price(
-            self.company_id, self.currency_id, self.date_order.date(), 'sale',
-            product_price_unit=price, product_currency=self.company_id.currency_id,
-            fiscal_position=self.fiscal_position_id)
+        return self._tint_sale_price(base, price)
 
     def _tint_base_description(self, snapshot):
         self.ensure_one()
@@ -72,7 +72,7 @@ class SaleOrder(models.Model):
         point = self.env.ref('entintados_pdv.uom_tint_point')
         for order in self:
             points = {}
-            for line in order.order_line.filtered(lambda line: line.product_id and line._tint_recipe().get('base_only')):
+            for line in order.order_line._tint_lines():
                 pending = max(line.product_uom_qty - line.qty_delivered, 0)
                 for dose in line._tint_recipe()['doses']:
                     points[dose['product_id']] = points.get(dose['product_id'], 0) + dose['points'] * pending
@@ -110,7 +110,6 @@ class SaleOrder(models.Model):
             'name': '%s — %s — %s' % (formula.color_id.display_name, base.display_name, formula.size_id.display_name),
             'formula_id': formula.id, 'currency_id': self.currency_id.id,
             'base_id': base.id, 'unit_price': self._tint_unit_price(formula, base),
-            'base_unit_price': self._tint_component_price(base),
             'base_only': True, 'color_name': formula.color_id.name, 'color_code': formula.color_id.code,
             'size_name': formula.size_id.display_name,
             'doses': [],
