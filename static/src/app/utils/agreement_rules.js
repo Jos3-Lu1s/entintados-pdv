@@ -5,7 +5,7 @@ import { formatOriginBadge } from "@entintados_pdv/app/utils/origin_badge";
 /** Leyenda del acuerdo de precio fijo, igual que `FIXED_PRICE_LABEL` de Ventas. */
 export const FIXED_PRICE_LABEL = "Precio fijo";
 
-function recordId(value) {
+export function recordId(value) {
     return value?.id ?? value ?? false;
 }
 
