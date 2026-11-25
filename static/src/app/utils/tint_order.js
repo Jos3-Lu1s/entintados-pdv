@@ -1,7 +1,6 @@
 
 import { _t } from "@web/core/l10n/translation";
-import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
-import { resolveAgreement } from "@entintados_pdv/app/utils/agreement_rules";
+import { recordId, resolveAgreement } from "@entintados_pdv/app/utils/agreement_rules";
 
 /**
  * Utilidades para transformar fórmulas y bases en líneas de orden enlazadas (padre e hijas de colorante).
@@ -9,6 +8,8 @@ import { resolveAgreement } from "@entintados_pdv/app/utils/agreement_rules";
 
 // Colorantes ya advertidos por falta de precio en la sesión actual.
 const _warnedColorantsWithoutPrice = new Set();
+
+const NO_RANGE = Object.freeze({ priceMin: 0, priceMax: 0, priceOsel: 0, hasRange: false });
 
 /** Obtiene el precio de venta por punto del colorante. */
 export function colorantPointPrice(colorant) {
@@ -38,7 +39,7 @@ export function formulaDoses(pos, formula) {
     return [...(formula?.line_ids || [])]
         .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
         .map((line) => {
-            const colorantId = line.colorant_id?.id ?? line.colorant_id;
+            const colorantId = recordId(line.colorant_id);
             const colorant = pos.models["product.product"].get(colorantId);
             return {
                 id: line.id,
@@ -54,55 +55,41 @@ export function formulaDoses(pos, formula) {
         .filter((dose) => dose.colorant && dose.points > 0);
 }
 
-/** Calcula el precio total de los colorantes de una fórmula. */
-export function formulaColorantPrice(pos, formula) {
-    return formulaDoses(pos, formula).reduce(
-        (acc, dose) => acc + dose.points * colorantPointPrice(dose.colorant),
-        0
-    );
-}
-
 /** Obtiene la regla de rango mínimo/máximo configurada para la base y presentación. */
 export function resolvePresentationRange(pos, baseProduct) {
-    if (!baseProduct || !pos?.models?.["lines.product.presentation"]) {
-        return { priceMin: 0, priceMax: 0, priceOsel: 0, hasRange: false };
-    }
-    const tmpl = baseProduct.product_tmpl_id || baseProduct;
-    const lineId = tmpl.lines_product_id?.id ?? tmpl.lines_product_id;
-    const sizeId = tmpl.tint_size_id?.id ?? tmpl.tint_size_id;
-
-    if (!lineId || !sizeId) {
-        return { priceMin: 0, priceMax: 0, priceOsel: 0, hasRange: false };
-    }
-
-    const presentations = pos.models["lines.product.presentation"].getAll?.() || [];
-    const match = presentations.find((p) => {
-        const pLineId = p.line_id?.id ?? p.line_id;
-        const pSizeId = p.presentation_id?.id ?? p.presentation_id;
-        return pLineId === lineId && pSizeId === sizeId;
-    });
-
+    const presentations = pos?.models?.["lines.product.presentation"];
+    const tmpl = baseProduct?.product_tmpl_id || baseProduct;
+    const lineId = recordId(tmpl?.lines_product_id);
+    const sizeId = recordId(tmpl?.tint_size_id);
+    const match =
+        presentations &&
+        lineId &&
+        sizeId &&
+        (presentations.getAll?.() || []).find(
+            (p) => recordId(p.line_id) === lineId && recordId(p.presentation_id) === sizeId
+        );
     if (!match) {
-        return { priceMin: 0, priceMax: 0, priceOsel: 0, hasRange: false };
+        return NO_RANGE;
     }
-
     const priceMin = match.price_min || 0;
     const priceMax = match.price_max || 0;
     const priceOsel = match.price_osel || 0;
-    return {
-        priceMin,
-        priceMax,
-        priceOsel,
-        hasRange: priceMin > 0 || priceMax > 0,
-    };
+    return { priceMin, priceMax, priceOsel, hasRange: priceMin > 0 || priceMax > 0 };
 }
 
 /**
  * Calcula los detalles completos del precio entintado (teórico, acotado y estado de rango).
  * Si el cliente tiene un precio fijo acordado para la base, este sustituye el precio base
  * y se le suman los colorantes dispensados sin acotamiento forzado de rango.
+ * `doses` permite reutilizar las dosis que el llamador ya calculó.
  */
-export function computeTintedPriceDetails(pos, baseProduct, formula, partner = null) {
+export function computeTintedPriceDetails(
+    pos,
+    baseProduct,
+    formula,
+    partner = null,
+    doses = formulaDoses(pos, formula)
+) {
     let basePrice =
         baseProduct?.lst_price ?? baseProduct?.product_tmpl_id?.list_price ?? 0;
 
@@ -115,7 +102,10 @@ export function computeTintedPriceDetails(pos, baseProduct, formula, partner = n
         }
     }
 
-    const colorantsPrice = formulaColorantPrice(pos, formula);
+    const colorantsPrice = doses.reduce(
+        (acc, dose) => acc + dose.points * colorantPointPrice(dose.colorant),
+        0
+    );
     const theoreticalPrice = basePrice + colorantsPrice;
     const range = resolvePresentationRange(pos, baseProduct);
 
@@ -143,11 +133,6 @@ export function computeTintedPriceDetails(pos, baseProduct, formula, partner = n
     };
 }
 
-/** Calcula el precio total del producto entintado aplicando las reglas de acotamiento de rango. */
-export function computeTintedPrice(pos, baseProduct, formula, partner = null) {
-    return computeTintedPriceDetails(pos, baseProduct, formula, partner).finalPrice;
-}
-
 /** Calcula los litros a extraer según el porcentaje de extracción de la base. */
 export function extractionLiters(baseType, size) {
     if (!baseType?.requires_extraction || !size) {
@@ -167,29 +152,6 @@ export function buildCustomerNote({ color }) {
         code: colorCode,
         name: colorName,
     });
-}
-
-/** Genera la receta técnica detallada para uso exclusivo interno (taller / etiqueta de bote). */
-export function buildInternalTechnicalText(pos, { color, baseType, size, formula }) {
-    const doses = formulaDoses(pos, formula);
-    const totalPoints = doses.reduce((acc, dose) => acc + dose.points, 0);
-    const parts = [
-        `${color?.code ? `[${color.code}] ` : ""}${color?.name || ""}`,
-        `${baseType?.code || ""} · ${size?.name || ""}`,
-        ...doses.map((dose) => `${dose.name}: ${formatPoints(dose.points)}`),
-        `Total: ${formatPoints(totalPoints)}`,
-    ];
-    const liters = extractionLiters(baseType, size);
-    if (liters) {
-        parts.push(_t("Extraer %s L antes de entintar", liters.toFixed(1)));
-    }
-    return parts.join(" | ");
-}
-
-/** Genera el texto resumen para la nota pública de la línea (mantiene confidencialidad). */
-export function buildSummaryText(pos, { color, baseType, size, formula }) {
-    const gallery = formula?.gallery_id;
-    return buildCustomerNote({ color, gallery });
 }
 
 /**
@@ -219,13 +181,17 @@ export async function addTintedBaseToOrder(
         (pos.models["product.pricelist"]?.getAll?.()?.[0]) ||
         false;
 
-    const partner = order.get_partner?.() || order.partner_id;
-    const baseTmpl = baseProduct.product_tmpl_id;
-    const priceDetails = computeTintedPriceDetails(pos, baseProduct, formula, partner);
-    const finalUnitPrice = priceDetails.finalPrice;
+    const doses = formulaDoses(pos, formula);
+    const { finalPrice: finalUnitPrice } = computeTintedPriceDetails(
+        pos,
+        baseProduct,
+        formula,
+        order.getPartner(),
+        doses
+    );
 
     // Las líneas hijas representan el consumo físico de colorante para inventario a $0.00 comercial.
-    const comboLines = formulaDoses(pos, formula).map((dose) => [
+    const comboLines = doses.map((dose) => [
         "create",
         {
             product_id: dose.colorant,
@@ -245,7 +211,7 @@ export async function addTintedBaseToOrder(
     // Cotiza y agrega la base con el precio consolidado final.
     const parent = await pos.addLineToCurrentOrder(
         {
-            product_tmpl_id: baseTmpl,
+            product_tmpl_id: baseProduct.product_tmpl_id,
             product_id: baseProduct,
             qty,
             price_unit: finalUnitPrice,
@@ -262,34 +228,17 @@ export async function addTintedBaseToOrder(
 
     if (parent) {
         parent.is_tinted_base = true;
-        if (parent.combo_line_ids) {
-            const doses = formulaDoses(pos, formula);
-            parent.combo_line_ids.forEach((child, index) => {
-                child.is_tint_colorant = true;
-                if (child.unit_points === undefined || child.unit_points === null) {
-                    child.unit_points = doses[index]?.points ?? (qty ? child.qty / qty : 0);
-                }
-            });
-        }
+        parent.combo_line_ids?.forEach((child, index) => {
+            child.is_tint_colorant = true;
+            child.unit_points ??= doses[index]?.points ?? tintDose(child, parent);
+        });
         parent.setUnitPrice(finalUnitPrice);
         parent.price_type = "manual";
         parent.manual_price = true;
-
-        parent.price_origin = "tint";
-        parent.price_origin_label = "Precio del entintado: base más colorantes";
-
-        const rule = resolveAgreement(pos?.models, partner, baseProduct, { currency: pos?.currency });
-        if (rule.type === "fixed_price") {
-            parent.fixed_price_locked = true;
-            parent.setDiscount(0);
-        } else if (rule.type === "discount" && rule.discount > 0) {
-            parent.setDiscount(rule.discount);
-        }
-
-        const gallery = formula?.gallery_id;
-        parent.setCustomerNote(
-            buildCustomerNote({ color, gallery })
-        );
+        parent.setCustomerNote(buildCustomerNote({ color }));
+        // Con la línea ya marcada como entintado, el acuerdo y el origen del precio los
+        // aplica `_refreshTintedBaseAgreement`, igual que en cualquier otro cambio del pedido.
+        order.refreshOrderPricing();
     }
     return parent;
 }

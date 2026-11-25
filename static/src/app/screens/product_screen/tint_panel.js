@@ -6,7 +6,6 @@ import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { formatPoints } from "@entintados_pdv/app/utils/tint_points";
 import {
-    computeTintedPrice,
     computeTintedPriceDetails,
     formulaDoses,
 } from "@entintados_pdv/app/utils/tint_order";
@@ -533,7 +532,7 @@ export class TintPanel extends Component {
 
     buildCard(formula, baseProduct) {
         const doses = formulaDoses(this.pos, formula);
-        const priceDetails = computeTintedPriceDetails(this.pos, baseProduct, formula);
+        const priceDetails = computeTintedPriceDetails(this.pos, baseProduct, formula, null, doses);
         const defaultCode = baseProduct.default_code || baseProduct.product_tmpl_id?.default_code || "";
         return {
             key: `${formula.id}-${baseProduct.id}`,
