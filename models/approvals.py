@@ -1,13 +1,8 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError, UserError
-from odoo.exceptions import RedirectWarning
-
-import logging
-_logger = logging.getLogger(__name__)
+from odoo.exceptions import RedirectWarning, UserError
 
 MATERIAL_OUTPUT_TYPE_XMLID = 'entintados_pdv.picking_type_material_output'
 APPROVAL_CATEGORY_XMLID = 'entintados_pdv.approval_category_salida_material'
-DEPARTMENT_AUDITORIA_XMLID = 'entintados_pdv.hr_department_auditoria'
 APPROVE_MATERIAL_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_material_output'
 
 class Approval(models.Model):
@@ -28,15 +23,9 @@ class ApprovalApprover(models.Model):
     _inherit = 'approval.approver'
 
     def action_approve(self):
-        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
-
         for approver in self:
             request = approver.request_id
-            if (
-                category_salida
-                and request.category_id == category_salida
-                and not request.material_auditor_ids
-            ):
+            if request._is_material_output_request() and not request.material_auditor_ids:
                 action = self.env.ref('entintados_pdv.action_crm_material_auditor_assign_wizard')
                 raise RedirectWarning(
                     _("Antes de aprobar esta solicitud debes asignar uno o más "
@@ -77,8 +66,10 @@ class ApprovalRequest(models.Model):
             if not request.crm_lead_id._can_cancel_demo() and self.env.user not in request.sudo().material_auditor_ids.user_id:
                 raise UserError(_('Solo el jefe del organigrama o los auditores asignados pueden cancelar la demostración.'))
         result = None
-        for request in self:
-            result = super(ApprovalRequest, request.sudo() if request in demos else request).action_cancel()
+        if demos:
+            result = super(ApprovalRequest, demos.sudo()).action_cancel()
+        if self - demos:
+            result = super(ApprovalRequest, self - demos).action_cancel()
         self.filtered(lambda request: request.request_status == 'cancel').crm_lead_id._mark_demo_lost(
             _('Cancelación de la aprobación de la demostración.'))
         return result
@@ -98,7 +89,7 @@ class ApprovalRequest(models.Model):
     def _reject_demo(self):
         self.ensure_one()
         request = self.sudo()
-        pickings = request.picking_ids | request.generated_picking_id
+        pickings = request._get_material_pickings()
         if pickings.filtered(lambda picking: picking.state == 'done'):
             raise UserError(_('No puedes rechazar una demostración cuya salida ya fue realizada.'))
         action = self.crm_lead_id._return_demo_for_correction(self)
@@ -164,19 +155,23 @@ class ApprovalRequest(models.Model):
              "la salida de material generada a partir de esta solicitud.",
     )
 
+    def _is_material_output_request(self):
+        """Solicitudes de ``self`` que pertenecen a la categoría de salida de material."""
+        category = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
+        return self.filtered(lambda request: category and request.category_id == category)
+
+    def _get_material_pickings(self):
+        self.ensure_one()
+        return self.picking_ids | self.generated_picking_id
+
     @api.depends('generated_picking_id', 'picking_ids')
     def _compute_picking_count(self):
         for request in self:
-            pickings = request.picking_ids
-            if request.generated_picking_id:
-                pickings = pickings | request.generated_picking_id
-            request.picking_count = len(pickings)
+            request.picking_count = len(request._get_material_pickings())
 
     def action_view_picking(self):
         self.ensure_one()
-        pickings = self.picking_ids
-        if self.generated_picking_id:
-            pickings = pickings | self.generated_picking_id
+        pickings = self._get_material_pickings()
         if not pickings:
             return False
         if len(pickings) == 1:
@@ -185,7 +180,7 @@ class ApprovalRequest(models.Model):
                 'name': _('Salida de Almacén'),
                 'res_model': 'stock.picking',
                 'view_mode': 'form',
-                'res_id': pickings[0].id if isinstance(pickings, list) else pickings.id,
+                'res_id': pickings.id,
                 'target': 'current',
             }
         return {
@@ -197,54 +192,19 @@ class ApprovalRequest(models.Model):
             'target': 'current',
         }
     
-    @api.depends('request_status', 'category_id')
-    def _compute_check_material_output(self):
-        """No calcula ningún campo visible: solo usa @api.depends como disparador.
-        Se apoya en 'generated_picking_id' como guarda de idempotencia."""
-        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
-        for request in self:
-            if (
-                request.request_status == 'approved'
-                and not request.generated_picking_id
-                and not self.env.context.get('skip_material_picking_trigger')
-                and category_salida
-                and request.category_id == category_salida
-            ):
-                request.sudo()._create_material_picking()
-
-    _material_output_trigger = fields.Boolean(
-        compute='_compute_check_material_output',
-        store=False,
-    )
-
     def action_approve(self, approver=None):
-        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
-
         # Si es la categoría de salida de material y AÚN no hay auditores
         # asignados, se interrumpe la aprobación y se abre el wizard.
-        if (
-            category_salida
-            and len(self) == 1
-            and self.category_id == category_salida
-            and not self.material_auditor_ids
-        ):
-            return {
-                'type': 'ir.actions.act_window',
-                'res_model': 'crm.material.auditor.assign.wizard',
-                'view_mode': 'form',
-                'target': 'new',
-                'context': {'default_approval_request_id': self.id},
-            }
+        if len(self) == 1 and self._is_material_output_request() and not self.material_auditor_ids:
+            action = self.env['ir.actions.act_window']._for_xml_id(
+                'entintados_pdv.action_crm_material_auditor_assign_wizard')
+            action['context'] = {'default_approval_request_id': self.id}
+            return action
 
         res = super().action_approve(approver=approver)
 
-        for request in self:
-            if (
-                request.request_status == 'approved'
-                and not request.generated_picking_id
-                and category_salida
-                and request.category_id == category_salida
-            ):
+        for request in self._is_material_output_request():
+            if request.request_status == 'approved' and not request.generated_picking_id:
                 # La aprobación la valida el flujo nativo. La salida es una
                 # operación automática: no exige permisos de almacén al aprobador.
                 request.sudo()._create_material_picking()
@@ -252,10 +212,9 @@ class ApprovalRequest(models.Model):
 
     def _create_material_picking(self):
         self.ensure_one()
-        category_salida = self.env.ref(APPROVAL_CATEGORY_XMLID, raise_if_not_found=False)
-        if not category_salida or self.category_id != category_salida:
+        if not self._is_material_output_request():
             return False
-        
+
         if not self.material_auditor_ids:
             raise UserError(_(
                 "No se puede generar la salida de material sin auditores "
@@ -277,69 +236,57 @@ class ApprovalRequest(models.Model):
             return False
 
         lead = self.crm_lead_id
-        partner = self.partner_id or (lead.partner_id if lead else False)
-        origin = self.name or (lead.name if lead else '')
+        partner = self.partner_id or lead.partner_id
 
-        picking_vals = {
+        picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type.id,
             'location_id': self.warehouse_id.id,
-            'origin': origin,
-            'partner_id': partner.id if partner else False,
+            'origin': self.name or lead.name or '',
+            'partner_id': partner.id,
             'approval_request_id': self.id,
-        }
-        if lead:
-            picking_vals['crm_lead_id'] = lead.id
+            'crm_lead_id': lead.id,
+        })
 
-        picking = self.env['stock.picking'].create(picking_vals)
-
-        if lead and lead.material_line_ids:
-            for line in lead.material_line_ids:
-                self.env['stock.move'].create({
-                    'description_picking': line.description or line.product_id.display_name,
-                    'product_id': line.product_id.id,
-                    'product_uom_qty': line.quantity,
-                    'product_uom': line.uom_id.id,
-                    'picking_id': picking.id,
-                })
-        elif self.product_line_ids:
-            for line in self.product_line_ids:
-                if not line.product_id:
-                    continue
-                uom_id = line.product_uom_id or line.product_id.uom_id
-                self.env['stock.move'].create({
-                    'description_picking': line.description or line.product_id.display_name,
-                    'product_id': line.product_id.id,
-                    'product_uom_qty': line.quantity or 1.0,
-                    'product_uom': uom_id.id if uom_id else False,
-                    'picking_id': picking.id,
-                })
+        if lead.material_line_ids:
+            move_vals = [{
+                'description_picking': line.description or line.product_id.display_name,
+                'product_id': line.product_id.id,
+                'product_uom_qty': line.quantity,
+                'product_uom': line.uom_id.id,
+                'picking_id': picking.id,
+            } for line in lead.material_line_ids]
+        else:
+            move_vals = [{
+                'description_picking': line.description or line.product_id.display_name,
+                'product_id': line.product_id.id,
+                'product_uom_qty': line.quantity or 1.0,
+                'product_uom': (line.product_uom_id or line.product_id.uom_id).id,
+                'picking_id': picking.id,
+            } for line in self.product_line_ids.filtered('product_id')]
+        self.env['stock.move'].create(move_vals)
 
         picking.action_confirm()
         self.generated_picking_id = picking.id
         self._notify_auditoria_department(picking)
-        
         return picking
-    
+
     def _notify_auditoria_department(self, picking):
-        users = self.material_auditor_ids.mapped('user_id')
-        if not users:
-            return  # defensivo; ya se bloqueó antes en _create_material_picking
-
         activity_type = self.env.ref(APPROVE_MATERIAL_ACTIVITY_XMLID, raise_if_not_found=False)
-
-        for user in users:
+        note = _(
+            'Se generó la salida de material %(picking)s relacionada a la '
+            'oportunidad %(lead)s. Favor de revisar y aprobar.'
+        ) % {
+            'picking': picking.name or picking.id,
+            'lead': self.crm_lead_id.name or '',
+        }
+        deadline = fields.Date.context_today(self)
+        for user in self.material_auditor_ids.user_id:
             picking.activity_schedule(
                 activity_type_id=activity_type.id if activity_type else False,
                 user_id=user.id,
                 summary=activity_type.summary if activity_type else _('Aprobar salida de material'),
-                note=_(
-                    'Se generó la salida de material %(picking)s relacionada a la '
-                    'oportunidad %(lead)s. Favor de revisar y aprobar.'
-                ) % {
-                    'picking': picking.name or picking.id,
-                    'lead': self.crm_lead_id.name if self.crm_lead_id else '',
-                },
-                date_deadline=fields.Date.context_today(self),
+                note=note,
+                date_deadline=deadline,
             )
     
     def action_view_crm_lead(self):
