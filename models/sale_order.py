@@ -90,11 +90,10 @@ class SaleOrder(models.Model):
     @api.depends('company_id')
     @api.depends_context('uid')
     def _compute_edit_locked(self):
-        can_edit_price = self.env.user.has_group('entintados_pdv.group_sale_edit_price_unit')
-        can_edit_discount = self.env.user.has_group('entintados_pdv.group_sale_edit_discount')
         for order in self:
-            order.price_unit_edit_locked = not (order.company_id.sale_price_unit_editable or can_edit_price)
-            order.discount_edit_locked = not (order.company_id.sale_discount_editable or can_edit_discount)
+            rights = self.env.user._get_sale_edit_rights(order.company_id)
+            order.price_unit_edit_locked = not rights['price']
+            order.discount_edit_locked = not rights['discount']
 
     @api.model_create_multi
     def create(self, vals_list):

@@ -32,14 +32,17 @@ class SaleOrder(models.Model):
             'context': {'default_order_id': self.id},
         }
 
-    def _tint_component_price(self, product, uom=None):
-        """Card price in the sale UoM/currency, with the normal fiscal-position mapping."""
+    def _tint_sale_price(self, product, price, uom=None):
+        """Company-currency price converted to the sale UoM/currency, with the fiscal-position mapping."""
         self.ensure_one()
-        product = product.with_company(self.company_id)
         return product._get_tax_included_unit_price(
             self.company_id, self.currency_id, self.date_order.date(), 'sale',
-            product_uom=uom or product.uom_id, product_price_unit=product.lst_price,
+            product_uom=uom or product.uom_id, product_price_unit=price,
             product_currency=self.company_id.currency_id, fiscal_position=self.fiscal_position_id)
+
+    def _tint_component_price(self, product, uom=None):
+        product = product.with_company(self.company_id)
+        return self._tint_sale_price(product, product.lst_price, uom)
 
     def _tint_unit_price(self, formula, base):
         self.ensure_one()
@@ -49,18 +52,7 @@ class SaleOrder(models.Model):
             dose.colorant_id.uom_id._compute_price(
                 dose.colorant_id.with_company(self.company_id).lst_price, point) * dose.points
             for dose in formula.line_ids)
-        return base._get_tax_included_unit_price(
-            self.company_id, self.currency_id, self.date_order.date(), 'sale',
-            product_price_unit=price, product_currency=self.company_id.currency_id,
-            fiscal_position=self.fiscal_position_id)
-
-    def _tint_display_title(self, snapshot):
-        title = _('Entintado: %s') % snapshot.get('color_name', snapshot.get('name', ''))
-        if snapshot.get('color_code'):
-            title += ' [%s]' % snapshot['color_code']
-        if snapshot.get('size_name'):
-            title += ' — %s' % snapshot['size_name']
-        return title
+        return self._tint_sale_price(base, price)
 
     def _tint_base_description(self, snapshot):
         self.ensure_one()
@@ -79,16 +71,16 @@ class SaleOrder(models.Model):
         result = super()._check_stock_availability()
         point = self.env.ref('entintados_pdv.uom_tint_point')
         for order in self:
-            quantities = {}
-            for line in order.order_line.filtered(lambda line: line.product_id and line._tint_recipe().get('base_only')):
+            points = {}
+            for line in order.order_line._tint_lines():
                 pending = max(line.product_uom_qty - line.qty_delivered, 0)
                 for dose in line._tint_recipe()['doses']:
-                    product = self.env['product.product'].browse(dose['product_id'])
-                    quantities[product] = quantities.get(product, 0) + point._compute_quantity(
-                        dose['points'] * pending, product.uom_id, round=False)
-            for product, quantity in quantities.items():
-                available = product.with_company(order.company_id).with_context(
-                    warehouse_id=order.warehouse_id.id, warehouse=order.warehouse_id.id).free_qty
+                    points[dose['product_id']] = points.get(dose['product_id'], 0) + dose['points'] * pending
+            products = self.env['product.product'].browse(list(points)).with_company(order.company_id).with_context(
+                warehouse_id=order.warehouse_id.id, warehouse=order.warehouse_id.id)
+            for product in products:
+                quantity = point._compute_quantity(points[product.id], product.uom_id, round=False)
+                available = product.free_qty
                 if product.uom_id.compare(quantity, available) > 0:
                     raise UserError(_('No hay suficiente colorante para el entintado:\n%s') %
                                     order._stock_shortage_details(product, quantity, available))
@@ -118,7 +110,6 @@ class SaleOrder(models.Model):
             'name': '%s — %s — %s' % (formula.color_id.display_name, base.display_name, formula.size_id.display_name),
             'formula_id': formula.id, 'currency_id': self.currency_id.id,
             'base_id': base.id, 'unit_price': self._tint_unit_price(formula, base),
-            'base_unit_price': self._tint_component_price(base),
             'base_only': True, 'color_name': formula.color_id.name, 'color_code': formula.color_id.code,
             'size_name': formula.size_id.display_name,
             'doses': [],
@@ -132,15 +123,13 @@ class SaleOrder(models.Model):
             snapshot['doses'].append({'product_id': product.id, 'points': dose.points,
                                       'name': product.display_name, 'unit_price': self._tint_component_price(product, point)})
         sequence = max(self.order_line.mapped('sequence') or [0]) + 10
-        base = self.env['product.product'].browse(snapshot['base_id'])
-        values = [{
+        return lines.create({
             'order_id': self.id, 'sequence': sequence, 'product_id': base.id,
             'name': self._tint_base_description(snapshot), 'product_uom_qty': quantity,
             'product_uom_id': base.uom_id.id, 'price_unit': snapshot['unit_price'],
             'discount': 0, 'tint_snapshot': snapshot, 'tint_container_qty': quantity,
             'price_origin': 'tint', 'technical_price_unit': snapshot['unit_price'],
-        }]
-        return lines.create(values).with_env(self.env)
+        }).with_env(self.env)
 
 
 class SaleOrderLine(models.Model):
@@ -216,16 +205,15 @@ class SaleOrderLine(models.Model):
             'difference': difference(discount),
         }
 
-    def _tint_saved_component_price(self):
-        self.ensure_one()
-        return self._tint_recipe()['unit_price']
+    def _tint_lines(self):
+        return self.filtered(lambda line: line.product_id and line.tint_snapshot)
 
     @api.depends('tint_snapshot')
     def _compute_price_unit(self):
-        tinted = self.filtered(lambda line: line.product_id and line._tint_recipe())
+        tinted = self._tint_lines()
         super(SaleOrderLine, self - tinted)._compute_price_unit()
         for line in tinted.with_context(_tint_operation=_TINT_OPERATION):
-            line.price_unit = line._tint_saved_component_price()
+            line.price_unit = line._tint_recipe()['unit_price']
             line.technical_price_unit = line.price_unit
             line.price_origin = 'tint'
             line.price_origin_label = _('Precio del entintado: base más colorantes')
@@ -234,18 +222,12 @@ class SaleOrderLine(models.Model):
 
     @api.depends('tint_snapshot')
     def _compute_discount(self):
-        tinted = self.filtered(lambda line: line.product_id and line._tint_recipe())
+        tinted = self._tint_lines()
         super(SaleOrderLine, self - tinted)._compute_discount()
         for line in tinted.with_context(_tint_operation=_TINT_OPERATION):
-            if line.promo_reward_id:
-                # La promoción elegida se conserva; la reevaluación la quita si deja de proceder.
-                line.update(line._line_promotion_values(line.promo_reward_id))
-                continue
-            line.discount = line._tint_own_discount()
-            line.technical_discount = line.discount
-            line.pricing_rule_type = 'none'
-            line.pricing_rule_origin = False
-            line.pricing_rule_id = False
+            # La promoción elegida se conserva; la reevaluación la quita si deja de proceder.
+            line.update(line._line_promotion_values(line.promo_reward_id) if line.promo_reward_id
+                        else line._promotion_fallback_values())
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -264,8 +246,7 @@ class SaleOrderLine(models.Model):
         return super().write(vals)
 
     def unlink(self):
-        flat = self.filtered(lambda line: line.product_id and line.tint_snapshot)
-        if flat.filtered(lambda line: line.state not in ('draft', 'sent', 'cancel') or line.qty_invoiced or line.qty_delivered):
+        if self._tint_lines().filtered(lambda line: line.state not in ('draft', 'sent', 'cancel') or line.qty_invoiced or line.qty_delivered):
             raise ValidationError(_('No se puede eliminar una base entintada confirmada o con movimientos.'))
         return super().unlink()
 

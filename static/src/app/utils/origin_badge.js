@@ -6,6 +6,9 @@
 
 export const BADGE_SEPARATOR = " · ";
 
+/** Marca del producto de combo que copia el badge de su paquete. */
+export const COMBO_ORIGIN_PREFIX = "↳ ";
+
 /** Decimales de la precisión `Discount`. */
 const DISCOUNT_DIGITS = 2;
 

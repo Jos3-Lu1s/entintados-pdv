@@ -3,7 +3,7 @@ import logging
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
-from odoo.tools import float_is_zero, float_round
+from odoo.tools import float_compare, float_is_zero, float_round
 
 _logger = logging.getLogger(__name__)
 
@@ -83,9 +83,10 @@ class PosOrder(models.Model):
     def _check_pricing_coherence(self):
         """Rechaza líneas cuyo acuerdo, promoción o descuento no pueden darse juntos.
 
-        Solo revisa los datos de la propia línea: el pedido ya está cobrado y el acuerdo vigente
-        pudo cambiar después de cargar la caja. El descuento de un colorante no se revisa: el core
-        le copia el de su base entintada y el colorante vale 0.
+        Solo revisa los datos de la propia línea (y, en un producto de combo, los de su paquete): el
+        pedido ya está cobrado y el acuerdo vigente pudo cambiar después de cargar la caja. El
+        descuento de un colorante no se revisa: el core le copia el de su base entintada y el
+        colorante vale 0. El producto de un combo lleva el descuento y el acuerdo de su paquete.
         """
         digits = self.env['decimal.precision'].precision_get('Discount')
         for order in self:
@@ -110,6 +111,16 @@ class PosOrder(models.Model):
                         "El colorante «%(product)s» del pedido %(order)s no lleva acuerdo ni promoción: "
                         "el entintado se cobra en su base.", **values,
                     ))
+                package = line.combo_item_id and line.combo_parent_id
+                if package and (
+                    float_compare(line.discount, package.discount, precision_digits=digits)
+                    or (line.pricing_rule_type or 'none') != (package.pricing_rule_type or 'none')
+                ):
+                    raise UserError(_(
+                        "El producto «%(product)s» del combo «%(package)s» en el pedido %(order)s "
+                        "no lleva el descuento de su paquete.",
+                        package=package.product_id.display_name, **values,
+                    ))
                 if line.promo_reward_id and not line.promo_reward_id._is_line_promotion():
                     raise UserError(_(
                         "La recompensa «%(reward)s» de la línea «%(product)s» no es una promoción por línea.",
@@ -119,7 +130,10 @@ class PosOrder(models.Model):
                     raise UserError(_(
                         "La línea «%(product)s» del pedido %(order)s no admite promociones.", **values,
                     ))
-                if line.pricing_rule_type == 'promo' and not line.promo_reward_id and not line.reward_id:
+                # El producto de un combo copia la promoción que guarda su paquete.
+                inherits_promotion = package and package.promo_reward_id
+                if (line.pricing_rule_type == 'promo' and not line.promo_reward_id
+                        and not line.reward_id and not inherits_promotion):
                     raise UserError(_(
                         "La línea «%(product)s» del pedido %(order)s indica una promoción que no trae.",
                         **values,

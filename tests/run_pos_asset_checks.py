@@ -23,7 +23,7 @@ def checks(env):
     from odoo.exceptions import UserError
     base = Path('/usr/lib/python3/dist-packages/odoo/addons/point_of_sale/static/src/app/screens')
     for path, expression in [
-        ('ticket_screen/ticket_screen.xml', "//ActionpadWidget[@actionToTrigger.bind='onClickRefund']"),
+        ('ticket_screen/ticket_screen.xml', "//ActionpadWidget[@actionToTrigger.bind='onDoRefund']"),
         ('product_screen/control_buttons/control_buttons.xml', "//button[contains(@t-on-click, 'clickRefund')]"),
     ]:
         assert etree.parse(str(base / path)).xpath(expression), 'Refund button XPath no longer matches native POS'

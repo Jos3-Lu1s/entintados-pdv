@@ -14,3 +14,5 @@ backups/
 migrations/
 *.md
 .archify/
+tmp/
+.worktrees/

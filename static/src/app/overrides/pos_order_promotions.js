@@ -3,6 +3,7 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { formatOriginBadge } from "@entintados_pdv/app/utils/origin_badge";
 import { agreementForLine } from "@entintados_pdv/app/utils/pricing_rules";
+import { isComboPackage } from "@entintados_pdv/app/utils/combo_rules";
 import {
     availablePromotionRewards,
     bestPromotionPlan,
@@ -33,10 +34,21 @@ patch(PosOrder.prototype, {
         line.pricing_rule_origin = formatOriginBadge(reward.program_id?.name, reward.discount);
         line.pricing_rule_id = false;
         line.promo_reward_id = reward;
+        if (isComboPackage(line)) {
+            this.syncComboItems(line);
+        }
     },
 
     /** Vuelve la línea a su acuerdo vigente, como `_promotion_fallback_values` de Ventas. */
     _writePromotionFallback(line) {
+        if (isComboPackage(line)) {
+            // El paquete vuelve a su acuerdo con el cálculo del combo: un precio fijo se
+            // reparte entre sus productos y nunca se escribe en el paquete.
+            line.promo_reward_id = false;
+            this._writeNoAgreement(line);
+            this._refreshComboPricing(line, this.getPartner(), false);
+            return;
+        }
         const rule = agreementForLine(this, line);
         line.promo_reward_id = false;
         line.pricing_rule_id = rule.rule || false;
@@ -44,12 +56,7 @@ patch(PosOrder.prototype, {
             line.discount = 0;
             line.pricing_rule_type = "fixed_price";
             line.pricing_rule_origin = rule.originLabel || "";
-            line._entintadosSettingPrice = true;
-            try {
-                line.setUnitPrice(rule.price);
-            } finally {
-                delete line._entintadosSettingPrice;
-            }
+            line.setUnitPrice(rule.price);
             line.price_type = "manual";
             line.fixed_price_locked = true;
             line.price_origin = "fixed_price";
@@ -63,6 +70,13 @@ patch(PosOrder.prototype, {
             line.pricing_rule_type = "none";
             line.pricing_rule_origin = "";
         }
+    },
+
+    _writeNoAgreement(line) {
+        line.discount = 0;
+        line.pricing_rule_type = "none";
+        line.pricing_rule_origin = "";
+        line.pricing_rule_id = false;
     },
 
     /**

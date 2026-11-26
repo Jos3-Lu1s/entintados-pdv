@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- El botón de recompensas dice «Promociones» y cuenta las líneas con promociones sin aplicar, como en Ventas. -->
+    <t t-name="entintados_pdv.ControlButtons" t-inherit="pos_loyalty.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//button[@t-on-click='() => this.clickRewards()']" position="replace">
+            <button class="control-button"
+                t-att-class="buttonClass"
+                t-attf-class="{{state.nbrRewards ? 'highlight' : 'disabled'}}"
+                t-on-click="() => this.clickRewards()">
+                <i class="fa fa-star me-1 text-favourite"/>Promociones<span t-if="promotionLineCount" class="o-promotion-line-count ms-1">(<t t-esc="promotionLineCount"/>)</span>
+            </button>
+        </xpath>
+    </t>
+</templates>

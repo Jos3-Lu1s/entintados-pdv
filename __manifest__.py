@@ -37,7 +37,7 @@ Catálogo de entintado
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'contacts', 'account', 'account_reports', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos'],
+    'depends': ['base', 'contacts', 'account', 'account_reports', 'l10n_mx_edi', 'l10n_mx_edi_sale', 'portal', 'product', 'point_of_sale', 'pos_sale', 'pos_settle_due', 'sale', 'sale_stock', 'sale_crm', 'sale_management', 'purchase', 'crm', 'phone_validation', 'hr', 'mail', 'calendar','sale_loyalty', 'approvals', 'stock', 'pos_loyalty', 'l10n_mx_edi_pos', 'pos_hr'],
 
     "assets": {
         "point_of_sale._assets_pos": [
@@ -74,8 +74,14 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/components/tint_formula_popup/tint_formula_popup.xml",
             "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.js",
             "entintados_pdv/static/src/app/components/tint_create_color_popup/tint_create_color_popup.xml",
+            # Desglose del combo: la plantilla es la de Ventas
+            "entintados_pdv/static/src/app/components/combo_breakdown_popover/combo_breakdown_popover.js",
+            "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.xml",
             # Modelos del POS
             "entintados_pdv/static/src/app/models/tint_models.js",
+            # Módulos comunes con Ventas
+            "entintados_pdv/static/src/common/promo_hint_rows.js",
+            "entintados_pdv/static/src/common/price_origin_display.js",
             # Utilidades
             "entintados_pdv/static/src/app/utils/tint_points.js",
             "entintados_pdv/static/src/app/utils/pos_stock.js",
@@ -83,7 +89,10 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/agreement_rules.js",
             "entintados_pdv/static/src/app/utils/pricelist_rules.js",
             "entintados_pdv/static/src/app/utils/origin_badge.js",
+            "entintados_pdv/static/src/app/utils/combo_rules.js",
+            "entintados_pdv/static/src/app/utils/price_origin.js",
             "entintados_pdv/static/src/app/utils/promotion_rules.js",
+            "entintados_pdv/static/src/app/utils/cashier_permissions.js",
             "entintados_pdv/static/src/app/utils/tint_order.js",
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             "entintados_pdv/static/src/app/utils/invoice_options.js",
@@ -110,8 +119,12 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
             "entintados_pdv/static/src/app/overrides/pos_order_pricing.js",
             "entintados_pdv/static/src/app/overrides/pos_order_promotions.js",
+            # Después de los parches de las entradas del teclado (pos_store, pos_order_line,
+            # pos_order_pricing y advance_line_lock): así el permiso se revisa primero.
+            "entintados_pdv/static/src/app/overrides/cashier_permissions.js",
             "entintados_pdv/static/src/app/overrides/native_rewards.js",
             "entintados_pdv/static/src/app/overrides/promotion_selector.js",
+            "entintados_pdv/static/src/app/overrides/control_buttons.xml",
             "entintados_pdv/static/src/app/overrides/orderline.js",
             "entintados_pdv/static/src/app/overrides/orderline.xml",
             "entintados_pdv/static/src/app/overrides/control_buttons/tint_control_button.js",
@@ -152,6 +165,9 @@ Catálogo de entintado
             # Widget de campo del backend (usado en la vista de res.partner)
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.js",
             "entintados_pdv/static/src/fields/contact_type_selector/contact_type_selector_field.xml",
+            # Módulos comunes con la caja
+            "entintados_pdv/static/src/common/promo_hint_rows.js",
+            "entintados_pdv/static/src/common/price_origin_display.js",
             # Desglose del reparto del precio de un combo en las líneas de venta
             "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.js",
             "entintados_pdv/static/src/fields/combo_breakdown/combo_breakdown_popover.xml",
@@ -238,7 +254,6 @@ Catálogo de entintado
         'report/invoice_tint.xml',
         'report/invoice_mat.xml',
         'report/sale_quotation.xml',
-        'views/sale_tint_stock_views.xml',
         'views/purchase_order_views.xml',
         'views/branch_purchase_request_views.xml',
         'views/osel_operation_controls_views.xml',

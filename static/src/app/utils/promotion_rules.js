@@ -6,6 +6,8 @@
  */
 
 import { _t } from "@web/core/l10n/translation";
+import { isComboItem } from "@entintados_pdv/app/utils/combo_rules";
+import { agreementForLine } from "@entintados_pdv/app/utils/pricing_rules";
 
 const { DateTime } = luxon;
 
@@ -34,14 +36,6 @@ export function isColorant(product) {
     return (product?.tint_role || product?.product_tmpl_id?.tint_role) === "colorant";
 }
 
-function isComboPackage(line) {
-    if (line.product_id?.type === "combo") {
-        return true;
-    }
-    // La base entintada también lleva hijos, pero todos son colorantes.
-    return (line.combo_line_ids || []).some((child) => !isColorant(child.product_id));
-}
-
 export function isAdvanceLine(line) {
     const product = line.product_id;
     if (product?.is_accounting_advance || product?.product_tmpl_id?.is_accounting_advance) {
@@ -66,7 +60,6 @@ export function admitsLinePromotion(line) {
     return !(
         isColorant(line.product_id) ||
         line.combo_parent_id ||
-        isComboPackage(line) ||
         line.is_reward_line ||
         line.reward_id ||
         line.pricing_rule_type === "fixed_price" ||
@@ -317,4 +310,91 @@ export function lossReason(order, line, reward, now = DateTime.now()) {
         }
     }
     return orderLossReason(order, reward, now);
+}
+
+function promotionOption(reward, difference, applied) {
+    return {
+        reward_id: reward.id,
+        name: reward.program_id?.name || "",
+        target: reward.reward_target_label || "",
+        discount: reward.discount,
+        difference,
+        applied,
+        scope: reward.discount_applicability,
+    };
+}
+
+/** La línea y sus hijas: el paquete de un combo vale 0 y su importe es el de sus productos. */
+function linesWithPrice(line) {
+    return [line, ...(line.combo_line_ids || [])];
+}
+
+/**
+ * Lo que la estrella de la línea ofrece, con la forma de `promo_available_info` de Ventas
+ * (`_compute_promo_available`): una opción por promoción con cuánto cambia el importe y, con
+ * una aplicada, la vuelta al acuerdo vigente. `false` si la línea no tiene nada que ofrecer.
+ *
+ * @param {Object} order
+ * @param {Object} line
+ * @param {Object} [options]
+ * @param {Map} [options.rewardsByLine] - `lineRewards(order)` ya calculado.
+ * @param {(order: Object, line: Object) => Object} [options.agreementFor] - Acuerdo vigente.
+ */
+export function linePromotionInfo(order, line, options = {}) {
+    const { rewardsByLine = null, agreementFor = agreementForLine, ...rewardOptions } = options;
+    if (isComboItem(line)) {
+        // Un producto del combo solo informa la promoción de su paquete: se elige allá.
+        const packageReward = line.combo_parent_id?.promo_reward_id;
+        return packageReward
+            ? { options: [promotionOption(packageReward, 0, true)], fallback: false, from_package: true }
+            : false;
+    }
+    const applied = line.promo_reward_id || false;
+    const offered = (rewardsByLine || lineRewards(order, rewardOptions)).get(line) || [];
+    const rewards = offered.filter((reward) => idOf(reward) !== idOf(applied));
+    if (!rewards.length && !applied) {
+        return false;
+    }
+    const round = (value) => (order.currency?.round ? order.currency.round(value) : value);
+    const priceLines = linesWithPrice(line);
+    const baseAmount = priceLines.reduce((sum, item) => sum + (Number(item.priceExclNoDiscount) || 0), 0);
+    const currentDiscount = Number(line.discount) || 0;
+    const difference = (discount) => round((baseAmount * ((Number(discount) || 0) - currentDiscount)) / 100);
+
+    const optionsList = sortByDiscount(applied ? [...rewards, applied] : rewards).map((reward) =>
+        promotionOption(reward, difference(reward.discount), idOf(reward) === idOf(applied))
+    );
+    let fallback = false;
+    if (applied) {
+        const agreement = agreementFor(order, line);
+        if (agreement.type === "fixed_price") {
+            const current = priceLines.reduce((sum, item) => sum + (Number(item.priceExcl) || 0), 0);
+            fallback = {
+                label: agreement.originLabel || _t("Precio fijo"),
+                difference: round(current - (Number(agreement.price) || 0) * (Number(line.qty) || 0)),
+            };
+        } else {
+            fallback = {
+                label: (agreement.type === "discount" && agreement.originLabel) || _t("sin acuerdo"),
+                difference: difference(agreement.type === "discount" ? agreement.discount : 0),
+            };
+        }
+        // Quitar la promoción de pedido de una línea la quita de todo el pedido.
+        fallback.scope = idOf(applied) === idOf(order.order_promo_reward_id) ? "order" : "specific";
+    }
+    return { options: optionsList, fallback };
+}
+
+/**
+ * Líneas con alguna promoción disponible distinta de la que ya tienen, como
+ * `promo_available_line_count` de Ventas.
+ */
+export function promotionLineCount(order, options = {}) {
+    let count = 0;
+    for (const [line, rewards] of lineRewards(order, options)) {
+        if (rewards.some((reward) => idOf(reward) !== idOf(line.promo_reward_id))) {
+            count++;
+        }
+    }
+    return count;
 }

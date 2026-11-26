@@ -5,7 +5,7 @@ from odoo.tests.common import TransactionCase, new_test_user, tagged
 
 @tagged('post_install', '-at_install')
 class TestPosPriceDiscountLock(TransactionCase):
-    """Validación de permisos de edición de precio unitario y descuento en el Punto de Venta."""
+    """Permiso de cada cajero para teclear precio y descuento en el Punto de Venta."""
 
     @classmethod
     def setUpClass(cls):
@@ -15,8 +15,23 @@ class TestPosPriceDiscountLock(TransactionCase):
         cls.group_discount = cls.env.ref('entintados_pdv.group_sale_edit_discount')
         base_groups = 'point_of_sale.group_pos_user,sales_team.group_sale_salesman'
         cls.cashier = new_test_user(cls.env, login='pos_cashier_lock', groups=base_groups)
+        cls.supervisor = new_test_user(cls.env, login='pos_supervisor_lock', groups=base_groups)
         cls.pos_config = cls.env['pos.config'].create({
             'name': 'TPV Control Precios Test',
+            'company_id': cls.company.id,
+        })
+        cls.employee_supervisor = cls.env['hr.employee'].create({
+            'name': 'Supervisor Permisos',
+            'company_id': cls.company.id,
+            'user_id': cls.supervisor.id,
+        })
+        cls.employee_cashier = cls.env['hr.employee'].create({
+            'name': 'Cajero Permisos',
+            'company_id': cls.company.id,
+            'user_id': cls.cashier.id,
+        })
+        cls.employee_without_user = cls.env['hr.employee'].create({
+            'name': 'Cajero Sin Usuario',
             'company_id': cls.company.id,
         })
 
@@ -33,58 +48,71 @@ class TestPosPriceDiscountLock(TransactionCase):
         if discount:
             user.group_ids |= self.group_discount
 
-    def test_pos_config_user_permissions_truth_table(self):
-        """Verifica el cálculo de user_can_edit_price y user_can_edit_discount en pos.config."""
-        pos_config = self.pos_config.with_user(self.cashier)
+    def _user_rights(self, user):
+        Users = self.env['res.users'].with_user(user)
+        record = Users._load_pos_data_read(user.with_user(user), self.pos_config)[0]
+        return record['_can_edit_price'], record['_can_edit_discount']
 
-        # Matriz para precio: (company_editable, has_group, expected_can_edit)
+    def _employee_rights(self, employee):
+        Employees = self.env['hr.employee'].with_user(self.cashier)
+        records = Employees._load_pos_data_read(employee.with_user(self.cashier), self.pos_config)
+        record = next(r for r in records if r['id'] == employee.id)
+        return record['_can_edit_price'], record['_can_edit_discount']
+
+    def test_user_rights_truth_table(self):
+        """Flag de compañía × grupo exento → llaves del usuario de la sesión."""
         for editable, exempt, expected in [
             (True, False, True),
             (True, True, True),
             (False, False, False),
             (False, True, True),
         ]:
-            self._set_company_flags(price=editable, discount=True)
-            self._set_user_groups(self.cashier, price=exempt, discount=False)
-            pos_config.invalidate_recordset(['user_can_edit_price', 'sale_price_unit_editable'])
+            self._set_company_flags(price=editable, discount=editable)
+            self._set_user_groups(self.cashier, price=exempt, discount=exempt)
             self.assertEqual(
-                pos_config.user_can_edit_price,
-                expected,
-                f"Fallo en precio con editable={editable}, exempt={exempt}",
+                self._user_rights(self.cashier),
+                (expected, expected),
+                f"Fallo con editable={editable}, exento={exempt}",
             )
 
-        # Matriz para descuento: (company_editable, has_group, expected_can_edit)
-        for editable, exempt, expected in [
-            (True, False, True),
-            (True, True, True),
-            (False, False, False),
-            (False, True, True),
-        ]:
-            self._set_company_flags(price=True, discount=editable)
-            self._set_user_groups(self.cashier, price=False, discount=exempt)
-            pos_config.invalidate_recordset(['user_can_edit_discount', 'sale_discount_editable'])
-            self.assertEqual(
-                pos_config.user_can_edit_discount,
-                expected,
-                f"Fallo en descuento con editable={editable}, exempt={exempt}",
-            )
-
-    def test_load_pos_data_fields_and_read(self):
-        """Verifica que los campos de gobernanza viajen en el payload inicial del TPV."""
-        pos_config = self.pos_config.with_user(self.cashier)
+    def test_user_rights_are_independent(self):
+        """El grupo de precio no da el descuento, ni al revés."""
         self._set_company_flags(price=False, discount=False)
+        self._set_user_groups(self.cashier, price=True, discount=False)
+        self.assertEqual(self._user_rights(self.cashier), (True, False))
         self._set_user_groups(self.cashier, price=False, discount=True)
+        self.assertEqual(self._user_rights(self.cashier), (False, True))
 
-        fields_list = pos_config._load_pos_data_fields(pos_config)
-        self.assertIn('user_can_edit_price', fields_list)
-        self.assertIn('user_can_edit_discount', fields_list)
-        self.assertIn('sale_price_unit_editable', fields_list)
-        self.assertIn('sale_discount_editable', fields_list)
+    def test_employee_rights_follow_user(self):
+        """Cada empleado lleva el permiso de su usuario, aunque lo cargue un cajero sin él."""
+        self._set_company_flags(price=False, discount=False)
+        self._set_user_groups(self.supervisor, price=True, discount=True)
+        self._set_user_groups(self.cashier, price=False, discount=False)
+        self.assertEqual(self._employee_rights(self.employee_supervisor), (True, True))
+        self.assertEqual(self._employee_rights(self.employee_cashier), (False, False))
 
-        read_records = pos_config._load_pos_data_read(pos_config, pos_config)
-        self.assertTrue(read_records)
-        record_data = read_records[0]
-        self.assertFalse(record_data['user_can_edit_price'])
-        self.assertTrue(record_data['user_can_edit_discount'])
-        self.assertFalse(record_data['sale_price_unit_editable'])
-        self.assertFalse(record_data['sale_discount_editable'])
+        self._set_user_groups(self.supervisor, price=True, discount=False)
+        self.assertEqual(self._employee_rights(self.employee_supervisor), (True, False))
+
+    def test_employee_without_user_uses_company(self):
+        """Un empleado sin usuario solo tiene lo que deja abierto la compañía."""
+        for price, discount in [(False, False), (True, False), (False, True), (True, True)]:
+            self._set_company_flags(price=price, discount=discount)
+            self.assertEqual(
+                self._employee_rights(self.employee_without_user),
+                (price, discount),
+                f"Fallo con precio={price}, descuento={discount}",
+            )
+
+    def test_sale_order_edit_locked_unchanged(self):
+        """El bloqueo de Ventas sigue dando lo mismo para las cuatro combinaciones."""
+        for editable, exempt in [(True, False), (True, True), (False, False), (False, True)]:
+            self._set_company_flags(price=editable, discount=editable)
+            self._set_user_groups(self.cashier, price=exempt, discount=exempt)
+            # Pedido en memoria: el cálculo solo lee la compañía y el usuario.
+            order_as_cashier = self.env['sale.order'].with_user(self.cashier).new({
+                'company_id': self.company.id,
+            })
+            locked = not (editable or exempt)
+            self.assertEqual(order_as_cashier.price_unit_edit_locked, locked)
+            self.assertEqual(order_as_cashier.discount_edit_locked, locked)

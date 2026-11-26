@@ -6,6 +6,7 @@ import { formatOriginBadge } from "@entintados_pdv/app/utils/origin_badge";
 import { admitsLinePromotion } from "@entintados_pdv/app/utils/promotion_rules";
 import { agreementForLine } from "@entintados_pdv/app/utils/pricing_rules";
 import { isTintColorant, isTintedBase } from "@entintados_pdv/app/utils/tint_order";
+import { isComboItem, isComboPackage } from "@entintados_pdv/app/utils/combo_rules";
 
 // Más avisos que estos se agrupan en uno solo, como en Ventas.
 const PROMOTION_NOTIFICATION_THRESHOLD = 5;
@@ -20,14 +21,6 @@ patch(PosStore.prototype, {
             default_is_customer: true,
             entintados_partner_scope: "customer",
         };
-    },
-
-    get canEditUnitPrice() {
-        return Boolean(this.config?.user_can_edit_price ?? true);
-    },
-
-    get canEditDiscount() {
-        return Boolean(this.config?.user_can_edit_discount ?? true);
     },
 
     async addLineToCurrentOrder(...args) {
@@ -57,10 +50,13 @@ patch(PosStore.prototype, {
     /**
      * Descuento tecleado, con las reglas de Ventas:
      * 1. con promoción de pedido activa no se cambia;
-     * 2. en un entintado no se teclea: lo dan su acuerdo o su promoción;
+     * 2. en un producto de combo o en un entintado no se teclea: lo dan su paquete, su
+     *    acuerdo o su promoción;
      * 3. el mismo % del acuerdo vigente, en una línea sin promoción, conserva el acuerdo;
      * 4. cualquier otro valor deja la línea manual y le quita la promoción.
-     * Si la caja rechaza el valor (precio fijo o sin permiso), la línea queda como estaba.
+     * En un paquete de combo, sus productos copian el resultado.
+     * Si la línea rechaza el valor (anticipo), queda como estaba. El permiso y el precio fijo
+     * se revisan antes, en `overrides/cashier_permissions.js`.
      */
     async setDiscountFromUI(line, val) {
         const order = line.order_id;
@@ -70,6 +66,19 @@ patch(PosStore.prototype, {
                 _t(
                     "El pedido tiene la promoción %s en todas sus líneas. Quítala del pedido para cambiar el descuento.",
                     orderReward.program_id?.name || ""
+                ),
+                { type: "warning" }
+            );
+            return;
+        }
+        if (isComboItem(line)) {
+            this.notification.add(
+                _t(
+                    "No se puede cambiar el descuento de «%(product)s»: es parte del combo «%(package)s». El descuento se pone en el paquete.",
+                    {
+                        product: line.product_id?.display_name || "",
+                        package: line.combo_parent_id?.product_id?.display_name || "",
+                    }
                 ),
                 { type: "warning" }
             );
@@ -87,7 +96,11 @@ patch(PosStore.prototype, {
         const requested = Number(val) || 0;
         const result = await super.setDiscountFromUI(...arguments);
         const rejected = line.discount === previousDiscount && requested !== previousDiscount;
-        if (rejected || line.fixed_price_locked) {
+        if (rejected) {
+            // El core copia el descuento a los productos del combo antes que al paquete.
+            if (isComboPackage(line)) {
+                order.syncComboItems(line);
+            }
             return result;
         }
         const agreement = agreementForLine(order, line);
@@ -109,6 +122,9 @@ patch(PosStore.prototype, {
             line.pricing_rule_type = "manual";
             line.pricing_rule_origin = formatOriginBadge(_t("Manual"), line.discount);
             line.pricing_rule_id = false;
+        }
+        if (isComboPackage(line)) {
+            order.syncComboItems(line);
         }
         return result;
     },

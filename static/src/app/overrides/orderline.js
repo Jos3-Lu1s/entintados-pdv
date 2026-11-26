@@ -1,53 +1,39 @@
 import { Component } from "@odoo/owl";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
 import { patch } from "@web/core/utils/patch";
-import { _t } from "@web/core/l10n/translation";
 import { formatCurrency } from "@web/core/currency";
+import { formatFloat } from "@web/core/utils/numbers";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { tintedProductName } from "@entintados_pdv/app/utils/tint_order";
-import { findPricelistRule, pricelistOriginLabel } from "@entintados_pdv/app/utils/pricelist_rules";
+import { _t } from "@web/core/l10n/translation";
+import { pricingRuleDisplay } from "@entintados_pdv/common/price_origin_display";
+import { formatOriginBadge } from "@entintados_pdv/app/utils/origin_badge";
+import { priceOriginData } from "@entintados_pdv/app/utils/price_origin";
+import { comboBreakdown, isComboPackage } from "@entintados_pdv/app/utils/combo_rules";
+import { agreementForLine } from "@entintados_pdv/app/utils/pricing_rules";
+import { findPricelistRule } from "@entintados_pdv/app/utils/pricelist_rules";
+import { PosComboBreakdownPopover } from "@entintados_pdv/app/components/combo_breakdown_popover/combo_breakdown_popover";
 
-export const POS_PRICE_ORIGINS = {
-    list: { icon: "fa-tag", color: "text-muted", title: _t("Precio de venta") },
-    pricelist: { icon: "fa-list-alt", color: "text-info", title: _t("Tarifa") },
-    agreement: { icon: "fa-lock", color: "text-success", title: _t("Acuerdo comercial") },
-    fixed_price: { icon: "fa-lock", color: "text-success", title: _t("Precio fijo de acuerdo") },
-    manual: { icon: "fa-pencil", color: "text-warning", title: _t("Manual") },
-    promo: { icon: "fa-star", color: "text-primary", title: _t("Promoción") },
-    combo: { icon: "fa-cubes", color: "text-primary", title: _t("Parte de combo") },
-    tint: { icon: "fa-tint", color: "text-info", title: _t("Entintado") },
-};
+/** Cifras del desglose sin ceros sobrantes en los enteros: `500 / 700 × 1000 = 714.29`. */
+function formatBreakdownNumber(value) {
+    return Number.isInteger(value) ? String(value) : formatFloat(value, { digits: [16, 2] });
+}
 
-export function getPriceOriginData(line) {
-    if (!line) {
-        return null;
-    }
-    const originKey = line.price_origin || (line.fixed_price_locked ? "fixed_price" : "list");
-    const config = POS_PRICE_ORIGINS[originKey] || POS_PRICE_ORIGINS.list;
-    const detail = line.price_origin_label || (
-        originKey === "list" ? _t("Precio de venta del producto") :
-        originKey === "manual" ? _t("Modificado de forma manual") :
-        originKey === "fixed_price" ? (line.pricing_rule_origin || _t("Precio fijo")) :
-        originKey === "pricelist" ? (
-            line.order_id?.pricelist_id
-                ? pricelistOriginLabel(
-                    line.order_id.pricelist_id,
-                    findPricelistRule(line.order_id.pricelist_id, line.product_id, line.getQuantity())
-                )
-                : _t("Precio determinado por tarifa activa")
-        ) :
-        originKey === "tint" ? _t("Precio del entintado: base más colorantes") :
-        originKey === "combo" ? _t("Parte de combo") :
-        originKey === "promo" ? _t("Regalo de promoción") :
-        line.pricing_rule_origin || config.title
-    );
-    return {
-        key: originKey,
-        icon: config.icon,
-        color: config.color,
-        title: config.title,
-        detail,
-    };
+/** Desglose del paquete de un combo con lo que la función pura no puede leer sola. */
+function packageBreakdown(line) {
+    const order = line.order_id;
+    const pricelist = order?.pricelist_id;
+    const product = line.product_id;
+    const rule = findPricelistRule(pricelist, product, 1);
+    return comboBreakdown(line, {
+        pricelistPrice: product.product_tmpl_id.getPrice(pricelist, 1, 0, false, product),
+        // Solo un paquete en precio fijo reparte el precio del acuerdo.
+        agreement: line.pricing_rule_type === "fixed_price" ? agreementForLine(order, line) : null,
+        packagePriceOrigin: rule ? `Tarifa: ${pricelist.name}` : "Precio de venta",
+        rounding: order?.currency,
+        formatMoney: (amount) => formatCurrency(amount, line.currency.id),
+        formatNumber: formatBreakdownNumber,
+    });
 }
 
 export class PosPriceOriginPopover extends Component {
@@ -69,28 +55,32 @@ patch(Orderline.prototype, {
         super.setup(...arguments);
         try {
             this.priceOriginPopover = usePopover(PosPriceOriginPopover, { position: "left" });
+            this.comboBreakdownPopover = usePopover(PosComboBreakdownPopover, { position: "left" });
         } catch {
             this.priceOriginPopover = null;
+            this.comboBreakdownPopover = null;
         }
     },
 
     onPriceOriginClick(ev, line) {
         ev.stopPropagation();
-        if (!this.priceOriginPopover) {
-            return;
-        }
-        if (this.priceOriginPopover.isOpen) {
-            this.priceOriginPopover.close();
-            return;
-        }
-        const origin = getPriceOriginData(line || this.line);
+        const target = line || this.line;
+        const origin = priceOriginData(target);
         if (!origin) {
             return;
         }
-        this.priceOriginPopover.open(ev.currentTarget, {
-            title: origin.title,
-            detail: origin.detail,
-        });
+        const breakdown = origin.key === "combo" && isComboPackage(target) ? packageBreakdown(target) : null;
+        const [popover, props] = breakdown && !breakdown.empty
+            ? [this.comboBreakdownPopover, { breakdown }]
+            : [this.priceOriginPopover, { title: origin.title, detail: origin.detail }];
+        if (!popover) {
+            return;
+        }
+        if (popover.isOpen) {
+            popover.close();
+            return;
+        }
+        popover.open(ev.currentTarget, props);
     },
 
     get lineScreenValues() {
@@ -110,22 +100,15 @@ patch(Orderline.prototype, {
             values.pricingRuleOrigin = line.pricing_rule_origin || null;
             values.pricingRuleType = line.pricing_rule_type || null;
             values.hasPricingRule = Boolean(line.pricing_rule_origin);
-            values.hasPromo = Boolean(line.promo_reward_id);
-            values.pricingRuleColor =
-                values.pricingRuleType === "fixed_price" ? "text-success" :
-                values.pricingRuleType === "promo" ? "text-primary" :
-                values.pricingRuleType === "manual" ? "text-warning" :
-                values.pricingRuleType && values.pricingRuleType !== "none" ? "text-info" :
-                "";
-            values.pricingRuleIcon =
-                values.pricingRuleType === "fixed_price" ? "fa-lock" :
-                values.pricingRuleType === "promo" ? "fa-star" :
-                values.pricingRuleType === "manual" ? "fa-pencil" :
-                "fa-tag";
+            const ruleDisplay = pricingRuleDisplay(values.pricingRuleType);
+            values.pricingRuleColor = ruleDisplay.color;
+            values.pricingRuleIcon = ruleDisplay.icon;
+            // Descuento sin badge: no se sabe de dónde viene, así que no se rotula como manual.
+            values.discountBadge = line.discount ? formatOriginBadge(_t("Descuento"), line.discount) : null;
         }
 
         if (this.props.mode === "display" && !this.props.basic_receipt) {
-            const originData = getPriceOriginData(line);
+            const originData = priceOriginData(line);
             if (originData) {
                 values.priceOriginIcon = originData.icon;
                 values.priceOriginColor = originData.color;

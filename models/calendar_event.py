@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models, api, _
+from collections import defaultdict
 
-DEMO_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_demo'
-FIELD_VISIT_ACTIVITY_XMLID = 'entintados_pdv.mail_activity_type_field_visit'
+from odoo import api, fields, models
+
+# Campos que enlazan el evento a un registro; si cambian, se re-etiqueta.
+CAMPOS_ENLACE = frozenset({'res_model', 'res_model_id', 'res_id', 'activity_ids'})
+
 
 class CalendarEvent(models.Model):
     """Etiqueta las reuniones CRM (demostración, visita de campo) para que su
@@ -24,7 +27,7 @@ class CalendarEvent(models.Model):
         help="Tipo de reunión CRM que originó este evento "
              "(demostración, visita de campo).",
     )
-    
+
     @api.model_create_multi
     def create(self, vals_list):
         events = super().create(vals_list)
@@ -33,38 +36,40 @@ class CalendarEvent(models.Model):
 
     def write(self, vals):
         res = super().write(vals)
-        campos_enlace = {'res_model', 'res_model_id', 'res_id', 'activity_ids'}
-        if not self.env.context.get('skip_crm_meeting_sync') and campos_enlace & set(vals):
+        if CAMPOS_ENLACE & set(vals):
             self._sync_crm_meeting_tags()
         return res
 
     def _sync_crm_meeting_tags(self):
         """Pone crm_lead_id y crm_activity_type_id a los eventos ligados a una
         oportunidad, aunque se hayan creado desde el botón nativo de Actividades."""
-        tipos = self.env['mail.activity.type']
-        for xmlid in (DEMO_ACTIVITY_XMLID, FIELD_VISIT_ACTIVITY_XMLID):
-            tipo = self.env.ref(xmlid, raise_if_not_found=False)
-            if tipo:
-                tipos |= tipo
-        if not tipos:
+        pendientes = self.filtered(
+            lambda e: e.res_model == 'crm.lead' and e.res_id
+            and not (e.crm_lead_id and e.crm_activity_type_id)
+        )
+        if not pendientes:
             return
 
-        tipo_contexto = self.env.context.get('default_activity_type_id')
+        tipos = self.env['mail.activity.type'].browse(
+            list(self.env['mail.activity']._reglas_actividad_etapa())
+        )
+        if not tipos:
+            return
+        tipo_contexto = tipos & tipos.browse(self.env.context.get('default_activity_type_id') or [])
 
-        for event in self:
-            if event.res_model != 'crm.lead' or not event.res_id:
-                continue
-
+        # Agrupa los eventos con los mismos valores para escribir una vez por grupo.
+        grupos = defaultdict(lambda: self.browse())
+        for event in pendientes:
             vals = {}
             if not event.crm_lead_id:
                 vals['crm_lead_id'] = event.res_id
-
             if not event.crm_activity_type_id:
-                tipo = event.activity_ids.activity_type_id.filtered(lambda t: t in tipos)[:1]
-                if not tipo and tipo_contexto in tipos.ids:
-                    tipo = tipos.filtered(lambda t: t.id == tipo_contexto)
+                tipo = (event.activity_ids.activity_type_id & tipos)[:1] or tipo_contexto
                 if tipo:
                     vals['crm_activity_type_id'] = tipo.id
-
             if vals:
-                event.sudo().with_context(skip_crm_meeting_sync=True).write(vals)
+                grupos[tuple(sorted(vals.items()))] |= event
+
+        # Los campos escritos no están en CAMPOS_ENLACE, así que no hay recursión.
+        for vals, events in grupos.items():
+            events.sudo().write(dict(vals))

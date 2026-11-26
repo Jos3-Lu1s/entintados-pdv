@@ -14,6 +14,9 @@ const PROGRAM = "Promo Tour";
 const SCHEME_PRODUCT = "Esmalte Esquema Tour";
 const OTHER_SCHEME_PRODUCT = "Esmalte Otro Esquema Tour";
 const TINT_BASE = "Base Tour Entintado";
+const FIXED_COMBO = "Paquete Fijo Tour";
+const PROMO_COMBO = "Paquete Promo Tour";
+const COMBO_PROGRAM = "Esp Tour";
 
 function badgeContains(text) {
     return [
@@ -83,8 +86,208 @@ function schemePricelistAndManualDiscountSteps() {
     ].flat();
 }
 
+function comboPackage(packageName) {
+    const order = posmodel.getOrder();
+    const packageLine = order.lines.find((line) => line.product_id.name === packageName);
+    if (!packageLine) {
+        throw new Error(`No está el paquete '${packageName}' en el pedido.`);
+    }
+    return packageLine;
+}
+
+/** Revisa en el modelo el precio y el badge de los productos de un paquete. */
+function comboItemsHave(packageName, { prices, badge, ruleType }) {
+    return [
+        {
+            content: `los productos de '${packageName}' tienen ${prices || ""} ${badge}`,
+            trigger: `.orderline:has(.product-name:contains("${packageName}"))`,
+            run: () => {
+                const items = comboPackage(packageName).combo_line_ids;
+                const actualPrices = items.map((line) => line.price_unit);
+                if (prices && JSON.stringify(actualPrices) !== JSON.stringify(prices)) {
+                    throw new Error(`Precios del combo: ${JSON.stringify(actualPrices)}`);
+                }
+                for (const line of items) {
+                    if (line.pricing_rule_origin !== badge || line.pricing_rule_type !== ruleType) {
+                        throw new Error(
+                            `Badge del producto del combo: ${line.pricing_rule_type} '${line.pricing_rule_origin}'`
+                        );
+                    }
+                    if (line.price_origin !== "combo") {
+                        throw new Error(`Origen del precio del producto del combo: ${line.price_origin}`);
+                    }
+                }
+            },
+        },
+    ];
+}
+
+/** Selecciona un producto del combo, como si el cajero lo tocara en la lista. */
+function selectComboItem(packageName, index) {
+    return [
+        {
+            content: `seleccionar el producto ${index + 1} de '${packageName}'`,
+            trigger: `.orderline:has(.product-name:contains("${packageName}"))`,
+            run: () => {
+                const order = posmodel.getOrder();
+                order.selectOrderline(comboPackage(packageName).combo_line_ids[index]);
+            },
+        },
+    ];
+}
+
+// Tercera fase: combos. El cliente tiene precio fijo de 200 en un combo (se reparte entre sus
+// productos) y 15 % en otro, que además recibe la promoción `specific` de 20 % del paquete.
+function comboSteps() {
+    return [
+        Chrome.createFloatingOrder(),
+        ProductScreen.clickPartnerButton(),
+        ProductScreen.clickCustomer("Cliente Tour Promo"),
+
+        ProductScreen.clickDisplayedProduct(FIXED_COMBO),
+        comboItemsHave(FIXED_COMBO, {
+            prices: [142.86, 42.86, 14.28],
+            badge: "↳ Precio fijo",
+            ruleType: "fixed_price",
+        }),
+        ProductScreen.totalAmountIs("200.00"),
+
+        ProductScreen.clickDisplayedProduct(PROMO_COMBO),
+        ProductScreen.clickLine(PROMO_COMBO),
+        badgeContains("Producto · 15%"),
+        comboItemsHave(PROMO_COMBO, {
+            prices: [714.29, 214.29, 71.42],
+            badge: "↳ Producto · 15%",
+            ruleType: "product",
+        }),
+
+        clickStar(),
+        pickInPopup(COMBO_PROGRAM),
+        badgeContains(`${COMBO_PROGRAM} · 20%`),
+        comboItemsHave(PROMO_COMBO, { badge: `↳ ${COMBO_PROGRAM} · 20%`, ruleType: "promo" }),
+
+        selectComboItem(PROMO_COMBO, 1),
+        Numpad.click("%"),
+        Numpad.click("5"),
+        Notification.has("es parte del combo"),
+        comboItemsHave(PROMO_COMBO, { badge: `↳ ${COMBO_PROGRAM} · 20%`, ruleType: "promo" }),
+
+        ProductScreen.clickLine(PROMO_COMBO),
+        ProductScreen.totalAmountIs("1,000.00"),
+        ProductScreen.clickPayButton(),
+        PaymentScreen.clickPaymentMethod("Cash"),
+        PaymentScreen.clickValidate(),
+        ReceiptScreen.isShown(),
+    ].flat();
+}
+
+/** Abre las acciones, revisa el botón de promociones y cierra. */
+function promotionsButtonHas(trigger, content) {
+    return [
+        ProductScreen.clickControlButtonMore(),
+        { content, trigger },
+        {
+            content: "cerrar las acciones",
+            trigger: ".modal header .btn-close",
+            run: "click",
+        },
+    ].flat();
+}
+
+// Cuarta fase: indicadores y selector. Estrella oculta sin promociones, contador del botón,
+// diferencia en dinero en el selector, estrella informativa en el combo y desglose del paquete.
+function promotionUiSteps() {
+    return [
+        ReceiptScreen.clickNextOrder(),
+        ProductScreen.clickPartnerButton(),
+        ProductScreen.clickCustomer("Cliente Tour Promo"),
+
+        ProductScreen.clickDisplayedProduct(OTHER_SCHEME_PRODUCT),
+        {
+            content: "una línea sin promociones no tiene estrella",
+            trigger: `.orderline.selected:has(.product-name:contains("${OTHER_SCHEME_PRODUCT}")):not(:has(.o-line-promo-star))`,
+        },
+
+        ProductScreen.clickDisplayedProduct(PRODUCT),
+        promotionsButtonHas(
+            '.control-buttons button:contains("Promociones (1)")',
+            "el botón cuenta una línea con promociones"
+        ),
+
+        clickStar(),
+        {
+            content: "el selector se titula con el producto",
+            trigger: `.modal-title:contains("Promociones para")`,
+        },
+        {
+            content: "la opción dice cuánto ahorra",
+            trigger: `.selection-item:contains("${PROGRAM} - 20 %"):contains("ahorra"):contains("10.00 más")`,
+        },
+        pickInPopup(`${PROGRAM} - 20 %`),
+        badgeContains(`${PROGRAM} · 20%`),
+        {
+            content: "la estrella queda llena",
+            trigger: ".orderline.selected .o-line-promo-star .fa-star",
+        },
+        promotionsButtonHas(
+            '.control-buttons button:contains("Promociones"):not(:has(.o-promotion-line-count))',
+            "sin líneas pendientes el botón no cuenta"
+        ),
+
+        clickStar(),
+        {
+            content: "la aplicada sale activa",
+            trigger: `.selection-item.selected:contains("${PROGRAM}")`,
+        },
+        {
+            content: "se ofrece volver al acuerdo",
+            trigger: '.selection-item:contains("Sin promoción: vuelve a Producto · 10%")',
+        },
+        {
+            content: "cerrar el selector",
+            trigger: ".modal header .btn-close",
+            run: "click",
+        },
+
+        ProductScreen.clickDisplayedProduct(PROMO_COMBO),
+        ProductScreen.clickLine(PROMO_COMBO),
+        clickStar(),
+        pickInPopup(COMBO_PROGRAM),
+        badgeContains(`${COMBO_PROGRAM} · 20%`),
+
+        selectComboItem(PROMO_COMBO, 0),
+        {
+            content: "el producto del combo tiene la estrella llena",
+            trigger: ".orderline.selected .o-line-promo-star .fa-star",
+            run: "click",
+        },
+        Notification.has(`Promoción del paquete «${PROMO_COMBO}»`),
+
+        {
+            content: "abrir el desglose del paquete",
+            trigger: `.orderline:has(.product-name:contains("${PROMO_COMBO}")) .o_pos_price_origin_icon:has(.fa-cubes)`,
+            run: "click",
+        },
+        {
+            content: "el desglose muestra el reparto",
+            trigger: '.o_combo_breakdown_popover:contains("Desglose del combo"):contains("Se reparte"):contains("1,000.00"):contains("500 / 700 × 1000 = 714.29")',
+        },
+        {
+            content: "cerrar el desglose",
+            trigger: `.orderline:has(.product-name:contains("${PROMO_COMBO}")) .o_pos_price_origin_icon`,
+            run: "click",
+        },
+
+        ProductScreen.clickPayButton(),
+        PaymentScreen.clickPaymentMethod("Cash"),
+        PaymentScreen.clickValidate(),
+        ReceiptScreen.isShown(),
+    ].flat();
+}
+
 // Datos: `tests/test_pos_line_promotion_tour.py`. Cliente con 10 % de acuerdo en el producto y
-// una promoción `specific` de 20 % en el mismo producto; la segunda fase usa la tarifa por esquema.
+// una promoción `specific` de 20 % en el mismo producto; la segunda fase usa la tarifa por esquema
+// y la tercera, dos combos con acuerdo en el paquete. La cuarta revisa los indicadores con esos datos.
 registry.category("web_tour.tours").add("EntintadosPosLinePromotionTour", {
     steps: () =>
         [
@@ -117,5 +320,7 @@ registry.category("web_tour.tours").add("EntintadosPosLinePromotionTour", {
             ReceiptScreen.isShown(),
 
             schemePricelistAndManualDiscountSteps(),
+            comboSteps(),
+            promotionUiSteps(),
         ].flat(),
 });

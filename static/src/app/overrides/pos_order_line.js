@@ -1,5 +1,4 @@
 import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
-import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
@@ -11,7 +10,7 @@ import { isTintColorant, isTintedBase, tintDose, tintedProductName } from "@enti
  * Parche para PosOrderline para:
  * 1. Asegurar cálculo consolidado de displayPrice con combo_line_ids.
  * 2. Sincronización reactiva de cantidades en bases entintadas y sus líneas hijas de colorante.
- * 3. Bloqueo de edición manual y protección de líneas hijas de colorantes.
+ * 3. Protección de líneas hijas de colorantes.
  */
 patch(PosOrderline.prototype, {
     getFullProductName() {
@@ -102,38 +101,10 @@ patch(PosOrderline.prototype, {
         return res;
     },
 
+    // El permiso del cajero y el precio fijo se revisan en las entradas del teclado
+    // (`overrides/cashier_permissions.js`): aquí también escriben los recálculos.
     setUnitPrice(unitPrice) {
         if (isTintColorant(this)) {
-            return false;
-        }
-        const pos = this.pos || this.order_id?.pos || this.models?.env?.services?.pos;
-        if (this.fixed_price_locked && !this._entintadosSettingPrice) {
-            const notification =
-                this.models?.env?.services?.notification ||
-                this.env?.services?.notification ||
-                this.order_id?.pos?.notification ||
-                pos?.notification;
-            if (notification) {
-                notification.add(
-                    _t("El precio está pactado por acuerdo comercial y no se puede modificar."),
-                    { type: "warning" }
-                );
-            }
-            return false;
-        }
-        const canEdit = pos?.canEditUnitPrice ?? this.config?.user_can_edit_price ?? true;
-        if (!canEdit && !this._entintadosSettingPrice) {
-            const notification =
-                this.models?.env?.services?.notification ||
-                this.env?.services?.notification ||
-                this.order_id?.pos?.notification ||
-                pos?.notification;
-            if (notification) {
-                notification.add(
-                    _t("No tienes permiso para modificar el precio de venta."),
-                    { type: "warning" }
-                );
-            }
             return false;
         }
         return super.setUnitPrice(unitPrice);
@@ -141,36 +112,6 @@ patch(PosOrderline.prototype, {
 
     setDiscount(discount) {
         if (isTintColorant(this)) {
-            return false;
-        }
-        const pos = this.pos || this.order_id?.pos || this.models?.env?.services?.pos;
-        if (this.fixed_price_locked && !this._entintadosSettingDiscount) {
-            const notification =
-                this.models?.env?.services?.notification ||
-                this.env?.services?.notification ||
-                this.order_id?.pos?.notification ||
-                pos?.notification;
-            if (notification) {
-                notification.add(
-                    _t("Los productos con precio fijo pactado no admiten descuento."),
-                    { type: "warning" }
-                );
-            }
-            return false;
-        }
-        const canEdit = pos?.canEditDiscount ?? this.config?.user_can_edit_discount ?? true;
-        if (!canEdit && !this._entintadosSettingDiscount) {
-            const notification =
-                this.models?.env?.services?.notification ||
-                this.env?.services?.notification ||
-                this.order_id?.pos?.notification ||
-                pos?.notification;
-            if (notification) {
-                notification.add(
-                    _t("No tienes permiso para modificar el descuento."),
-                    { type: "warning" }
-                );
-            }
             return false;
         }
         return super.setDiscount(discount);
@@ -344,83 +285,5 @@ patch(TicketScreen.prototype, {
     },
     async onDoRefund() {
         return this.onClickRefund();
-    },
-});
-
-patch(ProductScreen.prototype, {
-    getNumpadButtons() {
-        const buttons = super.getNumpadButtons();
-        const order = this.currentOrder || this.pos?.getOrder?.();
-        const line = order?.getSelectedOrderline?.() || order?.get_selected_orderline?.();
-
-        const canEditPrice = Boolean(this.pos?.canEditUnitPrice) && !line?.fixed_price_locked;
-        const canEditDiscount = Boolean(this.pos?.canEditDiscount) && !line?.fixed_price_locked;
-
-        if (!canEditPrice && this.pos?.numpadMode === "price") {
-            this.pos.numpadMode = "quantity";
-        }
-        if (!canEditDiscount && this.pos?.numpadMode === "discount") {
-            this.pos.numpadMode = "quantity";
-        }
-
-        return buttons.map((button) => {
-            if (button.value === "price" && !canEditPrice) {
-                return {
-                    ...button,
-                    disabled: true,
-                    class: `${button.class || ""} disabled opacity-50`,
-                };
-            }
-            if (button.value === "discount" && !canEditDiscount) {
-                return {
-                    ...button,
-                    disabled: true,
-                    class: `${button.class || ""} disabled opacity-50`,
-                };
-            }
-            return button;
-        });
-    },
-
-    onNumpadClick(buttonValue) {
-        const order = this.currentOrder || this.pos?.getOrder?.();
-        const line = order?.getSelectedOrderline?.() || order?.get_selected_orderline?.();
-        if (buttonValue === "price") {
-            if (line?.fixed_price_locked) {
-                const notification = this.env?.services?.notification || this.pos?.notification;
-                notification?.add(
-                    _t("El precio está pactado por acuerdo comercial y no se puede modificar."),
-                    { type: "warning" }
-                );
-                return;
-            }
-            if (!this.pos?.canEditUnitPrice) {
-                const notification = this.env?.services?.notification || this.pos?.notification;
-                notification?.add(
-                    _t("No tienes permiso para modificar el precio de venta."),
-                    { type: "warning" }
-                );
-                return;
-            }
-        }
-        if (buttonValue === "discount") {
-            if (line?.fixed_price_locked) {
-                const notification = this.env?.services?.notification || this.pos?.notification;
-                notification?.add(
-                    _t("Los productos con precio fijo pactado no admiten descuento."),
-                    { type: "warning" }
-                );
-                return;
-            }
-            if (!this.pos?.canEditDiscount) {
-                const notification = this.env?.services?.notification || this.pos?.notification;
-                notification?.add(
-                    _t("No tienes permiso para modificar el descuento."),
-                    { type: "warning" }
-                );
-                return;
-            }
-        }
-        return super.onNumpadClick(buttonValue);
     },
 });

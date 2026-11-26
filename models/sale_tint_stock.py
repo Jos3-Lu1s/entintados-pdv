@@ -39,15 +39,14 @@ class StockMove(models.Model):
         result = super().write(vals)
         if 'product_uom_qty' in vals:
             self.filtered(lambda move: move.state not in ('draft', 'done', 'cancel')
-                          and move.picking_id and bool(move._tint_sale_line()))._prepare_tint_colorant_moves()
+                          and move.picking_id and move._tint_sale_line())._prepare_tint_colorant_moves()
         return result
 
     def _prepare_merge_moves_distinct_fields(self):
         return super()._prepare_merge_moves_distinct_fields() + ['tint_base_move_id']
 
     def _action_cancel(self):
-        components = self.search([('tint_base_move_id', 'in', self.ids),
-                                  ('state', 'not in', ['done', 'cancel'])])
+        components = self._tint_open_components()
         result = super()._action_cancel()
         if components:
             components._action_cancel()
@@ -57,9 +56,12 @@ class StockMove(models.Model):
         moves = super()._action_confirm(merge=merge, merge_into=merge_into, **kwargs)
         bases = moves.filtered(lambda move: move.state not in ('done', 'cancel')
                                and move.picking_id and move.location_dest_id.usage == 'customer'
-                               and bool(move._tint_sale_line()))
+                               and move._tint_sale_line())
         bases._prepare_tint_colorant_moves()
         return moves
+
+    def _tint_open_components(self):
+        return self.search([('tint_base_move_id', 'in', self.ids), ('state', 'not in', ['done', 'cancel'])])
 
     def _prepare_tint_colorant_moves(self):
         point = self.env.ref('entintados_pdv.uom_tint_point')
@@ -67,16 +69,18 @@ class StockMove(models.Model):
             line = base._tint_sale_line()
             containers = base.product_uom._compute_quantity(
                 base.product_uom_qty, line.product_uom_id, round=False)
+            existing_by_product = {move.product_id.id: move
+                                   for move in self.search([('tint_base_move_id', '=', base.id)])}
             for dose in line._tint_recipe()['doses']:
-                existing = self.search([('tint_base_move_id', '=', base.id),
-                                        ('product_id', '=', dose['product_id'])])
+                existing = existing_by_product.get(dose['product_id'])
                 if existing:
-                    if existing.state not in ('done', 'cancel'):
-                        quantity = point._compute_quantity(
-                            dose['points'] * containers, existing.product_uom, round=False)
-                        if existing.product_uom.compare(existing.product_uom_qty, quantity):
-                            existing.product_uom_qty = quantity
-                            existing._action_assign()
+                    if existing.state in ('done', 'cancel'):
+                        continue
+                    quantity = point._compute_quantity(
+                        dose['points'] * containers, existing.product_uom, round=False)
+                    if existing.product_uom.compare(existing.product_uom_qty, quantity):
+                        existing.product_uom_qty = quantity
+                        existing._action_assign()
                     continue
                 component = self.with_context(_tint_operation=_TINT_OPERATION).create({
                     'product_id': dose['product_id'], 'product_uom': point.id,
@@ -86,6 +90,7 @@ class StockMove(models.Model):
                     'company_id': base.company_id.id, 'origin': base.origin,
                     'tint_base_move_id': base.id,
                 })
+                existing_by_product[dose['product_id']] = component
                 component._action_confirm(merge=False)
                 component._action_assign()
 
@@ -99,7 +104,7 @@ class StockMove(models.Model):
         bases = self.filtered(lambda move: move.state not in ('done', 'cancel')
                               and (move.location_dest_id.usage == 'customer'
                                    or (move.location_id.usage == 'customer' and move.origin_returned_move_id))
-                              and bool(move._tint_sale_line()))
+                              and move._tint_sale_line())
         if not bases:
             return super()._action_done(cancel_backorder=cancel_backorder)
         # Reservation failures must also roll back the base's completed move/backorder.
@@ -108,8 +113,7 @@ class StockMove(models.Model):
             bases.invalidate_recordset(['state', 'quantity', 'move_line_ids'])
             pending = bases.filtered(lambda move: move.state not in ('done', 'cancel'))
             pending._prepare_tint_colorant_moves()
-            colorants = self.search([('tint_base_move_id', 'in', pending.ids),
-                                     ('state', 'not in', ['done', 'cancel'])])
+            colorants = pending._tint_open_components()
             pickings = {move.id: move.tint_base_move_id.picking_id for move in colorants}
             point = self.env.ref('entintados_pdv.uom_tint_point')
             for component in colorants:
@@ -128,22 +132,25 @@ class StockMove(models.Model):
             colorants.write({'picking_id': False})
             result = super()._action_done(cancel_backorder=cancel_backorder)
             pending.filtered(lambda move: move.state == 'done')._consume_tint_colorants()
+            reattach = self.env.context.get('_tint_picking_completion') is not _TINT_OPERATION
             for component in colorants:
-                if self.env.context.get('_tint_picking_completion') is not _TINT_OPERATION:
+                if reattach:
                     component.picking_id = pickings[component.id]
                 if component.tint_base_move_id.state == 'cancel':
                     component._action_cancel()
             return result
 
-    def _tint_sale_line(self):
+    def _tint_return_chain(self):
         self.ensure_one()
         move = self
         while move:
-            line = move.sale_line_id
-            if line and line._tint_recipe().get('base_only'):
-                return line
+            yield move
             move = move.origin_returned_move_id
-        return self.env['sale.order.line']
+
+    def _tint_sale_line(self):
+        return next((move.sale_line_id for move in self._tint_return_chain()
+                     if move.sale_line_id and move.sale_line_id._tint_recipe().get('base_only')),
+                    self.env['sale.order.line'])
 
     @api.model
     def _setup_tint_delivery_components(self):
@@ -151,7 +158,7 @@ class StockMove(models.Model):
             ('sale_line_id.tint_snapshot', '!=', False),
             ('state', 'not in', ['draft', 'done', 'cancel']),
             ('picking_id', '!=', False), ('location_dest_id.usage', '=', 'customer'),
-        ]).filtered(lambda move: bool(move._tint_sale_line()))
+        ]).filtered(lambda move: move._tint_sale_line())
         self.env['res.company']._with_locked_records(bases.sorted('id'))
         bases._compute_description_picking()
         bases._prepare_tint_colorant_moves()
@@ -162,13 +169,7 @@ class StockMove(models.Model):
             component.picking_id = component.tint_base_move_id.picking_id
 
     def _is_tint_consumption(self):
-        self.ensure_one()
-        move = self
-        while move:
-            if move.tint_base_move_id:
-                return True
-            move = move.origin_returned_move_id
-        return False
+        return any(move.tint_base_move_id for move in self._tint_return_chain())
 
     def _action_synch_order(self):
         # Native sale_stock sells extra picking products automatically. Formula
@@ -178,6 +179,7 @@ class StockMove(models.Model):
 
     def _consume_tint_colorants(self):
         point = self.env.ref('entintados_pdv.uom_tint_point')
+        detach = self.env.context.get('_tint_picking_completion') is _TINT_OPERATION
         for base_move in self:
             sale_line = base_move._tint_sale_line()
             snapshot = sale_line._tint_recipe()
@@ -191,6 +193,10 @@ class StockMove(models.Model):
                 product = self.env['product.product'].browse(dose['product_id'])
                 if not product.active or not product.is_storable or not product.uom_id._has_common_reference(point):
                     raise UserError(_('Revisa el inventario y la unidad del colorante %s.') % product.display_name)
+                consumption = self.search([('tint_base_move_id', '=', base_move.id),
+                                           ('product_id', '=', product.id)], limit=1)
+                if consumption.state == 'done':
+                    continue
                 previous = self.search([
                     ('tint_base_move_id', '=', base_move.origin_returned_move_id.id),
                     ('product_id', '=', product.id), ('state', '=', 'done'),
@@ -199,18 +205,13 @@ class StockMove(models.Model):
                     'product_id': product.id, 'product_uom': point.id,
                     'product_uom_qty': dose['points'] * containers,
                     'location_id': source.id, 'location_dest_id': destination.id,
-                    'picking_id': (False if self.env.context.get('_tint_picking_completion') is _TINT_OPERATION
-                                   else base_move.picking_id.id),
+                    'picking_id': False if detach else base_move.picking_id.id,
                     'state': 'confirmed', 'picking_type_id': base_move.picking_type_id.id,
                     'company_id': base_move.company_id.id, 'origin': base_move.origin,
                     'description_picking': product.display_name,
                     'tint_base_move_id': base_move.id,
                     'origin_returned_move_id': previous.id,
                 }
-                consumption = self.search([('tint_base_move_id', '=', base_move.id),
-                                           ('product_id', '=', product.id)], limit=1)
-                if consumption.state == 'done':
-                    continue
                 if consumption:
                     consumption.with_context(_tint_operation=_TINT_OPERATION).write(values)
                 else:
@@ -220,7 +221,6 @@ class StockMove(models.Model):
                     raise UserError(_('No hay suficiente colorante disponible para validar la salida: %s.') % product.display_name)
                 consumption.picked = True
                 consumption._action_done(cancel_backorder=True)
-            base_move.picking_id.invalidate_recordset(['tint_consumption_count'])
 
 
 class StockPicking(models.Model):
@@ -230,30 +230,12 @@ class StockPicking(models.Model):
         # sale_stock adds any extra delivered product as a billable sale line.
         # Reattach formula components only after that native synchronization.
         result = super(StockPicking, self.with_context(_tint_picking_completion=_TINT_OPERATION))._action_done()
-        components = self._tint_consumption_moves()
-        for component in components.filtered(lambda move: not move.picking_id):
+        for component in self._tint_consumption_moves().filtered(lambda move: not move.picking_id):
             component.picking_id = component.tint_base_move_id.picking_id
         return result
 
-    tint_consumption_count = fields.Integer(string='Movimientos de colorante', compute='_compute_tint_consumption_count')
-
     def _tint_consumption_moves(self):
         return self.env['stock.move'].search([('tint_base_move_id', 'in', self.move_ids.ids)])
-
-    @api.depends('move_ids.state')
-    def _compute_tint_consumption_count(self):
-        for picking in self:
-            picking.tint_consumption_count = len(picking._tint_consumption_moves())
-
-    def action_view_tint_consumptions(self):
-        self.ensure_one()
-        self.check_access('read')
-        return {
-            'type': 'ir.actions.act_window', 'name': _('Colorantes del entintado'),
-            'res_model': 'stock.move', 'view_mode': 'list,form',
-            'domain': [('tint_base_move_id', 'in', self.move_ids.ids)],
-            'context': {'create': False},
-        }
 
 
 class StockReturnPicking(models.TransientModel):

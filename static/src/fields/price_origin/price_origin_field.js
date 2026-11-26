@@ -4,20 +4,12 @@ import { usePopover } from "@web/core/popover/popover_hook";
 import { registry } from "@web/core/registry";
 import { formatSelection } from "@web/views/fields/formatters";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
+import { PRICE_ORIGIN_ICONS } from "@entintados_pdv/common/price_origin_display";
 import {
     buildComboBreakdown,
     ComboBreakdownPopover,
 } from "../combo_breakdown/combo_breakdown_popover";
 
-/** Icono y color por origen del precio de la línea de venta. */
-const PRICE_ORIGINS = {
-    list: { icon: "fa-tag", color: "text-muted" },
-    pricelist: { icon: "fa-list-alt", color: "text-info" },
-    fixed_price: { icon: "fa-lock", color: "text-success" },
-    manual: { icon: "fa-pencil", color: "text-warning" },
-    combo: { icon: "fa-cubes", color: "text-primary" },
-    tint: { icon: "fa-tint", color: "text-info" },
-};
 
 export class PriceOriginPopover extends Component {
     static template = "entintados_pdv.PriceOriginPopover";
@@ -48,9 +40,9 @@ export class PriceOriginField extends Component {
 
     get origin() {
         if (this.isComboPackage) {
-            return PRICE_ORIGINS.combo;
+            return PRICE_ORIGIN_ICONS.combo;
         }
-        return PRICE_ORIGINS[this.props.record.data[this.props.name]] || null;
+        return PRICE_ORIGIN_ICONS[this.props.record.data[this.props.name]] || null;
     }
 
     get title() {
