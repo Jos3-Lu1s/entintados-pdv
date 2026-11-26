@@ -428,6 +428,12 @@ class SaleOrderPosQuotation(models.Model):
             raise UserError(_('Esta orden está Por facturar y no se puede traer al Punto de Venta.'))
         if any(self.mapped('pos_has_active_invoice')):
             raise UserError(_('Esta cotización o pedido ya tiene factura y no se puede traer al Punto de Venta.'))
+        for order in self:
+            # The POS loads sale lines flat: a combo or a native reward would lose its structure.
+            if order.order_line.filtered(lambda line: line.product_id.type == 'combo'
+                                         or line.combo_item_id or line.reward_id):
+                raise UserError(_('La cotización %s trae combos o regalos de promoción: cóbrala desde Ventas.')
+                                % order.name)
         return super().load_sale_order_from_pos(config_id)
 
     @api.model

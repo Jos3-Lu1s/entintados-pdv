@@ -98,43 +98,6 @@ patch(PaymentScreen.prototype, {
 });
 
 patch(PosStore.prototype, {
-    async _processSaleOrder(saleOrder) {
-        if (this._processingSaleOrder) {
-            return;
-        }
-        this._processingSaleOrder = true;
-        try {
-            const existingOrder = this.getOpenOrders().find((order) =>
-                printableQuotations(order).some((quotation) => quotation.id === saleOrder.id)
-            );
-            if (existingOrder) {
-                const orderNumber = existingOrder.getName() || existingOrder.pos_reference || existingOrder.id;
-                this.notification.add(
-                    _t("Esta cotización ya está en la orden %s del punto de venta.", orderNumber),
-                    { type: "warning" }
-                );
-                return;
-            }
-            if (printableQuotations(this.getOrder()).length) {
-                this.notification.add(
-                    _t("Esta orden del punto de venta ya tiene una cotización o pedido de Ventas. La selección se abrirá en una orden nueva."),
-                    { type: "warning" }
-                );
-                this.addNewOrder();
-            }
-            const order = this.getOrder();
-            if (saleOrder.partner_id) {
-                order.setPartner(saleOrder.partner_id);
-            }
-            const fiscalPosition = saleOrder.fiscal_position_id;
-            order.update({ fiscal_position_id: fiscalPosition });
-            await this.settleSO(saleOrder, fiscalPosition);
-            this.selectOrderLine(order, order.lines.at(-1));
-        } finally {
-            this._processingSaleOrder = false;
-        }
-    },
-
     async pay() {
         const order = this.getOrder();
         if (order?.isRefund && Number.isInteger(order.id) &&
@@ -157,15 +120,6 @@ patch(PosStore.prototype, {
         }
         return super.pay(...arguments);
     },
-
-    async addLineToCurrentOrder(values, options = {}, configure = true) {
-        const recipe = values.sale_order_line_id?.tint_snapshot;
-        if (recipe?.base_only) {
-            values = { ...values, is_tinted_base: true, tint_color_code: recipe.color_code || false,
-                       customer_note: values.sale_order_line_id.name };
-        }
-        return super.addLineToCurrentOrder(values, options, configure);
-    },
 });
 
 patch(ControlButtons.prototype, {
@@ -173,32 +127,6 @@ patch(ControlButtons.prototype, {
         super.setup(...arguments);
         this.quotationUI = useService("ui");
         this.quotationAction = useService("action");
-    },
-
-    onClickQuotation() {
-        const partner = this.pos.getOrder()?.getPartner();
-        const domain = [
-            ["state", "!=", "cancel"],
-            ["invoice_status", "!=", "to invoice"],
-            ["pos_has_active_invoice", "=", false],
-            ["currency_id", "=", this.pos.currency.id],
-            ["amount_unpaid", ">", 0],
-        ];
-        if (partner) {
-            domain.push(["partner_id", "any", [["id", "child_of", [partner.id]]]]);
-        }
-        this.dialog.add(SelectCreateDialog, {
-            resModel: "sale.order",
-            noCreate: true,
-            multiSelect: false,
-            domain,
-            context: this.partner ? { search_default_partner_id: this.partner.id } : {},
-            onSelected: async ([orderId]) => {
-                if (orderId) {
-                    await this.pos.onClickSaleOrder(orderId);
-                }
-            },
-        });
     },
 
     get printableSaleQuotations() {
