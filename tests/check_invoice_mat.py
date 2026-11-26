@@ -8,6 +8,7 @@ from odoo import api, SUPERUSER_ID
 from odoo.modules.registry import Registry
 from odoo.tools import config
 from odoo.tools.convert import convert_file
+from odoo.tools.image import image_data_uri
 
 database = sys.argv[1]
 config.parse_config(['-c', '/etc/odoo/odoo.conf', '-d', database, '--no-http',
@@ -38,7 +39,10 @@ with Registry(database).cursor() as cr:
         assert b'mat-invoice' in html
         from lxml import html as html_parser
         document = html_parser.fromstring(html)
-        assert document.xpath('//img[@alt="Pinturas Osel Centro Sur" and starts-with(@src, "data:image/jpeg;base64,")]')
+        logo = invoice.company_id.logo
+        assert document.xpath('//img[@alt="Logotipo de la empresa"]/@src') == (
+            [image_data_uri(logo)] if logo else []
+        )
         table = document.xpath('//table[@name="mat_invoice_lines"]')[0]
         count = len(table.xpath('./thead/tr/th'))
         for row in table.xpath('./tbody/tr[td and not(td[@colspan])]'):
@@ -87,7 +91,7 @@ with Registry(database).cursor() as cr:
         vendor = env['account.move'].search([('move_type','=','in_refund')], limit=1)
         if vendor:
             html, _ = env['ir.actions.report']._render_qweb_html('account.account_invoices', vendor.ids)
-            assert b'Pinturas Osel Centro Sur' not in html
+            assert b'mat-document-header' not in html
         print('PASS: invoice HTML/PDF rendered; supplier layout preserved')
     finally:
         cr.rollback()

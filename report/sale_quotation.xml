@@ -52,7 +52,7 @@
                     <td class="o_sq_brand">
                         <div class="o_sq_card">
                             <div class="o_sq_logo">
-                                <img t-att-src="doc._quotation_report_image()" alt="Pinturas Osel Centro Sur"/>
+                                <img t-if="company.logo" t-att-src="image_data_uri(company.logo)" alt="Logotipo de la empresa"/>
                             </div>
                             <table class="o_sq_reference">
                                 <tr>

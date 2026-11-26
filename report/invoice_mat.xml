@@ -1,24 +1,34 @@
 <?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <template id="report_invoice_live">
-        <t t-call="account.report_invoice_with_payments"/>
+        <t t-if="docs and all(o.move_type == 'out_invoice' and o.l10n_mx_edi_cfdi_state == 'sent' and o.l10n_mx_edi_cfdi_attachment_id for o in docs)"
+           t-call="web.html_container">
+            <t t-set="print_with_payments" t-value="True"/>
+            <t t-foreach="docs" t-as="o">
+                <t t-set="lang" t-value="o.partner_id.lang"/>
+                <t t-call="l10n_mx_edi.report_invoice_document" t-lang="lang"/>
+            </t>
+        </t>
+        <t t-else="" t-call="account.report_invoice_with_payments"/>
     </template>
     <record id="action_report_invoice_live" model="ir.actions.report">
-        <field name="name">Vista previa de factura actual</field>
+        <field name="name">Facturas</field>
         <field name="model">account.move</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">entintados_pdv.report_invoice_live</field>
         <field name="report_file">entintados_pdv.report_invoice_live</field>
         <field name="attachment_use" eval="False"/>
+        <field name="print_report_name">(object.name or str(object.id)).replace('/', '_')</field>
     </record>
     <template id="mat_document_header">
     <t t-set="mat_header" t-value="o._mat_report_header()"/>
     <t t-set="mat_partner" t-value="mat_header['partner']"/>
     <t t-set="mat_agent" t-value="mat_header['agent']"/>
+    <t t-set="company_logo" t-value="o.company_id.sudo().logo"/>
     <div class="mat-document-header">
         <table class="o_sq_header"><tr>
             <td class="o_sq_logo">
-                <img t-att-src="o._mat_invoice_logo()" alt="Pinturas Osel Centro Sur"/>
+                <img t-if="company_logo" t-att-src="image_data_uri(company_logo)" alt="Logotipo de la empresa"/>
             </td>
             <td class="o_sq_company">
                 <div class="o_sq_company_name" t-field="o.company_id.name"/>
@@ -102,10 +112,10 @@
                     .mat-invoice .o_total {border-top:1px solid #222; font-weight:bold;}
                     .mat-invoice #payment_term {font-size:11px;}
                     .mat-invoice .mat-thanks {color:#24468d; font-weight:bold; margin-top:14px;}
-                    .mat-invoice #complement {font-size:9px; margin-top:15px;}
-                    .mat-invoice #complement .barcode {float:left; width:20%;}
+                    .mat-invoice #complement {display:table; clear:both; font-size:9px; margin-top:15px; page-break-inside:auto; table-layout:fixed;}
+                    .mat-invoice #complement .barcode {display:table-cell; float:none; vertical-align:top; width:20%;}
                     .mat-invoice #complement .barcode img {width:125px;height:125px;}
-                    .mat-invoice #complement .complement-details {float:right; width:79%;}
+                    .mat-invoice #complement .complement-details {display:table-cell; float:none; vertical-align:top; width:80%;}
                     .mat-invoice .page {margin:0;}
                     .mat-invoice .mat-document-header {font-family:'IBM Plex Sans','Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:1.45;color:#1d1d1b;}
                     .mat-invoice .mat-document-header table {border-collapse:collapse;border-spacing:0;}
@@ -147,8 +157,16 @@
 </style>
                 <t t-out="0"/>
             </div>
-            <div class="footer" style="font-size:9px;color:#666;text-align:right;">
-                <span t-field="o.company_id.name"/> · Página <span class="page"/> / <span class="topage"/>
+            <div t-attf-class="footer o_company_#{company.id}_layout {{report_type != 'pdf' and 'mt-auto'}}">
+                <div class="o_footer_content d-flex border-top pt-2">
+                    <img class="me-3" style="height:36px; width:auto;"
+                         t-att-src="o._mat_invoice_footer_image()" alt="Súper Asesor Osel"/>
+                    <div class="flex-grow-1 text-start me-2" t-field="company.report_footer"/>
+                    <div class="text-end text-muted">
+                        <div t-if="report_type == 'pdf' and display_name_in_footer" t-out="o.name"/>
+                        <div t-if="report_type == 'pdf'" class="text-nowrap">Page <span class="page"/> / <span class="topage"/></div>
+                    </div>
+                </div>
             </div>
         </t>
     </template>

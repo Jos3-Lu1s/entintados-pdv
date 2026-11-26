@@ -4,6 +4,7 @@ from lxml import html
 
 from odoo import Command
 from odoo.tests.common import TransactionCase, tagged
+from odoo.tools.image import image_data_uri
 
 
 def _digits(text):
@@ -106,7 +107,9 @@ class TestSaleQuotationReport(TransactionCase):
         self.assertEqual([' '.join(' '.join(header.itertext()).split()) for header in headers], [
             'Cantidad', 'Código', 'Descripción', 'Valor Uni.', 'Importe',
         ])
-        self.assertTrue(doc.xpath("//img[@alt='Pinturas Osel Centro Sur'][starts-with(@src, 'data:image/jpeg;base64,')]"))
+        logo = order.company_id.logo
+        self.assertEqual(doc.xpath("//img[@alt='Logotipo de la empresa']/@src"),
+                         [image_data_uri(logo)] if logo else [])
         self.assertTrue(doc.xpath("//div[hasclass('article')]/table[hasclass('o_sq_header')]"))
         self.assertFalse(doc.xpath("//div[hasclass('header')]//table[hasclass('o_sq_header')]"))
         self.assertTrue(doc.xpath("//div[hasclass('footer')]//img[@alt='Súper Asesor Osel'][starts-with(@src, 'data:image/jpeg;base64,')]"))

@@ -104,18 +104,32 @@ patch(PosStore.prototype, {
         }
         this._processingSaleOrder = true;
         try {
-            const hasDifferentSaleOrder = this.getOrder().lines.some((line) => {
-                const origin = line.sale_order_origin_id || line.sale_order_line_id?.order_id;
-                return origin && origin.id !== saleOrder.id;
-            });
-            if (hasDifferentSaleOrder) {
+            const existingOrder = this.getOpenOrders().find((order) =>
+                printableQuotations(order).some((quotation) => quotation.id === saleOrder.id)
+            );
+            if (existingOrder) {
+                const orderNumber = existingOrder.getName() || existingOrder.pos_reference || existingOrder.id;
+                this.notification.add(
+                    _t("Esta cotización ya está en la orden %s del punto de venta.", orderNumber),
+                    { type: "warning" }
+                );
+                return;
+            }
+            if (printableQuotations(this.getOrder()).length) {
                 this.notification.add(
                     _t("Esta orden del punto de venta ya tiene una cotización o pedido de Ventas. La selección se abrirá en una orden nueva."),
                     { type: "warning" }
                 );
                 this.addNewOrder();
             }
-            return await super._processSaleOrder(...arguments);
+            const order = this.getOrder();
+            if (saleOrder.partner_id) {
+                order.setPartner(saleOrder.partner_id);
+            }
+            const fiscalPosition = saleOrder.fiscal_position_id;
+            order.update({ fiscal_position_id: fiscalPosition });
+            await this.settleSO(saleOrder, fiscalPosition);
+            this.selectOrderLine(order, order.lines.at(-1));
         } finally {
             this._processingSaleOrder = false;
         }
@@ -335,7 +349,8 @@ patch(ControlButtons.prototype, {
 
     get canPrintCurrentQuotation() {
         const order = this.pos.getOrder();
-        return order?.state === "draft" && !order.finalized && !order.isRefund && order.lines.length > 0;
+        return order?.state === "draft" && !order.finalized && !order.isRefund && order.lines.length > 0 &&
+            !printableQuotations(order).length;
     },
 
     async onClickPrintCurrentQuotation() {

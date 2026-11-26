@@ -12,10 +12,8 @@ function fixture(fail = false) {
     class ControlButtons {}
     class TicketScreen {}
     class NativePosStore {
-        async _processSaleOrder(saleOrder) {
-            const order = this.getOrder();
-            order.lines.push({ sale_order_origin_id: saleOrder });
-            return order;
+        async _processSaleOrder() {
+            assert.fail('The native action menu must not open');
         }
         pay() {
             assert.ok(this.getOrder().lines.some((line) => line.refunded_orderline_id));
@@ -29,7 +27,7 @@ function fixture(fail = false) {
         requiresPosStock: (product) => Boolean(product?.is_storable),
         downloadFile: (...args) => downloads.push(args),
         isTintColorant: (line) => Boolean(line.is_tint_colorant),
-        _t: (text) => text, patch: (target, extension) => {
+        _t: (text, value) => value === undefined ? text : text.replace('%s', value), patch: (target, extension) => {
             Object.setPrototypeOf(extension, Object.getPrototypeOf(target));
             Object.defineProperties(target, Object.getOwnPropertyDescriptors(extension));
         } });
@@ -97,34 +95,75 @@ test('downloads the linked quotation from the clicked ticket row', async () => {
 
 test('opens a different sales quotation in a new POS order and warns the cashier', async () => {
     const { PosStore } = fixture();
-    const firstQuotation = { id: 42, partner_id: { id: 1 } };
+    const firstQuotation = { id: 42, partner_id: { id: 1 }, fiscal_position_id: { id: 7 } };
     const secondQuotation = { ...firstQuotation, id: 43 };
-    const original = { lines: [{ sale_order_line_id: { order_id: firstQuotation } }] };
+    const newOrder = () => ({
+        getName: () => '6009',
+        lines: [],
+        setPartner(partner) { this.partner_id = partner; },
+        update(values) { Object.assign(this, values); },
+    });
+    const original = newOrder();
     let current = original;
     const notices = [];
     const store = Object.assign(new PosStore(), {
         getOrder: () => current,
-        addNewOrder() { current = { lines: [] }; },
+        getOpenOrders: () => current === original ? [original] : [original, current],
+        addNewOrder() { current = newOrder(); },
+        async settleSO(quotation, fiscalPosition) {
+            assert.equal(current.partner_id, quotation.partner_id);
+            assert.equal(current.fiscal_position_id, fiscalPosition);
+            current.lines.push({ sale_order_origin_id: quotation });
+        },
+        selectOrderLine(order, line) { assert.equal(line, order.lines.at(-1)); },
         notification: { add: (...args) => notices.push(args) },
     });
 
-    assert.equal(await store._processSaleOrder(firstQuotation), original);
+    await store._processSaleOrder(firstQuotation);
+    assert.equal(current, original);
     assert.equal(notices.length, 0);
-    const next = await store._processSaleOrder(secondQuotation);
+    assert.equal(await store._processSaleOrder(firstQuotation), undefined);
+    assert.equal(current, original);
+    assert.equal(original.lines.length, 1);
+    assert.match(notices[0][0], /ya está en la orden 6009/);
+    assert.equal(notices[0][1].type, 'warning');
+    await store._processSaleOrder(secondQuotation);
+    const next = current;
     assert.equal(next, current);
     assert.notEqual(next, original);
     assert.equal(next.lines.length, 1);
     assert.equal(next.lines[0].sale_order_origin_id, secondQuotation);
-    assert.equal(original.lines.length, 2);
-    assert.equal(original.lines[1].sale_order_origin_id, firstQuotation);
-    assert.equal(notices.length, 1);
-    assert.equal(notices[0][1].type, 'warning');
-    assert.match(notices[0][0], /se abrirá en una orden nueva/);
+    assert.equal(original.lines.length, 1);
+    assert.equal(original.lines[0].sale_order_origin_id, firstQuotation);
+    assert.equal(notices[1][1].type, 'warning');
+    assert.match(notices[1][0], /se abrirá en una orden nueva/);
+    assert.equal(await store._processSaleOrder(firstQuotation), undefined);
+    assert.equal(current, next);
+    assert.equal(next.lines.length, 1);
+    assert.match(notices[2][0], /ya está en la orden 6009/);
+});
+
+test('prints the original Sales quotation for an imported ticket', async () => {
+    const { button, calls } = fixture();
+    const order = button.pos.getOrder();
+    const quotation = { id: 43, name: 'S00114' };
+    order.lines[0].sale_order_origin_id = quotation;
+    button.pos.lastCreatedSaleQuotation = { id: 99 };
+    button.quotationAction = { doAction: (action, options) => {
+        calls.push([action, options.additionalContext.active_id]);
+    } };
+
+    assert.equal(button.canPrintCurrentQuotation, false);
+    await button.onClickPrintCurrentQuotation();
+    assert.equal(calls.length, 0);
+    await button.onClickPrintSaleQuotation();
+    assert.deepEqual(calls, [['sale.action_report_saleorder', 43]]);
 });
 
 test('prints all current order lines without converting or removing the ticket', async () => {
     const { button, calls, downloads } = fixture();
     const order = button.pos.getOrder();
+    button.pos.lastCreatedSaleQuotation = { id: 99 };
     const base = order.lines[0];
     base.serializeForORM = () => ({ uuid: base.uuid, product_id: 2, price_subtotal: base.price_subtotal });
     order.lines.push({

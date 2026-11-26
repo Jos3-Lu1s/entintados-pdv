@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <!-- El botón de recompensas dice «Promociones» y cuenta las líneas con promociones sin aplicar, como en Ventas. -->
-    <t t-name="entintados_pdv.ControlButtons" t-inherit="pos_loyalty.ControlButtons" t-inherit-mode="extension">
+    <t t-name="entintados_pdv.ControlButtons" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
         <xpath expr="//button[@t-on-click='() => this.clickRewards()']" position="replace">
             <button class="control-button"
                 t-att-class="buttonClass"

@@ -5,9 +5,6 @@
                     t-att-class="buttonClass" t-on-click="onClickPrintCurrentQuotation">
                 <i class="fa fa-print me-1" aria-hidden="true"/>Imprimir cotización de esta orden
             </button>
-            <button t-if="printableSaleQuotations.length" t-att-class="buttonClass" t-on-click="onClickPrintSaleQuotation">
-                <i class="fa fa-print me-1"/>Imprimir cotización
-            </button>
             <button t-if="pos.cashier._role != 'minimal'" t-att-class="buttonClass" t-on-click="() => this.onClickCreateSaleQuotation()">
                 <i class="fa fa-file-text-o me-1"/>Crear cotización
             </button>

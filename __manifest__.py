@@ -52,6 +52,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/advance_line_lock.js",
             "entintados_pdv/static/src/app/overrides/pos_financing.js",
             "entintados_pdv/static/src/app/overrides/pos_invoice_collection.js",
+            "entintados_pdv/static/src/app/overrides/pos_receipt_invoice.js",
+            "entintados_pdv/static/src/app/overrides/pos_receipt_invoice.xml",
             "entintados_pdv/static/src/app/overrides/pos_debt_line_removal.js",
             "entintados_pdv/static/src/app/overrides/pos_financing.xml",
             "entintados_pdv/static/src/app/overrides/pos_bank_payments.xml",

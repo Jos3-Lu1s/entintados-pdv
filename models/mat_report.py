@@ -39,8 +39,47 @@ class AccountMove(models.Model):
         with file_open('entintados_pdv/static/src/img/quotation_osel_logo.jpg', 'rb') as logo:
             return 'data:image/jpeg;base64,' + b64encode(logo.read()).decode('ascii')
 
+    def _mat_invoice_footer_image(self):
+        return self.env['sale.order']._quotation_report_image(watermark=True)
+
     def _mat_report_header(self):
         return header(self)
+
+    def action_print_pdf(self):
+        self.ensure_one()
+        if self._mat_has_signed_invoice():
+            # Render from the signed XML even if an earlier PDF was saved as an attachment.
+            return self.env.ref('entintados_pdv.action_report_invoice_live').report_action(self, config=False)
+        return super().action_print_pdf()
+
+    def _mat_has_signed_invoice(self):
+        self.ensure_one()
+        return (self.move_type == 'out_invoice' and self.l10n_mx_edi_cfdi_state == 'sent'
+                and bool(self.l10n_mx_edi_cfdi_attachment_id))
+
+    def _get_invoice_legal_documents(self, filetype, allow_fallback=False):
+        if filetype == 'pdf' and self._mat_has_signed_invoice():
+            reports = self.env['ir.actions.report'].with_context(website_id=False, force_report_rendering=True)
+            pdf, _ = reports._render_qweb_pdf('entintados_pdv.report_invoice_live', self.ids)
+            return {
+                'filename': f"{(self.name or str(self.id)).replace('/', '_')}.pdf",
+                'filetype': 'pdf',
+                'content': pdf,
+            }
+        return super()._get_invoice_legal_documents(filetype, allow_fallback=allow_fallback)
+
+    def _get_invoice_legal_documents_all(self, allow_fallback=False):
+        if not self._mat_has_signed_invoice():
+            return super()._get_invoice_legal_documents_all(allow_fallback=allow_fallback)
+
+        documents = super()._get_invoice_legal_documents_all()
+        if not documents:
+            documents = [self._get_invoice_legal_documents('cfdi')]
+        saved = self.invoice_pdf_report_id
+        return [self._get_invoice_legal_documents('pdf'), *(
+            document for document in documents
+            if document and (document['filetype'], document['filename']) != (saved.mimetype, saved.name)
+        )]
 
     def action_get_mat_preview(self):
         self.ensure_one()
