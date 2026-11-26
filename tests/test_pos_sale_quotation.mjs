@@ -407,7 +407,7 @@ test('selects the new draft ticket after restoring an order from Ventas', async 
     assert.equal(selected, replacement);
 });
 
-test('checks branch availability for positive stock lines without saving the quotation', async () => {
+test('checks branch availability for the selected line and its tint formula without saving', async () => {
     const { button, calls, BranchStockDialog } = fixture();
     const order = button.pos.getOrder();
     const base = { id: 2, is_storable: true };
@@ -430,15 +430,21 @@ test('checks branch availability for positive stock lines without saving the quo
         calls.push([model, method, JSON.stringify(args)]);
         return stockRows;
     };
+    let dialogProps;
     button.dialog.add = (component, props) => {
         assert.equal(component, BranchStockDialog);
-        assert.equal(props.rows, stockRows);
-        calls.push('opened');
+        dialogProps = props;
     };
-    await button.onClickQuotationStock();
+    button.onClickQuotationStock();
+    assert.equal(calls.length, 0);
+    assert.equal(dialogProps.entries.length, 3);
+    for (const entry of dialogProps.entries) {
+        assert.equal(await dialogProps.loadStock(entry), stockRows);
+    }
     assert.deepEqual(calls, [
-        ['product.product', 'get_pos_quotation_branch_stock', '[7,{"2":5},{"3":28,"5":16}]'],
-        'opened',
+        ['product.product', 'get_pos_quotation_branch_stock', '[7,{"2":1},{}]'],
+        ['product.product', 'get_pos_quotation_branch_stock', '[7,{"2":2},{"3":24}]'],
+        ['product.product', 'get_pos_quotation_branch_stock', '[7,{"2":2},{"3":4,"5":16}]'],
     ]);
     order.finalized = true;
     assert.equal(button.canCheckQuotationStock, false);

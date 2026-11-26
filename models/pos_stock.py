@@ -64,6 +64,7 @@ class ProductProduct(models.Model):
             lambda company: company.root_id == config.company_id.root_id)
         warehouses = self.env['stock.warehouse'].sudo().search(
             [('company_id', 'in', companies.ids)], order='name, id')
+        order_warehouse = config.picking_type_id.warehouse_id
         rows = []
         for warehouse in warehouses:
             lookup = self.env['product.stock.lookup'].new({'company_id': warehouse.company_id.id})
@@ -76,6 +77,7 @@ class ProductProduct(models.Model):
                 available = on_hand - reserved
                 rows.append({
                     'warehouse': warehouse.display_name, 'product': product.display_name,
+                    'productId': product.id, 'isOrderWarehouse': warehouse.id == order_warehouse.id,
                     'uom': product.uom_id.name, 'required': required, 'onHand': on_hand,
                     'reserved': reserved, 'available': available,
                     'shortage': product.uom_id.compare(required, available) > 0,

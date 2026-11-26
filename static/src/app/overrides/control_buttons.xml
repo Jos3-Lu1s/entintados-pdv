@@ -2,6 +2,8 @@
 <templates xml:space="preserve">
     <!-- El botón de recompensas dice «Promociones» y cuenta las líneas con promociones sin aplicar, como en Ventas. -->
     <t t-name="entintados_pdv.ControlButtons" t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('control-buttons-modal')]//NoteButton[@label.translate='Customer Note']" position="replace"/>
+        <xpath expr="//div[hasclass('control-buttons-modal')]//button[@t-on-click='() => this.clickPromoCode()']" position="replace"/>
         <xpath expr="//button[@t-on-click='() => this.clickRewards()']" position="replace">
             <button class="control-button"
                 t-att-class="buttonClass"

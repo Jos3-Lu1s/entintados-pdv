@@ -48,25 +48,42 @@
     </t>
     <t t-name="entintados_pdv.BranchStockDialog">
         <Dialog title="props.title" size="'xl'">
-            <div t-if="props.rows.length" class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
+            <div class="row g-2 mb-4 align-items-center">
+                <label for="pos-stock-product" class="col-sm-3 fw-semibold">Producto / entintado</label>
+                <div class="col-sm-9">
+                    <AutoComplete id="'pos-stock-product'" sources="sources"
+                                  value="state.entry?.label || ''"
+                                  placeholder.translate="Busca el producto o el color del entintado..."/>
+                </div>
+                <div class="col-6 col-sm-3 text-muted">Unidad</div>
+                <div class="col-6 col-sm-9" t-esc="state.entry?.unit || '—'"/>
+                <div class="col-6 col-sm-3 text-muted">Orden</div>
+                <div class="col-6 col-sm-9" t-esc="state.entry?.reference || '—'"/>
+                <div class="col-6 col-sm-3 text-muted">Almacén de la orden</div>
+                <div class="col-6 col-sm-9" t-esc="orderWarehouse || '—'"/>
+                <div class="col-6 col-sm-3 text-muted">Cantidad solicitada</div>
+                <div class="col-6 col-sm-9" t-esc="state.entry ? formatQuantity(state.entry.quantity) : '—'"/>
+                <div class="col-6 col-sm-3 text-muted">Compañía</div>
+                <div class="col-6 col-sm-9" t-esc="props.company || '—'"/>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2">
                     <thead>
                         <tr>
-                            <th scope="col">Sucursal</th>
-                            <th scope="col">Producto</th>
-                            <th scope="col">Unidad</th>
-                            <th scope="col" class="text-end">Solicitado</th>
+                            <th scope="col">Almacén</th>
                             <th scope="col" class="text-end">Existencia física</th>
                             <th scope="col" class="text-end">Reservado</th>
                             <th scope="col" class="text-end">Disponible</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr t-foreach="props.rows" t-as="row" t-key="row_index">
-                            <td t-esc="row.warehouse"/>
-                            <td t-esc="row.product"/>
-                            <td t-esc="row.uom"/>
-                            <td class="text-end" t-esc="formatQuantity(row.required)"/>
+                        <tr t-foreach="state.rows" t-as="row" t-key="row_index">
+                            <th scope="row" class="fw-normal">
+                                <span t-esc="row.warehouse"/>
+                                <div t-if="row.productId !== state.entry.productId" class="small text-muted">
+                                    <t t-esc="row.product"/> · <t t-esc="formatQuantity(row.required)"/> <t t-esc="row.uom"/>
+                                </div>
+                            </th>
                             <td class="text-end" t-esc="formatQuantity(row.onHand)"/>
                             <td class="text-end" t-esc="formatQuantity(row.reserved)"/>
                             <td class="text-end" t-att-class="{'text-danger fw-bold': row.shortage}">
@@ -74,12 +91,22 @@
                                 <span t-if="row.shortage" class="d-block small">Insuficiente</span>
                             </td>
                         </tr>
+                        <tr t-if="!state.rows.length">
+                            <td colspan="4" class="py-3 text-muted" role="status">
+                                <t t-if="state.pending">Consultando existencias…</t>
+                                <span t-elif="state.error" class="text-danger" t-esc="state.error"/>
+                                <t t-elif="state.entry">No se encontraron existencias por sucursal.</t>
+                                <t t-else="">Selecciona un producto o entintado para consultar sus existencias.</t>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
-            <p t-else="" class="mb-0">No se encontraron existencias por sucursal para los productos consultados.</p>
+            <p class="small text-muted mb-0">Disponible = existencia física menos lo reservado.</p>
             <t t-set-slot="footer">
-                <button class="btn btn-secondary" t-on-click="props.close">Cerrar</button>
+                <button class="btn btn-secondary" t-att-disabled="!state.entry || state.pending"
+                        t-on-click="() => this.load()">Actualizar</button>
+                <button class="btn btn-primary" t-on-click="props.close">Cerrar</button>
             </t>
         </Dialog>
     </t>

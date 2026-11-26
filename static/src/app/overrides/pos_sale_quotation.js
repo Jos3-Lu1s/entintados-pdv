@@ -139,62 +139,58 @@ patch(ControlButtons.prototype, {
             order.lines.some((line) => line.qty > 0 && requiresPosStock(line.product_id));
     },
 
-    async onClickQuotationStock() {
-        if (!this.canCheckQuotationStock || this._checkingQuotationStock) {
+    onClickQuotationStock() {
+        if (!this.canCheckQuotationStock) {
             return;
         }
         const order = this.pos.getOrder();
-        const quantities = {};
-        const tintPoints = {};
-        const lines = new Set(order.lines);
-        const recipeChildren = new Set();
-        for (const line of order.lines) {
-            for (const child of line.combo_line_ids || []) {
-                lines.add(child);
-                if (isTintColorant(child) && line.sale_order_line_id?.tint_snapshot?.doses?.length) {
-                    recipeChildren.add(child);
-                }
-            }
-        }
-        const add = (totals, productId, quantity) => {
-            if (productId && quantity > 0) {
-                totals[productId] = (totals[productId] || 0) + quantity;
-            }
-        };
-        for (const line of lines) {
+        const lines = [...new Set(order.lines.flatMap((line) => [line, ...(line.combo_line_ids || [])]))];
+        const tintChildren = new Set(lines.flatMap((line) => (line.combo_line_ids || []).filter(isTintColorant)));
+        const entries = lines.flatMap((line, index) => {
             const product = line.product_id;
-            if (line.qty <= 0 || recipeChildren.has(line)) {
-                continue;
+            if (line.qty <= 0 || tintChildren.has(line) || !requiresPosStock(product)) {
+                return [];
             }
-            if (isTintColorant(line)) {
-                if (!line.combo_parent_id?.sale_order_line_id?.tint_snapshot?.doses?.length) {
-                    add(tintPoints, product?.id, Number(line.qty));
-                }
-                continue;
-            }
-            if (requiresPosStock(product)) {
-                add(quantities, product.id, Number(line.qty));
-            }
+            const quantities = {};
+            const tintPoints = {};
             const recipe = line.sale_order_line_id?.tint_snapshot;
-            if (recipe?.base_id && recipe.base_id === product?.id) {
-                for (const dose of recipe.doses || []) {
-                    add(tintPoints, dose.product_id, dose.points * Number(line.qty));
+            if (isTintColorant(line)) {
+                tintPoints[product.id] = Number(line.qty);
+            } else {
+                quantities[product.id] = Number(line.qty);
+                if (recipe?.base_id === product.id && recipe.doses?.length) {
+                    for (const dose of recipe.doses) {
+                        tintPoints[dose.product_id] = (tintPoints[dose.product_id] || 0) + dose.points * Number(line.qty);
+                    }
+                } else {
+                    for (const child of (line.combo_line_ids || []).filter(isTintColorant)) {
+                        if (child.qty > 0 && child.product_id?.id) {
+                            const id = child.product_id.id;
+                            tintPoints[id] = (tintPoints[id] || 0) + Number(child.qty);
+                        }
+                    }
                 }
             }
-        }
-        this._checkingQuotationStock = true;
-        try {
-            const rows = await this.pos.data.call("product.product", "get_pos_quotation_branch_stock",
-                [this.pos.config.id, quantities, tintPoints]);
-            if (order === this.pos.getOrder() && this.canCheckQuotationStock) {
-                this.dialog.add(BranchStockDialog, { rows, title: _t("Disponibilidad por sucursal") });
-            }
-        } catch (error) {
-            this.notification.add(error.data?.message || _t("No se pudo consultar la disponibilidad. Revisa la conexión."),
-                { type: "warning" });
-        } finally {
-            this._checkingQuotationStock = false;
-        }
+            const name = line.getFullProductName?.() || product.display_name || product.name || "";
+            return [{
+                label: _t("%s · Línea %s", name, index + 1),
+                productId: product.id,
+                quantity: Number(line.qty),
+                unit: product.uom_id?.name || "",
+                reference: (line.sale_order_origin_id || line.sale_order_line_id?.order_id)?.name ||
+                    order.getName?.() || order.pos_reference || "",
+                quantities,
+                tintPoints,
+            }];
+        });
+        const config = this.pos.config;
+        this.dialog.add(BranchStockDialog, {
+            entries,
+            title: _t("Disponibilidad por sucursal"),
+            company: this.pos.company?.name || "",
+            loadStock: (entry) => this.pos.data.call("product.product", "get_pos_quotation_branch_stock",
+                [config.id, entry.quantities, entry.tintPoints]),
+        });
     },
 
     async onClickReinvoiceSaleOrder() {
