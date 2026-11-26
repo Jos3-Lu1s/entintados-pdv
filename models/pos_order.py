@@ -78,6 +78,7 @@ class PosOrder(models.Model):
         self.browse(order_id)._check_pos_refunds_disabled()
         self.browse(order_id)._check_colorant_lines()
         self.browse(order_id)._check_pricing_coherence()
+        self.browse(order_id)._sync_sale_lines_with_charged_prices()
         return order_id
 
     def _check_pricing_coherence(self):

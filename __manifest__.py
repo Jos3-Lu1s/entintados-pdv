@@ -97,6 +97,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/utils/tint_flow.js",
             "entintados_pdv/static/src/app/utils/invoice_options.js",
             "entintados_pdv/static/src/app/utils/quotation_print.js",
+            "entintados_pdv/static/src/app/utils/sale_order_import.js",
             # Pantalla de seleccion de color
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.js",
             "entintados_pdv/static/src/app/screens/tint_color_screen/tint_color_screen.xml",
@@ -119,6 +120,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/pos_order_line.js",
             "entintados_pdv/static/src/app/overrides/pos_order_pricing.js",
             "entintados_pdv/static/src/app/overrides/pos_order_promotions.js",
+            # Después de pos_store.js y pos_order_pricing.js: recalcula con sus reglas.
+            "entintados_pdv/static/src/app/overrides/sale_order_import.js",
             # Después de los parches de las entradas del teclado (pos_store, pos_order_line,
             # pos_order_pricing y advance_line_lock): así el permiso se revisa primero.
             "entintados_pdv/static/src/app/overrides/cashier_permissions.js",

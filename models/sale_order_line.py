@@ -8,6 +8,9 @@ from ..utils.origin_badge import COMBO_ORIGIN_PREFIX, FIXED_PRICE_LABEL, format_
 from ..utils.pricing_selection import PRICE_ORIGINS, PRICING_RULE_TYPES
 
 AGREEMENT_DISCOUNT_TYPES = ('product', 'line', 'scheme', 'global')
+# Escritura de lo cobrado en la caja: la cantidad que `pos_sale` cuenta como facturada por el
+# propio ticket no impide la promoción que ese ticket cobró.
+POS_CHARGED_PRICES = object()
 # Campos del acuerdo que los productos de un combo copian de su paquete.
 COMBO_AGREEMENT_FIELDS = {
     'product_id', 'discount', 'technical_discount',
@@ -1248,7 +1251,10 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         if self.pricing_rule_type == 'fixed_price':
             return _("Precio fijo de acuerdo")
-        if self.qty_invoiced > 0:
+        if self.qty_invoiced > 0 and not (
+            self.env.context.get('pos_charged_prices') is POS_CHARGED_PRICES
+            and not self.invoice_lines.filtered(lambda line: line.move_id.state != 'cancel')
+        ):
             return _("Ya facturada")
         return False
 

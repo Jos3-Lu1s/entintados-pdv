@@ -45,6 +45,7 @@ from . import test_advance_defaults
 from . import test_vendor_credit_reasons
 from . import test_sale_tint
 from . import test_pos_sale_quotation
+from . import test_pos_sale_order_import
 from . import test_customer_credit_reasons
 from . import test_pos_bank_payments
 from . import test_distributed_credit_report

@@ -78,6 +78,7 @@ from . import sale_tint
 from . import sale_tint_stock
 from . import pos_invoice_collection
 from . import pos_sale_quotation
+from . import pos_sale_order_sync
 from . import customer_credit_reason
 from . import pos_bank_payments
 from . import vendor_credit_report

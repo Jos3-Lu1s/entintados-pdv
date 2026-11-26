@@ -98,29 +98,6 @@ patch(PaymentScreen.prototype, {
 });
 
 patch(PosStore.prototype, {
-    async _processSaleOrder(saleOrder) {
-        if (this._processingSaleOrder) {
-            return;
-        }
-        this._processingSaleOrder = true;
-        try {
-            const hasDifferentSaleOrder = this.getOrder().lines.some((line) => {
-                const origin = line.sale_order_origin_id || line.sale_order_line_id?.order_id;
-                return origin && origin.id !== saleOrder.id;
-            });
-            if (hasDifferentSaleOrder) {
-                this.notification.add(
-                    _t("Esta orden del punto de venta ya tiene una cotización o pedido de Ventas. La selección se abrirá en una orden nueva."),
-                    { type: "warning" }
-                );
-                this.addNewOrder();
-            }
-            return await super._processSaleOrder(...arguments);
-        } finally {
-            this._processingSaleOrder = false;
-        }
-    },
-
     async pay() {
         const order = this.getOrder();
         if (order?.isRefund && Number.isInteger(order.id) &&
@@ -143,15 +120,6 @@ patch(PosStore.prototype, {
         }
         return super.pay(...arguments);
     },
-
-    async addLineToCurrentOrder(values, options = {}, configure = true) {
-        const recipe = values.sale_order_line_id?.tint_snapshot;
-        if (recipe?.base_only) {
-            values = { ...values, is_tinted_base: true, tint_color_code: recipe.color_code || false,
-                       customer_note: values.sale_order_line_id.name };
-        }
-        return super.addLineToCurrentOrder(values, options, configure);
-    },
 });
 
 patch(ControlButtons.prototype, {
@@ -159,32 +127,6 @@ patch(ControlButtons.prototype, {
         super.setup(...arguments);
         this.quotationUI = useService("ui");
         this.quotationAction = useService("action");
-    },
-
-    onClickQuotation() {
-        const partner = this.pos.getOrder()?.getPartner();
-        const domain = [
-            ["state", "!=", "cancel"],
-            ["invoice_status", "!=", "to invoice"],
-            ["pos_has_active_invoice", "=", false],
-            ["currency_id", "=", this.pos.currency.id],
-            ["amount_unpaid", ">", 0],
-        ];
-        if (partner) {
-            domain.push(["partner_id", "any", [["id", "child_of", [partner.id]]]]);
-        }
-        this.dialog.add(SelectCreateDialog, {
-            resModel: "sale.order",
-            noCreate: true,
-            multiSelect: false,
-            domain,
-            context: this.partner ? { search_default_partner_id: this.partner.id } : {},
-            onSelected: async ([orderId]) => {
-                if (orderId) {
-                    await this.pos.onClickSaleOrder(orderId);
-                }
-            },
-        });
     },
 
     get printableSaleQuotations() {
