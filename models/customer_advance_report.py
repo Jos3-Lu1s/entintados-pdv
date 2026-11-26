@@ -66,8 +66,9 @@ class CustomerAdvanceReportHandler(models.AbstractModel):
         )
 
     def _balances(self, invoices):
+        balances = [(invoice, invoice._advance_report_balances()) for invoice in invoices]
         return {
-            name: sum(self._convert(invoice, invoice[name]) for invoice in invoices)
+            name: sum(self._convert(invoice, values[name]) for invoice, values in balances)
             for name in self._balance_columns
         }
 
@@ -113,15 +114,19 @@ class CustomerAdvanceReportHandler(models.AbstractModel):
             )
             for invoice in invoices[:limit] if limit else invoices:
                 line_id = report._get_generic_line_id('account.move', invoice.id, parent_line_id=line_dict_id)
-                has_applications = bool(invoice.advance_used_invoice_ids)
+                has_applications = bool(invoice._advance_report_used_amounts_by_invoice())
                 lines.append({
                     'id': line_id,
                     'parent_id': line_dict_id,
                     'name': invoice.name,
                     'caret_options': 'account.move',
-                    'advance_name_color': 'text-danger' if invoice.currency_id.is_zero(invoice.advance_available) else 'text-warning',
+                    'advance_name_color': 'text-danger' if invoice.currency_id.is_zero(invoice._advance_report_balances()['advance_available']) else 'text-warning',
                     'level': 2,
-                    'columns': self._columns(report, options, {'invoice_date': invoice.invoice_date, **self._balances(invoice)}),
+                    'columns': self._columns(report, options, {
+                        'invoice_date': invoice.invoice_date,
+                        'advance_credit_status': invoice._advance_report_credit_status(),
+                        **self._balances(invoice),
+                    }),
                     'unfoldable': has_applications,
                     'unfolded': has_applications and (options['unfold_all'] or line_id in options['unfolded_lines']),
                     'expand_function': self._expand_function,
@@ -131,8 +136,8 @@ class CustomerAdvanceReportHandler(models.AbstractModel):
         if model_name == 'account.move':
             advance = move_model.search(domain & Domain('id', '=', record_id), limit=1)
             if advance:
-                amounts = advance._advance_used_amounts_by_invoice()
-                for invoice in advance.advance_used_invoice_ids:
+                amounts = advance._advance_report_used_amounts_by_invoice()
+                for invoice in move_model.browse(list(amounts)):
                     lines.append({
                         'id': report._get_generic_line_id('account.move', invoice.id, parent_line_id=line_dict_id),
                         'parent_id': line_dict_id,

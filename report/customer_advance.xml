@@ -87,7 +87,7 @@
                                 <thead style="display: table-header-group;">
                                     <tr class="o_advance_currency">
                                         <th/>
-                                        <th colspan="4" t-out="currency.name"/>
+                                        <th t-att-colspan="5 if detailed else 4" t-out="currency.name"/>
                                     </tr>
                                     <tr>
                                         <t t-if="detailed">
@@ -101,24 +101,27 @@
                                         <th class="text-end">Total</th>
                                         <th class="text-end">Saldo utilizado</th>
                                         <th class="text-end">Saldo disponible</th>
+                                        <th t-if="detailed">Estatus de nota de crédito</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <t t-if="detailed">
                                         <t t-foreach="section['customers']" t-as="customer">
                                             <tr class="o_advance_customer">
-                                                <td colspan="5" t-out="customer['name'] or ''"/>
+                                                <td colspan="6" t-out="customer['name'] or ''"/>
                                             </tr>
                                             <t t-foreach="customer['invoices']" t-as="invoice">
-                                                <tr t-attf-class="o_advance_invoice {{ 'o_advance_invoice_with_applications' if invoice.advance_used_invoice_ids else '' }}">
+                                                <t t-set="balances" t-value="invoice._advance_report_balances()"/>
+                                                <t t-set="used_amounts" t-value="invoice._advance_report_used_amounts_by_invoice()"/>
+                                                <tr t-attf-class="o_advance_invoice {{ 'o_advance_invoice_with_applications' if used_amounts else '' }}">
                                                     <td class="text-nowrap"><span t-field="invoice.name"/></td>
                                                     <td class="text-nowrap"><span t-field="invoice.invoice_date"/></td>
                                                     <td class="text-end text-nowrap"><span t-field="invoice.amount_total"/></td>
-                                                    <td class="text-end text-nowrap"><span t-field="invoice.advance_applied"/></td>
-                                                    <td class="text-end text-nowrap"><span t-field="invoice.advance_available"/></td>
+                                                    <td class="text-end text-nowrap"><span t-out="balances['advance_applied']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></td>
+                                                    <td class="text-end text-nowrap"><span t-out="balances['advance_available']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></td>
+                                                    <td t-out="invoice._advance_report_credit_status()"/>
                                                 </tr>
-                                                <t t-set="used_amounts" t-value="invoice._advance_used_amounts_by_invoice()"/>
-                                                <tr t-foreach="invoice.advance_used_invoice_ids" t-as="related" class="o_advance_application">
+                                                <tr t-foreach="invoice.browse(list(used_amounts))" t-as="related" class="o_advance_application">
                                                     <td>Aplicado en <span class="o_advance_application_tag" t-field="related.name"/></td>
                                                     <td class="text-nowrap"><span t-field="related.invoice_date"/></td>
                                                     <td/>
@@ -126,6 +129,7 @@
                                                         <span t-out="used_amounts.get(related.id, 0.0)"
                                                               t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                                     </td>
+                                                    <td/>
                                                     <td/>
                                                 </tr>
                                             </t>
@@ -145,6 +149,7 @@
                                         <td t-foreach="section['totals']" t-as="amount" class="text-end text-nowrap">
                                             <span t-out="amount" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                         </td>
+                                        <td t-if="detailed"/>
                                     </tr>
                                 </tbody>
                             </table>

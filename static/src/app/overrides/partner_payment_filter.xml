@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="entintados_pdv.PartnerPaymentFilter"
+       t-inherit="point_of_sale.PartnerList" t-inherit-mode="extension">
+        <xpath expr="//t[@t-set='initialPartners']" position="before">
+            <div class="d-flex flex-wrap gap-2 p-3 border-bottom" role="group" aria-label="Filtrar clientes por condición de pago">
+                <button type="button" class="btn"
+                        t-att-disabled="state.loading"
+                        t-att-class="state.customerPaymentFilter === 'cash' ? 'btn-primary' : 'btn-outline-secondary'"
+                        t-att-aria-pressed="state.customerPaymentFilter === 'cash' ? 'true' : 'false'"
+                        t-on-click="() => this.setCustomerPaymentFilter('cash')">
+                    Clientes de contado
+                </button>
+                <button type="button" class="btn"
+                        t-att-disabled="state.loading"
+                        t-att-class="state.customerPaymentFilter === 'credit' ? 'btn-primary' : 'btn-outline-secondary'"
+                        t-att-aria-pressed="state.customerPaymentFilter === 'credit' ? 'true' : 'false'"
+                        t-on-click="() => this.setCustomerPaymentFilter('credit')">
+                    Clientes de crédito
+                </button>
+            </div>
+        </xpath>
+    </t>
+</templates>

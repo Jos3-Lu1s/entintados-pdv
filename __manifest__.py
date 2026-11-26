@@ -115,6 +115,8 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/screens/pos_ticket_screen/order_receipt.xml",
             # Overrides (patch) a componentes/servicios del core POS
             "entintados_pdv/static/src/app/overrides/partner_line.xml",
+            "entintados_pdv/static/src/app/overrides/partner_payment_filter.js",
+            "entintados_pdv/static/src/app/overrides/partner_payment_filter.xml",
             "entintados_pdv/static/src/app/overrides/product_pricing.js",
             "entintados_pdv/static/src/app/overrides/pos_store.js",
             "entintados_pdv/static/src/app/overrides/pos_stock.js",

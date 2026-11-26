@@ -314,6 +314,47 @@ class AccountMove(models.Model):
                     amounts[invoice.id] += line._advance_application_amount()
         return amounts
 
+    def _advance_report_credit_lines(self):
+        """Only posted credit notes count as usage in customer advance reports."""
+        self.ensure_one()
+        return self._advance_application_lines().filtered(
+            lambda line: line.move_id.move_type == 'out_refund'
+            and line.move_id.state == 'posted'
+        )
+
+    def _advance_report_balances(self):
+        self.ensure_one()
+        used = sum(line._advance_application_amount() for line in self._advance_report_credit_lines())
+        return {
+            'amount_total': self.amount_total,
+            'advance_applied': used,
+            'advance_available': max(self.advance_paid - used, 0.0),
+        }
+
+    def _advance_report_credit_status(self):
+        self.ensure_one()
+        states = {
+            line.move_id.state for line in self._advance_application_lines()
+            if line.move_id.move_type == 'out_refund'
+        }
+        if not states:
+            return _('Pendiente')
+        labels = (
+            ('draft', _('Borrador')),
+            ('posted', _('Registrado')),
+            ('cancel', _('Cancelado')),
+        )
+        return ' / '.join(label for state, label in labels if state in states)
+
+    def _advance_report_used_amounts_by_invoice(self):
+        self.ensure_one()
+        amounts = defaultdict(float)
+        for line in self._advance_report_credit_lines():
+            invoice = line.move_id.advance_target_id
+            if invoice.move_type == 'out_invoice' and invoice.state == 'posted':
+                amounts[invoice.id] += line._advance_application_amount()
+        return amounts
+
     def _advance_account(self):
         self.ensure_one()
         account = (self.company_id.supplier_advance_account_id if self.move_type == 'in_invoice'

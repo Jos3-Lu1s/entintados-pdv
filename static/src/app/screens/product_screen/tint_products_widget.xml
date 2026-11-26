@@ -121,7 +121,16 @@
                                 t-att-class="product.is_storable and getAvailableQty(product) &lt;= 0 ? 'text-danger fw-bold' : 'text-success fw-bold'">
                                 <span t-esc="product.is_storable ? getAvailableQty(product) : '—'"/>
                             </td>
-                            <td class="py-2 text-end fw-bold text-nowrap text-dark fs-6" t-esc="tintRowPriceFormatted(product)"/>
+                            <td class="py-2 text-end fw-bold text-nowrap text-dark fs-6">
+                                <t t-set="priceRange" t-value="tintRowPriceRange(product)"/>
+                                <span t-att-class="priceRange.priceClass" t-esc="priceRange.displayPrice"/>
+                                <span t-if="priceRange.hasMinimum"
+                                      class="badge rounded-pill bg-warning-subtle text-warning-emphasis border ms-1 text-xxs px-1"
+                                      t-att-title="'Precio mínimo de la línea: ' + priceRange.minimum">Mín</span>
+                                <span t-if="priceRange.hasMaximum"
+                                      class="badge rounded-pill bg-info-subtle text-info-emphasis border ms-1 text-xxs px-1"
+                                      t-att-title="'Precio máximo de la línea: ' + priceRange.maximum">Máx</span>
+                            </td>
                         </tr>
                     </t>
                 </TintTable>

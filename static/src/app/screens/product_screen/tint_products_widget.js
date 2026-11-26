@@ -7,6 +7,7 @@ import { TintPanel } from "@entintados_pdv/app/screens/product_screen/tint_panel
 import { TintTable } from "@entintados_pdv/app/components/tint_table/tint_table";
 import { TintCreateColorPopup } from "@entintados_pdv/app/components/tint_create_color_popup/tint_create_color_popup";
 import { requiresPosStock } from "@entintados_pdv/app/utils/pos_stock";
+import { resolvePresentationRange } from "@entintados_pdv/app/utils/tint_order";
 
 // Registro de subcomponentes TintPanel y TintTable en ProductScreen.
 ProductScreen.components = { ...ProductScreen.components, TintPanel, TintTable };
@@ -129,6 +130,25 @@ patch(ProductScreen.prototype, {
             : String(price);
     },
 
+    tintRowPriceRange(product) {
+        const range = resolvePresentationRange(this.pos, product);
+        const price = this.tintRowPrice(product);
+        const hasMinimum = range.priceMin > 0 && price <= range.priceMin;
+        const hasMaximum = !hasMinimum && range.priceMax > 0 && price >= range.priceMax;
+        const displayPrice = hasMinimum ? range.priceMin : hasMaximum ? range.priceMax : price;
+        const format = (amount) => this.env.utils?.formatCurrency
+            ? this.env.utils.formatCurrency(amount) : String(amount);
+        return {
+            minimum: format(range.priceMin),
+            maximum: format(range.priceMax),
+            hasMinimum,
+            hasMaximum,
+            displayPrice: format(displayPrice),
+            unitPrice: displayPrice,
+            priceClass: hasMinimum ? 'text-warning-emphasis' : hasMaximum ? 'text-info-emphasis' : 'text-dark',
+        };
+    },
+
     getAvailableQty(product) {
         const stock = Number(product.pos_stock_qty || 0);
         const inOrder = Number(this.state.quantityByProductTmplId?.[product.id] || 0);
@@ -156,6 +176,33 @@ patch(ProductScreen.prototype, {
         const baseProduct = productTmpl?.product_variant_ids?.[0];
 
         if (!selectedColor || productTmpl?.tint_role !== "base" || !baseProduct) {
+            if (this.tintUi.tab === 'products' && this.tintUi.viewMode === 'list'
+                && !order?.preset_id?.is_return) {
+                const range = this.tintRowPriceRange(productTmpl);
+                if (range.hasMinimum || range.hasMaximum) {
+                    const options = {};
+                    if (this.searchWord && productTmpl.isConfigurable()) {
+                        const variants = productTmpl.product_variant_ids.filter((variant) =>
+                            (variant.barcode && variant.barcode.includes(this.searchWord)) ||
+                            (variant.default_code && variant.default_code.includes(this.searchWord)));
+                        if (variants.length === 1) {
+                            options.presetVariant = variants[0];
+                        }
+                    }
+                    const line = await this.pos.addLineToCurrentOrder({
+                        product_tmpl_id: productTmpl,
+                        price_unit: range.unitPrice,
+                        price_type: 'manual',
+                        price_origin: 'manual',
+                        price_origin_label: range.hasMinimum
+                            ? 'Precio mínimo de la línea' : 'Precio máximo de la línea',
+                    }, options);
+                    if (line) {
+                        this.showOptionalProductPopupIfNeeded(productTmpl);
+                    }
+                    return line;
+                }
+            }
             return super.addProductToOrder(productTmpl);
         }
 

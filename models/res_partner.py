@@ -444,7 +444,7 @@ class ResPartner(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         fields = super()._load_pos_data_fields(config)
-        return fields + [
+        return list(dict.fromkeys(fields + [
             'discount',
             'discount_rule_ids',
             'is_credit',
@@ -453,7 +453,8 @@ class ResPartner(models.Model):
             'is_supplier',
             'is_creditor',
             'property_payment_term_id',
-        ]
+            'company_registry',
+        ]))
 
     @api.model
     def _load_pos_data_read(self, records, config):
