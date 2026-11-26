@@ -145,6 +145,16 @@ def checks(env):
         'crm_lead_id': lead.id,
     })
     normal.write({'note': 'Native inventory edit preserved'})
+    other_approver.write({'group_ids': [Command.link(env.ref('point_of_sale.group_pos_manager').id)]})
+    for user_with_stock_access in (auditor, other_approver):
+        normal.with_user(user_with_stock_access).check_access('read')
+    denied(lambda: picking.with_user(other_approver).check_access('read'))
+    for role in ('sales_team.group_sale_salesman', 'point_of_sale.group_pos_user'):
+        operator = user('approval', role)
+        operator.write({'group_ids': [Command.link(env.ref(role).id)]})
+        assert not operator.has_group('stock.group_stock_user')
+        normal.with_user(operator).check_access('read')
+        denied(lambda: picking.with_user(operator).check_access('read'))
     return 'PASS: own/assigned visibility, three role boundaries, CRM request and approval generation, child records, evidence upload, native approval/inventory and views.'
 
 

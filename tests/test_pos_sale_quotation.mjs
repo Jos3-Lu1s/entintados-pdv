@@ -5,10 +5,18 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../static/src/app/overrides/pos_sale_quotation.js', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
+const quotationUtils = fs.readFileSync(new URL('../static/src/app/utils/quotation_print.js', import.meta.url), 'utf8')
+    .replace(/^export /gm, '');
 
 function fixture(fail = false) {
     class ControlButtons {}
+    class TicketScreen {}
     class NativePosStore {
+        async _processSaleOrder(saleOrder) {
+            const order = this.getOrder();
+            order.lines.push({ sale_order_origin_id: saleOrder });
+            return order;
+        }
         pay() {
             assert.ok(this.getOrder().lines.some((line) => line.refunded_orderline_id));
             return 'payment';
@@ -16,8 +24,9 @@ function fixture(fail = false) {
     }
     class PosStore extends NativePosStore {}
     const BranchStockDialog = class {};
-    vm.runInNewContext(source, { ControlButtons, PosStore, PosOrder: class {}, PaymentScreen: class {}, useService() {}, ask: async () => true,
-        BranchStockDialog, FormViewDialog: class {}, requiresPosStock: (product) => Boolean(product?.is_storable),
+    vm.runInNewContext(quotationUtils + source, { ControlButtons, TicketScreen, PosStore, PosOrder: class {}, PaymentScreen: class {}, useService() {}, ask: async () => true,
+        BranchStockDialog, FormViewDialog: class {}, SelectCreateDialog: class {},
+        requiresPosStock: (product) => Boolean(product?.is_storable),
         downloadFile: (...args) => downloads.push(args),
         isTintColorant: (line) => Boolean(line.is_tint_colorant),
         _t: (text) => text, patch: (target, extension) => {
@@ -41,28 +50,109 @@ function fixture(fail = false) {
             } },
             removePendingOrder() { calls.push('removePending'); }, removeOrder() { calls.push('remove'); },
             navigate() {}, addNewOrder() {} } });
-    return { button, calls, PosStore, BranchStockDialog, downloads };
+    return { button, calls, PosStore, TicketScreen, BranchStockDialog, downloads };
 }
+
+test('filters orders marked To Invoice and invoiced quotations from the import selector', async () => {
+    const { button } = fixture();
+    let options;
+    let selected;
+    button.dialog.add = (_dialog, props) => { options = props; };
+    button.pos.currency = { id: 5 };
+    button.pos.onClickSaleOrder = (id) => { selected = id; };
+
+    button.onClickQuotation();
+    assert.equal(options.resModel, 'sale.order');
+    assert.equal(JSON.stringify(options.domain), JSON.stringify([
+        ['state', '!=', 'cancel'],
+        ['invoice_status', '!=', 'to invoice'],
+        ['pos_has_active_invoice', '=', false],
+        ['currency_id', '=', 5],
+        ['amount_unpaid', '>', 0],
+        ['partner_id', 'any', [['id', 'child_of', [1]]]],
+    ]));
+    await options.onSelected([42]);
+    assert.equal(selected, 42);
+});
+
+test('downloads the linked quotation from the clicked ticket row', async () => {
+    const { TicketScreen } = fixture();
+    const screen = new TicketScreen();
+    const calls = [];
+    screen.quotationAction = { doAction: (...args) => calls.push(args) };
+    screen.pos = { lastCreatedSaleQuotation: { id: 99 }, getOrder: () => ({
+        lines: [{ sale_order_origin_id: { id: 42 } }],
+    }) };
+    const row = { lines: [{ sale_order_line_id: { order_id: { id: 43 } } }] };
+    const unlinked = { lines: [] };
+
+    assert.equal(screen.hasLinkedQuotation(unlinked), false);
+    await screen.onClickDownloadQuotation(unlinked);
+    assert.equal(screen.hasLinkedQuotation(row), true);
+    await screen.onClickDownloadQuotation(row);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], 'sale.action_report_saleorder');
+    assert.equal(calls[0][1].additionalContext.active_id, 43);
+});
+
+test('opens a different sales quotation in a new POS order and warns the cashier', async () => {
+    const { PosStore } = fixture();
+    const firstQuotation = { id: 42, partner_id: { id: 1 } };
+    const secondQuotation = { ...firstQuotation, id: 43 };
+    const original = { lines: [{ sale_order_line_id: { order_id: firstQuotation } }] };
+    let current = original;
+    const notices = [];
+    const store = Object.assign(new PosStore(), {
+        getOrder: () => current,
+        addNewOrder() { current = { lines: [] }; },
+        notification: { add: (...args) => notices.push(args) },
+    });
+
+    assert.equal(await store._processSaleOrder(firstQuotation), original);
+    assert.equal(notices.length, 0);
+    const next = await store._processSaleOrder(secondQuotation);
+    assert.equal(next, current);
+    assert.notEqual(next, original);
+    assert.equal(next.lines.length, 1);
+    assert.equal(next.lines[0].sale_order_origin_id, secondQuotation);
+    assert.equal(original.lines.length, 2);
+    assert.equal(original.lines[1].sale_order_origin_id, firstQuotation);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0][1].type, 'warning');
+    assert.match(notices[0][0], /se abrirá en una orden nueva/);
+});
 
 test('prints all current order lines without converting or removing the ticket', async () => {
     const { button, calls, downloads } = fixture();
     const order = button.pos.getOrder();
     const base = order.lines[0];
-    base.serializeForORM = () => ({ uuid: base.uuid, product_id: 2 });
+    base.serializeForORM = () => ({ uuid: base.uuid, product_id: 2, price_subtotal: base.price_subtotal });
     order.lines.push({
         combo_parent_id: base,
         serializeForORM: () => ({ uuid: 'component', product_id: 3 }),
     });
-    order.serializeForORM = () => ({ state: 'draft', lines: [] });
+    order.amount_total = 0;
+    order.tracking_number = '6009';
+    order.setOrderPrices = () => {
+        calls.push('prices');
+        order.amount_total = 65076.70;
+        order.amount_tax = 8976.10;
+        base.price_subtotal = 56100.60;
+    };
+    order.serializeForORM = () => ({ state: 'draft', lines: [], amount_total: order.amount_total,
+        amount_tax: order.amount_tax });
     button.pos.data.call = async (model, method, [snapshot]) => {
         assert.equal(model, 'pos.order');
         assert.equal(method, 'print_sale_quotation_from_ui');
-        assert.equal(JSON.stringify(snapshot.lines), '[[0,0,{"uuid":"line","product_id":2,"combo_parent_id":false}],[0,0,{"uuid":"component","product_id":3,"combo_parent_id":"line"}]]');
+        assert.equal(snapshot.amount_total, 65076.70);
+        assert.equal(snapshot.tracking_number, '6009');
+        assert.equal(snapshot.amount_tax, 8976.10);
+        assert.equal(JSON.stringify(snapshot.lines), '[[0,0,{"uuid":"line","product_id":2,"price_subtotal":56100.6,"combo_parent_id":false}],[0,0,{"uuid":"component","product_id":3,"combo_parent_id":"line"}]]');
         return 'JVBERi0=';
     };
     await button.onClickPrintCurrentQuotation();
     assert.deepEqual(downloads, [['data:application/pdf;base64,JVBERi0=', 'Cotizacion.pdf', 'application/pdf']]);
-    assert.deepEqual(calls, ['unblock']);
+    assert.deepEqual(calls, ['prices', 'unblock']);
     assert.equal(button.pos.getOrder(), order);
 });
 

@@ -36,9 +36,9 @@ with Registry(database).cursor() as cr:
         assert b'mat_invoice_lines' in live
         html, _ = env['ir.actions.report']._render_qweb_html('account.account_invoices', invoice.ids)
         assert b'mat-invoice' in html
-        assert b'invoice_logo_placeholder.png' in html
         from lxml import html as html_parser
         document = html_parser.fromstring(html)
+        assert document.xpath('//img[@alt="Pinturas Osel Centro Sur" and starts-with(@src, "data:image/jpeg;base64,")]')
         table = document.xpath('//table[@name="mat_invoice_lines"]')[0]
         count = len(table.xpath('./thead/tr/th'))
         for row in table.xpath('./tbody/tr[td and not(td[@colspan])]'):
@@ -87,7 +87,7 @@ with Registry(database).cursor() as cr:
         vendor = env['account.move'].search([('move_type','=','in_refund')], limit=1)
         if vendor:
             html, _ = env['ir.actions.report']._render_qweb_html('account.account_invoices', vendor.ids)
-            assert b'invoice_logo_placeholder.png' not in html
+            assert b'Pinturas Osel Centro Sur' not in html
         print('PASS: invoice HTML/PDF rendered; supplier layout preserved')
     finally:
         cr.rollback()

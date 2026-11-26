@@ -3,7 +3,16 @@
     <record id="pos_card_bank_company_rule" model="ir.rule">
         <field name="name">Bancos de tarjeta por compañía</field>
         <field name="model_id" ref="model_pos_card_bank"/>
+        <field name="domain_force">[('company_id', 'child_of', user.company_ids.root_id.ids)]</field>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="pos_card_bank_company_manage_rule" model="ir.rule">
+        <field name="name">Configuración de bancos de tarjeta por compañía</field>
+        <field name="model_id" ref="model_pos_card_bank"/>
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="perm_read" eval="False"/>
     </record>
     <record id="pos_card_bank_list" model="ir.ui.view">
         <field name="name">pos.card.bank.list</field>
@@ -20,14 +29,21 @@
         <field name="model">pos.card.bank</field>
         <field name="arch" type="xml">
             <form>
+                <header>
+                    <button name="action_prepare_card_payment_methods" type="object" string="Crear método de pago"
+                            class="oe_highlight" invisible="not active" groups="point_of_sale.group_pos_manager"/>
+                </header>
                 <sheet>
                     <widget name="web_ribbon" title="Archivado" bg_color="text-bg-danger" invisible="active"/>
                     <group>
                         <field name="active" invisible="1"/>
                         <field name="name"/>
                         <field name="company_id" groups="base.group_multi_company"/>
+                        <field name="root_company_id" invisible="1"/>
+                        <field name="excluded_company_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                        <field name="journal_id" options="{'no_create': True}"/>
                     </group>
-                    <div class="text-muted">Los bancos activos aparecen al seleccionar un método de tarjeta en la caja.</div>
+                    <div class="text-muted">Disponible en todas las sucursales de la empresa, excepto las seleccionadas.</div>
                 </sheet>
             </form>
         </field>

@@ -6,6 +6,8 @@
        t-inherit="point_of_sale.ControlButtons"
        t-inherit-mode="extension">
 
+        <xpath expr="//InternalNoteButton" position="replace"/>
+
         <!-- Botón de entintado en la barra de control -->
         <xpath expr="//SelectPartnerButton" position="after">
             <button t-if="!pos.config.module_pos_restaurant and !props.showRemainingButtons"

@@ -6,6 +6,7 @@ import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_p
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
+import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { useService } from "@web/core/utils/hooks";
 import { downloadFile } from "@web/core/network/download";
 import { SelectCreateDialog } from "@web/views/view_dialogs/select_create_dialog";
@@ -14,6 +15,48 @@ import { printableQuotations } from "../utils/quotation_print";
 import { BranchStockDialog } from "../components/branch_stock_dialog";
 import { requiresPosStock } from "../utils/pos_stock";
 import { isTintColorant } from "../utils/tint_order";
+
+async function selectQuotation(dialog, options, title) {
+    if (options.length > 1) {
+        return makeAwaitable(dialog, SelectionPopup, {
+            title,
+            list: options.map((item) => ({ id: item.id, label: item.name || item.display_name, item })),
+        });
+    }
+    return options[0];
+}
+
+function downloadSaleQuotation(action, quotation) {
+    return action.doAction("sale.action_report_saleorder", {
+        additionalContext: { active_model: "sale.order", active_ids: [quotation.id], active_id: quotation.id },
+    });
+}
+
+patch(TicketScreen.prototype, {
+    setup() {
+        super.setup(...arguments);
+        this.quotationAction = useService("action");
+    },
+
+    hasLinkedQuotation(order) {
+        return printableQuotations(order).length > 0;
+    },
+
+    async onClickDownloadQuotation(order) {
+        try {
+            const quotation = await selectQuotation(
+                this.dialog, printableQuotations(order), _t("Descargar cotización")
+            );
+            if (quotation) {
+                await downloadSaleQuotation(this.quotationAction, quotation);
+            }
+        } catch (error) {
+            this.pos.notification.add(error.data?.message || _t("No se pudo descargar la cotización."), {
+                type: "danger",
+            });
+        }
+    },
+});
 
 patch(PosOrder.prototype, {
     serializeForORM() {
@@ -55,6 +98,29 @@ patch(PaymentScreen.prototype, {
 });
 
 patch(PosStore.prototype, {
+    async _processSaleOrder(saleOrder) {
+        if (this._processingSaleOrder) {
+            return;
+        }
+        this._processingSaleOrder = true;
+        try {
+            const hasDifferentSaleOrder = this.getOrder().lines.some((line) => {
+                const origin = line.sale_order_origin_id || line.sale_order_line_id?.order_id;
+                return origin && origin.id !== saleOrder.id;
+            });
+            if (hasDifferentSaleOrder) {
+                this.notification.add(
+                    _t("Esta orden del punto de venta ya tiene una cotización o pedido de Ventas. La selección se abrirá en una orden nueva."),
+                    { type: "warning" }
+                );
+                this.addNewOrder();
+            }
+            return await super._processSaleOrder(...arguments);
+        } finally {
+            this._processingSaleOrder = false;
+        }
+    },
+
     async pay() {
         const order = this.getOrder();
         if (order?.isRefund && Number.isInteger(order.id) &&
@@ -93,6 +159,32 @@ patch(ControlButtons.prototype, {
         super.setup(...arguments);
         this.quotationUI = useService("ui");
         this.quotationAction = useService("action");
+    },
+
+    onClickQuotation() {
+        const partner = this.pos.getOrder()?.getPartner();
+        const domain = [
+            ["state", "!=", "cancel"],
+            ["invoice_status", "!=", "to invoice"],
+            ["pos_has_active_invoice", "=", false],
+            ["currency_id", "=", this.pos.currency.id],
+            ["amount_unpaid", ">", 0],
+        ];
+        if (partner) {
+            domain.push(["partner_id", "any", [["id", "child_of", [partner.id]]]]);
+        }
+        this.dialog.add(SelectCreateDialog, {
+            resModel: "sale.order",
+            noCreate: true,
+            multiSelect: false,
+            domain,
+            context: this.partner ? { search_default_partner_id: this.partner.id } : {},
+            onSelected: async ([orderId]) => {
+                if (orderId) {
+                    await this.pos.onClickSaleOrder(orderId);
+                }
+            },
+        });
     },
 
     get printableSaleQuotations() {
@@ -234,9 +326,7 @@ patch(ControlButtons.prototype, {
 
     async printSaleQuotation(quotation) {
         try {
-            await this.quotationAction.doAction("sale.action_report_saleorder", {
-                additionalContext: { active_model: "sale.order", active_ids: [quotation.id], active_id: quotation.id },
-            });
+            await downloadSaleQuotation(this.quotationAction, quotation);
         } catch (error) {
             this.notification.add(error.data?.message || _t("No se pudo imprimir la cotización. Puedes reintentar desde Ventas."),
                 { type: "danger" });
@@ -260,7 +350,9 @@ patch(ControlButtons.prototype, {
         this._printingCurrentQuotation = true;
         this.quotationUI.block();
         try {
+            order.setOrderPrices();
             const snapshot = order.serializeForORM({ keepCommands: true });
+            snapshot.tracking_number = order.tracking_number;
             // Synchronization sends only changed lines. The PDF needs the full order.
             snapshot.lines = order.lines.map((line) => [0, 0, {
                 ...line.serializeForORM({ keepCommands: true }),
@@ -282,14 +374,7 @@ patch(ControlButtons.prototype, {
     },
 
     async onClickPrintSaleQuotation() {
-        const options = this.printableSaleQuotations;
-        let quotation = options[0];
-        if (options.length > 1) {
-            quotation = await makeAwaitable(this.dialog, SelectionPopup, {
-                title: _t("Imprimir cotización"),
-                list: options.map((item) => ({ id: item.id, label: item.name || item.display_name, item })),
-            });
-        }
+        const quotation = await selectQuotation(this.dialog, this.printableSaleQuotations, _t("Imprimir cotización"));
         if (quotation) {
             await this.printSaleQuotation(quotation);
             this.props.close?.();

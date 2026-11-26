@@ -13,6 +13,34 @@ class TestPosBankPayments(TransactionCase):
         action = self.config.action_prepare_bank_payments()
         return self.env['pos.payment.method'].search(action['domain'])
 
+    def test_card_bank_button_prepares_methods_and_excludes_branches(self):
+        company = self.env.company
+        bank = self.env['pos.card.bank'].create({'name': 'Terminal QA', 'company_id': company.id})
+        for branch_name in ('Usa terminal QA', 'Excluida QA'):
+            branch = self.env['res.company'].create({'name': branch_name, 'parent_id': company.id})
+            self.env.user.company_ids |= branch
+            branch_env = self.env['pos.config'].with_company(branch).env
+            branch_env['account.journal'].create({
+                'name': 'Banco QA', 'code': 'BNKQA', 'type': 'bank', 'company_id': branch.id,
+            })
+            branch_env['pos.config'].create({'name': branch_name, 'payment_method_ids': [Command.clear()]})
+        included, excluded = self.env['pos.config'].sudo().search([
+            ('name', 'in', ['Usa terminal QA', 'Excluida QA'])], order='id')
+        bank.journal_id = self.env['account.journal'].search([
+            ('company_id', '=', company.id), ('type', '=', 'bank')], limit=1)
+        bank.excluded_company_ids = [Command.set(excluded.company_id.ids)]
+        bank.action_prepare_card_payment_methods()
+        parent_method = self.config.payment_method_ids.filtered(lambda method: method.card_bank_id == bank)
+        branch_method = included.payment_method_ids.filtered(lambda method: method.card_bank_id == bank)
+        self.assertEqual(branch_method.journal_id.company_id, included.company_id)
+        self.assertTrue(parent_method and branch_method.outstanding_account_id)
+        self.assertFalse(excluded.payment_method_ids.filtered(lambda method: method.card_bank_id == bank))
+        bank.action_prepare_card_payment_methods()
+        self.assertEqual(bank.payment_method_ids, parent_method | branch_method)
+        bank.excluded_company_ids = [Command.link(included.company_id.id)]
+        self.assertNotIn(branch_method, included.payment_method_ids)
+        self.assertTrue(branch_method.exists())
+
     def test_card_default_does_not_depend_on_company_column(self):
         company = self.env.company
         self.assertFalse(company._fields['pos_card_default_journal_id'].store)

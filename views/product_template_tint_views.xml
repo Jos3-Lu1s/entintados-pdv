@@ -10,14 +10,13 @@
                 <page
                     string="Entintado"
                     name="tint"
-                    invisible="type != 'consu' or not is_storable"
                 >
                     <group>
-                        <group name="tint_role" string="Rol">
+                        <group name="tint_role" string="Rol" invisible="type != 'consu' or not is_storable">
                             <field name="tint_role" />
                             <field name="tint_category_id" readonly="1"/>
                         </group>
-                        <group name="tint_prices" string="Esquemas" invisible="tint_role != 'base'">
+                        <group name="tint_prices" string="Esquemas">
                             <field name="scheme_filter_id" options="{'no_create': True}" />
                             <field
                                 name="lines_product_id"
@@ -27,7 +26,7 @@
                             />
                         </group>
                     </group>
-                    <group invisible="tint_role != 'base'">
+                    <group invisible="type != 'consu' or not is_storable or tint_role != 'base'">
                         <group name="tint_base" string="Envase">
                             <field
                                 name="tint_base_type_id"
@@ -48,13 +47,13 @@
                     <group
                         name="tint_extraction"
                         string="Extracción previa"
-                        invisible="tint_role != 'base' or not tint_requires_extraction"
+                        invisible="type != 'consu' or not is_storable or tint_role != 'base' or not tint_requires_extraction"
                     >
                         <field name="tint_requires_extraction" invisible="1" />
                         <field name="tint_extraction_liters" />
                         <field name="tint_operator_note" />
                     </group>
-                    <group invisible="tint_role != 'colorant'">
+                    <group invisible="type != 'consu' or not is_storable or tint_role != 'colorant'">
                         <group name="tint_colorant" string="Colorante">
                             <field name="uom_id" options="{'no_create': True}" />
                             <field name="list_price" />
@@ -63,7 +62,7 @@
                     <div
                         class="alert alert-info"
                         role="alert"
-                        invisible="tint_role != 'base'"
+                        invisible="type != 'consu' or not is_storable or tint_role != 'base'"
                     >
                         La capacidad se resuelve automáticamente desde la matriz
                         de capacidad a partir del tipo de base y la presentación.

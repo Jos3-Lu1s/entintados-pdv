@@ -3,6 +3,7 @@ import math
 
 from odoo import api, Command, fields, models, _
 from odoo.exceptions import AccessError, UserError
+from odoo.fields import Domain
 
 from .sale_tint import _TINT_OPERATION
 
@@ -130,7 +131,7 @@ class PosOrderQuotation(models.Model):
         if not session or session.company_id not in self.env.companies or session.state != 'opened':
             raise UserError(_('Usa una sesión abierta de la compañía activa.'))
         names = ['uuid', 'partner_id', 'pricelist_id', 'fiscal_position_id', 'amount_total',
-                 'amount_tax', 'amount_return', 'pos_reference', 'name']
+                 'amount_tax', 'amount_return', 'pos_reference', 'name', 'tracking_number']
         values = {name: order[name] for name in names if name in order}
         values.update(session_id=session.id, company_id=session.company_id.id, state='draft', amount_paid=0)
         virtual = self.with_company(session.company_id).new(values)
@@ -272,7 +273,9 @@ class PosOrderQuotation(models.Model):
                 'team_id': self.config_id.crm_team_id.id, 'origin': self.pos_reference or self.name,
             }
             if printing:
-                quotation_vals['name'] = self.pos_reference or self.name or _('Borrador de caja')
+                quotation_vals['name'] = (
+                    f'Pdv - {self.tracking_number}' if self.tracking_number else _('Borrador de caja')
+                )
             if order_promo_reward:
                 quotation_vals['order_promo_reward_id'] = order_promo_reward.id
             quotation = self.env['sale.order'].with_company(self.company_id).create(quotation_vals)
@@ -318,7 +321,49 @@ class SaleOrderPosQuotation(models.Model):
     pos_quotation_uuid = fields.Char(copy=False, readonly=True, index=True)
     pos_quotation_session_id = fields.Many2one('pos.session', copy=False, readonly=True, check_company=True)
     pos_quotation_snapshot = fields.Json(copy=False, readonly=True)
+    pos_has_active_invoice = fields.Boolean(
+        compute='_compute_pos_has_active_invoice', search='_search_pos_has_active_invoice',
+    )
     _pos_quotation_uuid_unique = models.Constraint('UNIQUE(pos_quotation_uuid)', 'El ticket ya tiene una cotización.')
+
+    @api.depends('invoice_status', 'order_line.is_downpayment', 'order_line.invoice_lines.move_id.state',
+                 'order_line.invoice_lines.move_id.move_type',
+                 'order_line.invoice_lines.move_id.is_advance_invoice',
+                 'order_line.invoice_lines.move_id.l10n_mx_edi_cfdi_state')
+    def _compute_pos_has_active_invoice(self):
+        invoiced = self.sudo().filtered_domain(self._pos_active_invoice_domain())
+        for order in self:
+            order.pos_has_active_invoice = order in invoiced
+
+    def _search_pos_has_active_invoice(self, operator, value):
+        if operator not in ('in', 'not in'):
+            return NotImplemented
+        values = set(value) if operator == 'in' else {True, False} - set(value)
+        if len(values) != 1:
+            return Domain(bool(values))
+        domain = self._pos_active_invoice_domain()
+        return domain if True in values else ~domain
+
+    @api.model
+    def _pos_active_invoice_domain(self):
+        active_invoice = (
+            Domain('move_type', '=', 'out_invoice') & Domain('is_advance_invoice', '=', False)
+            & (Domain('state', 'in', ('draft', 'posted'))
+               | Domain('l10n_mx_edi_cfdi_state', 'in', ('sent', 'global_sent', 'cancel_requested')))
+        )
+        # Cashiers must see the exclusion even if record rules hide the invoice itself.
+        return Domain('invoice_status', '=', 'invoiced') | Domain(
+            'order_line', 'any!', Domain('is_downpayment', '=', False)
+            & Domain('invoice_lines', 'any!', Domain('move_id', 'any!', active_invoice)),
+        )
+
+    def load_sale_order_from_pos(self, config_id):
+        self.check_access('read')
+        if 'to invoice' in self.mapped('invoice_status'):
+            raise UserError(_('Esta orden está Por facturar y no se puede traer al Punto de Venta.'))
+        if any(self.mapped('pos_has_active_invoice')):
+            raise UserError(_('Esta cotización o pedido ya tiene factura y no se puede traer al Punto de Venta.'))
+        return super().load_sale_order_from_pos(config_id)
 
     @api.model
     def _load_pos_data_fields(self, config):

@@ -536,6 +536,17 @@ $tint-breakpoint-lg: 1199.98px;
     }
 }
 
+.o-entintados-order-controls {
+    > .set-partner {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    > .o-tint-button {
+        flex-shrink: 0;
+    }
+}
+
 .o-tint-button {
     border: 1px solid var(--o-tint-border, #b58900);
     white-space: nowrap;

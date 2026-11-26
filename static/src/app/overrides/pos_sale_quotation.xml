@@ -32,6 +32,23 @@
             </button>
         </xpath>
     </t>
+    <t t-name="entintados_pdv.TicketQuotationDownload" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+        <xpath expr="//tr[hasclass('order-row')]/td[.//t[@t-esc='getTotal(order)']]" position="after">
+            <td class="align-middle text-end">
+                <t t-call="entintados_pdv.DownloadQuotationButton"/>
+            </td>
+        </xpath>
+        <xpath expr="//div[hasclass('mobileOrderList')]//div[./t[@t-esc='getTotal(order)']]" position="after">
+            <t t-call="entintados_pdv.DownloadQuotationButton"/>
+        </xpath>
+    </t>
+    <t t-name="entintados_pdv.DownloadQuotationButton">
+        <button t-if="hasLinkedQuotation(order)" type="button" class="btn btn-secondary"
+                title="Descargar cotización" aria-label="Descargar cotización"
+                t-on-click.stop="() => this.onClickDownloadQuotation(order)" t-on-dblclick.stop="() => {}">
+            <i class="fa fa-download" aria-hidden="true"/>
+        </button>
+    </t>
     <t t-name="entintados_pdv.BranchStockDialog">
         <Dialog title="props.title" size="'xl'">
             <div t-if="props.rows.length" class="table-responsive">

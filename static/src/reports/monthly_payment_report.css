@@ -6,3 +6,32 @@
 .monthly_payment_report .o_account_report_scroll_container table {
     width: 100%;
 }
+
+.vendor_documents_report .line_cell .name {
+    white-space: normal;
+}
+
+.vendor_documents_report .line_cell.numeric .name,
+.vendor_documents_report .line_cell.date .name {
+    white-space: nowrap;
+}
+
+.vendor_documents_report .o_vendor_documents_supplier > td {
+    border-top: 2px solid var(--bs-border-color);
+    font-weight: 700;
+}
+
+.vendor_documents_report .o_vendor_documents_section > td {
+    background: var(--bs-tertiary-bg);
+    font-weight: 700;
+}
+
+.vendor_documents_report .o_vendor_documents_payment > td {
+    border-top: 1px solid var(--bs-border-color);
+    background: var(--bs-primary-bg-subtle);
+    font-weight: 600;
+}
+
+.vendor_documents_report .o_vendor_documents_applied .line_name {
+    border-inline-start: 3px solid var(--bs-primary-border-subtle);
+}

@@ -1,4 +1,7 @@
+from base64 import b64encode
+
 from odoo import models
+from odoo.tools import file_open
 from odoo.tools.misc import format_date
 
 
@@ -31,6 +34,10 @@ def header(document):
 
 class AccountMove(models.Model):
     _inherit = 'account.move'
+
+    def _mat_invoice_logo(self):
+        with file_open('entintados_pdv/static/src/img/quotation_osel_logo.jpg', 'rb') as logo:
+            return 'data:image/jpeg;base64,' + b64encode(logo.read()).decode('ascii')
 
     def _mat_report_header(self):
         return header(self)

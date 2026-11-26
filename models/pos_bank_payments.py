@@ -39,9 +39,9 @@ class ResCompany(models.Model):
             params.set_param('entintados_pdv.pos_card_journal.%s' % company.id,
                              str(company.pos_card_default_journal_id.id or 0))
 
-    def _payment_method_defaults(self):
+    def _payment_method_defaults(self, journal=None):
         self.ensure_one()
-        journal = self.pos_card_default_journal_id
+        journal = journal or self.pos_card_default_journal_id
         if not journal:
             journals = self.env['account.journal'].search([
                 ('company_id', '=', self.id), ('type', '=', 'bank')], limit=2)
@@ -79,6 +79,12 @@ class PosCardBank(models.Model):
 
     name = fields.Char(string='Banco / terminal', required=True)
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
+    root_company_id = fields.Many2one(related='company_id.root_id')
+    payment_method_ids = fields.One2many('pos.payment.method', 'card_bank_id', string='Métodos de pago')
+    excluded_company_ids = fields.Many2many(
+        'res.company', string='Sucursales excluidas',
+        help='Deja este campo vacío para habilitar el banco en todas las sucursales de la empresa.',
+        domain="[('id', 'child_of', root_company_id)]")
     active = fields.Boolean(default=True)
     journal_id = fields.Many2one('account.journal', string='Diario específico', check_company=True,
         domain="[('type', '=', 'bank'), ('company_id', '=', company_id)]",
@@ -86,7 +92,8 @@ class PosCardBank(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data, config):
-        return [('company_id', '=', config.company_id.id), ('active', '=', True)]
+        return [('company_id', 'child_of', config.company_id.root_id.id), ('active', '=', True),
+                ('excluded_company_ids', 'not in', config.company_id.ids)]
 
     @api.model
     def _load_pos_data_fields(self, config):
@@ -98,6 +105,92 @@ class PosCardBank(models.Model):
             if bank.journal_id and (bank.journal_id.type != 'bank' or bank.journal_id.company_id != bank.company_id):
                 raise ValidationError(_('Selecciona un diario bancario de la misma compañía.'))
 
+    @api.constrains('excluded_company_ids', 'company_id')
+    def _check_excluded_companies(self):
+        for bank in self:
+            companies = bank.excluded_company_ids | bank.sudo().payment_method_ids.company_id
+            if companies.filtered(lambda company: company.root_id != bank.company_id.root_id):
+                raise ValidationError(_('Selecciona únicamente sucursales de la misma empresa.'))
+
+    def action_prepare_card_payment_methods(self):
+        self.ensure_one()
+        if not self.env.user.has_group('point_of_sale.group_pos_manager'):
+            raise UserError(_('Solo un administrador del Punto de Venta puede preparar métodos de tarjeta.'))
+        self.check_access('write')
+        if not self.active:
+            raise UserError(_('Activa el banco antes de preparar su método de pago.'))
+        with self.env.cr.savepoint():
+            methods = self._sync_card_payment_methods()
+        accessible_companies = methods.company_id & self.env.user.company_ids
+        return {
+            'type': 'ir.actions.act_window', 'name': _('Métodos de tarjeta de %s', self.name),
+            'res_model': 'pos.payment.method', 'view_mode': 'list,form',
+            'domain': [('id', 'in', methods.filtered(lambda method: method.company_id in accessible_companies).ids)],
+            'context': dict(self.env.context, allowed_company_ids=(self.env.companies | accessible_companies).ids),
+        }
+
+    def write(self, vals):
+        if 'excluded_company_ids' not in vals and 'active' not in vals:
+            return super().write(vals)
+        with self.env.cr.savepoint():
+            result = super().write(vals)
+            for bank in self:
+                if self.env['pos.payment.method'].sudo().with_context(active_test=False).search_count(
+                        [('card_bank_id', '=', bank.id)], limit=1):
+                    bank._sync_card_payment_methods()
+            return result
+
+    def _sync_card_payment_methods(self):
+        self.ensure_one()
+        self.env['res.company']._with_locked_records(self.company_id.root_id)
+        configs = self.env['pos.config'].sudo().search([('company_id', 'child_of', self.company_id.root_id.id)])
+        return self._apply_card_payment_methods(configs)
+
+    def _apply_card_payment_methods(self, configs):
+        active_configs = configs.filtered(lambda config: self.active and config.company_id not in self.excluded_company_ids)
+        methods = self.env['pos.payment.method'].sudo()
+        linked = methods.with_context(active_test=False).search([
+            ('card_bank_id', '=', self.id), ('collection_type', '=', 'card')])
+        for config in configs - active_configs:
+            removing = config.payment_method_ids & linked
+            if removing:
+                config.write({'payment_method_ids': [Command.unlink(method.id) for method in removing]})
+        prepared = methods.browse()
+        for company in active_configs.company_id:
+            destinations = active_configs.filtered(lambda config: config.company_id == company)
+            company_methods = linked.filtered(lambda item: item.company_id == company)
+            method = company_methods.filtered('active')[:1] or company_methods[:1]
+            if not method:
+                method = self._prepare_company_card_method(company, destinations[0], methods.with_company(company))
+            elif not method.active:
+                method.active = True
+            for config in destinations:
+                if method not in config.payment_method_ids:
+                    config.write({'payment_method_ids': [Command.link(method.id)]})
+            prepared |= method
+        return prepared
+
+    def _prepare_company_card_method(self, company, config, methods):
+        legacy = methods.search([
+            ('company_id', '=', company.id), ('collection_type', '=', 'card'),
+            ('card_bank_id', '=', False), ('terminal_label', '=ilike', self.name),
+        ], limit=2)
+        if len(legacy) == 1:
+            legacy.card_bank_id = self.id
+            return legacy
+        journal = self.journal_id if self.journal_id.company_id == company else None
+        defaults = company._payment_method_defaults(journal)
+        if not defaults['journal_id']:
+            raise UserError(_('Configura el diario predeterminado para tarjetas de %(branch)s en Punto de Venta.',
+                              branch=company.display_name))
+        if not defaults['outstanding_account_id']:
+            defaults['outstanding_account_id'] = config._bank_pending_account(self.name, 0).id
+        return methods.create({
+            **defaults, 'name': _('Tarjeta %s', self.name), 'company_id': company.id,
+            'collection_type': 'card', 'card_bank_id': self.id, 'payment_method_type': 'none',
+            'l10n_mx_edi_payment_method_id': self.env.ref('l10n_mx_edi.payment_method_tarjeta_debito').id,
+        })
+
 
 class PosBankPaymentMethod(models.Model):
     _inherit = 'pos.payment.method'
@@ -108,8 +201,7 @@ class PosBankPaymentMethod(models.Model):
     ], string='Tipo de cobro', default='standard', required=True)
     terminal_label = fields.Char(string='Banco / terminal',
                                  help='Nombre visible en caja, por ejemplo BBVA o Santander.')
-    card_bank_id = fields.Many2one('pos.card.bank', string='Banco de tarjeta', check_company=True,
-        ondelete='restrict', domain="[('company_id', '=', company_id)]")
+    card_bank_id = fields.Many2one('pos.card.bank', string='Banco de tarjeta', ondelete='restrict')
     card_bank_name = fields.Char(string='Nombre de banco anterior', related='card_bank_id.name')
     card_payment_code = fields.Char(related='l10n_mx_edi_payment_method_id.code')
 
@@ -172,8 +264,8 @@ class PosBankPaymentMethod(models.Model):
     @api.constrains('collection_type', 'journal_id', 'outstanding_account_id', 'company_id', 'terminal_label', 'card_bank_id')
     def _check_bank_collection_configuration(self):
         for method in self.filtered('card_bank_id'):
-            if method.collection_type != 'card' or method.card_bank_id.company_id != method.company_id:
-                raise ValidationError(_('El banco del catálogo debe ser de la misma compañía y se usa en cobros con tarjeta.'))
+            if method.collection_type != 'card' or method.card_bank_id.company_id.root_id != method.company_id.root_id:
+                raise ValidationError(_('El banco del catálogo debe ser de la misma empresa y se usa en cobros con tarjeta.'))
         for method in self.filtered(lambda item: item.collection_type != 'standard'):
             account = method.outstanding_account_id
             if not method.company_id or method.journal_id.type != 'bank' or method.journal_id.company_id != method.company_id:
@@ -194,17 +286,30 @@ class PosPayment(models.Model):
         names = super()._load_pos_data_fields(config)
         return names + ['terminal_bank_id'] if names and 'terminal_bank_id' not in names else names
 
-    @api.constrains('terminal_bank_id', 'payment_method_id', 'pos_order_id')
+    @api.constrains('terminal_bank_id', 'payment_method_id', 'pos_order_id', 'amount')
     def _check_terminal_bank(self):
-        for payment in self.filtered('terminal_bank_id'):
+        for payment in self:
             method = payment.payment_method_id
-            if (payment.terminal_bank_id.company_id != payment.company_id
-                    or (method.collection_type != 'card' and method.card_payment_code not in ('04', '28'))):
-                raise ValidationError(_('El banco de la terminal debe ser de la compañía del pago y usarse con tarjeta.'))
+            bank = payment.terminal_bank_id or method.card_bank_id
+            if bank and (bank.company_id.root_id != payment.company_id.root_id
+                         or (method.collection_type != 'card' and method.card_payment_code not in ('04', '28'))
+                         or (payment.amount > 0 and payment.company_id in bank.excluded_company_ids)):
+                raise ValidationError(_('El banco debe estar habilitado para cobros con tarjeta en la sucursal del pago.'))
 
 
 class PosConfigBankPayments(models.Model):
     _inherit = 'pos.config'
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        configs = super().create(vals_list)
+        for root in configs.company_id.root_id:
+            self.env['res.company']._with_locked_records(root)
+            banks = self.env['pos.card.bank'].sudo().search([
+                ('company_id', 'child_of', root.id), ('payment_method_ids', '!=', False)])
+            for bank in banks:
+                bank._apply_card_payment_methods(configs.sudo().filtered(lambda config: config.company_id.root_id == root))
+        return configs
 
     def action_prepare_bank_payments(self):
         """Create native bank methods; native POS entries use outstanding_account_id."""

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
     <record id="vendor_invoice_detail_report" model="account.report">
-        <field name="name">Facturas por proveedor</field>
+        <field name="name">Facturas y pagos por proveedor</field>
         <field name="custom_handler_model_id" ref="model_account_vendor_document_report_handler"/>
         <field name="filter_date_range" eval="True"/>
         <field name="filter_partner" eval="True"/>
@@ -9,7 +9,7 @@
         <field name="filter_period_comparison" eval="False"/>
         <field name="column_ids">
             <record id="vendor_invoice_detail_column_date" model="account.report.column">
-                <field name="name">Fecha de factura</field>
+                <field name="name">Fecha</field>
                 <field name="expression_label">date</field>
                 <field name="figure_type">date</field>
             </record>
@@ -19,7 +19,7 @@
                 <field name="figure_type">date</field>
             </record>
             <record id="vendor_invoice_detail_column_ref" model="account.report.column">
-                <field name="name">Referencia</field>
+                <field name="name">Referencia / detalle</field>
                 <field name="expression_label">ref</field>
                 <field name="figure_type">string</field>
             </record>
@@ -38,21 +38,58 @@
                 <field name="expression_label">amount</field>
                 <field name="figure_type">monetary</field>
             </record>
+            <record id="vendor_invoice_detail_column_applied" model="account.report.column">
+                <field name="name">Aplicado a factura</field>
+                <field name="expression_label">applied</field>
+                <field name="figure_type">monetary</field>
+            </record>
             <record id="vendor_invoice_detail_column_balance" model="account.report.column">
                 <field name="name">Saldo pendiente</field>
                 <field name="expression_label">balance</field>
                 <field name="figure_type">monetary</field>
             </record>
+            <record id="vendor_invoice_detail_column_paid" model="account.report.column">
+                <field name="name">Pago / aplicado</field>
+                <field name="expression_label">paid</field>
+                <field name="figure_type">monetary</field>
+            </record>
+            <record id="vendor_invoice_detail_column_kind" model="account.report.column">
+                <field name="name">Tipo de pago</field>
+                <field name="expression_label">kind</field>
+                <field name="figure_type">string</field>
+            </record>
+            <record id="vendor_invoice_detail_column_journal" model="account.report.column">
+                <field name="name">Diario</field>
+                <field name="expression_label">journal</field>
+                <field name="figure_type">string</field>
+            </record>
+            <record id="vendor_invoice_detail_column_sat" model="account.report.column">
+                <field name="name">Forma de pago</field>
+                <field name="expression_label">sat</field>
+                <field name="figure_type">string</field>
+            </record>
+            <record id="vendor_invoice_detail_column_groups" model="account.report.column">
+                <field name="name">Pagos agrupados</field>
+                <field name="expression_label">groups</field>
+                <field name="figure_type">string</field>
+            </record>
         </field>
     </record>
     <record id="action_vendor_invoice_detail_report" model="ir.actions.client">
-        <field name="name">Facturas por proveedor</field>
+        <field name="name">Facturas y pagos por proveedor</field>
         <field name="tag">account_report</field>
         <field name="context" eval="{'report_id': ref('vendor_invoice_detail_report')}"/>
     </record>
-    <menuitem id="menu_vendor_invoice_detail_report" name="Facturas por proveedor"
+    <menuitem id="menu_vendor_invoice_detail_report" name="Facturas y pagos por proveedor"
               parent="account_vendor_invoices_section" action="action_vendor_invoice_detail_report"
               sequence="50" groups="account.group_account_invoice"/>
+    <record id="action_vendor_monthly_payment_dashboard" model="ir.actions.client">
+        <field name="name">Facturas y pagos por proveedor</field>
+        <field name="context" eval="{'report_id': ref('vendor_invoice_detail_report')}"/>
+    </record>
+    <record id="menu_vendor_monthly_payment_report" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
 
     <record id="vendor_payment_posting_report" model="account.report">
         <field name="name">Contabilización de pagos por proveedor</field>

@@ -3,6 +3,9 @@
 
     <!-- Pestañas de navegación y alternador de vista -->
     <t t-name="entintados_pdv.ProductScreenTintTabs" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('control-buttons')][ControlButtons]" position="attributes">
+            <attribute name="class" add="o-entintados-order-controls" separator=" "/>
+        </xpath>
 
         <xpath expr="//div[hasclass('rightpane')]/div[hasclass('position-relative')]" position="before">
             <div t-if="!pos.config.module_pos_restaurant" class="o-tint-tabs d-flex align-items-center justify-content-between p-2 flex-shrink-0 border-bottom bg-view min-w-0 w-100">

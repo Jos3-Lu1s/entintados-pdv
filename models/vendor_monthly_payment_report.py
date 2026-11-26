@@ -323,6 +323,16 @@ class VendorDocumentReportHandler(models.AbstractModel):
     _inherit = 'account.vendor.monthly.payment.report.handler'
     _description = 'Facturas y contabilización de pagos a proveedores'
 
+    def _custom_options_initializer(self, report, options, previous_options):
+        super()._custom_options_initializer(report, options, previous_options)
+        if report == self.env.ref('entintados_pdv.vendor_invoice_detail_report'):
+            options['ignore_totals_below_sections'] = True
+            options['custom_display_config']['css_custom_class'] = 'vendor_documents_report'
+            consolidated = {'applied', 'kind', 'journal', 'sat', 'groups'}
+            options['columns'] = [
+                column for column in options['columns'] if column['expression_label'] not in consolidated
+            ]
+
     def _vendor_document_groups(self, options):
         dates = options['date']
         companies = [company['id'] for company in options.get('companies', [])] or self.env.company.ids
@@ -333,10 +343,16 @@ class VendorDocumentReportHandler(models.AbstractModel):
         invoice_report = self.env.ref('entintados_pdv.vendor_invoice_detail_report')
         invoice_mode = options['report_id'] == invoice_report.id
         if invoice_mode:
-            documents = self.env['account.move'].search(domain + [
+            invoices = self.env['account.move'].search(domain + [
                 ('move_type', 'in', ['in_invoice', 'in_receipt']), ('state', '=', 'posted'),
                 ('invoice_date', '>=', dates['date_from']), ('invoice_date', '<=', dates['date_to']),
             ], order='invoice_date, id')
+            payments = self.env['account.payment'].search(domain + [
+                ('partner_type', '=', 'supplier'), ('payment_type', '=', 'outbound'),
+                ('state', 'in', ['in_process', 'paid']),
+                ('date', '>=', dates['date_from']), ('date', '<=', dates['date_to']),
+            ], order='date, id')
+            documents = [*invoices, *payments]
         else:
             documents = self.env['account.payment'].search(domain + [
                 ('partner_type', '=', 'supplier'), ('payment_type', '=', 'outbound'),
@@ -351,11 +367,23 @@ class VendorDocumentReportHandler(models.AbstractModel):
                 'name': f"{partner.display_name or _('Sin proveedor')} · {currency.name}",
                 'currency': currency, 'anchor': document, 'rows': [],
             })
-            if invoice_mode:
+            if invoice_mode and document._name == 'account.move':
                 group['rows'].append((document, document.name, {
                     'date': document.invoice_date, 'due': document.invoice_date_due,
                     'ref': document.ref or '', 'untaxed': document.amount_untaxed,
                     'tax': document.amount_tax, 'amount': document.amount_total, 'balance': document.amount_residual,
+                }))
+            elif invoice_mode:
+                folios = ', '.join(document.monthly_vendor_group_ids.mapped('name'))
+                group['rows'].append((document, document.name, {
+                    'date': document.date,
+                    'ref': ' · '.join(filter(None, (
+                        _('Grupo %s', folios) if folios else '',
+                        document.monthly_vendor_payment_kind,
+                        document.journal_id.display_name,
+                        document.l10n_mx_edi_payment_method_id.display_name,
+                    ))),
+                    'paid': document.amount,
                 }))
             else:
                 folios = ', '.join(document.monthly_vendor_group_ids.mapped('name'))
@@ -365,12 +393,15 @@ class VendorDocumentReportHandler(models.AbstractModel):
                         'journal': document.journal_id.display_name, 'account': line.account_id.display_name,
                         'memo': line.name, 'groups': folios, 'debit': line.debit, 'credit': line.credit,
                     }))
+        if invoice_mode:
+            for group in groups.values():
+                group['rows'].sort(key=lambda entry: (entry[0]._name, entry[2]['date'], entry[0].id))
         return groups.values()
 
     def _dynamic_lines_generator(self, report, options, all_column_groups_expression_totals, warnings=None):
         lines = []
         totals = defaultdict(lambda: defaultdict(float))
-        amount_keys = ('untaxed', 'tax', 'amount', 'balance', 'debit', 'credit')
+        amount_keys = ('untaxed', 'tax', 'amount', 'balance', 'paid', 'debit', 'credit')
         for group in self._vendor_document_groups(options):
             values = defaultdict(float)
             for _record, _name, row in group['rows']:
@@ -383,6 +414,7 @@ class VendorDocumentReportHandler(models.AbstractModel):
             line_id = report._get_generic_line_id(anchor._name, anchor.id, markup='vendor_document_group')
             lines.append((0, {
                 'id': line_id, 'name': group['name'], 'level': 2, 'unfoldable': True,
+                'class': 'o_vendor_documents_supplier',
                 'unfolded': line_id in options.get('unfolded_lines', []) or options.get('unfold_all'),
                 'expand_function': '_report_expand_unfoldable_line_vendor_document',
                 'columns': self._vendor_report_columns(report, options, values, group['currency']),
@@ -403,15 +435,58 @@ class VendorDocumentReportHandler(models.AbstractModel):
                       if group['anchor']._name == model and group['anchor'].id == record_id), None)
         lines = []
         if group and not offset:
+            section = None
+            combined = report == self.env.ref('entintados_pdv.vendor_invoice_detail_report')
             for record, name, values in group['rows']:
-                lines.append({
+                if combined and section != record._name:
+                    section = record._name
+                    lines.append({
+                        'id': report._get_generic_line_id(None, None, parent_line_id=line_dict_id, markup=section),
+                        'parent_id': line_dict_id,
+                        'name': _('Facturas del período') if section == 'account.move' else _('Pagos del período'),
+                        'level': 3,
+                        'class': 'o_vendor_documents_section',
+                        'columns': self._vendor_report_columns(report, options, {}),
+                    })
+                line = {
                     'id': report._get_generic_line_id(record._name, record.id, parent_line_id=line_dict_id),
                     'parent_id': line_dict_id, 'name': name, 'level': 4,
                     'columns': self._vendor_report_columns(report, options, values, group['currency']),
-                })
+                }
+                if record._name in ('account.move', 'account.payment'):
+                    line['caret_options'] = record._name
+                if combined and record._name == 'account.payment':
+                    line['class'] = 'o_vendor_documents_payment'
+                lines.append(line)
                 if record._name == 'account.move':
                     lines.extend(self._vendor_bill_document_lines(report, options, line_dict_id, record))
+                elif record._name == 'account.payment':
+                    lines.extend(self._vendor_payment_bill_lines(report, options, line['id'], record))
         return {'lines': lines, 'offset_increment': len(lines), 'has_more': False, 'progress': progress}
+
+    def _vendor_payment_bill_lines(self, report, options, payment_line_id, payment):
+        lines = []
+        for bill in payment.monthly_vendor_bill_ids.sorted(lambda record: (record.invoice_date or record.date, record.id)):
+            partials, _exchange_moves = bill._get_reconciled_invoices_partials()
+            applied = [
+                amount for _partial, amount, counterpart in partials
+                if counterpart.move_id.origin_payment_id == payment
+            ]
+            values = {
+                'date': bill.invoice_date,
+                'ref': bill.ref or '',
+                'paid': bill.currency_id.round(sum(applied)) if applied else None,
+            }
+            lines.append({
+                'id': report._get_generic_line_id('account.move', bill.id, parent_line_id=payment_line_id),
+                'parent_id': payment_line_id,
+                'name': _('Factura · %s', bill.display_name),
+                'level': 8,
+                'class': 'o_vendor_documents_applied',
+                'caret_options': 'account.move',
+                'columns': self._vendor_report_columns(report, options, values, bill.currency_id),
+            })
+        return lines
 
     def _vendor_bill_document_lines(self, report, options, group_line_id, bill):
         payable = bill.line_ids.filtered(lambda line: line.account_type == 'liability_payable')
@@ -421,21 +496,16 @@ class VendorDocumentReportHandler(models.AbstractModel):
         credits = (reconciled_moves | bill.reversal_move_ids).filtered(
             lambda move: move.move_type == 'in_refund' and move.state == 'posted'
         )
-        payments = (bill._get_reconciled_payments() | bill.matched_payment_ids).filtered(
-            lambda payment: payment.state in ('in_process', 'paid')
-        )
         lines = []
-        for documents, label in ((payments, _('Pago')), (credits, _('Nota de crédito'))):
-            for document in documents.sorted(lambda item: (item.date, item.id)):
-                lines.append({
-                    'id': report._get_generic_line_id(
-                        document._name, document.id, parent_line_id=group_line_id,
-                        markup=f'vendor_bill_{bill.id}',
-                    ),
-                    'parent_id': group_line_id,
-                    'name': _('%(label)s · %(name)s', label=label, name=document.display_name),
-                    'level': 8,
-                    'caret_options': document._name,
-                    'columns': self._vendor_report_columns(report, options, {'date': document.date}),
-                })
+        for credit in credits.sorted(lambda item: (item.date, item.id)):
+            lines.append({
+                'id': report._get_generic_line_id(
+                    credit._name, credit.id, parent_line_id=group_line_id, markup=f'vendor_bill_{bill.id}',
+                ),
+                'parent_id': group_line_id,
+                'name': _('Nota de crédito · %s', credit.display_name),
+                'level': 8,
+                'caret_options': credit._name,
+                'columns': self._vendor_report_columns(report, options, {'date': credit.date}),
+            })
         return lines

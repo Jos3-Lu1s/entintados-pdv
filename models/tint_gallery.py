@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
 
 
 class TintGallery(models.Model):
@@ -78,14 +77,20 @@ class TintGallery(models.Model):
                 vals['code_prefix'] = self._normalize_prefix(vals['code_prefix'])
         galleries = super().create(vals_list)
         for gallery in galleries:
-            gallery.color_sequence_id = self.env['ir.sequence'].sudo().create({
-                'name': _("Colores: %s", gallery.name),
-                'padding': 4,
-                'implementation': 'standard',
-                'number_next': 1,
-                'company_id': False,
-            })
+            gallery._create_color_sequence()
         return galleries
+
+    def _create_color_sequence(self, number_next=1):
+        self.ensure_one()
+        sequence = self.env['ir.sequence'].sudo().create({
+            'name': _("Colores: %s", self.name),
+            'padding': 4,
+            'implementation': 'standard',
+            'number_next': number_next,
+            'company_id': False,
+        })
+        self.sudo().color_sequence_id = sequence
+        return sequence
 
     def write(self, vals):
         if 'code_prefix' in vals:
@@ -98,17 +103,39 @@ class TintGallery(models.Model):
         self.ensure_one()
         return (self.code_prefix or '') + number.zfill(4)
 
+    def _initial_color_number(self, colors):
+        prefix = self.code_prefix or ''
+        existing = colors.search_fetch([('code', '=like', prefix + '%')], ['code'])
+        numbers = (color.code[len(prefix):] for color in existing
+                   if color.code and color.code.startswith(prefix))
+        return max((int(number) for number in numbers if number.isascii() and number.isdigit()), default=0) + 1
+
+    def get_pos_color_number_preview(self):
+        self.ensure_one()
+        self.check_access('read')
+        colors = self.env['tint.color'].sudo().with_context(active_test=False)
+        sequence = self.color_sequence_id.sudo()
+        if not sequence:
+            return str(self._initial_color_number(colors)).zfill(4)
+        sequence.invalidate_recordset(['number_next_actual'])
+        number = sequence.number_next_actual
+        while True:
+            formatted = sequence.get_next_char(number)
+            if not colors.search_count([('code', '=', self._compose_color_code(formatted))], limit=1):
+                return formatted.zfill(4)
+            number += sequence.number_increment
+
     def _next_color_number(self):
         """Siguiente número de la secuencia cuyo código no esté ocupado."""
         self.ensure_one()
-        if not self.color_sequence_id:
-            raise UserError(_(
-                "La galería «%s» no tiene numeración de colores configurada. "
-                "Capture el número del color o configure la galería.",
-                self.name,
-            ))
         colors = self.env['tint.color'].sudo().with_context(active_test=False)
         sequence = self.color_sequence_id.sudo()
+        if not sequence:
+            self.env.cr.execute('SELECT id FROM tint_gallery WHERE id = %s FOR NO KEY UPDATE', [self.id])
+            self.invalidate_recordset(['color_sequence_id', 'code_prefix'])
+            sequence = self.color_sequence_id.sudo()
+            if not sequence:
+                sequence = self._create_color_sequence(self._initial_color_number(colors))
         while True:
             number = sequence.next_by_id()
             code = self._compose_color_code(number)

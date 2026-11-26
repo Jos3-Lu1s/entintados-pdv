@@ -15,11 +15,10 @@
     <t t-set="mat_header" t-value="o._mat_report_header()"/>
     <t t-set="mat_partner" t-value="mat_header['partner']"/>
     <t t-set="mat_agent" t-value="mat_header['agent']"/>
-    <div class="o_sale_quotation mat-document-header">
+    <div class="mat-document-header">
         <table class="o_sq_header"><tr>
             <td class="o_sq_logo">
-                <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)" alt="Logotipo"/>
-                <img t-else="" src="/entintados_pdv/static/src/img/invoice_logo_placeholder.png" alt="Logotipo de la empresa"/>
+                <img t-att-src="o._mat_invoice_logo()" alt="Pinturas Osel Centro Sur"/>
             </td>
             <td class="o_sq_company">
                 <div class="o_sq_company_name" t-field="o.company_id.name"/>
@@ -108,6 +107,19 @@
                     .mat-invoice #complement .barcode img {width:125px;height:125px;}
                     .mat-invoice #complement .complement-details {float:right; width:79%;}
                     .mat-invoice .page {margin:0;}
+                    .mat-invoice .mat-document-header {font-family:'IBM Plex Sans','Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:1.45;color:#1d1d1b;}
+                    .mat-invoice .mat-document-header table {border-collapse:collapse;border-spacing:0;}
+                    .mat-invoice .mat-document-header td {padding:0;border:0;vertical-align:top;}
+                    .mat-invoice .mat-document-header .o_sq_header {border-bottom:1px solid #1d1d1b;}
+                    .mat-invoice .o_sq_header td {vertical-align:bottom;padding-bottom:18px;}
+                    .mat-invoice .o_sq_header .o_sq_logo {width:154px;vertical-align:middle;}
+                    .mat-invoice .o_sq_logo img {max-width:136px;max-height:52px;}
+                    .mat-invoice .o_sq_header .o_sq_company {vertical-align:middle;padding-left:18px;border-left:1px solid #e2e0db;font-size:11px;color:#5f5d58;}
+                    .mat-invoice .o_sq_company_name {font-size:12.5px;font-weight:600;color:#1d1d1b;letter-spacing:.01em;}
+                    .mat-invoice .o_sq_title_cell {text-align:right;}
+                    .mat-invoice .o_sq_title {font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#2c4f8f;}
+                    .mat-invoice .o_sq_folio {font-size:21px;font-weight:600;line-height:1.15;letter-spacing:-.01em;}
+                    .mat-invoice .o_sq_date {font-size:11px;color:#5f5d58;}
                 
     .mat-invoice .mat-panel {background:white;border:1px solid #f2f2f2;border-radius:12px;box-shadow:0 2px 6px #ededed;overflow:hidden;}
     .mat-invoice .mat-panel.mat-brand,.mat-invoice .mat-panel.mat-dates,.mat-invoice .mat-top .mat-company {width:100%;box-sizing:border-box;}
@@ -128,9 +140,9 @@
     .mat-invoice .mat-lines th {background:#f1e9d4;color:#625d54;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;}
     .mat-invoice .mat-info .mat-heading {margin-bottom:8px;}
     .mat-invoice .mat-panel {border:0;border-radius:0;box-shadow:none;background:#f5f4f1;}
-    .mat-invoice .mat-lines {border:0;border-radius:0;border-collapse:collapse;}
-    .mat-invoice .mat-lines td {border-bottom:1px solid #e4e1db;}
-    .mat-invoice .mat-summary {border:0;border-radius:0;width:42%;}
+    .mat-invoice .mat-lines,.mat-invoice .mat-summary {border-radius:0;border-collapse:collapse;}
+    .mat-invoice .mat-lines td,.mat-invoice .mat-lines th,.mat-invoice .mat-summary td {border:1px solid #d4d0c8;}
+    .mat-invoice .mat-summary {width:42%;}
     .mat-invoice .mat-summary .o_total {background:#f1e9d4;color:#24468d;}
 </style>
                 <t t-out="0"/>

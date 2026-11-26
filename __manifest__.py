@@ -171,10 +171,6 @@ Catálogo de entintado
             # Sin creación rápida de contactos: quedarían sin teléfono
             "entintados_pdv/static/src/fields/partner_no_quick_create/partner_no_quick_create.js",
         ],
-        "web.report_assets_common": [
-            # PDF de cotizaciones y órdenes de venta
-            "entintados_pdv/static/src/reports/sale_quotation.scss",
-        ],
         "web.assets_unit_tests": [
             "entintados_pdv/static/tests/unit/**/*",
         ],
@@ -233,6 +229,8 @@ Catálogo de entintado
         'data/pos_bank_payment_data.xml',
         # Contactos, ventas, compras y riesgo financiero
         'views/res_partner_views.xml',
+        # Update the stored advance button before validating the tint view it used to inherit.
+        'views/sale_cash_advance_button_views.xml',
         'views/sale_order_views.xml',
         'views/sale_tint_views.xml',
         'views/tint_sales_report_views.xml',

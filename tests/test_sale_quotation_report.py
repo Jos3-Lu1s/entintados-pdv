@@ -92,11 +92,11 @@ class TestSaleQuotationReport(TransactionCase):
 
     def test_title_follows_order_state(self):
         order = self._order(order_line=[Command.create({'product_id': self.product.id})])
-        title = self._text(self._render(order).xpath("//div[hasclass('o_sq_title')]"))
+        title = self._text(self._render(order).xpath("//td[hasclass('o_sq_title')]"))
         self.assertEqual(title, 'Cotización')
 
         order.action_confirm()
-        title = self._text(self._render(order).xpath("//div[hasclass('o_sq_title')]"))
+        title = self._text(self._render(order).xpath("//td[hasclass('o_sq_title')]"))
         self.assertEqual(title, 'Orden de venta')
 
     def test_core_body_is_not_rendered(self):
@@ -104,16 +104,18 @@ class TestSaleQuotationReport(TransactionCase):
         doc = self._render(order)
         headers = doc.xpath("//table[@name='sale_quotation_lines']/thead/tr/th")
         self.assertEqual([' '.join(' '.join(header.itertext()).split()) for header in headers], [
-            'Código', 'Producto', 'Cantidad', 'Unidad', 'Precio unitario',
-            'Importe antes de descuento', 'Desc. %', 'Desc. importe', 'Subtotal',
-            'Impuestos importe', 'Total',
+            'Cantidad', 'Código', 'Descripción', 'Valor Uni.', 'Importe',
         ])
+        self.assertTrue(doc.xpath("//img[@alt='Pinturas Osel Centro Sur'][starts-with(@src, 'data:image/jpeg;base64,')]"))
+        self.assertTrue(doc.xpath("//div[hasclass('article')]/table[hasclass('o_sq_header')]"))
+        self.assertFalse(doc.xpath("//div[hasclass('header')]//table[hasclass('o_sq_header')]"))
+        self.assertTrue(doc.xpath("//div[hasclass('footer')]//img[@alt='Súper Asesor Osel'][starts-with(@src, 'data:image/jpeg;base64,')]"))
         self.assertFalse(doc.xpath("//table[hasclass('o_main_table')]"))
 
     def test_attention_only_for_contact_of_a_company(self):
         order = self._order(order_line=[Command.create({'product_id': self.product.id})])
         doc = self._render(order)
-        self.assertEqual(self._text(doc.xpath("//span[hasclass('o_sq_partner_name')]")), self.company_partner.name)
+        self.assertEqual(self._text(doc.xpath("//td[hasclass('o_sq_partner_name')]")), self.company_partner.name)
         self.assertIn('Atención', self._pairs(doc))
         self.assertIn(self.contact.name, doc.text_content())
 
@@ -124,26 +126,26 @@ class TestSaleQuotationReport(TransactionCase):
         order = self._order(order_line=[Command.create({'product_id': self.product.id})])
         order.validity_date = '2026-12-31'
         doc = self._render(order)
-        self.assertIn('Válida hasta', self._pairs(doc))
+        self.assertIn('Fecha de Vigencia', doc.text_content())
         self.assertIn('válida hasta', self._text(doc.xpath("//td[hasclass('o_sq_terms')]")))
 
         order.validity_date = False
         doc = self._render(order)
-        self.assertNotIn('Válida hasta', self._pairs(doc))
+        self.assertNotIn('Fecha de Vigencia', doc.text_content())
         self.assertNotIn('válida hasta', self._text(doc.xpath("//td[hasclass('o_sq_terms')]")))
 
-    def test_discount_column_and_rows_only_with_discount(self):
+    def test_discount_shows_in_summary(self):
         order = self._order(order_line=[Command.create({'product_id': self.product.id, 'product_uom_qty': 2})])
         doc = self._render(order)
         headers = self._text(doc.xpath("//table[@name='sale_quotation_lines']//th"))
         self.assertNotIn('Desc.', headers)
-        self.assertFalse(doc.xpath("//tr[@name='sale_quotation_gross']"))
-        self.assertFalse(doc.xpath("//tr[@name='sale_quotation_discount']"))
+        self.assertTrue(doc.xpath("//tr[@name='sale_quotation_gross']"))
+        self.assertEqual(_digits(self._text(doc.xpath("//tr[@name='sale_quotation_discount']/td[2]"))), '000')
 
         order.order_line.discount = 20
         doc = self._render(order)
         headers = self._text(doc.xpath("//table[@name='sale_quotation_lines']//th"))
-        self.assertIn('Desc.', headers)
+        self.assertNotIn('Desc.', headers)
         self.assertTrue(doc.xpath("//tr[@name='sale_quotation_gross']"))
         self.assertTrue(doc.xpath("//tr[@name='sale_quotation_discount']"))
         values = order._quotation_report_values()
@@ -171,11 +173,10 @@ class TestSaleQuotationReport(TransactionCase):
         rows = doc.xpath("//tr[@name='sale_quotation_product']")
         self.assertEqual(len(rows), 1)
         cells = rows[0].xpath('./td')
-        self.assertEqual(self._text(cells[:1]), f'BASE-REP-01 + {self.formula.color_id.code}')
-        self.assertIn(self.formula.color_id.name.upper(), self._text(cells[1:2]).upper())
-        self.assertEqual(_digits(self._text(cells[2:3])), '300')
-        self.assertEqual(_digits(self._text(cells[8:9])), _digits('%.2f' % line.price_subtotal))
-        self.assertEqual(_digits(self._text(cells[-1:])), _digits('%.2f' % line.price_total))
+        self.assertEqual(self._text(cells[1:2]), f'BASE-REP-01 + {self.formula.color_id.code}')
+        self.assertIn(self.formula.color_id.name.upper(), self._text(cells[2:3]).upper())
+        self.assertEqual(_digits(self._text(cells[:1])), '30000')
+        self.assertEqual(_digits(self._text(cells[-1:])), _digits('%.2f' % line.price_subtotal))
         self.assertNotIn('COL-REP-01', doc.text_content())
 
     def _section_order(self, **section_values):
@@ -191,8 +192,8 @@ class TestSaleQuotationReport(TransactionCase):
 
         cells = doc.xpath("//tr[@name='sale_quotation_section']")[0].xpath('./td')
         self.assertEqual(self._text(cells[:1]), 'Áreas comunes')
-        self.assertFalse(self._text(cells[1:-2] + cells[-1:]))
-        self.assertEqual(_digits(self._text(cells[-2:-1])),
+        self.assertEqual(cells[0].get('colspan'), '4')
+        self.assertEqual(_digits(self._text(cells[-1:])),
                          _digits('%.2f' % section._get_section_totals('price_subtotal')))
         self.assertFalse(doc.xpath("//tr[@name='sale_quotation_product']"))
 
@@ -202,15 +203,14 @@ class TestSaleQuotationReport(TransactionCase):
         doc = self._render(order)
 
         cells = doc.xpath("//tr[@name='sale_quotation_section']")[0].xpath('./td')
-        self.assertFalse(self._text(cells[1:-2] + cells[-1:]))
-        self.assertEqual(_digits(self._text(cells[-2:-1])),
+        self.assertEqual(cells[0].get('colspan'), '4')
+        self.assertEqual(_digits(self._text(cells[-1:])),
                          _digits('%.2f' % section._get_section_totals('price_subtotal')))
         children = doc.xpath("//tr[@name='sale_quotation_product']")
         self.assertEqual(len(children), 1)
         child_cells = children[0].xpath('./td')
         self.assertTrue(self._text(child_cells[2:3]))
-        self.assertTrue(self._text(child_cells[3:4]))
-        self.assertFalse(self._text(child_cells[4:]))
+        self.assertFalse(self._text(child_cells[3:]))
 
     def test_plain_section_prints_only_title(self):
         order = self._order(order_line=[

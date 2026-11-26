@@ -110,7 +110,11 @@ export class TintPanel extends Component {
         if (!this.isDebug || !this.galleriesLoaded) {
             return 0;
         }
-        return this.formulas.filter((formula) => !formula.gallery_id).length;
+        return this.formulas.filter((formula) => !this.galleryForFormula(formula)).length;
+    }
+
+    galleryForFormula(formula) {
+        return formula.color_id?.gallery_id || formula.gallery_id;
     }
 
     get hasCatalog() {
@@ -397,7 +401,7 @@ export class TintPanel extends Component {
         const activeSizes = sizeIds || [];
         const activeBaseTypes = baseTypeIds || [];
         return this.colorFormulas.filter((formula) => {
-            if (level >= 1 && galleryId && formula.gallery_id?.id !== galleryId) {
+            if (level >= 1 && galleryId && this.galleryForFormula(formula)?.id !== galleryId) {
                 return false;
             }
             if (level >= 2 && activeSizes.length && !activeSizes.includes(formula.size_id?.id)) {
@@ -541,7 +545,7 @@ export class TintPanel extends Component {
             baseProduct,
             defaultCode,
             color: formula.color_id,
-            gallery: formula.gallery_id,
+            gallery: this.galleryForFormula(formula),
             baseType: formula.base_type_id,
             size: formula.size_id,
             doses,

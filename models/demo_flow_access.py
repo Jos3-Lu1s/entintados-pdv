@@ -82,9 +82,19 @@ class DemoFlowUser(models.Model):
             # Read-only ACLs for cross-module consultation must not grant access
             # to native documents or documents belonging to other companies.
             company_path = PARENTS[model][1] + '.company_id' if model in PARENTS else 'company_id'
-            return list(scope & allowed & Domain.OR([
+            permitted = scope & allowed & Domain.OR([
                 Domain(company_path, '=', False), Domain(company_path, 'in', self.env.companies.ids),
-            ]))
+            ])
+            # Keep the ordinary reads granted by the native ACLs. POS validates
+            # its pickings before linking them to a session, so a POS link
+            # cannot be required here.
+            inventory = model in ('stock.picking', 'stock.move', 'stock.move.line')
+            native_stock_access = inventory and self.has_group('stock.group_stock_user')
+            native_sales_access = model in ('stock.picking', 'stock.move') and (
+                self.has_group('sales_team.group_sale_salesman') or self.has_group('point_of_sale.group_pos_user'))
+            if native_stock_access or native_sales_access:
+                permitted |= ~scope & Domain('company_id', 'in', self.env.companies.ids)
+            return list(permitted)
         if not self.has_group(PREFIX + 'user'):
             return [(1, '=', 1)]
         return list(~scope | allowed)

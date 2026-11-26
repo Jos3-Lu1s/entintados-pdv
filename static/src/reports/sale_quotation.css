@@ -1,0 +1,62 @@
+.o_sale_quotation {
+    color: #151515;
+    font: 11.5px/1.36 Arial, sans-serif;
+}
+
+.o_sale_quotation table { width: 100%; border-collapse: collapse; }
+.o_sale_quotation th, .o_sale_quotation td { padding: 0; border: 0; vertical-align: top; }
+.o_sale_quotation .o_sq_num { text-align: right; white-space: nowrap; }
+.o_sale_quotation .o_sq_center { text-align: center; }
+.o_sale_quotation .o_sq_card { border: 1px solid #e7e7e7; border-radius: 8px; overflow: hidden; }
+.o_sale_quotation .o_sq_band { padding: 4px 7px; color: #173b80; background: #efecd9; font-weight: 700; }
+
+.o_sale_quotation .o_sq_header { margin-bottom: 12px; page-break-inside: avoid; text-align: center; }
+.o_sale_quotation .o_sq_header > tbody > tr > td { vertical-align: middle; }
+.o_sale_quotation .o_sq_brand { width: 34%; }
+.o_sale_quotation .o_sq_company { width: 37%; padding: 0 6px; line-height: 1.45; }
+.o_sale_quotation .o_sq_company_name { font-weight: 700; }
+.o_sale_quotation .o_sq_logo { padding: 4px 6px; }
+.o_sale_quotation .o_sq_logo img { display: block; width: 115px; max-width: 100%; height: auto; margin: 0 auto; }
+.o_sale_quotation .o_sq_title { width: 48%; background: #efecd9; color: #173b80; font-weight: 700; }
+.o_sale_quotation .o_sq_reference td, .o_sale_quotation .o_sq_date { padding: 5px 3px; }
+.o_sale_quotation .o_sq_dates .o_sq_card + .o_sq_card { margin-top: 9px; }
+.o_sale_quotation .o_sq_date { font-weight: 700; }
+
+.o_sale_quotation .o_sq_info { margin-top: 4px; page-break-inside: avoid; }
+.o_sale_quotation .o_sq_customer { width: 70%; padding-right: 7px; }
+.o_sale_quotation .o_sq_contact { vertical-align: middle; font-size: 10px; }
+.o_sale_quotation .o_sq_contact_name { padding: 8px 5px 2px; text-align: center; font-weight: 700; }
+.o_sale_quotation .o_sq_pairs { margin: 6px 0; table-layout: auto; }
+.o_sale_quotation .o_sq_pairs td { padding: 1px 6px; word-wrap: break-word; }
+.o_sale_quotation .o_sq_pairs td:first-child { width: 1%; white-space: nowrap; font-weight: 700; }
+.o_sale_quotation .o_sq_intro { margin: 6px 0 17px; }
+
+.o_sale_quotation .o_sq_lines { table-layout: fixed; border: 1px solid #e7e7e7; }
+.o_sale_quotation .o_sq_lines thead { display: table-header-group; }
+.o_sale_quotation .o_sq_lines tr { page-break-inside: avoid; }
+.o_sale_quotation .o_sq_lines th, .o_sale_quotation .o_sq_lines td { padding: 4px 6px; }
+.o_sale_quotation .o_sq_lines th { background: #efecd9; color: #173b80; text-align: left; }
+.o_sale_quotation .o_sq_lines th.o_sq_num { text-align: right; }
+.o_sale_quotation .o_sq_col_qty { width: 10%; }
+.o_sale_quotation .o_sq_col_code { width: 17%; }
+.o_sale_quotation .o_sq_col_price { width: 16%; }
+.o_sale_quotation .o_sq_code, .o_sale_quotation .o_sq_desc { word-wrap: break-word; }
+.o_sale_quotation .o_sq_section td { background: #f5f5f5; font-weight: 700; }
+.o_sale_quotation .o_sq_note td { font-style: italic; }
+
+.o_sale_quotation .o_sq_totals { margin-top: 9px; page-break-inside: avoid; }
+.o_sale_quotation .o_sq_totals_amounts { width: 50%; }
+.o_sale_quotation .o_sq_amounts { border: 1px solid #e7e7e7; }
+.o_sale_quotation .o_sq_totals td { padding: 4px 5px; }
+.o_sale_quotation .o_sq_untaxed td, .o_sale_quotation .o_sq_grand td { border-top: 1px solid #222; font-weight: 700; }
+
+.o_sale_quotation .o_sq_closing { margin-top: 4px; page-break-inside: avoid; color: #173b80; font-weight: 600; }
+.o_sale_quotation .o_sq_terms > div { margin-bottom: 3px; }
+.o_sale_quotation .o_sq_signature { margin-top: 12px; color: #151515; font-weight: normal; }
+
+.o_sale_quotation.footer { text-align: left; }
+.o_sale_quotation .o_sq_watermark { display: block; height: 52px; opacity: .22; }
+.o_sale_quotation .o_sq_footer td { color: #555; font-size: 9px; text-align: left; vertical-align: middle; }
+.o_sale_quotation .o_sq_footer .o_sq_footer_mark { width: 52px; padding-right: 10px; }
+.o_sale_quotation .o_sq_footer .o_sq_footer_company { padding-right: 12px; word-wrap: break-word; }
+.o_sale_quotation .o_sq_footer .o_sq_footer_page { text-align: right; white-space: nowrap; }

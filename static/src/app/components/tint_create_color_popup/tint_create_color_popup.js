@@ -1,4 +1,4 @@
-import { Component, useState } from "@odoo/owl";
+import { Component, onMounted, useState } from "@odoo/owl";
 import { Dialog } from "@web/core/dialog/dialog";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
@@ -61,8 +61,8 @@ export class TintCreateColorPopup extends Component {
         this.state = useState({
             // Datos del color
             newColorName: "",
-            newColorNumber: "",
             newColorNotes: "",
+            colorNumberPreview: _t("Consultando consecutivo…"),
 
             // Galería por defecto, base y presentación para la fórmula
             newGalleryId: initialGalleryId,
@@ -80,6 +80,21 @@ export class TintCreateColorPopup extends Component {
             createColorError: "",
             createColorSuccess: "",
         });
+        onMounted(() => this.loadColorNumberPreview());
+    }
+
+    async loadColorNumberPreview() {
+        try {
+            if (this.defaultGallery) {
+                this.state.colorNumberPreview = await this.pos.data.call(
+                    "tint.gallery", "get_pos_color_number_preview", [[this.defaultGallery.id]]
+                );
+                return;
+            }
+        } catch {
+            // The server still assigns the code when the color is saved.
+        }
+        this.state.colorNumberPreview = _t("Consecutivo no disponible");
     }
 
     get defaultGallery() {
@@ -116,10 +131,6 @@ export class TintCreateColorPopup extends Component {
 
     get codePrefix() {
         return this.defaultGallery?.code_prefix || "";
-    }
-
-    get isColorNumberValid() {
-        return /^\d*$/.test(this.state.newColorNumber.trim());
     }
 
     get colorants() {
@@ -247,7 +258,7 @@ export class TintCreateColorPopup extends Component {
         if (this.state.isCreatingColor) {
             return false;
         }
-        if (!this.state.newColorName.trim() || !this.isColorNumberValid) {
+        if (!this.state.newColorName.trim()) {
             return false;
         }
         if (!parseInt(this.state.newGalleryId) || !parseInt(this.state.newBaseTypeId) || !parseInt(this.state.newSizeId)) {
@@ -268,12 +279,6 @@ export class TintCreateColorPopup extends Component {
     async saveNewColor() {
         if (!this.state.newColorName.trim()) {
             this.state.createColorError = _t("El nombre del color es obligatorio.");
-            return;
-        }
-        if (!this.isColorNumberValid) {
-            this.state.createColorError = _t(
-                "El número del color solo admite dígitos, sin el prefijo de la galería."
-            );
             return;
         }
 
@@ -335,10 +340,6 @@ export class TintCreateColorPopup extends Component {
                 name: this.state.newColorName.trim(),
                 gallery_id: galleryId,
             };
-            const colorNumber = this.state.newColorNumber.trim();
-            if (colorNumber) {
-                vals.code_number = colorNumber;
-            }
             if (this.state.newColorNotes.trim()) {
                 vals.notes = this.state.newColorNotes.trim();
             }
@@ -397,6 +398,16 @@ export class TintCreateColorPopup extends Component {
                 await this.pos.data.create("tint.color.formula.line", lineValsList);
             } else if (this.pos.orm && typeof this.pos.orm.create === "function") {
                 await this.pos.orm.create("tint.color.formula.line", lineValsList);
+            }
+
+            // POS create caches the submitted values. Read the saved formula
+            // so the cache also contains its computed gallery and dose links.
+            try {
+                await this.pos.data.callRelated("tint.color.formula", "get_pos_formulas", [
+                    this.pos.config.id, [["id", "=", formulaId]],
+                ], {}, false);
+            } catch (error) {
+                console.warn("No se pudo actualizar la fórmula guardada en caja:", error);
             }
 
             if (this.state.generateOtherSizes) {

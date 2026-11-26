@@ -44,8 +44,8 @@
                             </div>
 
                             <div class="col-md-5">
-                                <label class="form-label small fw-bold text-dark mb-1">
-                                    Número del Color <span class="text-secondary-emphasis fw-normal">(opcional)</span>
+                                <label for="pos_tint_color_number" class="form-label small fw-bold text-dark mb-1">
+                                    Número del Color
                                 </label>
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-light text-secondary-emphasis border-end-0">
@@ -54,13 +54,8 @@
                                     <span t-if="codePrefix" class="input-group-text bg-light fw-semibold font-monospace">
                                         <t t-esc="codePrefix"/>
                                     </span>
-                                    <input type="text" inputmode="numeric"
-                                           t-attf-class="form-control ps-2 {{ isColorNumberValid ? '' : 'is-invalid' }}"
-                                           t-model="state.newColorNumber"
-                                           placeholder="Vacío: siguiente de la galería"/>
-                                </div>
-                                <div t-if="!isColorNumberValid" class="text-danger text-xxs mt-1">
-                                    Solo dígitos, sin el prefijo de la galería.
+                                    <input id="pos_tint_color_number" type="text" class="form-control ps-2"
+                                           t-att-value="state.colorNumberPreview" readonly="readonly"/>
                                 </div>
                             </div>
 

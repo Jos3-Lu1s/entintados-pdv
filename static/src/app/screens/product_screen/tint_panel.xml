@@ -137,8 +137,7 @@
                         no tienen galería.
                     </strong>
                     <div class="mt-1">
-                        Asígnala en <em>Entintados → Carta de color → Fórmulas</em>, campo
-                        <em>Galería</em>, o el filtrado no tiene por dónde empezar.
+                        Revisa la galería del color en <em>Entintados → Carta de color → Colores</em>.
                     </div>
                 </div>
 
@@ -262,6 +261,14 @@
                         </div>
 
                         <!-- Estado guiado inicial sin filtros seleccionados -->
+                        <div t-elif="!hasActiveFilters and !sizes.length and !baseTypes.length"
+                             class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state text-center p-4">
+                            <i class="fa fa-filter fa-3x mb-3 text-secondary"/>
+                            <h5>No hay productos base compatibles en esta caja</h5>
+                            <p class="mb-0 small text-secondary-emphasis">
+                                Revisa el tipo de base y la presentación de los productos disponibles en Punto de Venta.
+                            </p>
+                        </div>
                         <div t-elif="!hasActiveFilters"
                              class="h-100 flex-grow-1 d-flex flex-column align-items-center justify-content-center o-tint-empty-state text-center p-4">
                             <i class="fa fa-sliders fa-3x mb-3 text-secondary"/>

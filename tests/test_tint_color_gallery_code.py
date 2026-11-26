@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase, tagged
 
@@ -72,12 +72,19 @@ class TestTintColorGalleryCode(TransactionCase):
             self.assertEqual(gallery.code_prefix or False, prefix, xmlid)
             self.assertTrue(gallery.color_sequence_id, xmlid)
 
-    def test_gallery_without_sequence_clear_error(self):
+    def test_gallery_without_sequence_resumes_after_existing_colors(self):
+        historical = self._color(self.gallery_r, code='ZR0045')
+        archived = self._color(self.gallery_r, code='ZR0098', active=False)
         self.gallery_r.color_sequence_id = False
-        with self.assertRaisesRegex(UserError, 'Transición prueba'):
-            self._color(self.gallery_r)
-        color = self._color(self.gallery_r, code_number='45')
-        self.assertEqual(color.code, 'ZR0045')
+        self.assertEqual(self.gallery_r.get_pos_color_number_preview(), '0099')
+        self.assertFalse(self.gallery_r.color_sequence_id)
+        self.assertEqual(self._color(self.gallery_r).code, 'ZR0099')
+        sequence = self.gallery_r.color_sequence_id
+        self.assertTrue(sequence)
+        self.assertEqual(self._color(self.gallery_r).code, 'ZR0100')
+        self.assertEqual(self.gallery_r.color_sequence_id, sequence)
+        self.assertEqual(historical.code, 'ZR0045')
+        self.assertEqual(archived.code, 'ZR0098')
 
     # --- Creación ---------------------------------------------------------
 
@@ -93,6 +100,8 @@ class TestTintColorGalleryCode(TransactionCase):
     def test_sequence_skips_occupied(self):
         self._color(self.gallery_r, code='ZR0001')
         self._color(self.gallery_r, code='ZR0002', active=False)
+        self.assertEqual(self.gallery_r.get_pos_color_number_preview(), '0003')
+        self.assertEqual(self.gallery_r.color_number_next, 1)
         color = self._color(self.gallery_r)
         self.assertEqual(color.code, 'ZR0003')
 

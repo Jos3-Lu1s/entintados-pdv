@@ -467,7 +467,7 @@ class SaleOrderLine(models.Model):
 
     @api.depends(lambda self: [
         'price_subtotal', 'product_uom_qty', 'product_id.standard_price', 'product_uom_id',
-        'order_id.currency_id', 'order_id.company_id', 'order_id.date_order',
+        'order_id.currency_id', 'order_id.company_id', 'order_id.date_order', 'tint_snapshot',
     ] + (['purchase_price'] if 'purchase_price' in self._fields else []))
     def _compute_osel_margin(self):
         for line in self:
@@ -482,6 +482,19 @@ class SaleOrderLine(models.Model):
                         cost, line.currency_id, line.company_id,
                         (line.order_id.date_order or fields.Datetime.now()).date(),
                     )
+            doses = line._tint_recipe().get('doses', [])
+            if doses:
+                point = self.env.ref('entintados_pdv.uom_tint_point')
+                products = self.env['product.product'].with_company(line.company_id)
+                colorant_cost = 0
+                for dose in doses:
+                    colorant = products.browse(dose['product_id'])
+                    quantity = point._compute_quantity(dose['points'], colorant.uom_id, round=False)
+                    colorant_cost += colorant.standard_price * quantity
+                unit_cost += line.company_id.currency_id._convert(
+                    colorant_cost, line.currency_id, line.company_id,
+                    (line.order_id.date_order or fields.Datetime.now()).date(), round=False,
+                )
             line.osel_cost_amount = unit_cost * line.product_uom_qty
             line.osel_margin_amount = line.price_subtotal - line.osel_cost_amount
             line.osel_margin_ratio = line.osel_margin_amount / line.price_subtotal if line.price_subtotal else (

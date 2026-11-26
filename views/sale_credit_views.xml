@@ -4,19 +4,6 @@
         <field name="model_id" ref="approvals.model_approval_request"/>
         <field name="domain_force">['|', ('sale_credit_move_id', '=', False), ('company_id', 'in', company_ids)]</field>
     </record>
-    <record id="sale_order_form_credit_advance" model="ir.ui.view">
-        <field name="name">sale.order.form.credit.advance</field>
-        <field name="model">sale.order</field>
-        <field name="active" eval="True"/>
-        <field name="inherit_id" ref="entintados_pdv.sale_order_form_tint"/>
-        <field name="arch" type="xml">
-            <xpath expr="//button[@name='%(sale_loyalty.sale_loyalty_coupon_wizard_action)d'][not(@disabled)]" position="before">
-                <button name="action_sale_cash_advance" type="object" string="Recibir anticipo"
-                        class="btn btn-secondary" groups="account.group_account_invoice"
-                        invisible="state not in ['draft', 'sent'] or locked"/>
-            </xpath>
-        </field>
-    </record>
     <record id="sale_cash_advance_form" model="ir.ui.view">
         <field name="name">sale.cash.advance.form</field>
         <field name="model">sale.cash.advance</field>

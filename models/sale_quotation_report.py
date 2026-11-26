@@ -1,9 +1,23 @@
+from base64 import b64encode
+
+from markupsafe import Markup
+
 from odoo import models
+from odoo.tools import file_open
 from odoo.tools.misc import format_date, format_datetime
 
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
+
+    def _quotation_report_style(self):
+        with file_open('entintados_pdv/static/src/reports/sale_quotation.css') as stylesheet:
+            return Markup(stylesheet.read())
+
+    def _quotation_report_image(self, *, watermark=False):
+        filename = 'quotation_super_asesor.jpg' if watermark else 'quotation_osel_logo.jpg'
+        with file_open(f'entintados_pdv/static/src/img/{filename}', 'rb') as image:
+            return 'data:image/jpeg;base64,' + b64encode(image.read()).decode('ascii')
 
     def _quotation_report_values(self):
         self.ensure_one()

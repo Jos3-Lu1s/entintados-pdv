@@ -6,12 +6,12 @@
         <field name="name">Cotización (Carta)</field>
         <field name="format">Letter</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">40</field>
-        <field name="margin_bottom">22</field>
-        <field name="margin_left">15</field>
-        <field name="margin_right">15</field>
+        <field name="margin_top">10</field>
+        <field name="margin_bottom">27</field>
+        <field name="margin_left">9</field>
+        <field name="margin_right">9</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">28</field>
+        <field name="header_spacing">0</field>
         <field name="dpi">96</field>
         <field name="disable_shrinking" eval="True"/>
     </record>
@@ -30,7 +30,7 @@
     </record>
 
     <record id="sale.action_report_saleorder" model="ir.actions.report">
-        <field name="paperformat_id" ref="paperformat_sale_quotation_landscape"/>
+        <field name="paperformat_id" ref="paperformat_sale_quotation"/>
     </record>
 
     <record id="sale.action_report_pro_forma_invoice" model="ir.actions.report">
@@ -41,34 +41,51 @@
          (valores de sale.order._quotation_report_values). -->
     <template id="sale_quotation_layout">
         <t t-set="company" t-value="doc.company_id.sudo()"/>
-        <div class="header o_sale_quotation">
-            <table class="o_sq_header">
-                <tr>
-                    <td t-if="company.logo" class="o_sq_logo">
-                        <img t-att-src="image_data_uri(company.logo)" alt="Logo"/>
-                    </td>
-                    <td class="o_sq_company">
-                        <div class="o_sq_company_name" t-out="company.name"/>
-                        <div t-if="company.vat">RFC <t t-out="company.vat"/></div>
-                        <div t-if="company.website" t-out="company.website"/>
-                    </td>
-                    <td class="o_sq_title_cell">
-                        <div class="o_sq_title" t-out="quotation['title']"/>
-                        <div class="o_sq_folio" t-out="doc.name"/>
-                        <div class="o_sq_date" t-out="quotation['date_short']"/>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
+        <t t-set="quotation_style" t-value="doc._quotation_report_style()"/>
         <div class="article o_sale_quotation"
              t-att-data-oe-model="doc._name"
              t-att-data-oe-id="doc.id"
              t-att-data-oe-lang="doc.env.context.get('lang')">
+            <style t-out="quotation_style"/>
+            <table class="o_sq_header">
+                <tr>
+                    <td class="o_sq_brand">
+                        <div class="o_sq_card">
+                            <div class="o_sq_logo">
+                                <img t-att-src="doc._quotation_report_image()" alt="Pinturas Osel Centro Sur"/>
+                            </div>
+                            <table class="o_sq_reference">
+                                <tr>
+                                    <td class="o_sq_title" t-out="quotation['title']"/>
+                                    <td class="o_sq_folio" t-out="doc.name"/>
+                                </tr>
+                            </table>
+                        </div>
+                    </td>
+                    <td class="o_sq_company">
+                        <div class="o_sq_company_name" t-out="company.name"/>
+                        <div t-if="company.vat">RFC: <t t-out="company.vat"/></div>
+                        <div t-out="' '.join(filter(None, [company.street, company.street2]))"/>
+                        <div t-out="', '.join(filter(None, [company.zip and 'C.P. %s' % company.zip, company.city, company.country_id.name]))"/>
+                        <div t-if="company.website" t-out="company.website"/>
+                    </td>
+                    <td class="o_sq_dates">
+                        <div class="o_sq_card">
+                            <div class="o_sq_band">Fecha de <t t-out="quotation['document_label']"/></div>
+                            <div class="o_sq_date" t-out="quotation['date_order']"/>
+                        </div>
+                        <div t-if="quotation['validity']" class="o_sq_card">
+                            <div class="o_sq_band">Fecha de Vigencia</div>
+                            <div class="o_sq_date" t-out="quotation['validity']"/>
+                        </div>
+                    </td>
+                </tr>
+            </table>
             <t t-out="0"/>
         </div>
 
         <div class="footer o_sale_quotation">
+            <style t-out="quotation_style"/>
             <t t-set="company_address" t-value="', '.join(filter(None, [
                 company.street,
                 company.street2,
@@ -78,12 +95,13 @@
             ]))"/>
             <table class="o_sq_footer">
                 <tr>
-                    <td>
-                        <t t-out="' · '.join(filter(None, [
-                            company.name,
-                            company_address,
-                            company.phone and 'Tel. %s' % company.phone,
-                        ]))"/>
+                    <td class="o_sq_footer_mark">
+                        <img class="o_sq_watermark" t-att-src="doc._quotation_report_image(watermark=True)" alt="Súper Asesor Osel"/>
+                    </td>
+                    <td class="o_sq_footer_company">
+                        <div t-out="company.name"/>
+                        <div t-if="company_address" t-out="company_address"/>
+                        <div t-if="company.phone">Tel. <t t-out="company.phone"/></div>
                     </td>
                     <td class="o_sq_footer_page">
                         <span class="o_sq_footer_folio" t-out="doc.name"/>
@@ -120,147 +138,84 @@
         <t t-set="shipping" t-value="doc.partner_shipping_id"/>
         <table class="o_sq_info">
             <tr>
-                <td style="width: 40%;">
-                    <span class="o_sq_info_label">Cliente</span>
-                    <span class="o_sq_partner_name" t-out="customer.name"/>
-                    <table class="o_sq_pairs">
-                        <tr t-if="customer.ref">
-                            <td class="o_sq_pair_key">Clave</td>
-                            <td t-out="customer.ref"/>
-                        </tr>
-                        <tr t-if="quotation['regime']">
-                            <td class="o_sq_pair_key">Régimen</td>
-                            <td t-out="quotation['regime']"/>
-                        </tr>
-                        <tr t-if="quotation['attention']">
-                            <td class="o_sq_pair_key">Atención</td>
-                            <td t-out="quotation['attention']"/>
-                        </tr>
-                    </table>
-                </td>
-                <td style="width: 31%;">
-                    <span class="o_sq_info_label">Entregar en</span>
-                    <div class="o_sq_address">
-                        <div t-out="' '.join(filter(None, [shipping.street, shipping.street2]))"/>
-                        <t t-set="city_line" t-value="', '.join(filter(None, [
-                            shipping.city, shipping.state_id.code, shipping.country_id.name]))"/>
-                        <div t-out="' · '.join(filter(None, [
-                            shipping.zip and 'C.P. %s' % shipping.zip, city_line]))"/>
+                <td class="o_sq_customer">
+                    <div class="o_sq_card">
+                        <div class="o_sq_band">En atención a:</div>
+                        <table class="o_sq_pairs">
+                            <tr t-if="customer.ref"><td>Clave</td><td t-out="customer.ref"/></tr>
+                            <tr><td>Nombre</td><td class="o_sq_partner_name" t-out="customer.name"/></tr>
+                            <tr t-if="doc.user_id"><td>Agente</td><td t-out="doc.user_id.name"/></tr>
+                            <tr t-if="quotation['attention']"><td>Atención</td><td t-out="quotation['attention']"/></tr>
+                            <tr t-if="shipping"><td>Entrega a:</td><td t-out="shipping.name"/></tr>
+                            <tr t-if="quotation['regime']"><td>Régimen</td><td t-out="quotation['regime']"/></tr>
+                        </table>
                     </div>
                 </td>
-                <td style="width: 29%;">
-                    <span class="o_sq_info_label">Detalles</span>
-                    <table class="o_sq_pairs">
-                        <tr t-if="quotation['date_order']">
-                            <td class="o_sq_pair_key">Emisión</td>
-                            <td t-out="quotation['date_order']"/>
-                        </tr>
-                        <tr t-if="quotation['validity']">
-                            <td class="o_sq_pair_key">Válida hasta</td>
-                            <td t-out="quotation['validity']"/>
-                        </tr>
-                        <tr t-if="doc.user_id">
-                            <td class="o_sq_pair_key">Agente</td>
-                            <td t-out="doc.user_id.name"/>
-                        </tr>
-                    </table>
+                <td class="o_sq_contact">
+                    <div class="o_sq_card">
+                        <div class="o_sq_contact_name" t-out="shipping.name or customer.name"/>
+                        <table class="o_sq_pairs">
+                            <tr t-if="shipping.phone"><td>Teléfono:</td><td t-out="shipping.phone"/></tr>
+                            <tr t-if="shipping.street or shipping.street2">
+                                <td>Dirección:</td><td t-out="' '.join(filter(None, [shipping.street, shipping.street2]))"/>
+                            </tr>
+                            <tr t-if="shipping.zip"><td>C.P.:</td><td t-out="shipping.zip"/></tr>
+                            <tr t-if="shipping.city or shipping.state_id">
+                                <td>Ciudad:</td><td t-out="', '.join(filter(None, [shipping.city, shipping.state_id.code]))"/>
+                            </tr>
+                            <tr t-if="shipping.country_id"><td/><td t-out="shipping.country_id.name"/></tr>
+                        </table>
+                    </div>
                 </td>
             </tr>
         </table>
-        <p class="o_sq_intro">Ponemos a su consideración la siguiente <t t-out="quotation['document_label']"/>:</p>
+        <p class="o_sq_intro">A continuación pongo a su consideración la siguiente <t t-out="quotation['document_label']"/>:</p>
     </template>
 
     <template id="sale_quotation_lines">
-        <t t-set="show_breakdown" t-value="quotation['is_quotation'] and not env.context.get('proforma')"/>
-        <t t-set="show_discount" t-value="show_breakdown or quotation['show_discount']"/>
-        <t t-set="columns" t-value="11 if show_breakdown else 6 + (1 if show_discount else 0)"/>
-        <table t-attf-class="o_sq_lines {{ 'o_sq_lines_detailed' if show_breakdown else '' }}" name="sale_quotation_lines">
+        <table class="o_sq_lines" name="sale_quotation_lines">
             <thead>
                 <tr>
+                    <th class="o_sq_col_qty">Cantidad</th>
                     <th class="o_sq_col_code">Código</th>
-                    <th>Producto</th>
-                    <th class="o_sq_col_qty o_sq_num">Cantidad</th>
-                    <th class="o_sq_col_uom">Unidad</th>
-                    <th class="o_sq_col_price o_sq_num">Precio<br/>unitario</th>
-                    <th t-if="show_breakdown" class="o_sq_col_gross o_sq_num">Importe antes<br/>de descuento</th>
-                    <th t-if="show_discount" class="o_sq_col_disc o_sq_num">Desc. %</th>
-                    <th t-if="show_breakdown" class="o_sq_col_price o_sq_num">Desc.<br/>importe</th>
-                    <th class="o_sq_col_total o_sq_num">Subtotal</th>
-                    <th t-if="show_breakdown" class="o_sq_col_tax o_sq_num">Impuestos<br/>importe</th>
-                    <th t-if="show_breakdown" class="o_sq_col_grand o_sq_num">Total</th>
+                    <th>Descripción</th>
+                    <th class="o_sq_col_price o_sq_num">Valor Uni.</th>
+                    <th class="o_sq_col_price o_sq_num">Importe</th>
                 </tr>
             </thead>
             <tbody>
                 <t t-set="collapse_prices" t-value="False"/>
                 <t t-foreach="doc._get_order_lines_to_report()" t-as="line">
-                    <t t-set="is_section" t-value="line.display_type in ('line_section', 'line_subsection')"/>
                     <t t-if="line.display_type == 'line_section'">
                         <t t-set="collapse_prices" t-value="line.collapse_prices"/>
                     </t>
                     <t t-elif="line.display_type == 'line_subsection'">
                         <t t-set="collapse_prices" t-value="line.parent_id.collapse_prices or line.collapse_prices"/>
                     </t>
-
-                    <tr t-if="is_section"
-                        t-att-class="'o_sq_section' + (' o_sq_subsection' if line.display_type == 'line_subsection' else '')"
-                        name="sale_quotation_section">
+                    <tr t-if="line.display_type in ('line_section', 'line_subsection')" class="o_sq_section" name="sale_quotation_section">
                         <t t-set="show_total" t-value="line.collapse_composition or line.collapse_prices"/>
-                        <t t-set="section" t-value="line._quotation_section_values() if show_total else {}"/>
-                        <td t-att-colspan="2 if show_total else columns">
-                            <span class="o_sq_marker"/><span t-out="line.name"/>
-                        </td>
-                        <t t-if="show_total">
-                            <td class="o_sq_num"/>
-                            <td t-att-colspan="columns - (6 if show_breakdown else 4)"/>
-                            <td class="o_sq_num" t-out="section['total']" t-options="money"/>
-                            <td t-if="show_breakdown" colspan="2"/>
-                        </t>
+                        <td t-att-colspan="4 if show_total else 5" t-out="line.name"/>
+                        <td t-if="show_total" class="o_sq_num" t-out="line._quotation_section_values()['total']" t-options="money"/>
                     </tr>
                     <tr t-elif="line.display_type == 'line_note'" class="o_sq_note" name="sale_quotation_note">
-                        <td/>
-                        <td t-att-colspan="columns - 1" t-out="line.name" t-options="{'widget': 'text'}"/>
+                        <td colspan="5"><span t-out="line.name" t-options="{'widget': 'text'}"/></td>
                     </tr>
                     <tr t-elif="line.product_type == 'combo'" class="o_sq_section" name="sale_quotation_combo">
-                        <td colspan="2">
-                            <span class="o_sq_marker"/><span t-out="line.name"/>
-                        </td>
-                        <td class="o_sq_num o_sq_quantity">
-                            <span t-out="line.product_uom_qty" t-options="{'widget': 'float', 'precision': 2}"/>
-                        </td>
-                        <td><span t-field="line.product_uom_id"/></td>
-                        <td t-att-colspan="columns - (7 if show_breakdown else 5)"/>
+                        <td class="o_sq_center"><span t-out="line.product_uom_qty" t-options="{'widget': 'float', 'precision': 4}"/></td>
+                        <td colspan="3" t-out="line.name"/>
                         <td class="o_sq_num">
                             <t t-if="not collapse_prices" t-out="line._get_combo_totals('price_subtotal')" t-options="money"/>
                         </td>
-                        <td t-if="show_breakdown" colspan="2"/>
                     </tr>
                     <tr t-else="" class="o_sq_product" name="sale_quotation_product">
-                        <td class="o_sq_code" t-out="line._quotation_product_code()"/>
-                        <td class="o_sq_desc" t-out="line.name" t-options="{'widget': 'text'}"/>
-                        <td class="o_sq_num o_sq_quantity">
-                            <span t-out="line.product_uom_qty" t-options="{'widget': 'float', 'precision': 2}"/>
-                        </td>
-                        <td><span t-field="line.product_uom_id"/></td>
+                        <td class="o_sq_center"><span t-out="line.product_uom_qty" t-options="{'widget': 'float', 'precision': 4}"/></td>
+                        <td class="o_sq_center o_sq_code" t-out="line._quotation_product_code()"/>
+                        <td class="o_sq_desc"><span t-out="line.name" t-options="{'widget': 'text'}"/></td>
                         <td class="o_sq_num">
-                            <t t-if="not collapse_prices" t-out="line._quotation_unit_price()" t-options="money"/>
+                            <t t-if="not collapse_prices" t-out="line._quotation_unit_price()" t-options="{'widget': 'float', 'precision': 6}"/>
                         </td>
-                        <td t-if="show_breakdown" class="o_sq_num">
-                            <t t-if="not collapse_prices" t-out="line.sale_amount_before_discount" t-options="money"/>
-                        </td>
-                        <td t-if="show_discount" class="o_sq_num o_sq_disc">
-                            <t t-if="not collapse_prices" t-out="('%g' % line.discount) + '%' if line.discount else '—'"/>
-                        </td>
-                        <td t-if="show_breakdown" class="o_sq_num">
-                            <t t-if="not collapse_prices" t-out="line.discount_amount" t-options="money"/>
-                        </td>
-                        <td class="o_sq_num o_sq_amount">
+                        <td class="o_sq_num">
                             <t t-if="not collapse_prices" t-out="line.price_subtotal" t-options="money"/>
-                        </td>
-                        <td t-if="show_breakdown" class="o_sq_num o_sq_tax">
-                            <t t-if="not collapse_prices" t-out="line.sale_tax_amount_detail or ''"/>
-                        </td>
-                        <td t-if="show_breakdown" class="o_sq_num">
-                            <t t-if="not collapse_prices" t-out="line.price_total" t-options="money"/>
                         </td>
                     </tr>
                 </t>
@@ -271,29 +226,20 @@
     <template id="sale_quotation_totals">
         <table class="o_sq_totals" name="sale_quotation_totals">
             <tr>
-                <td class="o_sq_totals_notes">
-                    <div class="o_sq_totals_block">
-                        <span class="o_sq_eyebrow">Importe con letra</span>
-                        <span t-out="currency.amount_to_text(doc.amount_total)"/>
-                    </div>
-                    <div t-if="not is_html_empty(doc.note)" class="o_sq_totals_block" name="sale_quotation_notes">
-                        <span class="o_sq_eyebrow">Observaciones</span>
-                        <div t-field="doc.note"/>
-                    </div>
-                </td>
+                <td/>
                 <td class="o_sq_totals_amounts">
                     <table class="o_sq_amounts">
-                        <t t-if="quotation['show_discount']">
+                        <t>
                             <tr name="sale_quotation_gross">
-                                <td class="o_sq_amount_label">Subtotal</td>
+                                <td class="o_sq_amount_label">Importe antes del descuento</td>
                                 <td class="o_sq_num" t-out="quotation['gross']" t-options="money"/>
                             </tr>
                             <tr name="sale_quotation_discount">
                                 <td class="o_sq_amount_label">Descuento</td>
-                                <td class="o_sq_num">−<t t-out="quotation['discount']" t-options="money"/></td>
+                                <td class="o_sq_num" t-out="quotation['discount']" t-options="money"/>
                             </tr>
                         </t>
-                        <tr t-att-class="'o_sq_untaxed' if quotation['show_discount'] else None">
+                        <tr class="o_sq_untaxed">
                             <td class="o_sq_amount_label">Importe sin impuestos</td>
                             <td class="o_sq_num" t-out="doc.amount_untaxed" t-options="money"/>
                         </tr>
@@ -317,21 +263,22 @@
         <table class="o_sq_closing" name="sale_quotation_closing">
             <tr>
                 <td class="o_sq_terms">
-                    <span class="o_sq_eyebrow">Condiciones</span>
-                    Gracias por su preferencia.
-                    <t t-if="quotation['is_quotation'] and quotation['validity']">
-                        Esta cotización es válida hasta <t t-out="quotation['validity']"/>.
-                    </t>
+                    <div>Importe con letra: <span t-out="currency.amount_to_text(doc.amount_total)"/></div>
+                    <div>
+                        Gracias por su preferencia.
+                        <t t-if="quotation['is_quotation'] and quotation['validity']">
+                            Esta cotización es válida hasta <t t-out="quotation['validity']"/>.
+                        </t>
+                    </div>
+                    <div name="sale_quotation_notes">
+                        <span>Observaciones:</span>
+                        <div t-if="not is_html_empty(doc.note)" t-field="doc.note"/>
+                    </div>
+                    <div t-if="doc.user_id" class="o_sq_signature" name="sale_quotation_signature">
+                        Quedo a sus órdenes,
+                        <div t-out="doc.user_id.name"/>
+                    </div>
                 </td>
-                <t t-if="doc.user_id">
-                    <td class="o_sq_gap"/>
-                    <td class="o_sq_signature" name="sale_quotation_signature">
-                        <div class="o_sq_muted">Quedo a sus órdenes,</div>
-                        <div class="o_sq_sign_line"/>
-                        <div class="o_sq_signer" t-out="doc.user_id.name"/>
-                        <div class="o_sq_soft">Agente de ventas</div>
-                    </td>
-                </t>
             </tr>
         </table>
     </template>

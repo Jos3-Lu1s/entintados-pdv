@@ -28,7 +28,8 @@ class WithoutPosOrder(TestPosSaleQuotation):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env.registry.init_models(cls.env.cr, ['sale.order', 'pos.order.line'], {'module': 'entintados_pdv'}, install=False)
+        cls.env.registry.init_models(
+            cls.env.cr, ['sale.order', 'pos.order', 'pos.order.line'], {'module': 'entintados_pdv'}, install=False)
 
     def payload(self, ticket):
         data = {name: ticket[name] for name in (
@@ -133,6 +134,7 @@ class WithoutPosOrder(TestPosSaleQuotation):
     def test_print_current_ticket_preserves_draft(self):
         ticket = self._ticket(tinted=True, discount=10)
         data, _expected = self.payload(ticket)
+        data.update(pos_reference='266-1-000009', tracking_number='6009')
         base = ticket.lines.filtered(lambda line: not line.combo_parent_id)
         rule = self.env['res.partner.discount.rule'].create({
             'partner_id': ticket.partner_id.id, 'product_id': base.product_id.id, 'discount': 10,
@@ -148,6 +150,7 @@ class WithoutPosOrder(TestPosSaleQuotation):
         def render_pdf(report, refs):
             self.assertEqual(report, 'sale.action_report_saleorder')
             quotation = quotes.browse(refs)
+            self.assertEqual(quotation.name, 'Pdv - 6009')
             self.assertEqual(quotation.amount_total, ticket.amount_total)
             self.assertEqual(quotation.order_line.tint_snapshot['doses'][0]['points'], 12)
             return b'%PDF-test', 'pdf'
