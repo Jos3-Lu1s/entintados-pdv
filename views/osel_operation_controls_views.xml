@@ -79,6 +79,8 @@
             </xpath>
         </field>
     </record>
+    <!-- Remove the legacy picking view before validating its sibling extensions. -->
+    <delete model="ir.ui.view" id="stock_picking_form_tint_consumptions"/>
     <record id="osel_picking_form_controls" model="ir.ui.view">
         <field name="name">stock.picking.osel.controls</field>
         <field name="model">stock.picking</field>
