@@ -65,6 +65,7 @@ Catálogo de entintado
             "entintados_pdv/static/src/app/overrides/order_price_breakdown.xml",
             # Estilos del POS
             "entintados_pdv/static/src/app/style/tint.scss",
+            "entintados_pdv/static/src/app/style/pos_list_dialog.scss",
             # Componentes reutilizables (js + xml co-localizados)
             "entintados_pdv/static/src/app/components/customer_contact_info/customer_contact_info.js",
             "entintados_pdv/static/src/app/components/customer_contact_info/customer_contact_info.xml",

@@ -1,0 +1,40 @@
+// Diálogos de lista del PDV (SelectCreateDialog y derivados).
+// El PDV no carga el dialog.scss del backend y su modal es alto, así que la
+// altura fija de 20rem que el core da al estado vacío en diálogos deja la
+// tabla en una franja y el resto del modal en blanco. Aquí la vista llena el
+// cuerpo del modal y el desplazamiento queda dentro de la tabla.
+.o_select_create_dialog_content {
+    > .modal-body {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    > .modal-body > .o_list_view {
+        flex: 1 1 auto;
+        min-height: 0;
+
+        > .o_control_panel {
+            flex: 0 0 auto;
+        }
+
+        > .o_content,
+        > .o_content:has(.o_view_nocontent) {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        > .o_content > .o_list_renderer {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: auto;
+            overflow: auto;
+        }
+    }
+}
