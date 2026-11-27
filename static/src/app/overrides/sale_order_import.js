@@ -1,14 +1,19 @@
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
+import { OrderSummary } from "@point_of_sale/app/screens/product_screen/order_summary/order_summary";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { PosOrderline } from "@point_of_sale/app/models/pos_order_line";
 import { SelectCreateDialog } from "@web/views/view_dialogs/select_create_dialog";
 import {
+    comboPayloadFromSaleLines,
     currentRulesResetValues,
     isImportedSaleLine,
+    isSaleComboItem,
+    matchComboItemSaleLines,
     quotedTotal,
     snapshotDoses,
+    tintColorantChildValues,
 } from "@entintados_pdv/app/utils/sale_order_import";
 import { computeTintedPriceDetails, isTintedBase } from "@entintados_pdv/app/utils/tint_order";
 import { printableQuotations } from "@entintados_pdv/app/utils/quotation_print";
@@ -59,7 +64,11 @@ patch(PosStore.prototype, {
 
     /** «Liquidar»: las líneas traídas se valoran con las reglas vigentes de la caja. */
     async settleSO(saleOrder, orderFiscalPos) {
-        const result = await super.settleSO(...arguments);
+        // Combo products are rebuilt under their package: the native flow would add them flat.
+        const packageView = Object.create(saleOrder, {
+            order_line: { value: saleOrder.order_line.filter((line) => !isSaleComboItem(line)) },
+        });
+        const result = await super.settleSO(packageView, orderFiscalPos);
         const order = this.getOrder();
         // The native flow copies the quotation price and discount; recalculation runs
         // on every added line, so the final valuation is a single pass at the end.
@@ -152,12 +161,67 @@ patch(PosStore.prototype, {
     },
 
     async addLineToCurrentOrder(values, options = {}, configure = true) {
-        const recipe = values.sale_order_line_id?.tint_snapshot;
+        const saleLine = values.sale_order_line_id;
+        const recipe = saleLine?.tint_snapshot;
+        let colorants = [];
         if (recipe?.base_only) {
+            // Colorant children only show the formula; its stock comes from the frozen recipe.
+            colorants = tintColorantChildValues(snapshotDoses(this.models, recipe), values.qty);
             values = { ...values, is_tinted_base: true, tint_color_code: recipe.color_code || false,
-                       customer_note: values.sale_order_line_id.name };
+                       customer_note: saleLine.name,
+                       combo_line_ids: colorants.map((child) => ["create", {
+                           ...child,
+                           order_id: this.getOrder(),
+                           manual_price: true,
+                           customer_note: "",
+                           tax_ids: (child.product_id.product_tmpl_id?.taxes_id || []).map((tax) => ["link", tax]),
+                       }]) };
         }
-        return super.addLineToCurrentOrder(values, options, configure);
+        const itemSaleLines = this._saleComboItemLines(values);
+        if (itemSaleLines) {
+            const comboValues = { ...values, payload: comboPayloadFromSaleLines(saleLine, itemSaleLines) };
+            await this.handleComboProduct(comboValues, this.getOrder(), true);
+            values = { ...values, combo_line_ids: comboValues.combo_line_ids || [] };
+        }
+        const line = await super.addLineToCurrentOrder(values, options, configure);
+        if (line && itemSaleLines) {
+            this._linkComboItemsToSaleLines(line, itemSaleLines, values.sale_order_origin_id);
+        }
+        if (line && colorants.length) {
+            // Same marks as a tint captured in the POS (`addTintedBaseToOrder`).
+            line.is_tinted_base = true;
+            line.combo_line_ids?.forEach((child, index) => {
+                child.is_tint_colorant = true;
+                child.unit_points ??= colorants[index]?.unit_points;
+            });
+        }
+        return line;
+    },
+
+    /** Productos de Ventas del paquete de combo que se agrega, o `null` si no es un paquete traído. */
+    _saleComboItemLines(values) {
+        const saleLine = values.sale_order_line_id;
+        if (!saleLine || values.product_id?.type !== "combo") {
+            return null;
+        }
+        const saleOrder = this.models["sale.order"].get(values.sale_order_origin_id?.id);
+        return (saleOrder?.order_line || []).filter(
+            (line) => isSaleComboItem(line) && (line.linked_line_id?.id ?? line.linked_line_id) === saleLine.id
+        );
+    },
+
+    /**
+     * Liga cada producto del combo a su línea de venta y guarda lo cotizado, para escribir lo
+     * cobrado al sincronizar y para el aviso de diferencia de total.
+     */
+    _linkComboItemsToSaleLines(packageLine, itemSaleLines, saleOrder) {
+        for (const [itemLine, itemSaleLine] of matchComboItemSaleLines(packageLine.combo_line_ids, itemSaleLines)) {
+            itemLine.update({ sale_order_line_id: itemSaleLine, sale_order_origin_id: saleOrder });
+            itemSaleLine.quotedConverted = {
+                product_uom_qty: itemSaleLine.product_uom_qty,
+                price_total: itemSaleLine.price_total,
+            };
+        }
     },
 });
 
@@ -202,5 +266,24 @@ patch(ControlButtons.prototype, {
                 }
             },
         });
+    },
+});
+
+patch(OrderSummary.prototype, {
+    /** Un combo traído de Ventas no se reconfigura: sus productos están ligados a la cotización. */
+    async onOrderlineLongPress(event, line) {
+        const packageLine = line?.combo_parent_id || line;
+        if (packageLine?.product_id?.type === "combo" && packageLine.sale_order_line_id) {
+            const quotation = packageLine.sale_order_origin_id || packageLine.sale_order_line_id.order_id;
+            this.pos.notification.add(
+                _t("El combo «%(combo)s» viene de la cotización %(quotation)s: cambia la cantidad o quítalo. Para cambiar sus productos, edítalo en Ventas.", {
+                    combo: packageLine.product_id.display_name || "",
+                    quotation: quotation?.name || "",
+                }),
+                { type: "warning" }
+            );
+            return false;
+        }
+        return await super.onOrderlineLongPress(event, line);
     },
 });

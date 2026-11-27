@@ -22,7 +22,20 @@ function fixture(fail = false) {
             return 'payment';
         }
         async settleSO(saleOrder) {
+            (this.nativeSettled ||= []).push({ id: saleOrder.id, lines: saleOrder.order_line?.map((line) => line.id) });
             this.getOrder().setPricelist(saleOrder.pricelist_id);
+        }
+        async handleComboProduct(values) {
+            const [included, extras] = values.payload;
+            values.combo_line_ids = [...included, ...extras].map((conf) => ['create', {
+                combo_item_id: conf.combo_item_id, qty: conf.qty * values.qty,
+            }]);
+            return true;
+        }
+        async addLineToCurrentOrder(values) {
+            return { ...values, combo_line_ids: (values.combo_line_ids || []).map(([, child]) => ({
+                ...child, update(changes) { Object.assign(this, changes); },
+            })) };
         }
         _refreshLinePromotions(order) {
             (this.promotionRefreshes ||= []).push(order);
@@ -36,7 +49,13 @@ function fixture(fail = false) {
     }
     class PosOrderline extends NativePosOrderline {}
     const BranchStockDialog = class {};
-    vm.runInNewContext(quotationUtils + source, { ControlButtons, TicketScreen, PosStore, PosOrderline, PosOrder: class {}, PaymentScreen: class {}, useService() {}, ask: async () => true,
+    class NativeOrderSummary {
+        async onOrderlineLongPress() {
+            return 'configurator';
+        }
+    }
+    class OrderSummary extends NativeOrderSummary {}
+    vm.runInNewContext(quotationUtils + source, { ControlButtons, TicketScreen, PosStore, OrderSummary, PosOrderline, PosOrder: class {}, PaymentScreen: class {}, useService() {}, ask: async () => true,
         BranchStockDialog, FormViewDialog: class {}, SelectCreateDialog: class {},
         requiresPosStock: (product) => Boolean(product?.is_storable),
         downloadFile: (...args) => downloads.push(args),
@@ -69,7 +88,7 @@ function fixture(fail = false) {
             } },
             removePendingOrder() { calls.push('removePending'); }, removeOrder() { calls.push('remove'); },
             navigate() {}, addNewOrder() {} } });
-    return { button, calls, PosStore, PosOrderline, TicketScreen, BranchStockDialog, downloads };
+    return { button, calls, PosStore, PosOrderline, TicketScreen, BranchStockDialog, OrderSummary, downloads };
 }
 
 test('filters orders marked To Invoice and invoiced quotations from the import selector', async () => {
@@ -206,11 +225,11 @@ test('settles with the customer pricelist available in the POS, not the quotatio
     });
 
     order.partner = { property_product_pricelist: { id: 2 } };
-    await store.settleSO({ pricelist_id: quotationPricelist });
+    await store.settleSO({ pricelist_id: quotationPricelist, order_line: [] });
     assert.equal(order.pricelist_id, customerPricelist);
 
     order.partner = { property_product_pricelist: { id: 99 } };
-    await store.settleSO({ pricelist_id: quotationPricelist });
+    await store.settleSO({ pricelist_id: quotationPricelist, order_line: [] });
     assert.equal(order.pricelist_id, posPricelist);
 });
 
@@ -232,7 +251,7 @@ test('settling drops quotation prices and discounts before one final recalculati
         models: { 'product.pricelist': [] },
     });
 
-    await store.settleSO({ pricelist_id: { id: 1 } });
+    await store.settleSO({ pricelist_id: { id: 1 }, order_line: [] });
     for (const line of lines) {
         assert.equal(line.price_type, 'original');
         assert.equal(line.discount, 0);
@@ -259,7 +278,7 @@ test('lets the POS promotion engine decide after the final recalculation', async
         _refreshLinePromotions(target) { steps.push(['promotions', target, target.lines[0].promo_reward_id]); },
     });
 
-    await store.settleSO({});
+    await store.settleSO({ order_line: [] });
     assert.deepEqual(steps, ['pricing', ['promotions', order, false]]);
 });
 
@@ -285,7 +304,7 @@ test('reprices a quoted tint with today base and colorant prices on the frozen p
     const snapshot = { doses: [{ product_id: 21, points: 12, name: 'Colorante A', unit_price: 1 }] };
     const { store, line, notices } = tintFixture(snapshot, [{ id: 21, lst_price: 2 }]);
 
-    await store.settleSO({});
+    await store.settleSO({ order_line: [] });
     assert.equal(line.price_unit, 224);
     assert.equal(line.price_type, 'manual');
     assert.equal(line.price_origin, 'tint');
@@ -298,7 +317,7 @@ test('keeps the quoted tint price when a colorant is not loaded in the POS', asy
     const snapshot = { doses: [{ product_id: 21, points: 12, name: 'Colorante A' }] };
     const { store, line, notices } = tintFixture(snapshot, []);
 
-    await store.settleSO({});
+    await store.settleSO({ order_line: [] });
     assert.equal(line.price_unit, 224);
     assert.equal(line.price_type, 'manual');
     assert.equal(line.price_origin, 'manual');
@@ -308,7 +327,7 @@ test('keeps the quoted tint price when a colorant is not loaded in the POS', asy
 
 function totalFixture(lineTotal) {
     const { PosStore, PosOrderline } = fixture();
-    const quotation = { id: 42, name: 'S00042' };
+    const quotation = { id: 42, name: 'S00042', order_line: [] };
     const line = Object.assign(new PosOrderline(), {
         sale_order_line_id: { id: 1, is_downpayment: false }, sale_order_origin_id: quotation,
         price_type: 'automatic', discount: 10, priceIncl: lineTotal,
@@ -493,4 +512,133 @@ test('keeps ticket on RPC failure and releases UI for retry', async () => {
     assert.equal(calls.includes('remove'), false);
     assert.equal(calls.at(-1), 'unblock');
     assert.equal(button._creatingSaleQuotation, false);
+});
+
+test('the native flow never receives combo products, only their package', async () => {
+    const { PosStore } = fixture();
+    const order = { lines: [], getPartner: () => null, setPricelist() {}, refreshOrderPricing() {} };
+    const store = Object.assign(new PosStore(), {
+        getOrder: () => order, config: { pricelist_id: { id: 3 }, use_presets: false },
+        models: { 'product.pricelist': [] },
+    });
+    const quotation = { id: 42, name: 'S00042', order_line: [
+        { id: 1 },
+        { id: 2, product_uom_qty: 1 },
+        { id: 3, combo_item_id: { id: 11 }, linked_line_id: { id: 2 } },
+    ] };
+
+    await store.settleSO(quotation);
+    assert.deepEqual(store.nativeSettled, [{ id: 42, lines: [1, 2] }]);
+    assert.equal(quotation.order_line.length, 3);
+});
+
+test('rebuilds a quoted combo under its package and links each product to its sale line', async () => {
+    const { PosStore } = fixture();
+    const mesa = { id: 11, combo_id: { id: 1, qty_free: 1 } };
+    const silla = { id: 12, combo_id: { id: 2, qty_free: 1 } };
+    const packageSale = { id: 2, product_uom_qty: 2 };
+    const mesaSale = { id: 3, combo_item_id: mesa, linked_line_id: { id: 2 }, product_uom_qty: 2, price_total: 200 };
+    const sillaSale = { id: 4, combo_item_id: silla, linked_line_id: 2, product_uom_qty: 2, price_total: 100 };
+    const otherSale = { id: 5, combo_item_id: mesa, linked_line_id: { id: 9 }, product_uom_qty: 1 };
+    const quotation = { id: 42, order_line: [packageSale, mesaSale, sillaSale, otherSale] };
+    const store = Object.assign(new PosStore(), {
+        getOrder: () => ({ lines: [] }),
+        models: { 'sale.order': { get: (id) => (id === 42 ? quotation : undefined) } },
+    });
+
+    const line = await store.addLineToCurrentOrder({
+        product_id: { type: 'combo' }, qty: 2, sale_order_line_id: packageSale, sale_order_origin_id: { id: 42 },
+    }, {}, false);
+    assert.equal(line.payload, undefined);
+    assert.deepEqual(line.combo_line_ids.map((child) => [child.combo_item_id.id, child.qty]), [[11, 2], [12, 2]]);
+    assert.deepEqual(line.combo_line_ids.map((child) => child.sale_order_line_id), [mesaSale, sillaSale]);
+    assert.ok(line.combo_line_ids.every((child) => child.sale_order_origin_id.id === 42));
+    assert.equal(mesaSale.quotedConverted.product_uom_qty, 2);
+    assert.equal(mesaSale.quotedConverted.price_total, 200);
+    assert.equal(otherSale.quotedConverted, undefined);
+});
+
+test('a product that is not a combo package is added as before', async () => {
+    const { PosStore } = fixture();
+    const store = Object.assign(new PosStore(), { getOrder: () => ({ lines: [] }), models: {} });
+    const line = await store.addLineToCurrentOrder({
+        product_id: { type: 'consu' }, sale_order_line_id: { id: 1 }, sale_order_origin_id: { id: 42 },
+    }, {}, false);
+    assert.deepEqual(line.combo_line_ids, []);
+});
+
+test('the quoted combo package and its products are reset before the single recalculation', async () => {
+    const { PosStore } = fixture();
+    const quoted = (values) => ({ price_type: 'automatic', price_unit: 50, discount: 10, pricing_rule_type: 'manual',
+        pricing_rule_origin: 'Manual 10%', pricing_rule_id: false, promo_reward_id: { id: 7 }, ...values });
+    const packageLine = quoted({ sale_order_line_id: { id: 2, is_downpayment: false }, product_id: { type: 'combo' } });
+    const itemLine = quoted({ sale_order_line_id: { id: 3, is_downpayment: false }, combo_item_id: { id: 11 },
+        combo_parent_id: packageLine });
+    packageLine.combo_line_ids = [itemLine];
+    const order = { lines: [packageLine, itemLine], refreshed: 0, getPartner: () => null, setPricelist() {},
+        refreshOrderPricing() { this.refreshed += 1; } };
+    const store = Object.assign(new PosStore(), {
+        getOrder: () => order, config: { pricelist_id: { id: 3 }, use_presets: false },
+        models: { 'product.pricelist': [] },
+    });
+
+    await store.settleSO({ id: 42, order_line: [] });
+    for (const line of [packageLine, itemLine]) {
+        assert.equal(line.price_type, 'original');
+        assert.equal(line.discount, 0);
+        assert.equal(line.pricing_rule_type, 'none');
+        assert.equal(line.promo_reward_id, false);
+    }
+    assert.equal(order.refreshed, 1);
+});
+
+test('a quoted combo cannot be reconfigured from the ticket, a captured one can', async () => {
+    const { OrderSummary } = fixture();
+    const notices = [];
+    const summary = Object.assign(new OrderSummary(), { pos: { notification: { add: (...args) => notices.push(args) } } });
+    const packageLine = { product_id: { type: 'combo', display_name: 'Paquete oficina' },
+        sale_order_line_id: { id: 2 }, sale_order_origin_id: { id: 42, name: 'S00042' } };
+    const itemLine = { product_id: { type: 'consu' }, combo_parent_id: packageLine, sale_order_line_id: { id: 3 } };
+
+    assert.equal(await summary.onOrderlineLongPress({}, packageLine), false);
+    assert.equal(await summary.onOrderlineLongPress({}, itemLine), false);
+    assert.equal(notices.length, 2);
+    assert.match(notices[0][0], /El combo «Paquete oficina» viene de la cotización S00042: cambia la cantidad o quítalo/);
+    assert.equal(notices[0][1].type, 'warning');
+
+    const captured = { product_id: { type: 'combo', display_name: 'Paquete' } };
+    const regular = { product_id: { type: 'consu' }, sale_order_line_id: { id: 4 } };
+    assert.equal(await summary.onOrderlineLongPress({}, captured), 'configurator');
+    assert.equal(await summary.onOrderlineLongPress({}, regular), 'configurator');
+    assert.equal(notices.length, 2);
+});
+
+test('a quoted tinted base comes with its colorants as $0 children, like a tint captured in the POS', async () => {
+    const { PosStore } = fixture();
+    const tax = { id: 8 };
+    const colorantA = { id: 21, product_tmpl_id: { taxes_id: [tax] } };
+    const colorantB = { id: 22, product_tmpl_id: { taxes_id: [] } };
+    const products = new Map([[21, colorantA], [22, colorantB]]);
+    const order = { lines: [] };
+    const store = Object.assign(new PosStore(), {
+        getOrder: () => order,
+        models: { 'product.product': { get: (id) => products.get(id) } },
+    });
+    const recipe = { base_only: true, color_code: 'QA-AZUL', doses: [
+        { product_id: 21, points: 4 }, { product_id: 22, points: 1.5 }, { product_id: 23, points: 0 },
+    ] };
+
+    const line = await store.addLineToCurrentOrder({
+        product_id: { type: 'consu' }, qty: 2,
+        sale_order_line_id: { id: 1, name: 'Base QA\n+ [QA-AZUL] Azul', tint_snapshot: recipe },
+    }, {}, false);
+    assert.equal(line.is_tinted_base, true);
+    assert.equal(line.tint_color_code, 'QA-AZUL');
+    assert.equal(line.customer_note, 'Base QA\n+ [QA-AZUL] Azul');
+    assert.deepEqual(line.combo_line_ids.map((child) => [child.product_id.id, child.qty, child.price_unit, child.unit_points]),
+        [[21, 8, 0, 4], [22, 3, 0, 1.5]]);
+    assert.ok(line.combo_line_ids.every((child) => child.is_tint_colorant && child.price_type === 'manual'
+        && child.order_id === order));
+    assert.deepEqual(line.combo_line_ids.map((child) => child.tax_ids.map(([command, record]) => [command, record.id])),
+        [[['link', 8]], []]);
 });

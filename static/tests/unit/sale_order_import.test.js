@@ -1,9 +1,13 @@
 import { describe, expect, test } from "@odoo/hoot";
 import {
+    comboPayloadFromSaleLines,
     currentRulesResetValues,
     isImportedSaleLine,
+    isSaleComboItem,
+    matchComboItemSaleLines,
     quotedTotal,
     snapshotDoses,
+    tintColorantChildValues,
 } from "@entintados_pdv/app/utils/sale_order_import";
 
 // Datos planos con la forma de los modelos del PDV.
@@ -94,5 +98,116 @@ describe("quotedTotal", () => {
             { qty: 1, quotedSaleLine: { product_uom_qty: 1, price_total: 80 } },
         ];
         expect(quotedTotal(lines)).toBe(80);
+    });
+});
+
+// Paquete de 3 combos: «Mesa» incluye 1, «Silla» incluye 2. Por paquete se eligieron
+// 1 mesa, 2 sillas incluidas y 1 silla extra.
+const mesa = { id: 1, qty_free: 1 };
+const silla = { id: 2, qty_free: 2 };
+const mesaItem = { id: 11, combo_id: mesa };
+const sillaItem = { id: 12, combo_id: silla };
+const packageLine = { id: 50, product_uom_qty: 3 };
+
+function itemLine(id, comboItem, qty, values = {}) {
+    return { id, combo_item_id: comboItem, linked_line_id: { id: 50 }, product_uom_qty: qty, ...values };
+}
+
+describe("isSaleComboItem", () => {
+    test("producto con paquete y opción", () => {
+        expect(isSaleComboItem(itemLine(1, mesaItem, 3))).toBe(true);
+    });
+
+    test("paquete, línea normal o producto sin paquete", () => {
+        expect(isSaleComboItem(packageLine)).toBe(false);
+        expect(isSaleComboItem({ id: 2, product_uom_qty: 1 })).toBe(false);
+        expect(isSaleComboItem({ id: 3, combo_item_id: mesaItem })).toBe(false);
+        expect(isSaleComboItem(null)).toBe(false);
+    });
+});
+
+describe("comboPayloadFromSaleLines", () => {
+    const saleLines = [
+        packageLine,
+        itemLine(51, mesaItem, 3, { product_no_variant_attribute_value_ids: [{ id: 901 }, 902] }),
+        itemLine(52, sillaItem, 3),
+        itemLine(53, sillaItem, 3),
+        itemLine(54, sillaItem, 3),
+        { id: 60, product_uom_qty: 1 },
+        { id: 70, combo_item_id: mesaItem, linked_line_id: { id: 99 }, product_uom_qty: 1 },
+    ];
+
+    test("cantidad por paquete y separación de incluidos y extras con qty_free", () => {
+        const [included, extras] = comboPayloadFromSaleLines(packageLine, saleLines);
+        expect(included.map((conf) => [conf.combo_item_id.id, conf.qty])).toEqual([
+            [11, 1],
+            [12, 1],
+            [12, 1],
+        ]);
+        expect(extras.map((conf) => [conf.combo_item_id.id, conf.qty])).toEqual([[12, 1]]);
+    });
+
+    test("solo toma los productos de su paquete", () => {
+        const [included, extras] = comboPayloadFromSaleLines(packageLine, saleLines);
+        expect(included.length + extras.length).toBe(4);
+    });
+
+    test("pasa los atributos sin variante como ids", () => {
+        const [included] = comboPayloadFromSaleLines(packageLine, saleLines);
+        expect(included[0].configuration).toEqual({
+            attribute_value_ids: [901, 902],
+            attribute_custom_values: {},
+        });
+        expect(included[1].configuration.attribute_value_ids).toEqual([]);
+    });
+
+    test("paquete sin productos", () => {
+        expect(comboPayloadFromSaleLines(packageLine, [packageLine])).toEqual([[], []]);
+    });
+});
+
+describe("matchComboItemSaleLines", () => {
+    test("empareja por combo_item_id en el orden de las líneas, con opciones repetidas", () => {
+        const saleA = itemLine(52, sillaItem, 3);
+        const saleB = itemLine(53, sillaItem, 3);
+        const saleMesa = itemLine(51, mesaItem, 3);
+        const posMesa = { combo_item_id: mesaItem };
+        const posSillaA = { combo_item_id: sillaItem };
+        const posSillaB = { combo_item_id: { id: 12 } };
+        const matches = matchComboItemSaleLines([posMesa, posSillaA, posSillaB], [saleA, saleB, saleMesa]);
+        expect(matches.get(posMesa)).toBe(saleMesa);
+        expect(matches.get(posSillaA)).toBe(saleA);
+        expect(matches.get(posSillaB)).toBe(saleB);
+    });
+
+    test("deja fuera lo que no empareja", () => {
+        const posExtra = { combo_item_id: { id: 77 } };
+        const matches = matchComboItemSaleLines([posExtra, { qty: 1 }], [itemLine(51, mesaItem, 3)]);
+        expect(matches.size).toBe(0);
+    });
+});
+
+describe("tintColorantChildValues", () => {
+    test("una hija a $0 por dosis con puntos, con puntos × envases", () => {
+        const doses = [
+            { colorant: colorantA, points: 12 },
+            { colorant: colorantB, points: 0 },
+            { colorant: null, colorantId: 23, points: 4 },
+        ];
+        expect(tintColorantChildValues(doses, 2)).toEqual([
+            {
+                product_id: colorantA,
+                qty: 24,
+                price_unit: 0,
+                price_type: "manual",
+                unit_points: 12,
+                is_tint_colorant: true,
+            },
+        ]);
+    });
+
+    test("sin dosis no hay hijas", () => {
+        expect(tintColorantChildValues([], 3)).toEqual([]);
+        expect(tintColorantChildValues(null, 3)).toEqual([]);
     });
 });

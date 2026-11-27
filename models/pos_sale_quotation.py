@@ -422,20 +422,6 @@ class SaleOrderPosQuotation(models.Model):
             & Domain('invoice_lines', 'any!', Domain('move_id', 'any!', active_invoice)),
         )
 
-    def load_sale_order_from_pos(self, config_id):
-        self.check_access('read')
-        if 'to invoice' in self.mapped('invoice_status'):
-            raise UserError(_('Esta orden está Por facturar y no se puede traer al Punto de Venta.'))
-        if any(self.mapped('pos_has_active_invoice')):
-            raise UserError(_('Esta cotización o pedido ya tiene factura y no se puede traer al Punto de Venta.'))
-        for order in self:
-            # The POS loads sale lines flat: a combo or a native reward would lose its structure.
-            if order.order_line.filtered(lambda line: line.product_id.type == 'combo'
-                                         or line.combo_item_id or line.reward_id):
-                raise UserError(_('La cotización %s trae combos o regalos de promoción: cóbrala desde Ventas.')
-                                % order.name)
-        return super().load_sale_order_from_pos(config_id)
-
     @api.model
     def _load_pos_data_fields(self, config):
         return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['order_promo_reward_id']))
@@ -457,8 +443,10 @@ class StockPickingPosQuotation(models.Model):
     _inherit = 'stock.picking'
 
     def _create_move_from_pos_order_lines(self, lines):
+        # Colorants of a tint brought from Sales are consumed from its frozen recipe instead.
+        lines = lines.filtered(lambda line: not line._is_imported_tint_colorant())
         # Native POS groups equal products. Separate recipes that use the same base.
-        tinted = lines.filtered(lambda line: line.sale_order_line_id and line.sale_order_line_id._tint_recipe().get('base_only'))
+        tinted =lines.filtered(lambda line: line.sale_order_line_id and line.sale_order_line_id._tint_recipe().get('base_only'))
         for sale_line in tinted.sale_order_line_id:
             super()._create_move_from_pos_order_lines(tinted.filtered(lambda line: line.sale_order_line_id == sale_line))
         if lines - tinted:
@@ -478,7 +466,10 @@ class SaleOrderLinePosQuotation(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        return list(dict.fromkeys(super()._load_pos_data_fields(config) + ['tint_snapshot', 'tint_display_name', 'promo_reward_id']))
+        return list(dict.fromkeys(super()._load_pos_data_fields(config) + [
+            'tint_snapshot', 'tint_display_name', 'promo_reward_id',
+            'linked_line_id', 'combo_item_id', 'product_no_variant_attribute_value_ids',
+        ]))
 
 
 class StockMovePosQuotation(models.Model):
